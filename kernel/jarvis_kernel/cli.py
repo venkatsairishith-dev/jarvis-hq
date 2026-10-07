@@ -38,6 +38,10 @@ def main(argv=None):
     ap = sub.add_parser("approve", help="approve a pending request (interactive only)")
     ap.add_argument("id")
     sub.add_parser("kill"); sub.add_parser("resume"); sub.add_parser("status")
+    sv = sub.add_parser("serve", help="run the node endpoint"); sv.add_argument("--bind", required=True); sv.add_argument("--port", type=int, default=8765)
+    sub.add_parser("pair-code", help="make a one-time node pairing code")
+    sub.add_parser("nodes", help="list nodes (no state)")
+    an = sub.add_parser("analyze", help="report on a node from its collected state"); an.add_argument("node", nargs="?")
     a = sub.add_parser("audit"); a.add_argument("what", choices=["verify", "anchor"])
     a.add_argument("--anchor-file")
     args = p.parse_args(argv)
@@ -47,7 +51,13 @@ def main(argv=None):
         d, aid = k.request(Action(args.tool, args.op, args.target, untrusted_session=args.untrusted))
         print(json.dumps({"level": d.name, "reason": d.reason, "approval_id": aid}))
     elif args.cmd == "approve":
-        typed = _ask_console(f"Type the id again to approve {args.id}: ")
+        info = k.approval_info(args.id)
+        if not info or info["state"] != "pending":
+            print("refused (unknown, used or expired)", file=sys.stderr); return 1
+        typed = _ask_console(
+            f"\nApprove {info['level']} action? ({info['seconds_left']} s left)\n{json.dumps(info['action'], indent=2)}\n"
+            f"Type the id again to approve {args.id}: "
+        )
         if typed is None:
             print("refused: approvals need a real interactive terminal", file=sys.stderr)
             return 3
@@ -59,9 +69,43 @@ def main(argv=None):
     elif args.cmd == "kill":
         k.kill("cli"); print("kill switch ON")
     elif args.cmd == "resume":
+        typed = _ask_console("Type RESUME to lift the kill switch: ")
+        if typed is None:
+            print("refused: lifting the kill switch needs a real interactive terminal", file=sys.stderr); return 3
+        if typed.strip() != "RESUME":
+            return 1
         k.resume(); print("kill switch off")
     elif args.cmd == "status":
         print(json.dumps({"killed": k.killed(), "audit_head": k.audit.anchor()}))
+    elif args.cmd == "serve":
+        from .nodes import serve
+        if args.bind in ("0.0.0.0", "::", ""):
+            print("refused: bind to one private address (the Tailscale IP), not all interfaces", file=sys.stderr)
+            return 3
+        serve(k, args.bind, args.port)
+    elif args.cmd == "pair-code":
+        from .nodes import Nodes
+        print(Nodes(k).new_code())
+    elif args.cmd == "nodes":
+        from .nodes import Nodes
+        for n in Nodes(k).list():
+            print(f"{n['name']}: {'online' if n['online'] else 'offline'}, last report {n['seconds_since_report']} s ago")
+    elif args.cmd == "analyze":
+        from .nodes import Nodes
+        from .analyze import build, unmatched_numbers
+        from .policy import Action
+        d = k.authorize(Action("state", "read", args.node or "any-node"))
+        if not d.allowed:
+            print("refused:", d.reason); return 3
+        ns = [n for n in Nodes(k).list() if not args.node or n["name"] == args.node]
+        if not ns:
+            print("no node has reported yet"); return 1
+        for n in ns:
+            text = build(n)
+            bad = unmatched_numbers(text, n) if n["state"] else []
+            print(text)
+            print(f"[check] numbers not found in collected state: {bad or 'none'}")
+            k.audit.append("analyze", {"node": n["name"], "unmatched_numbers": bad})
     elif args.cmd == "audit":
         if args.what == "anchor":
             out = json.dumps(k.audit.anchor())
@@ -69,7 +113,12 @@ def main(argv=None):
                 open(args.anchor_file, "w").write(out)
             print(out)
         else:
-            anchor = json.load(open(args.anchor_file)) if args.anchor_file else None
+            anchor = None
+            if args.anchor_file:
+                try:
+                    anchor = json.load(open(args.anchor_file))
+                except (OSError, ValueError):
+                    print("refused: anchor file unreadable or not JSON", file=sys.stderr); return 2
             ok, msg = k.audit.verify(anchor)
             print(msg)
             return 0 if ok else 2

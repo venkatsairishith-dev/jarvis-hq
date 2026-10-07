@@ -62,3 +62,9 @@ First-milestone acceptance, rewritten as pass or fail tests:
 7. Cost: Cost Analysis recorded at $0 for the month; no cloud model call appears in the log.
 
 Measured figures only count as results. Latency, RAM and accuracy numbers in these docs are UNTESTED until the benchmark runs. With 200 items, 1% is 2 items, so the false-allow result is reported with a confidence interval, and the set is enlarged for the high-risk class before any claim.
+
+## Status (updated 2026-10-07)
+- P0 done. P1 (kernel v0.1) and P2 (laptop node) done and tested; see the daily note for the numbers.
+- Results against the milestone tests: 50 of 50 unit tests pass on Windows (Python 3.14) and on the VM (ARM Linux, Python 3.12); kill switch stops a worker in a median 0.34 s and at most 0.44 s over 20 runs through Tailscale; audit edit, deleted row, tail truncation and genesis rewrite are each detected; forged, replayed, expired and wrong-action approvals are each refused; the report's numbers are all found in the collected state (checked by a script); node goes offline after 45 s without a heartbeat (observed live at 58 s) and returns on restart.
+- Known limit: a process running as the same OS user can edit the kernel files directly. The kernel data dir is a protected resource in policy and every change is in the audit log, but the real fix is to run agents as a different OS user than the kernel. That is required before the Hermes bots (P5).
+- The kernel service listens only on the Tailscale address (port 8765). The VM firewall opens that port on the tailscale0 interface only. The shared Oracle network is unchanged.

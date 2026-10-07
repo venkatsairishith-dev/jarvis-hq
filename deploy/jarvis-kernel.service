@@ -1,0 +1,18 @@
+[Unit]
+Description=JARVIS kernel node endpoint (Tailscale only)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/jarvis/kernel
+ExecStart=/usr/bin/python3 -m jarvis_kernel serve --bind 100.125.91.51 --port 8765
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/ubuntu/.jarvis-kernel
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
