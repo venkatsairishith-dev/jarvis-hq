@@ -9,8 +9,9 @@ Rules (all deterministic):
 """
 import json
 import os
+import re
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .scrub import scrub
 
@@ -19,6 +20,11 @@ LANES = {"local", "private", "public"}
 
 class RouteError(Exception):
     pass
+
+
+def secrets_dir() -> str:
+    """Where this machine keeps secret files: $JARVIS_SECRETS, else D:\\jarvis-secrets (Windows) or ~/.jarvis/secrets."""
+    return os.environ.get("JARVIS_SECRETS") or (r"D:\jarvis-secrets" if os.name == "nt" else os.path.expanduser("~/.jarvis/secrets"))
 
 
 @dataclass
@@ -30,6 +36,15 @@ class Provider:
     models: list
     paid: bool = False
     enabled: bool = True
+    default_model: str = "default"
+    model_pattern: str | None = None      # a model name must match this (e.g. OpenRouter ':free$'), else the call is refused
+    extra_body: dict = field(default_factory=dict)  # e.g. {"provider": {"data_collection": "deny"}}
+    os_only: str | None = None            # "nt" or "posix": a provider that exists on one machine type only (e.g. the laptop's local model)
+
+    def key_path(self):
+        if not self.key_file:
+            return None
+        return self.key_file if os.path.isabs(self.key_file) else os.path.join(secrets_dir(), *self.key_file.replace("\\", "/").split("/"))
 
     def problems(self):
         out = []
@@ -39,10 +54,16 @@ class Provider:
             out.append("paid provider")
         return out
 
+    def model_ok(self, model: str) -> bool:
+        return self.model_pattern is None or re.search(self.model_pattern, model) is not None
+
     def available(self) -> bool:
         if not self.enabled or self.problems() or not self.base_url:
             return False
-        return self.key_file is None or os.path.isfile(self.key_file)
+        if self.os_only and self.os_only != os.name:
+            return False
+        kp = self.key_path()
+        return kp is None or os.path.isfile(kp)
 
 
 def allowed(task_lane: str, provider_lane: str) -> bool:
@@ -52,7 +73,7 @@ def allowed(task_lane: str, provider_lane: str) -> bool:
 
 
 def load(path: str):
-    cfg = json.load(open(path, encoding="utf-8"))
+    cfg = json.load(open(path, encoding="utf-8-sig"))  # tolerate a BOM (Windows editors add one)
     return [Provider(**p) for p in cfg["providers"]]
 
 
@@ -77,14 +98,23 @@ def call(kernel, providers, task_lane: str, prompt: str, purpose: str | None = N
     chain = plan(providers, task_lane, purpose)
     last = None
     for p in chain:
-        headers = {"Content-Type": "application/json"}
+        use_model = p.default_model if model == "default" else model
+        if not p.model_ok(use_model):  # e.g. a paid OpenRouter model: refuse before any request is made
+            kernel.audit.append("model_refused", {"provider": p.name, "model": use_model[:80], "why": "model_pattern"})
+            last = "ModelRefused"
+            continue
+        headers = {"Content-Type": "application/json", "User-Agent": "jarvis-gateway/0.1"}
         if p.key_file:
-            headers["Authorization"] = "Bearer " + open(p.key_file).read().strip()
-        body = json.dumps({"model": model, "max_tokens": int(max_tokens), "messages": [{"role": "user", "content": clean}]}).encode()
+            headers["Authorization"] = "Bearer " + open(p.key_path(), encoding="utf-8-sig").read().strip()
+        payload = {"model": use_model, "max_tokens": int(max_tokens), "messages": [{"role": "user", "content": clean}]}
+        payload.update(p.extra_body)
+        body = json.dumps(payload).encode()
         try:
             req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=body, headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=timeout) as r:
-                out = json.loads(r.read())["choices"][0]["message"]["content"]
+                out = json.loads(r.read())["choices"][0]["message"].get("content") or ""
+            if not out.strip():
+                raise ValueError("empty reply")  # reasoning models can spend the whole budget thinking: try the next provider
             kernel.audit.append("model_call", {"provider": p.name, "lane": task_lane, "scrubbed": findings, "chars_in": len(clean), "chars_out": len(out)})
             return out
         except Exception as e:  # try the next provider in the SAME lane

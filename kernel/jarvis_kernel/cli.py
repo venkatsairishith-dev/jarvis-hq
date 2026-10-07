@@ -39,6 +39,7 @@ def main(argv=None):
     ap.add_argument("id")
     sub.add_parser("kill"); sub.add_parser("resume"); sub.add_parser("status")
     sv = sub.add_parser("serve", help="run the node endpoint"); sv.add_argument("--bind", required=True); sv.add_argument("--port", type=int, default=8765)
+    tg = sub.add_parser("telegram", help="run the Telegram bridge"); tg.add_argument("--providers", default=None)
     sub.add_parser("pair-code", help="make a one-time node pairing code")
     sub.add_parser("nodes", help="list nodes (no state)")
     an = sub.add_parser("analyze", help="report on a node from its collected state"); an.add_argument("node", nargs="?")
@@ -83,6 +84,11 @@ def main(argv=None):
             print("refused: bind to one private address (the Tailscale IP), not all interfaces", file=sys.stderr)
             return 3
         serve(k, args.bind, args.port)
+    elif args.cmd == "telegram":
+        import os
+        from . import gateway, telegram
+        cfg = args.providers or os.path.join(os.path.dirname(__file__), "..", "..", "config", "providers.json")
+        telegram.from_files(k, gateway.load(cfg)).run()
     elif args.cmd == "pair-code":
         from .nodes import Nodes
         print(Nodes(k).new_code())

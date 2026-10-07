@@ -1,14 +1,18 @@
 {
-  "_note": "No secrets here. key_file points at a file in D:\\jarvis-secrets (or ~/.jarvis on the Mac). Entries stay enabled=false until the user supplies the key file and the base_url is verified against the provider's docs. Lanes come from the plan: private lane = local plus the private providers; public lane = Scout and Researcher only. paid must stay false.",
+  "_note": "No secrets here. key_file is relative to the machine's secrets folder ($JARVIS_SECRETS, D:\\jarvis-secrets on Windows, ~/.jarvis/secrets on Linux). A provider stays enabled=false until its key file exists AND a live call has worked. paid must stay false. Lanes: local, private, public. Base URLs verified against provider docs on 2026-10-07 (groq, openrouter); the others are still null.",
   "providers": [
-    {"name": "local-llama-vulkan", "lane": "local", "base_url": "http://127.0.0.1:8080/v1", "key_file": null, "models": ["any"], "paid": false, "enabled": true},
-    {"name": "zai-glm", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\zai.key", "models": ["any"], "paid": false, "enabled": false},
-    {"name": "cloudflare-workers-ai", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\cloudflare.key", "models": ["any"], "paid": false, "enabled": false},
-    {"name": "groq", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\groq.key", "models": ["extract", "route"], "paid": false, "enabled": false},
-    {"name": "openrouter-deny-training", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\openrouter.key", "models": ["any"], "paid": false, "enabled": false},
-    {"name": "ollama-cloud", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\ollama_cloud.key", "models": ["any"], "paid": false, "enabled": false},
-    {"name": "gemini", "lane": "public", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\gemini.key", "models": ["research"], "paid": false, "enabled": false},
-    {"name": "kilo", "lane": "public", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\kilo.key", "models": ["research"], "paid": false, "enabled": false},
-    {"name": "openrouter-public", "lane": "public", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\openrouter.key", "models": ["research"], "paid": false, "enabled": false}
+    {"name": "local-llama-vulkan", "lane": "local", "base_url": "http://127.0.0.1:8080/v1", "key_file": null, "models": ["any"], "paid": false, "enabled": true, "os_only": "nt"},
+    {"name": "groq", "lane": "private", "base_url": "https://api.groq.com/openai/v1", "key_file": "providers/groq.key", "models": ["any", "extract", "route"], "paid": false, "enabled": true,
+     "default_model": "openai/gpt-oss-120b", "model_pattern": "^(openai/gpt-oss-(120b|20b)|qwen/qwen3\\.8-27b)$", "extra_body": {"reasoning_effort": "low"}},
+    {"name": "openrouter-private", "lane": "private", "base_url": "https://openrouter.ai/api/v1", "key_file": "providers/openrouter.key", "models": ["any"], "paid": false, "enabled": true,
+     "default_model": "apodex/apodex-1.1-mini:free", "model_pattern": ":free$", "extra_body": {"provider": {"data_collection": "deny"}}},
+    {"name": "zai-glm", "lane": "private", "base_url": null, "key_file": "providers/zai.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "cloudflare-workers-ai", "lane": "private", "base_url": null, "key_file": "providers/cloudflare.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "ollama-cloud", "lane": "private", "base_url": null, "key_file": "providers/ollama_cloud.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "gemini", "lane": "public", "base_url": null, "key_file": "providers/gemini.key", "models": ["research"], "paid": false, "enabled": false},
+    {"name": "kilo", "lane": "public", "base_url": null, "key_file": "providers/kilo.key", "models": ["research"], "paid": false, "enabled": false},
+    {"name": "openrouter-public", "lane": "public", "base_url": "https://openrouter.ai/api/v1", "key_file": "providers/openrouter.key", "models": ["research"], "paid": false, "enabled": false,
+     "default_model": "apodex/apodex-1.1-mini:free", "model_pattern": ":free$"}
   ]
 }
+

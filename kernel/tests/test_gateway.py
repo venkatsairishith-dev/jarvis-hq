@@ -116,16 +116,77 @@ class G(unittest.TestCase):
         _, f, blocked = scrub("TOKEN=abcdefghijklmnop")
         self.assertEqual((f, blocked), (["key_assignment"], False))
 
+    # provider options added for real providers
+    def test_relative_key_file_resolves_against_secrets_dir(self):
+        d = os.path.join(self.tmp.name, "sec"); os.makedirs(os.path.join(d, "providers"))
+        open(os.path.join(d, "providers", "x.key"), "w").write("k")
+        old = os.environ.get("JARVIS_SECRETS"); os.environ["JARVIS_SECRETS"] = d
+        try:
+            p = Provider("x", "private", self.u_priv, "providers/x.key", ["any"])
+            self.assertTrue(p.available())
+            self.assertFalse(Provider("y", "private", self.u_priv, "providers/absent.key", ["any"]).available())
+        finally:
+            if old is None: os.environ.pop("JARVIS_SECRETS")
+            else: os.environ["JARVIS_SECRETS"] = old
+
+    def test_model_pattern_refuses_paid_model_before_any_request(self):
+        p = Provider("or", "private", self.u_priv, None, ["any"], default_model="x/y:free", model_pattern=":free$")
+        with self.assertRaises(RouteError):
+            call(self.k, [p], "private", "hi", model="anthropic/claude-expensive")
+        self.assertNotIn("priv", SEEN)
+        self.assertEqual(call(self.k, [p], "private", "hi"), "hello from priv")  # default model passes the pattern
+        self.assertIn("model_refused", [r[0] for r in self.k.db.execute("SELECT kind FROM audit")])
+
+    def test_extra_body_and_default_model_sent(self):
+        p = Provider("or", "private", self.u_priv, None, ["any"], default_model="a/b:free",
+                     extra_body={"provider": {"data_collection": "deny"}})
+        call(self.k, [p], "private", "hi")
+        sent = json.loads(SEEN["priv"][0][0])
+        self.assertEqual(sent["model"], "a/b:free")
+        self.assertEqual(sent["provider"], {"data_collection": "deny"})
+        self.assertIn("max_tokens", sent)
+
+    def test_empty_reply_falls_through_to_next_provider_in_lane(self):
+        class Empty(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                out = json.dumps({"choices": [{"message": {"content": None}}]}).encode()
+                self.send_response(200); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Empty)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        empty = Provider("empty", "private", f"http://127.0.0.1:{srv.server_address[1]}/v1", None, ["any"])
+        out = call(self.k, [empty, Provider("priv", "private", self.u_priv, None, ["any"])], "private", "hi")
+        self.assertEqual(out, "hello from priv")
+        srv.shutdown()
+
+    def test_os_only_provider_is_unavailable_on_the_other_os(self):
+        other = "posix" if os.name == "nt" else "nt"
+        self.assertFalse(Provider("x", "local", self.u_loc, None, ["any"], os_only=other).available())
+        self.assertTrue(Provider("x", "local", self.u_loc, None, ["any"], os_only=os.name).available())
+        self.assertTrue(Provider("x", "local", self.u_loc, None, ["any"]).available())
+        provs = load(os.path.join(os.path.dirname(__file__), "..", "..", "config", "providers.json"))
+        self.assertEqual([p for p in provs if p.name == "local-llama-vulkan"][0].os_only, "nt")
+
+    def test_loader_accepts_bom(self):
+        p = os.path.join(self.tmp.name, "p.json")
+        open(p, "wb").write(b"\xef\xbb\xbf" + json.dumps({"providers": [{"name": "a", "lane": "local", "base_url": "http://x", "key_file": None, "models": ["any"]}]}).encode())
+        self.assertEqual(load(p)[0].name, "a")
+
     # shipped config
     def test_shipped_config_is_valid_and_safe(self):
         provs = load(os.path.join(os.path.dirname(__file__), "..", "..", "config", "providers.json"))
         for p in provs:
             self.assertEqual(p.problems(), [], p.name)
             self.assertFalse(p.paid, p.name)
-        cloud = [p for p in provs if p.lane != "local"]
-        self.assertTrue(all(not p.enabled and p.base_url is None for p in cloud))  # nothing live until keys + verified URLs
-        with self.assertRaises(RouteError):
-            plan([p for p in provs if p.lane == "public"], "public")
+        for p in provs:
+            if p.enabled and p.lane != "local":      # an enabled cloud provider must have a URL and a way to refuse paid models
+                self.assertTrue(p.base_url and p.key_file, p.name)
+            if "openrouter" in p.name:
+                self.assertEqual(p.model_pattern, ":free$", p.name)        # OpenRouter may only use free models
+        priv = [p for p in provs if p.name == "openrouter-private"][0]
+        self.assertEqual(priv.extra_body, {"provider": {"data_collection": "deny"}})
+        self.assertFalse([p for p in provs if p.lane == "public" and p.enabled])  # public lane stays off until a public-lane bot exists
 
 
 if __name__ == "__main__":
