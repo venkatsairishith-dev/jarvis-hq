@@ -8,6 +8,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 import unicodedata
 import urllib.parse
 from dataclasses import dataclass, field
@@ -29,6 +30,8 @@ RULES = [
     ("service", "restart_noncritical", YELLOW_APPROVAL),
     ("message", "send_routine", YELLOW_APPROVAL),
     ("fs", "write", YELLOW_APPROVAL),
+    ("ui", "snapshot|list_windows", GREEN),
+    ("ui", "launch|focus|click|type|key|scroll", YELLOW_APPROVAL),
     ("money", "*", RED),
     ("delete", "*", RED),
     ("credential", "*", RED),
@@ -39,6 +42,8 @@ RULES = [
 
 # Tools that send data out. Removed once a session has read untrusted content.
 EGRESS_TOOLS = {"egress", "message", "publish", "browser_post", "http_post", "email", "upload"}
+SENSITIVE_APPS = re.compile(
+    r"1password|bitwarden|keepass|lastpass|dashlane|password manager|credential manager|metamask|\bwallet\b|paypal|\bbank|netbanking|\bupi\b|\bbroker", re.I)
 SECRET_COMPONENTS = {".jarvis", ".jarvis-kernel", "secrets.env", "keys.json", "protected.json", "id_ed25519", "id_rsa"}
 
 
@@ -81,7 +86,8 @@ def _is_secret_path(forms: list) -> bool:
     for f in forms:
         if "jarvis-secrets" in f:
             return True
-        for comp in f.split("/"):
+        for comp in re.split(r"[/\s]+", f):  # path pieces AND words (window titles like "keys.json - Notepad")
+            comp = comp.strip("'\"()[]{},;:<>")
             if comp in SECRET_COMPONENTS or comp.endswith(".pem") or "jarvis-secrets" in comp:
                 return True
     return False
@@ -103,7 +109,19 @@ class Action:
         return hashlib.sha256(blob.encode()).hexdigest()
 
     def describe(self) -> dict:
-        return {"tool": self.tool, "op": self.op, "target": self.target, "params": self.params, "lane": self.lane}
+        """What goes into the audit log and approval prompts: strings are scrubbed for secrets and truncated."""
+        from .scrub import scrub
+
+        def clean(x):
+            if isinstance(x, str):
+                s, _, blocked = scrub(x)
+                return "[BLOCKED: private key]" if blocked else (s if len(s) <= 200 else s[:200] + "...[truncated]")
+            if isinstance(x, dict):
+                return {str(k): clean(v) for k, v in x.items()}
+            if isinstance(x, (list, tuple)):
+                return [clean(v) for v in x]
+            return x
+        return {"tool": clean(self.tool), "op": clean(self.op), "target": clean(self.target), "params": clean(self.params), "lane": self.lane}
 
 
 @dataclass
@@ -143,6 +161,8 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         forms += [f for j in ("", "/") for f in _canon(j.join(group))]
     if _is_secret_path(forms):
         level, reason = DENY, "touches a secrets path"
+    if tool == "ui" and SENSITIVE_APPS.search(" ".join(forms)):
+        level, reason = DENY, "UI on a password manager, wallet or banking app"
     if protected:
         flat = " ".join(forms).lower()
         if any(_name(p) and _name(p).replace("\\", "/") in flat for p in protected):

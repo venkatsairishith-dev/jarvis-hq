@@ -57,6 +57,13 @@ class Nodes:
         self.k.audit.append("report_refused", {})
         return None
 
+    def identify(self, token: str):
+        th = _hash(token)
+        for name, h in self.k.db.execute("SELECT name, token_h FROM nodes"):
+            if hmac.compare_digest(h, th):
+                return name
+        return None
+
     def list(self):
         out = []
         for name, last, state in self.k.db.execute("SELECT name, last_seen, state FROM nodes"):
@@ -95,6 +102,26 @@ def make_handler(kernel):
                     if not name:
                         return self._json(401, {"error": "unauthorized"})
                     return self._json(200, {"ok": True, "killed": kernel.killed()})
+                if self.path in ("/request", "/authorize"):
+                    auth = self.headers.get("Authorization", "")
+                    name = nodes.identify(auth[7:] if auth.startswith("Bearer ") else "")
+                    if not name:
+                        kernel.audit.append("report_refused", {"path": self.path})
+                        return self._json(401, {"error": "unauthorized"})
+                    from .policy import Action
+                    from .store import Killed
+                    raw = data.get("action", {})
+                    a = Action(tool=str(raw.get("tool", "")), op=str(raw.get("op", "")), target=str(raw.get("target", "")),
+                               params=raw.get("params") if isinstance(raw.get("params"), dict) else {},
+                               lane=str(raw.get("lane", "private")), untrusted_session=bool(raw.get("untrusted_session", False)))
+                    if self.path == "/request":
+                        d, aid = kernel.request(a)
+                        return self._json(200, {"level": d.name, "reason": d.reason, "approval_id": aid})
+                    try:
+                        d = kernel.authorize(a, str(data.get("approval_id") or "") or None)
+                    except Killed:
+                        return self._json(200, {"allowed": False, "level": "KILLED", "reason": "kill switch is on"})
+                    return self._json(200, {"allowed": d.allowed, "level": d.name, "reason": d.reason})
                 self._json(404, {"error": "not found"})
             except Exception:
                 self._json(400, {"error": "bad request"})
