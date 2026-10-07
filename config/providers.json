@@ -1,0 +1,14 @@
+{
+  "_note": "No secrets here. key_file points at a file in D:\\jarvis-secrets (or ~/.jarvis on the Mac). Entries stay enabled=false until the user supplies the key file and the base_url is verified against the provider's docs. Lanes come from the plan: private lane = local plus the private providers; public lane = Scout and Researcher only. paid must stay false.",
+  "providers": [
+    {"name": "local-llama-vulkan", "lane": "local", "base_url": "http://127.0.0.1:8080/v1", "key_file": null, "models": ["any"], "paid": false, "enabled": true},
+    {"name": "zai-glm", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\zai.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "cloudflare-workers-ai", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\cloudflare.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "groq", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\groq.key", "models": ["extract", "route"], "paid": false, "enabled": false},
+    {"name": "openrouter-deny-training", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\openrouter.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "ollama-cloud", "lane": "private", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\ollama_cloud.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "gemini", "lane": "public", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\gemini.key", "models": ["research"], "paid": false, "enabled": false},
+    {"name": "kilo", "lane": "public", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\kilo.key", "models": ["research"], "paid": false, "enabled": false},
+    {"name": "openrouter-public", "lane": "public", "base_url": null, "key_file": "D:\\jarvis-secrets\\providers\\openrouter.key", "models": ["research"], "paid": false, "enabled": false}
+  ]
+}
