@@ -35,3 +35,10 @@ Windows 10 Pro 22H2 build 19045 under Boot Camp. Mainstream support ended 14 Oct
 - D:\jarvis\CLAUDE.md stays short: the Part 1 rules plus links to the memory map and the newest daily note.
 - Reusable procedures live as project skills in D:\jarvis\.claude\skills, with a copy in jarvis-hq: cost-check, phase-gate, vault-write, oracle-delete.
 - Repos: github.com/venkatsairishith-dev/jarvis-hq (docs, skills) and jarvis-vault (memory). Local: D:\jarvis\hq (jarvis-hq) and D:\jarvis\vault.
+
+## Corrections after independent review (2026-10-07)
+- The 4 OCPU / 24 GB, 10 TB egress and VCN-count figures are from Oracle's docs page and a community thread. They are NOT confirmed in the console for this tenancy [verify]. A Pay As You Go account bills anything over the free allowance. The $1 budget alert is a tripwire, not a cap.
+- Protected resources: D:\jarvis-secrets\protected.json lists the OCIDs of hermes-agent-vm-2, its boot volume and its VNIC, and the shared subnet. Any Oracle script must load it and refuse to write to those. Names are matched exactly, never by prefix.
+- Delete checklist: also verify the OCID is not in protected.json.
+- ESU: free only if enrollment shows no price. Source: Microsoft's ESU page (the Q&A thread said 13 Oct 2026; the Microsoft page says 12 Oct 2027) [verify in the Windows settings screen].
+- Secrets: files only, no environment variables. The Windows D: partition is visible from macOS under Boot Camp, so D:\jarvis-secrets is user-locked on Windows and is not copied to macOS.

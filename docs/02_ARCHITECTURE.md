@@ -51,3 +51,13 @@ Every action is followed by an observation and a check. Failure triggers a diffe
 
 ## Out of scope for now
 Training and fine-tuning (design the interface only: a TrainingProvider with request fields model, task, dataset, method, expected gain, compute, evaluation), voice, agent factory, a fancy UI, extra nodes.
+
+## Hardening added after independent review (2026-10-07)
+- **Approvals are out of band.** An approval is bound to a nonce and the hash of the exact action, shown to you on a channel no model can write to (kernel CLI or a paired device), and expires. Text a model or a web page produces can never count as approval. Forged GREEN, YELLOW or RED grants, a lowered risk floor, and replayed approvals are each refused and each has a test.
+- **YELLOW is split.** YELLOW-auto: allowed automatically inside written limits (for example installing a pinned package into a sandbox). YELLOW-approval: needs an approval as above. Anything not listed as YELLOW-auto is YELLOW-approval.
+- **Lanes come from the kernel, not a model.** Every provider is listed in the kernel config with its lane. A task's lane comes from deterministic source tags (where the data came from). Unknown means private. A model cannot change a lane. Some free tiers train on inputs, so a provider is public-lane unless its terms say otherwise.
+- **Secret scrubber.** All vault writes and all model-bound context pass through a secret-pattern scrubber. The agent sandbox and the Windows-MCP filter deny access to D:\jarvis-secrets. Collected machine state goes to a cloud model only after an approval; by default it stays local. The collector skips secret-like paths and environment variables.
+- **Protected resources are enforced in code.** The OCI wrapper loads D:\jarvis-secrets\protected.json (hermes-agent-vm-2, its boot volume and VNIC, and the shared subnet) and refuses any write to them. Names are matched by exact full-name equality, never by prefix. The shared VCN, subnet and security lists are not edited without your approval.
+- **Audit log integrity.** Besides the hash chain, the head hash is copied off the box on a schedule (to the vault repo) so truncation or a rewritten chain is caught.
+- **Cost cap per route.** The model gateway refuses any route marked paid. The default budget for every provider is $0. Providers are used only through keys with no card or billing attached.
+- **Reviewer subagents run read-only with no access to D:\jarvis-secrets.**

@@ -1,4 +1,4 @@
-# 03 Decisions and decision-layer evaluation
+﻿# 03 Decisions and decision-layer evaluation
 
 Each record: problem, options, evidence, decision, fallback. Evidence quality is stated. Nothing here was benchmarked on this machine yet; those are marked UNTESTED.
 
@@ -12,7 +12,7 @@ Each record: problem, options, evidence, decision, fallback. Evidence quality is
 ## Benchmark (design only, not run)
 Six task classes: permission and risk, intent routing, tool selection, agent routing, completion detection, injection resistance. Test set: 200 labelled items (real logs, generated and reviewed items, public sets, injection strings), at least 40 high-risk. Compare: rules only, embedding router, small LLM, larger LLM, hybrid.
 Metrics: accuracy, latency p50 and p95, RAM, false-allow rate, calibration (ECE), recovery.
-Pass: false-allow at most 1% overall and 0 of 40 high-risk at the final stage; ECE at most 0.08; tier-2 p95 at most 50 ms; RAM at most 3 GB. Small-LLM latency and RAM figures in the research are estimates, not measurements.
+Pass (targets, UNTESTED): false-allow at most 1% overall and 0 of 40 high-risk at the final stage, reported with a confidence interval and with a larger high-risk set; ECE at most 0.08; tier-2 p95 at most 50 ms; RAM at most 3 GB. Small-LLM latency and RAM figures in the research are estimates, not measurements.
 
 ## D2 Rules engine: ZEN 2.1.2 vs plain code
 Decision: start with plain Python rules (a table plus tests) for GREEN/YELLOW/RED. Add ZEN when rules need editing without code. Fallback: plain code. ZEN has an aarch64 wheel, so install is not a blocker; runtime on the VM is UNTESTED.
@@ -42,3 +42,4 @@ Windows: D:\jarvis-secrets (locked to the user). macOS: ~/.jarvis/secrets.env mo
 
 ## D10 Training
 Parked. The TrainingProvider interface is specified in 02_ARCHITECTURE.md; nothing is built, and Colab is not hard-coded.
+

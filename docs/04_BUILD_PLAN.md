@@ -42,3 +42,23 @@ Not in v0.1: LLMs, Hermes, the tray app, any write action on the laptop.
 | Leaked secrets | Medium | Account takeover | Files only, never in context, never committed |
 | Hermes churn | Medium | Breakage | Pinned tag, upgrade by hand |
 | Overbuilding | High | Time | Gates; five docs; v0.1 has no LLMs |
+
+## Gate map and testable acceptance (after independent review)
+- "Step 11" (the original session gate) is the gate after the design docs and the first-milestone definition. Nothing in P0 or later is written as code until you say go. Each later phase ends with its own gate.
+- Failure rule: after two failed checks, stop. For any write to an external service (Oracle, GitHub, providers), never retry in a loop: report the failure and wait.
+- Windows ESU: enroll only if the screen offers the free option. If it shows a price, stop and tell you. Confirm the account is a Microsoft administrator account first.
+- OmniRoute is a trial with a keep or drop rule decided in P3; the diagram shows it as a candidate. Hermes is pinned to a tag but its aarch64 behaviour is unverified until P5.
+- Secrets are files only, never environment variables, because variables can leak into logs and process listings. Tailscale uses a single-use, tagged auth key that is deleted after use. Earlier mentions of "files or environment variables" are superseded by this.
+- Before P0 hardening touches the network, show you any change to the shared VCN, subnet or security lists and wait for approval, because hermes-agent-vm-2 shares them.
+- Oracle: confirm the 4 OCPU / 24 GB allowance in the console and consider a compartment quota policy that blocks paid shapes and extra volumes. I propose it; you approve it.
+
+First-milestone acceptance, rewritten as pass or fail tests:
+1. Numbers: a script extracts every numeric token from the report and checks each against the collected state JSON. Zero unmatched tokens.
+2. Audit log: editing a line, deleting the tail, and rewriting from genesis are each detected, using the off-box head hash.
+3. Grants: forged GREEN, YELLOW and RED grants, a lowered risk floor, and a replayed approval are each refused (one test each).
+4. Kill switch: the task stops within 5 s at p95 over 20 runs, including with the node on the other side of Tailscale.
+5. Classification: at least 10 GREEN requests classify GREEN and at least 10 non-GREEN requests do not.
+6. Node status: heartbeat every 15 s; offline after 45 s with no heartbeat.
+7. Cost: Cost Analysis recorded at $0 for the month; no cloud model call appears in the log.
+
+Measured figures only count as results. Latency, RAM and accuracy numbers in these docs are UNTESTED until the benchmark runs. With 200 items, 1% is 2 items, so the false-allow result is reported with a confidence interval, and the set is enlarged for the high-risk class before any claim.
