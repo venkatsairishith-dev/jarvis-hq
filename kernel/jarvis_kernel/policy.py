@@ -47,6 +47,9 @@ RULES = [
 EGRESS_TOOLS = {"egress", "message", "publish", "browser_post", "http_post", "email", "upload"}
 SENSITIVE_APPS = re.compile(
     r"1password|bitwarden|keepass|lastpass|dashlane|password manager|credential manager|metamask|\bwallet\b|paypal|\bbank|netbanking|\bupi\b|\bbroker", re.I)
+# Files that hold the rules, hooks and settings the agents run under: changing them is console-only (at least RED).
+SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".claude", "hooks.json", "providers.json", "policy.py", "audit.py", "store.py"}
+WRITE_OPS = re.compile(r"write|edit|delete|remove|rename|move|commit|truncate|overwrite|append|chmod|rm\b", re.I)
 SECRET_COMPONENTS = {".jarvis", ".jarvis-kernel", "secrets.env", "keys.json", "protected.json", "id_ed25519", "id_rsa"}
 
 
@@ -200,6 +203,10 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         forms += [f for j in ("", "/") for f in _canon(j.join(group))]
     if _is_secret_path(forms):
         level, reason = DENY, "touches a secrets path"
+    if tool in ("fs", "config", "git", "delete", "service") and WRITE_OPS.search(op) and level < RED:
+        pieces = {c.strip("'\"()[]{},;:<>") for f in forms for c in re.split(r"[/\s]+", f)}
+        if pieces & SAFETY_COMPONENTS:
+            level, reason = RED, "changes the rules, hooks or settings the agents run under (console only)"
     if tool in ("ui", "browser") and SENSITIVE_APPS.search(" ".join(forms)):
         level, reason = DENY, "UI or browser on a password manager, wallet or banking app"
     if tool == "browser" and any(_internal_url(lf) for lf in leaves):

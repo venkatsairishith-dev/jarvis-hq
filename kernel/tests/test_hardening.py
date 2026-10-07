@@ -8,7 +8,7 @@ import threading
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from jarvis_kernel.policy import Action, DENY, RED, GREEN, decide
+from jarvis_kernel.policy import Action, DENY, RED, GREEN, YELLOW_APPROVAL, decide
 from jarvis_kernel.store import Kernel
 
 KDIR = os.path.join(os.path.dirname(__file__), "..")
@@ -102,6 +102,19 @@ class H(unittest.TestCase):
         prot = {"OCID1.Instance.OC1..AbCdEf"}
         self.assertEqual(decide(Action("oci", "terminate", "ocid1.instance.oc1..abcdef"), protected=prot).level, DENY)
         self.assertEqual(decide(Action("oci", "terminate", "", {"id": "OCID1.INSTANCE.OC1..ABCDEF"}), protected=prot).level, DENY)
+
+    # rules, hooks and settings files; the protected server by name
+    def test_changing_rule_files_needs_the_console(self):
+        for tgt in ("D:/jarvis/CLAUDE.md", "~/.claude/settings.json", "repo/.claude/settings.local.json", "kernel/jarvis_kernel/policy.py",
+                    "config/providers.json", "C:/Users/x/.claude/hooks.json", "CLAUDE.MD"):
+            for op in ("write", "edit", "delete"):
+                self.assertGreaterEqual(decide(Action("fs", op, tgt)).level, RED, (tgt, op))
+        self.assertEqual(decide(Action("fs", "read", "D:/jarvis/CLAUDE.md")).level, GREEN)      # reading them is fine
+        self.assertEqual(decide(Action("fs", "write", "notes/todo.md")).level, YELLOW_APPROVAL)  # ordinary files are not affected
+
+    def test_protected_server_name_is_denied_for_every_tool(self):
+        for tool, op, tgt in (("oci", "terminate", "hermes-agent-vm-2"), ("fs", "write", "/mnt/hermes-agent-vm-2/disk"), ("ssh", "run", "ubuntu@hermes-agent-vm-2")):
+            self.assertEqual(decide(Action(tool, op, tgt), protected=self.k.protected).level, DENY, (tool, op))
 
     # 10 suggested clamp
     def test_suggested_is_clamped_and_bools_ignored(self):

@@ -36,7 +36,7 @@ class Kernel:
         self.kill_file = self.dir / "KILL"
         self.lock = threading.RLock()
         # The kernel's own data dir is always protected: no action may touch state.db or KILL.
-        self.protected = set(protected or ()) | {str(self.dir).replace("\\", "/").lower()}
+        self.protected = set(protected or ()) | {str(self.dir).replace("\\", "/").lower(), "hermes-agent-vm-2"}   # the data dir and the protected server are always off limits
 
     # --- kill switch -------------------------------------------------
     def kill(self, why: str = "manual"):

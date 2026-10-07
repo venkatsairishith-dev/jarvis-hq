@@ -165,7 +165,9 @@ def main():
     test = [i for i in items if i["split"] == "test"]
     ood = os.environ.get("OOD")
     if ood:  # independent items written by someone who never saw the rules: reference examples = all 200 items
-        train = items
+        train = list(items)
+        for extra in filter(None, os.environ.get("EXTRA_REFS", "").split(";")):   # earlier independent sets may serve as references
+            train += [dict(json.loads(l), split="train") for l in open(extra, encoding="utf-8") if l.strip()]
         test = [json.loads(l) for l in open(ood, encoding="utf-8") if l.strip()]
         for it in test:
             it["split"] = "test"
