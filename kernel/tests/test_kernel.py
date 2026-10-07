@@ -122,7 +122,7 @@ class TestGrants(Base):
         d, aid = self.k.request(a)
         headless = {"creationflags": 0x00000008} if os.name == "nt" else {"start_new_session": True}  # no console / no tty
         r = subprocess.run(
-            [sys.executable, "-m", "jarvis_kernel", "--data", self.tmp.name, "approve", aid],
+            [getattr(sys, "_base_executable", sys.executable), "-m", "jarvis_kernel", "--data", self.tmp.name, "approve", aid],
             cwd=os.path.join(os.path.dirname(__file__), ".."), input=aid + "\n", capture_output=True, text=True,
             timeout=30, **headless,
         )

@@ -124,7 +124,7 @@ class H(unittest.TestCase):
     def test_resume_refused_without_console(self):
         self.k.kill("t")
         headless = {"creationflags": 0x00000008} if os.name == "nt" else {"start_new_session": True}
-        r = subprocess.run([sys.executable, "-m", "jarvis_kernel", "--data", str(self.k.dir), "resume"], cwd=KDIR,
+        r = subprocess.run([getattr(sys, "_base_executable", sys.executable), "-m", "jarvis_kernel", "--data", str(self.k.dir), "resume"], cwd=KDIR,
                            input="RESUME\n", capture_output=True, text=True, timeout=30, **headless)
         self.assertEqual(r.returncode, 3)
         self.assertTrue(self.k.killed())

@@ -30,6 +30,9 @@ RULES = [
     ("service", "restart_noncritical", YELLOW_APPROVAL),
     ("message", "send_routine", YELLOW_APPROVAL),
     ("fs", "write", YELLOW_APPROVAL),
+    ("browser", "open|snapshot|extract", GREEN),
+    ("browser", "click|type|select|press", YELLOW_APPROVAL),
+    ("browser", "download|upload", RED),
     ("ui", "snapshot|list_windows", GREEN),
     ("ui", "launch|focus|click|type|key|scroll", YELLOW_APPROVAL),
     ("money", "*", RED),
@@ -80,6 +83,42 @@ def _canon(s: str) -> list:
         except (OSError, ValueError):
             pass
     return forms
+
+
+def internal_host(host: str) -> bool:
+    """True for localhost, private/loopback/link-local/CGNAT (Tailscale) addresses and internal-looking names.
+    Handles decimal, octal, hex and IPv4-mapped IPv6 forms. Does not resolve DNS (the browser layer re-checks resolved IPs)."""
+    import ipaddress
+    import socket
+    h = host.strip().strip("[]").rstrip(".").lower()
+    if not h:
+        return True
+    if h == "localhost" or h.endswith((".localhost", ".local", ".internal", ".lan", ".home", ".corp", ".ts.net")):
+        return True
+    cand = None
+    try:
+        cand = ipaddress.ip_address(h)
+    except ValueError:
+        try:  # inet_aton accepts decimal (2130706433), hex (0x7f.1) and octal (0177.0.0.1) IPv4 spellings
+            cand = ipaddress.ip_address(socket.inet_ntoa(socket.inet_aton(h)))
+        except OSError:
+            return False
+    if isinstance(cand, ipaddress.IPv6Address) and cand.ipv4_mapped:
+        cand = cand.ipv4_mapped
+    return (cand.is_private or cand.is_loopback or cand.is_link_local or cand.is_reserved or cand.is_multicast
+            or cand.is_unspecified or cand in ipaddress.ip_network("100.64.0.0/10"))
+
+
+def _internal_url(leaf: str) -> bool:
+    s = urllib.parse.unquote(str(leaf)).strip()
+    if re.match(r"^(javascript|file|data|vbscript|ftp|chrome|about|view-source|blob):", s, re.I):
+        return True  # none of these are valid targets for the browser tool
+    if "://" not in s:
+        return False
+    parts = urllib.parse.urlsplit(s)
+    if parts.scheme.lower() not in ("http", "https"):
+        return True  # file:, ftp:, javascript: and friends are not allowed targets for the browser tool
+    return internal_host(parts.hostname or "")
 
 
 def _is_secret_path(forms: list) -> bool:
@@ -161,8 +200,10 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         forms += [f for j in ("", "/") for f in _canon(j.join(group))]
     if _is_secret_path(forms):
         level, reason = DENY, "touches a secrets path"
-    if tool == "ui" and SENSITIVE_APPS.search(" ".join(forms)):
-        level, reason = DENY, "UI on a password manager, wallet or banking app"
+    if tool in ("ui", "browser") and SENSITIVE_APPS.search(" ".join(forms)):
+        level, reason = DENY, "UI or browser on a password manager, wallet or banking app"
+    if tool == "browser" and any(_internal_url(lf) for lf in leaves):
+        level, reason = DENY, "browser pointed at an internal address"
     if protected:
         flat = " ".join(forms).lower()
         if any(_name(p) and _name(p).replace("\\", "/") in flat for p in protected):

@@ -44,3 +44,9 @@ Classes: USE, REUSE, WRAP, ADAPT, FORK, REIMPLEMENT, RESEARCH_MORE, REJECT.
 
 ## Open items
 Hermes aarch64 issues, the OmniRoute advisory, Vulkan on the Radeon, OpenClaw CVE counts, AIOS and OpenHands enterprise licence terms.
+
+## Added 2026-10-07: browser control
+| Tool | Class | Evidence | Fit and risk |
+|---|---|---|---|
+| Playwright for Python 1.63.0 | USE, pinned | Apache-2.0, Microsoft, requires Python 3.10+, installed and tested on Python 3.14 in a venv on D: (0.2 GB). Drives the installed Chrome (channel chrome), so no browser download | DOM rung of the control ladder. Its request hook does NOT see redirect hops (measured), so the safety guarantee comes from a local filtering proxy, not from Playwright |
+| Own filtering proxy (guardproxy.py, about 100 lines, stdlib) | REIMPLEMENT | No maintained small library found that resolves, checks and pins the address per connection; a general proxy (mitmproxy, squid) is much larger than needed | Forces all browser traffic, loopback included, through one checkpoint |

@@ -22,24 +22,30 @@ class Result:
 
 
 class Controller:
-    def __init__(self, ask, backend: dict, snap, max_actions: int = 20):
-        """ask(path, obj)->dict talks to the kernel. backend maps op -> fn(target, params). snap(process)->dict."""
-        self.ask, self.backend, self.snap = ask, backend, snap
+    def __init__(self, ask, backend: dict, snap, max_actions: int = 20, tool: str = "ui"):
+        """ask(path, obj)->dict talks to the kernel. backend maps op -> fn(target, params). snap(process)->dict.
+        tool is the policy tool name ("ui" or "browser"). Once a session has read untrusted content (web pages),
+        every later action carries untrusted_session=True so the kernel removes egress tools."""
+        self.ask, self.backend, self.snap, self.tool = ask, backend, snap, tool
         self.max_actions, self.used = max_actions, 0
         self.failed = set()
+        self.untrusted = False
 
     @staticmethod
     def _key(op, target, params):
         return json.dumps([op, target, params or {}], sort_keys=True)
 
     def _action(self, op, target, params):
-        return {"tool": "ui", "op": op, "target": target, "params": params or {}}
+        return {"tool": self.tool, "op": op, "target": target, "params": params or {}, "untrusted_session": self.untrusted}
 
     def observe(self, process: str, **kw):
         d = self.ask("/authorize", {"action": self._action("snapshot", process, {})})
         if not d.get("allowed"):
             return Result("refused", d.get("reason", ""), d.get("level", ""))
-        return self.snap(process, **kw)
+        snap = self.snap(process, **kw)
+        if self.tool == "browser":
+            self.untrusted = True   # page text is untrusted input: from now on, egress tools are removed for this session
+        return snap
 
     def request_approval(self, op, target, params=None):
         """Ask the kernel to create a pending approval. A human then approves it at the kernel console."""
@@ -65,6 +71,8 @@ class Controller:
         if not expect:
             return Result("unverified", "no expectation given", d.get("level", ""))
         after = self.snap(target.split("|")[0])
+        if self.tool == "browser":
+            self.untrusted = True
         if expect(before, after):
             return Result("verified", "", d.get("level", ""))
         self.failed.add(key)
