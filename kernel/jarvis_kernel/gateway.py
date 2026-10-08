@@ -93,7 +93,7 @@ def plan(providers, task_lane: str, purpose: str | None = None, prefer_local: bo
 def call(kernel, providers, task_lane: str, prompt: str, purpose: str | None = None, model: str = "default", timeout=60, max_tokens=256):
     """Run a prompt through the first provider in the chain that works. Audited. Keys are read at call time only.
     max_tokens is a hard output budget for the call."""
-    clean, findings, blocked = scrub(prompt)
+    clean, findings, blocked = scrub(prompt, deep=True)
     if blocked:
         kernel.audit.append("model_call_blocked", {"lane": task_lane, "findings": findings})
         raise RouteError("blocked: prompt contains a private key")

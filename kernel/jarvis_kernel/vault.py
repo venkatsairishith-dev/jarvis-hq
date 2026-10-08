@@ -34,7 +34,7 @@ def write(root: str, rel: str, text: str, append: bool = False, kernel=None) -> 
     """Write text to the vault. Returns the path written. Raises VaultError when refused. Audited if a kernel is given."""
     try:
         full = _resolve(root, rel)
-        clean, findings, blocked = scrub(text)
+        clean, findings, blocked = scrub(text, deep=True)
         if blocked:
             raise VaultError("refused: content contains a private key")
         data = clean.encode("utf-8")

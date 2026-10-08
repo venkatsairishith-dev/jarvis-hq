@@ -81,6 +81,7 @@ class T(unittest.TestCase):
     def test_help_status_and_unknown(self):
         self.b.handle(msg("/help")); self.assertIn("/status", self.last())
         self.b.handle(msg("/status")); self.assertIn("Kill switch: off", self.last()); self.assertIn("fake", self.last())
+        self.assertIn("Secret scanner:", self.last())
         self.b.handle(msg("/frobnicate")); self.assertIn("Unknown", self.last())
 
     def test_kill_from_phone_and_resume_refused(self):

@@ -53,7 +53,7 @@ class Bridge:
 
     # ---------- output ----------
     def say(self, text: str):
-        clean = scrub(text)[0]
+        clean = scrub(text, deep=True)[0]
         for i in range(0, len(clean) or 1, CHUNK):
             self.api.send(self.owner, clean[i:i + CHUNK])
 
@@ -109,6 +109,8 @@ class Bridge:
         lines += [f"Node {n['name']}: {'online' if n['online'] else 'offline'} (last report {n['seconds_since_report']} s ago)" for n in nodes] or ["No nodes paired."]
         avail = [p.name for p in self.providers if p.available()]
         lines.append("Model providers available: " + (", ".join(avail) or "none"))
+        from .scrub import gitleaks_path
+        lines.append("Secret scanner: " + ("gitleaks deep pass + built-in" if gitleaks_path() else "built-in only (gitleaks not installed)"))
         n = self.k.db.execute("SELECT COUNT(*) FROM approvals WHERE state='pending' AND expires>=?", (self.clock(),)).fetchone()[0]
         lines.append(f"Pending approvals: {n}")
         self.say("\n".join(lines))
