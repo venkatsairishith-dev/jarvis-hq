@@ -9,6 +9,7 @@ import secrets
 import time
 
 JOB_TTL = 1800          # a queued job waits at most 30 minutes for the node to come back
+RUN_TTL = 1800          # a job that starts but never reports (laptop slept, node died) is failed after 30 minutes
 NAME = re.compile(r"^[A-Za-z0-9_.-]{1,40}$")
 KINDS = {
     # kind: (policy tool, policy op) the kernel checks before queueing
@@ -25,7 +26,11 @@ class Jobs:
         self.k = kernel
         kernel.db.execute(
             "CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, node TEXT, kind TEXT, params TEXT, state TEXT, created REAL, expires REAL, "
-            "result TEXT, notified INT DEFAULT 0)")
+            "result TEXT, notified INT DEFAULT 0, started REAL)")
+        try:   # older databases were created without the started column
+            kernel.db.execute("ALTER TABLE jobs ADD COLUMN started REAL")
+        except Exception:
+            pass
 
     def create(self, node: str, kind: str, params: dict) -> str:
         from .policy import Action
@@ -49,7 +54,7 @@ class Jobs:
         now = time.time()
         self.k.db.execute("UPDATE jobs SET state='expired' WHERE state='queued' AND expires<?", (now,))
         for jid, kind, params in self.k.db.execute("SELECT id, kind, params FROM jobs WHERE node=? AND state='queued' ORDER BY created LIMIT 3", (node,)).fetchall():
-            cur = self.k.db.execute("UPDATE jobs SET state='running' WHERE id=? AND state='queued'", (jid,))
+            cur = self.k.db.execute("UPDATE jobs SET state='running', started=? WHERE id=? AND state='queued'", (now, jid))
             if cur.rowcount == 1:
                 self.k.audit.append("job_started", {"id": jid, "node": node})
                 return {"id": jid, "kind": kind, "params": json.loads(params)}
@@ -68,6 +73,10 @@ class Jobs:
         """Finished (or expired) jobs the owner has not been told about yet: [(id, kind, state, params, result)]."""
         now = time.time()
         self.k.db.execute("UPDATE jobs SET state='expired' WHERE state='queued' AND expires<?", (now,))
+        stuck = self.k.db.execute("UPDATE jobs SET state='failed', result=? WHERE state='running' AND started IS NOT NULL AND started<?",
+                                  (json.dumps({"ok": False, "error": "the laptop started the job but never reported a result (it may have gone to sleep or lost power)"}), now - RUN_TTL))
+        if stuck.rowcount:
+            self.k.audit.append("job_stuck_failed", {"count": stuck.rowcount})
         rows = self.k.db.execute("SELECT id, kind, state, params, result FROM jobs WHERE notified=0 AND state IN ('done','failed','expired')").fetchall()
         return [(i, k, s, json.loads(p), json.loads(r) if r else None) for i, k, s, p, r in rows]
 

@@ -75,6 +75,23 @@ class Queue(unittest.TestCase):
         rep = self.j.to_report(); self.assertEqual([(r[0], r[2]) for r in rep], [(jid, "expired")])
         self.j.mark_notified(jid); self.assertEqual(self.j.to_report(), [])
 
+    def test_a_job_that_never_reports_is_failed_and_reported(self):
+        jid = self.j.create("laptop", "project_check", {"project": "jarvis-hq"}); self.j.next_for("laptop")
+        self.assertEqual(self.j.to_report(), [])                                   # running normally: nothing to report yet
+        self.k.db.execute("UPDATE jobs SET started=? WHERE id=?", (time.time() - 1801, jid))
+        rep = self.j.to_report(); self.assertEqual([(r[0], r[2]) for r in rep], [(jid, "failed")]); self.assertIn("never reported", rep[0][4]["error"])
+        self.assertFalse(self.j.finish("laptop", jid, GOOD))                       # a late answer after the failure is refused
+        self.assertIn("job_stuck_failed", [r[0] for r in self.k.db.execute("SELECT kind FROM audit")])
+
+    def test_old_databases_without_the_started_column_are_upgraded(self):
+        import sqlite3
+        db = sqlite3.connect(os.path.join(self.tmp.name, "old.db"))
+        db.execute("CREATE TABLE jobs(id TEXT PRIMARY KEY, node TEXT, kind TEXT, params TEXT, state TEXT, created REAL, expires REAL, result TEXT, notified INT DEFAULT 0)")
+        class K: pass
+        k = K(); k.db = db
+        Jobs(k)
+        self.assertIn("started", [r[1] for r in db.execute("PRAGMA table_info(jobs)")]); db.close()
+
     def test_oversized_result_is_replaced(self):
         jid = self.j.create("laptop", "project_check", {"project": "jarvis-hq"}); self.j.next_for("laptop")
         self.j.finish("laptop", jid, {"ok": True, "blob": "x" * 70000})
