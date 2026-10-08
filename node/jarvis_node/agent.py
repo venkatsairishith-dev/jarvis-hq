@@ -4,6 +4,7 @@ import json
 import os
 import socket
 import sys
+import threading
 import time
 import urllib.request
 
@@ -30,9 +31,24 @@ def pair(url, code_file, name):
     print("paired; token saved to", TOKEN_FILE)  # the token itself is never printed
 
 
+def _do_job(url, token, job):
+    """Run one authorized job and post the result. Runs in a background thread so heartbeats never stall."""
+    from .jobs import run_job
+    try:
+        result = run_job(job)
+    except Exception as e:
+        result = {"ok": False, "error": type(e).__name__}
+    try:
+        _post(url, "/jobs/result", {"id": job["id"], "result": result}, token)
+    except Exception as e:
+        print("could not post job result:", type(e).__name__, file=sys.stderr)
+
+
 def run(url, name, once=False, collect_every=60, beat=15):
-    token = open(TOKEN_FILE).read().strip()
+    with open(TOKEN_FILE) as fh:
+        token = fh.read().strip()
     state, last_collect = {}, 0.0
+    worker = None
     while True:
         try:
             if time.time() - last_collect >= collect_every or not state:
@@ -41,6 +57,11 @@ def run(url, name, once=False, collect_every=60, beat=15):
             if r.get("killed"):
                 state, last_collect = {}, 0.0  # kill switch on: stop collecting until it is lifted
                 print("kernel kill switch is on; paused", file=sys.stderr)
+            elif not once and (worker is None or not worker.is_alive()):
+                job = _post(url, "/jobs/next", {}, token).get("job")
+                if job:
+                    worker = threading.Thread(target=_do_job, args=(url, token, job), daemon=True)
+                    worker.start()
         except Exception as e:
             print("report failed:", type(e).__name__, file=sys.stderr)
         if once:

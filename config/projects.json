@@ -1,0 +1,9 @@
+{
+  "_note": "Projects the owner allows JARVIS to check. Names are what you type after /check. The kernel only sees the names; the paths and test commands below are read by the node on that machine. {python} becomes the node's own Python. Add a project only if you trust its tests: running them executes the project's code.",
+  "projects": {
+    "jarvis-hq": {
+      "path": {"nt": "D:\\jarvis\\hq"},
+      "test": {"cwd": "kernel", "cmd": ["{python}", "-B", "-W", "ignore", "-I", "-m", "unittest", "discover", "-s", "tests"], "timeout_s": 900}
+    }
+  }
+}

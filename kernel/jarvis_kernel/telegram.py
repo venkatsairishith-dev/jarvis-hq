@@ -77,10 +77,10 @@ class Bridge:
         word = text.strip().split(None, 1)
         cmd = word[0].lower() if word else ""
         arg = word[1].strip() if len(word) > 1 else ""
-        known = {"/start", "/help", "/status", "/analyze", "/pending", "/approve", "/deny", "/kill", "/resume", "/ask", "confirm", "/recent", "/capabilities", "/can", "/models"}
+        known = {"/start", "/help", "/status", "/analyze", "/pending", "/approve", "/deny", "/kill", "/resume", "/ask", "confirm", "/recent", "/capabilities", "/can", "/models", "/check"}
         self.k.audit.append("tg_in", {"cmd": cmd if cmd in known else ("ask" if not cmd.startswith("/") else "unknown")})
         if cmd in ("/start", "/help"):
-            return self.say("JARVIS commands: /status, /recent, /capabilities, /can <tool> <op> [target], /models, /analyze [node], /pending, /approve <id>, /deny <id>, /kill, /ask <question> (or just type). "
+            return self.say("JARVIS commands: /status, /check <project>, /recent, /capabilities, /can <tool> <op> [target], /models, /analyze [node], /pending, /approve <id>, /deny <id>, /kill, /ask <question> (or just type). "
                             "Lifting the kill switch and approving RED actions are done at the kernel console.")
         if cmd == "/status":
             return self.status()
@@ -88,6 +88,8 @@ class Bridge:
             return self.analyze(arg)
         if cmd == "/pending":
             return self.pending()
+        if cmd == "/check":
+            return self.check(arg)
         if cmd == "/recent":
             return self.recent()
         if cmd == "/capabilities":
@@ -206,6 +208,54 @@ class Bridge:
                    "RED": "YES_WITH_CONSOLE_APPROVAL (needs the kernel console)", "DENY": "NO"}[d.name]
         self.say(f"{verdict}\nLevel: {d.name}. Reason: {d.reason}")
 
+    def _project_names(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "projects.json")
+        try:
+            with open(path, encoding="utf-8-sig") as fh:
+                return sorted(json.load(fh)["projects"])
+        except (OSError, ValueError, KeyError):
+            return []
+
+    def check(self, arg: str):
+        """/check <project>: queue a fixed project check (git status, recent commits, the project's own test command) on the laptop."""
+        from .jobs import Jobs, JobError
+        from .nodes import Nodes
+        from .store import Killed
+        names = self._project_names()
+        name = arg.strip() or (names[0] if len(names) == 1 else "")
+        if name not in names:
+            return self.say("Known projects: " + (", ".join(names) or "none") + ". Usage: /check <project>")
+        nodes = [n for n in Nodes(self.k).list() if (n["state"] or {}).get("os")]       # laptop-type nodes report a full state
+        if not nodes:
+            return self.say("No laptop node has reported yet.")
+        node = nodes[0]
+        try:
+            Jobs(self.k).create(node["name"], "project_check", {"project": name})
+        except Killed:
+            return self.say("Kill switch is on: no jobs.")
+        except JobError as e:
+            return self.say("Refused: " + str(e)[:150])
+        self.say(f"Queued a check of {name} on {node['name']} ({'online' if node['online'] else 'offline: it runs when the laptop is back, within 30 minutes'}). "
+                 "I will message you with the result. Nothing will be changed.")
+
+    def flush_jobs(self):
+        """Tell the owner about finished or expired jobs, once each."""
+        from .jobs import Jobs, report_text
+        from .analyze import _NUM, _flatten
+        jobs = Jobs(self.k)
+        for jid, kind, state, params, result in jobs.to_report():
+            project = params.get("project", "?")
+            if state == "expired":
+                text = f"Project check for {project} expired: the laptop did not pick it up within 30 minutes."
+            else:
+                text = report_text(project, result)
+                allowed = set(); _flatten(result, allowed)
+                bad = [m for m in _NUM.findall(text) if m not in allowed]
+                text += f"\n[check] numbers not found in the result: {bad or 'none'}"
+            self.say(text)
+            jobs.mark_notified(jid)
+            self.k.audit.append("job_reported", {"id": jid, "state": state})
+
     def models(self):
         path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "models.json")
         try:
@@ -298,6 +348,10 @@ class Bridge:
             except Exception as e:
                 self.k.audit.append("tg_start_check_failed", {"msg": str(e)[:80]})
                 raise SystemExit("Telegram token rejected or unreachable at start-up")
+        try:
+            self.flush_jobs()
+        except Exception as e:
+            self.k.audit.append("tg_handler_error", {"type": type(e).__name__})
         try:  # a restart must never replay old messages (an old /kill or /approve): acknowledge and drop everything queued
             newest = self.api.get_updates(-1, wait=0)
             if newest:
@@ -308,6 +362,7 @@ class Bridge:
         self.say("JARVIS kernel online.")
         while True:
             try:
+                self.flush_jobs()
                 for u in self.api.get_updates(offset):
                     offset = u["update_id"] + 1
                     try:

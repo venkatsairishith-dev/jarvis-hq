@@ -102,6 +102,21 @@ def make_handler(kernel):
                     if not name:
                         return self._json(401, {"error": "unauthorized"})
                     return self._json(200, {"ok": True, "killed": kernel.killed()})
+                if self.path in ("/jobs/next", "/jobs/result"):
+                    auth = self.headers.get("Authorization", "")
+                    name = nodes.identify(auth[7:] if auth.startswith("Bearer ") else "")
+                    if not name:
+                        kernel.audit.append("report_refused", {"path": self.path})
+                        return self._json(401, {"error": "unauthorized"})
+                    from .jobs import Jobs
+                    jobs = Jobs(kernel)
+                    if self.path == "/jobs/next":
+                        if kernel.killed():
+                            return self._json(200, {"job": None, "killed": True})
+                        return self._json(200, {"job": jobs.next_for(name)})
+                    res = data.get("result")
+                    ok = isinstance(data.get("id"), str) and isinstance(res, dict) and jobs.finish(name, data["id"], res)
+                    return self._json(200, {"accepted": bool(ok)})
                 if self.path in ("/request", "/authorize"):
                     auth = self.headers.get("Authorization", "")
                     name = nodes.identify(auth[7:] if auth.startswith("Bearer ") else "")
