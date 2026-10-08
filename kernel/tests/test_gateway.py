@@ -168,6 +168,30 @@ class G(unittest.TestCase):
         provs = load(os.path.join(os.path.dirname(__file__), "..", "..", "config", "providers.json"))
         self.assertEqual([p for p in provs if p.name == "local-llama-vulkan"][0].os_only, "nt")
 
+    def test_priority_orders_providers_but_never_widens_the_lane(self):
+        slow = Provider("slowlocal", "local", self.u_loc, None, ["any"], priority=90)
+        fast = Provider("fastpriv", "private", self.u_priv, None, ["any"], priority=20)
+        pub = Provider("pub", "public", self.u_pub, None, ["any"], priority=1)
+        self.assertEqual([p.name for p in plan([slow, fast, pub], "private")], ["fastpriv", "slowlocal"])   # priority wins; public never appears
+        self.assertEqual([p.name for p in plan([slow, fast, pub], "public")], ["pub", "slowlocal"])
+        self.assertEqual(call(self.k, [slow, fast], "private", "hi"), "hello from priv")                  # the fast one answered
+        # equal priority: local first (the original behaviour)
+        self.assertEqual([p.name for p in plan(self.provs(), "private")], ["loc", "priv"])
+
+    def test_provider_timeout_overrides_the_default(self):
+        class Slow(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                import time; self.rfile.read(int(self.headers["Content-Length"])); time.sleep(2.5)
+                out = json.dumps({"choices": [{"message": {"content": "late answer"}}]}).encode()
+                self.send_response(200); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Slow); threading.Thread(target=srv.serve_forever, daemon=True).start()
+        url = f"http://127.0.0.1:{srv.server_address[1]}/v1"
+        with self.assertRaises(RouteError):    # default timeout 1 s: too short for this provider
+            call(self.k, [Provider("slow", "local", url, None, ["any"])], "private", "hi", timeout=1)
+        self.assertEqual(call(self.k, [Provider("slow", "local", url, None, ["any"], timeout_s=10)], "private", "hi", timeout=1), "late answer")
+        srv.shutdown()
+
     def test_loader_accepts_bom(self):
         p = os.path.join(self.tmp.name, "p.json")
         open(p, "wb").write(b"\xef\xbb\xbf" + json.dumps({"providers": [{"name": "a", "lane": "local", "base_url": "http://x", "key_file": None, "models": ["any"]}]}).encode())

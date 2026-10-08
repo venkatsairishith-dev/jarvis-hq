@@ -40,6 +40,8 @@ class Provider:
     model_pattern: str | None = None      # a model name must match this (e.g. OpenRouter ':free$'), else the call is refused
     extra_body: dict = field(default_factory=dict)  # e.g. {"provider": {"data_collection": "deny"}}
     os_only: str | None = None            # "nt" or "posix": a provider that exists on one machine type only (e.g. the laptop's local model)
+    priority: int = 50                    # lower is tried first, within the lane rules (a slow local fallback gets a high number)
+    timeout_s: int | None = None          # per-provider request timeout (a slow CPU fallback needs longer than a cloud API)
 
     def key_path(self):
         if not self.key_file:
@@ -82,7 +84,7 @@ def plan(providers, task_lane: str, purpose: str | None = None, prefer_local: bo
     ok = [p for p in providers if p.available() and allowed(task_lane, p.lane)]
     if purpose:
         ok = [p for p in ok if purpose in p.models or "any" in p.models]
-    ok.sort(key=lambda p: (p.lane != "local") if prefer_local else (p.lane == "local"))
+    ok.sort(key=lambda p: (p.priority, (p.lane != "local") if prefer_local else (p.lane == "local")))   # stable: config order breaks ties
     if not ok:
         raise RouteError(f"no available provider for a {task_lane} task")
     return ok
@@ -111,7 +113,7 @@ def call(kernel, providers, task_lane: str, prompt: str, purpose: str | None = N
         body = json.dumps(payload).encode()
         try:
             req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urllib.request.urlopen(req, timeout=p.timeout_s or timeout) as r:
                 out = json.loads(r.read())["choices"][0]["message"].get("content") or ""
             if not out.strip():
                 raise ValueError("empty reply")  # reasoning models can spend the whole budget thinking: try the next provider

@@ -1,0 +1,19 @@
+[Unit]
+Description=JARVIS embedding service on the VM (bge-small, CPU, localhost only)
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/jarvis
+ExecStart=/home/ubuntu/jarvis/tools/llama.cpp/llama-b11461/llama-server -m /home/ubuntu/jarvis/models/bge-small-en-v1.5-q8_0.gguf --embedding --pooling cls --host 127.0.0.1 --port 8081 -c 512 -np 1 -t 1
+Restart=on-failure
+RestartSec=10
+Nice=10
+MemoryMax=1G
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
