@@ -11,6 +11,7 @@ Safety properties (each has a test):
 - clicks and typing must name the element they expect (name must match), so a stale id cannot hit another element
 - an action budget per session; one page only
 """
+import json
 import os
 import shutil
 import socket
@@ -58,6 +59,33 @@ def check_url(url: str, allow_hosts=()) -> str:
     return url
 
 
+def load_egress_proxy() -> str:
+    url = os.environ.get("JARVIS_EGRESS_PROXY")
+    if not url:
+        try:
+            url = json.load(open(os.path.join(os.path.dirname(__file__), "..", "..", "config", "egress.json"), encoding="utf-8-sig")).get("proxy")
+        except (OSError, ValueError):
+            url = None
+    if not url:
+        raise BrowserError("no egress checkpoint configured; refusing to browse")
+    return url
+
+
+def verify_egress(proxy_url: str):
+    """The browser only runs through a checkpoint that is reachable and demonstrably refuses internal addresses."""
+    import http.client
+    parts = urllib.parse.urlsplit(proxy_url)
+    try:
+        c = http.client.HTTPConnection(parts.hostname, parts.port or 80, timeout=8)
+        c.request("GET", "http://169.254.169.254/latest/meta-data/", headers={"Host": "169.254.169.254"})
+        status = c.getresponse().status
+        c.close()
+    except Exception:
+        raise BrowserError("egress checkpoint unreachable; refusing to browse") from None
+    if status not in (403, 407):
+        raise BrowserError(f"egress checkpoint failed its self-test (status {status}); refusing to browse")
+
+
 JS_ELEMENTS = """
 (max) => {
   const sel = 'a[href],button,input,select,textarea,[role=button],[role=link]';
@@ -81,8 +109,11 @@ JS_ELEMENTS = """
 
 
 class BrowserSession:
-    def __init__(self, channel="chrome", headless=True, allow_hosts=(), max_actions=30, timeout_ms=20000):
+    def __init__(self, channel="chrome", headless=True, allow_hosts=(), max_actions=30, timeout_ms=20000, egress_proxy=None, local_guard=False):
+        """egress_proxy: URL of the Smokescreen checkpoint (default: config/egress.json or $JARVIS_EGRESS_PROXY).
+        local_guard=True uses the built-in local filtering proxy instead; it exists for tests and is never a silent fallback."""
         self.channel, self.headless, self.allow_hosts = channel, headless, tuple(allow_hosts)
+        self.local_guard, self.egress_proxy = local_guard, egress_proxy
         self.max_actions, self.timeout_ms, self.used = max_actions, timeout_ms, 0
         self._host_ok = {}
         self._blocked = []       # hosts the early check refused (for audit/inspection; never page content)
@@ -90,14 +121,20 @@ class BrowserSession:
     # ---------- lifecycle ----------
     def __enter__(self):
         from playwright.sync_api import sync_playwright
-        from .guardproxy import GuardProxy
+        self.proxy = None
+        if self.local_guard:
+            from .guardproxy import GuardProxy
+            self.proxy = GuardProxy(self.allow_hosts).start()
+            proxy_url = f"http://127.0.0.1:{self.proxy.port}"
+        else:
+            proxy_url = self.egress_proxy or load_egress_proxy()
+            verify_egress(proxy_url)        # refuses to run unless the checkpoint is reachable AND denies the metadata address
         self.profile = tempfile.mkdtemp(prefix="jarvis-prof-")
-        self.proxy = GuardProxy(self.allow_hosts).start()      # the hard guard: every connection, redirects included
         self._pw = sync_playwright().start()
         self.page = None
         self.ctx = self._pw.chromium.launch_persistent_context(
             self.profile, channel=self.channel, headless=self.headless, accept_downloads=False, permissions=[],
-            service_workers="block", proxy={"server": f"http://127.0.0.1:{self.proxy.port}", "bypass": "<-loopback>"},
+            service_workers="block", proxy={"server": proxy_url, "bypass": "<-loopback>"},
             args=["--disable-extensions", "--disable-sync", "--no-first-run", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
         self.ctx.route("**/*", self._route)       # early refusal; the proxy is what actually guarantees it
         self.page = self.ctx.new_page()
@@ -118,7 +155,8 @@ class BrowserSession:
             self.ctx.close()
             self._pw.stop()
         finally:
-            self.proxy.stop()
+            if self.proxy:
+                self.proxy.stop()
             shutil.rmtree(self.profile, ignore_errors=True)
 
     @property

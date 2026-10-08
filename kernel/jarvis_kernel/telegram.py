@@ -39,6 +39,10 @@ class TelegramAPI:
         except Exception as e:
             raise RuntimeError(f"telegram error {type(e).__name__}") from None
 
+    def get_me(self):
+        """Cheap start-up check that the token is valid. Returns the bot username."""
+        return self._call("getMe", {}, 15).get("result", {}).get("username", "")
+
     def get_updates(self, offset: int, wait: int = 25):
         return self._call("getUpdates", {"offset": offset, "timeout": wait, "allowed_updates": ["message"]}, wait + 10).get("result", [])
 
@@ -203,6 +207,12 @@ class Bridge:
     def run(self, once=False):
         offset = 0
         backoff = 1
+        if hasattr(self.api, "get_me"):
+            try:
+                self.k.audit.append("tg_start_check", {"bot": self.api.get_me()[:40]})
+            except Exception as e:
+                self.k.audit.append("tg_start_check_failed", {"msg": str(e)[:80]})
+                raise SystemExit("Telegram token rejected or unreachable at start-up")
         try:  # a restart must never replay old messages (an old /kill or /approve): acknowledge and drop everything queued
             newest = self.api.get_updates(-1, wait=0)
             if newest:
@@ -230,6 +240,8 @@ class Bridge:
 
 def from_files(kernel, providers):
     d = gateway.secrets_dir()
-    token = open(os.path.join(d, "telegram_bot_token.txt"), encoding="utf-8-sig").read().strip()
-    owner = int(open(os.path.join(d, "telegram_chat_id.txt"), encoding="utf-8-sig").read().strip())
+    with open(os.path.join(d, "telegram_bot_token.txt"), encoding="utf-8-sig") as fh:
+        token = fh.read().strip()
+    with open(os.path.join(d, "telegram_chat_id.txt"), encoding="utf-8-sig") as fh:
+        owner = int(fh.read().strip())
     return Bridge(kernel, TelegramAPI(token), owner, providers)

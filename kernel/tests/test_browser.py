@@ -106,7 +106,7 @@ class Live(unittest.TestCase):
         cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
         cls.url = f"http://127.0.0.1:{cls.srv.server_address[1]}/"
-        cls.s = B.BrowserSession(allow_hosts=("127.0.0.1",), max_actions=200).__enter__()
+        cls.s = B.BrowserSession(allow_hosts=("127.0.0.1",), max_actions=200, local_guard=True).__enter__()
         cls.profile = cls.s.profile
 
     @classmethod
@@ -196,16 +196,16 @@ class Lifecycle(unittest.TestCase):
         cls.srv.shutdown()
 
     def test_localhost_refused_without_allow_list(self):
-        with B.BrowserSession() as strict:
+        with B.BrowserSession(local_guard=True) as strict:      # local guard, no allow list: loopback is refused
             with self.assertRaises(B.BrowserError): strict.open(self.url)
 
     def test_budget(self):
-        with B.BrowserSession(allow_hosts=("127.0.0.1",), max_actions=2) as one:
+        with B.BrowserSession(allow_hosts=("127.0.0.1",), max_actions=2, local_guard=True) as one:
             one.open(self.url); one.open(self.url)
             with self.assertRaises(B.BrowserError): one.open(self.url)
 
     def test_profile_and_proxy_are_cleaned_up(self):
-        with B.BrowserSession(allow_hosts=("127.0.0.1",)) as t:
+        with B.BrowserSession(allow_hosts=("127.0.0.1",), local_guard=True) as t:
             prof, port = t.profile, t.proxy.port; self.assertTrue(os.path.isdir(prof))
         self.assertFalse(os.path.exists(prof))
         import socket
@@ -213,7 +213,7 @@ class Lifecycle(unittest.TestCase):
             socket.create_connection(("127.0.0.1", port), timeout=2)
 
     def test_public_site_works_through_the_proxy(self):
-        with B.BrowserSession() as s:
+        with B.BrowserSession(local_guard=True) as s:
             try:
                 s.open("https://example.com/")
             except B.BrowserError:
@@ -227,7 +227,7 @@ class Lifecycle(unittest.TestCase):
         except OSError:
             self.skipTest("no DNS")
         port = self.srv.server_address[1]
-        with B.BrowserSession() as s:       # no allow list: a public-looking name must not reach 127.0.0.1
+        with B.BrowserSession(local_guard=True) as s:       # no allow list: a public-looking name must not reach 127.0.0.1
             with self.assertRaises(B.BrowserError): s.open(f"http://localtest.me:{port}/")
             self.assertIn("localtest.me", s.blocked)
 
@@ -285,6 +285,62 @@ class ProxyUnit(unittest.TestCase):
         out = self.raw(b"CONNECT this-host-does-not-exist.invalid:443 HTTP/1.1\r\n\r\n")
         self.assertTrue(out.startswith(b"HTTP/1.1 403"))
 
+def checkpoint_reachable():
+    try:
+        B.verify_egress(B.load_egress_proxy()); return True
+    except Exception:
+        return False
+
+
+@unittest.skipUnless(HAVE_PW, "playwright not installed in this Python")
+class Checkpoint(unittest.TestCase):
+    """The real egress checkpoint (Stripe Smokescreen on the VM, over Tailscale). Skipped when it cannot be reached."""
+    def test_self_test_passes_for_the_real_checkpoint(self):
+        if not checkpoint_reachable(): self.skipTest("checkpoint unreachable from this machine")
+        B.verify_egress(B.load_egress_proxy())
+
+    def test_self_test_refuses_a_proxy_that_allows_everything(self):
+        class Yes(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_GET(self):
+                self.send_response(200); self.send_header("Content-Length", "2"); self.end_headers(); self.wfile.write(b"ok")
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Yes); threading.Thread(target=srv.serve_forever, daemon=True).start()
+        with self.assertRaises(B.BrowserError): B.verify_egress(f"http://127.0.0.1:{srv.server_address[1]}")
+        srv.shutdown()
+
+    def test_unreachable_or_missing_checkpoint_means_no_browsing(self):
+        with self.assertRaises(B.BrowserError): B.verify_egress("http://127.0.0.1:9")
+        with self.assertRaises(B.BrowserError):
+            with B.BrowserSession(egress_proxy="http://127.0.0.1:9"): pass
+        old = os.environ.get("JARVIS_EGRESS_PROXY")
+        os.environ["JARVIS_EGRESS_PROXY"] = ""
+        try:
+            import unittest.mock as m
+            with m.patch("builtins.open", side_effect=OSError):
+                with self.assertRaises(B.BrowserError): B.load_egress_proxy()
+        finally:
+            if old is None: os.environ.pop("JARVIS_EGRESS_PROXY")
+            else: os.environ["JARVIS_EGRESS_PROXY"] = old
+
+    def test_real_browsing_through_the_checkpoint(self):
+        if not checkpoint_reachable(): self.skipTest("checkpoint unreachable from this machine")
+        with B.BrowserSession() as s:
+            s.open("https://example.com/")
+            self.assertEqual(s.snapshot()["title"], "Example Domain")
+            for bad in ("http://169.254.169.254/latest/meta-data/", "http://192.168.1.1/", "http://100.125.91.51:8765/"):
+                with self.assertRaises(B.BrowserError, msg=bad): s.open(bad)
+
+    def test_public_redirect_to_metadata_address_is_stopped_by_the_checkpoint(self):
+        if not checkpoint_reachable(): self.skipTest("checkpoint unreachable from this machine")
+        with B.BrowserSession() as s:
+            try:
+                s.open("https://httpbin.org/get")
+            except B.BrowserError:
+                self.skipTest("httpbin.org not reachable")
+            with self.assertRaises(B.BrowserError):
+                s.open("https://httpbin.org/redirect-to?url=http%3A%2F%2F169.254.169.254%2Flatest%2Fmeta-data%2F&status_code=302")
+            self.assertNotIn("meta-data", s.page.url)
+
 @unittest.skipUnless(HAVE_PW, "playwright not installed in this Python")
 class WithKernel(unittest.TestCase):
     """Controller + browser + kernel together: authorization first, approval for acting, untrusted flag after reading."""
@@ -299,7 +355,7 @@ class WithKernel(unittest.TestCase):
         cls.token = cls.nodes.pair(cls.nodes.new_code(), "laptop")
         cls.web = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=cls.web.serve_forever, daemon=True).start()
         cls.url = f"http://127.0.0.1:{cls.web.server_address[1]}/"
-        cls.s = B.BrowserSession(allow_hosts=("127.0.0.1",)).__enter__()
+        cls.s = B.BrowserSession(allow_hosts=("127.0.0.1",), local_guard=True).__enter__()
 
     @classmethod
     def tearDownClass(cls):

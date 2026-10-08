@@ -204,6 +204,42 @@ class T(unittest.TestCase):
         self.assertIn("tg_backlog_dropped", self.audit_kinds())
         self.assertEqual([t for _, t in api.sent], ["JARVIS kernel online."])
 
+    def test_every_kind_of_network_failure_is_free_of_the_token(self):
+        import socket
+        tok = "123456:SECRET_TOKEN_VALUE_abcdefghijklmnopqrstuv"
+        class Reset(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                self.connection.shutdown(socket.SHUT_RDWR)
+        class Garbage(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                body = b"not json at all " + tok.encode()
+                self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+        class Err500(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                self.send_response(500); self.send_header("Content-Length", "0"); self.end_headers()
+        for handler in (Reset, Garbage, Err500):
+            s = ThreadingHTTPServer(("127.0.0.1", 0), handler); threading.Thread(target=s.serve_forever, daemon=True).start()
+            api = TelegramAPI(tok, f"http://127.0.0.1:{s.server_address[1]}")
+            for call in (lambda: api.send(1, "x"), lambda: api.get_updates(0, wait=1), lambda: api.get_me()):
+                with self.assertRaises(Exception) as cm:
+                    call()
+                text = repr(cm.exception) + str(cm.exception) + repr(getattr(cm.exception, "__cause__", None)) + repr(getattr(cm.exception, "__context__", None))
+                self.assertNotIn("SECRET_TOKEN", text, handler.__name__)
+            s.shutdown()
+
+    def test_start_up_check_refuses_a_bad_token(self):
+        class BadToken(FakeAPI):
+            def get_me(self): raise RuntimeError("telegram HTTP 401")
+        with self.assertRaises(SystemExit):
+            Bridge(self.k, BadToken(), OWNER, self.prov).run(once=True)
+        self.assertIn("tg_start_check_failed", self.audit_kinds())
+        ok = FakeAPI(); ok.get_me = lambda: "mybot"
+        Bridge(self.k, ok, OWNER, self.prov).run(once=True)
+        self.assertIn("tg_start_check", self.audit_kinds())
+
     def test_poll_errors_back_off_and_are_audited_without_token(self):
         class Bad(FakeAPI):
             def get_updates(self, offset, wait=25): raise RuntimeError("telegram error URLError")
