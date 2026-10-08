@@ -14,3 +14,5 @@ Memory map: vault/decisions/memory-map.md
 Latest daily note: vault/daily/ (newest file)
 
 - Oracle protected: NEVER touch instance hermes-agent-vm-2 (or its volumes, network, IPs). hermes-agent-vm is the main server. (User, 2026-10-07)
+
+- Reuse first (user, 2026-10-08): use pre-existing maintained GitHub projects; do not remake anything or create new repos unless truly necessary. Justify any custom code against an existing project in docs/01_RESEARCH_AUDIT.md.
