@@ -12,6 +12,9 @@
     {"name": "ollama-cloud", "lane": "private", "base_url": null, "key_file": "providers/ollama_cloud.key", "models": ["any"], "paid": false, "enabled": false},
     {"name": "gemini", "lane": "public", "base_url": null, "key_file": "providers/gemini.key", "models": ["research"], "paid": false, "enabled": false},
     {"name": "kilo", "lane": "public", "base_url": null, "key_file": "providers/kilo.key", "models": ["research"], "paid": false, "enabled": false},
+    {"name": "colab-ollama", "lane": "public", "base_url": "https://2de2-34-143-149-50.ngrok-free.app/v1", "key_file": null, "models": ["any", "research"], "paid": false, "enabled": true,
+     "os_only": "posix", "priority": 15, "timeout_s": 300, "default_model": "gpt-oss:20b", "model_pattern": "^(gpt-oss:20b|qwen3:8b)$", "extra_body": {"reasoning_effort": "low"},
+     "_note": "Owner's free Colab T4 through ngrok (2026-10-09). Public lane: traffic passes ngrok. ngrok refuses every caller except the VM's address. The URL changes when the Colab runtime restarts: update base_url."},
     {"name": "openrouter-public", "lane": "public", "base_url": "https://openrouter.ai/api/v1", "key_file": "providers/openrouter.key", "models": ["research"], "paid": false, "enabled": false,
      "default_model": "apodex/apodex-1.1-mini:free", "model_pattern": ":free$"}
   ]

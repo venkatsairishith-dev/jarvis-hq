@@ -204,13 +204,15 @@ class G(unittest.TestCase):
             self.assertEqual(p.problems(), [], p.name)
             self.assertFalse(p.paid, p.name)
         for p in provs:
-            if p.enabled and p.lane != "local":      # an enabled cloud provider must have a URL and a way to refuse paid models
-                self.assertTrue(p.base_url and p.key_file, p.name)
+            if p.enabled and p.lane != "local":      # an enabled cloud provider needs a URL and either a key or a model allow-list
+                self.assertTrue(p.base_url and (p.key_file or p.model_pattern), p.name)
+            if p.enabled and p.lane == "public":     # public lane (since 2026-10-09: lab agents with public-lane tokens): models pinned
+                self.assertTrue(p.model_pattern, p.name)
             if "openrouter" in p.name:
                 self.assertEqual(p.model_pattern, ":free$", p.name)        # OpenRouter may only use free models
         priv = [p for p in provs if p.name == "openrouter-private"][0]
         self.assertEqual(priv.extra_body, {"provider": {"data_collection": "deny"}})
-        self.assertFalse([p for p in provs if p.lane == "public" and p.enabled])  # public lane stays off until a public-lane bot exists
+        self.assertFalse([p for p in provs if p.lane == "private" and p.name.startswith(("colab", "omniroute"))])  # tunnelled or free-for-all routes are never private
 
 
 if __name__ == "__main__":

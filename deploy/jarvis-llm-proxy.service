@@ -1,12 +1,12 @@
 [Unit]
-Description=JARVIS model endpoint for the agent (OpenAI-compatible, 127.0.0.1:8790; the agent never holds provider keys)
-After=network-online.target jarvis-kernel.service
+Description=JARVIS model endpoint for agents (OpenAI-compatible, 127.0.0.1:8790 and the Tailscale address; agents never hold provider keys, each token is bound to one lane)
+After=network-online.target jarvis-kernel.service tailscaled.service
 
 [Service]
 User=ubuntu
 WorkingDirectory=/home/ubuntu/jarvis/kernel
 Environment=JARVIS_SECRETS=/home/ubuntu/.jarvis/secrets
-ExecStart=/usr/bin/python3 -m jarvis_kernel llm-proxy --port 8790
+ExecStart=/usr/bin/python3 -m jarvis_kernel llm-proxy --port 8790 --bind 100.125.91.51
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

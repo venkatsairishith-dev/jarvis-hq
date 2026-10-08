@@ -1,7 +1,8 @@
 """OpenAI-compatible model endpoint for the agent runtime, so the agent NEVER holds a provider key.
 
-Listens on 127.0.0.1 only. The agent authenticates with its own bearer token (hash stored in the kernel DB, created by
-`jarvis agent-token`). Each request goes through the existing gateway rules: private lane only, free-model pattern,
+Listens on 127.0.0.1, plus the Tailscale address when started with --bind. The agent authenticates with its own bearer
+token (hash stored in the kernel DB, created by `jarvis agent-token`), and the token fixes the lane (private for the owner's
+agent, public for test agents). Each request goes through the existing gateway rules: that lane only, free-model pattern,
 provider priority and fallback (fallback only before any byte has been streamed back), secret scrubbing of every message
 and tool-call argument, an output-token cap, a rate limit, and an audit entry with counts only. The provider's response,
 including tool calls and streamed chunks, is relayed unchanged.
@@ -30,22 +31,31 @@ def _h(s: str) -> str:
 
 
 class AgentTokens:
+    """Each agent token is bound to ONE lane. The agent cannot choose it: private tokens (the owner's agent) reach only
+    local and private providers; public tokens (test agents, never given private data) reach only local and public ones."""
+
     def __init__(self, kernel):
         self.k = kernel
         kernel.db.execute("CREATE TABLE IF NOT EXISTS agent_tokens(name TEXT PRIMARY KEY, token_h TEXT, created REAL)")
+        cols = [r[1] for r in kernel.db.execute("PRAGMA table_info(agent_tokens)")]
+        if "lane" not in cols:   # older databases: every existing token stays private
+            kernel.db.execute("ALTER TABLE agent_tokens ADD COLUMN lane TEXT NOT NULL DEFAULT 'private'")
 
-    def issue(self, name: str) -> str:
+    def issue(self, name: str, lane: str = "private") -> str:
+        if lane not in ("private", "public"):
+            raise ValueError("lane must be private or public")
         tok = secrets.token_urlsafe(32)
-        self.k.db.execute("INSERT OR REPLACE INTO agent_tokens VALUES (?,?,?)", (name, _h(tok), time.time()))
-        self.k.audit.append("agent_token_issued", {"name": name})
+        self.k.db.execute("INSERT OR REPLACE INTO agent_tokens(name, token_h, created, lane) VALUES (?,?,?,?)", (name, _h(tok), time.time(), lane))
+        self.k.audit.append("agent_token_issued", {"name": name, "lane": lane})
         return tok
 
     def identify(self, tok: str):
+        """(name, lane) for a valid token, else (None, None)."""
         th = _h(tok)
-        for name, h in self.k.db.execute("SELECT name, token_h FROM agent_tokens"):
+        for name, h, lane in self.k.db.execute("SELECT name, token_h, lane FROM agent_tokens"):
             if hmac.compare_digest(h, th):
-                return name
-        return None
+                return name, lane
+        return None, None
 
 
 def _scrub_messages(body: dict):
@@ -94,17 +104,17 @@ def make_handler(kernel, providers, clock=time.time):
 
         def _agent(self):
             auth = self.headers.get("Authorization", "")
-            return tokens.identify(auth[7:]) if auth.startswith("Bearer ") else None
+            return tokens.identify(auth[7:]) if auth.startswith("Bearer ") else (None, None)
 
         def do_GET(self):
             if self.path.rstrip("/") == "/v1/models":
-                if not self._agent():
+                if not self._agent()[0]:
                     return self._json(401, {"error": {"message": "unauthorized"}})
                 return self._json(200, {"object": "list", "data": [{"id": "jarvis", "object": "model", "owned_by": "jarvis"}]})
             self._json(404, {"error": {"message": "not found"}})
 
         def do_POST(self):
-            agent = self._agent()
+            agent, lane = self._agent()
             if not agent:
                 kernel.audit.append("agent_model_refused", {"why": "bad token"})
                 return self._json(401, {"error": {"message": "unauthorized"}})
@@ -142,7 +152,7 @@ def make_handler(kernel, providers, clock=time.time):
             tool_names = sorted({str((t.get("function") or {}).get("name", "?"))[:40] for t in body.get("tools") or [] if isinstance(t, dict)})[:40]
             stream = bool(body.get("stream"))
             try:
-                chain = gateway.plan(providers, "private")     # the agent works on the owner's data: private lane only
+                chain = gateway.plan(providers, lane)     # the token's lane, never widened (private: the owner's agent)
             except gateway.RouteError as e:
                 return self._json(503, {"error": {"message": str(e)}})
             last = "none"
@@ -181,7 +191,7 @@ def make_handler(kernel, providers, clock=time.time):
                         self.wfile.write(chunk)
                         self.wfile.flush()
                         sent += len(chunk)
-                kernel.audit.append("agent_model_call", {"agent": agent, "provider": p.name, "stream": stream, "bytes_out": sent,
+                kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "stream": stream, "bytes_out": sent,
                                                          "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
                                                          "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings})
                 return
@@ -190,6 +200,10 @@ def make_handler(kernel, providers, clock=time.time):
     return H, tokens
 
 
-def serve(kernel, providers, port=8790):
+def serve(kernel, providers, port=8790, binds=("127.0.0.1",)):
+    """Loopback always; extra binds (e.g. the Tailscale address, for agents in the laptop's WSL box) only when asked."""
     H, _ = make_handler(kernel, providers)
-    ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
+    servers = [ThreadingHTTPServer((b, port), H) for b in binds]
+    for s in servers[1:]:
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+    servers[0].serve_forever()

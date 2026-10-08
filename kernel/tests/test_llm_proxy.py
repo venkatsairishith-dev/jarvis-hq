@@ -138,6 +138,29 @@ class P(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as cm: self.call({"messages": [{"role": "user", "content": "x"}]})
         self.assertEqual(cm.exception.code, 503)
 
+    def test_token_lane_decides_the_providers(self):
+        priv = Provider("priv", "private", self.up_url, None, ["any"], priority=1)
+        pub = Provider("pub", "public", self.bad_url, None, ["any"], priority=2)   # fails: proves no fallback into private
+        H, tokens = make_handler(self.k, [priv, pub], clock=lambda: self.now[0])
+        s = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=s.serve_forever, daemon=True).start(); self.servers.append(s)
+        self.url = f"http://127.0.0.1:{s.server_address[1]}"
+        lab = tokens.issue("lab", "public"); owner = tokens.issue("hermes")
+        with self.assertRaises(urllib.error.HTTPError) as cm: self.call({"messages": [{"role": "user", "content": "x"}]}, tok=lab)
+        self.assertEqual(cm.exception.code, 502)
+        self.assertEqual([n for n, b, a in self.seen], ["bad"])                    # the public token never reached the private provider
+        self.seen.clear(); self.call({"messages": [{"role": "user", "content": "x"}]}, tok=owner)
+        self.assertEqual([n for n, b, a in self.seen], ["good"])                   # the private token never reached the public one
+        rows = [r[0] for r in self.k.db.execute("SELECT payload FROM audit WHERE kind='agent_model_call'")]
+        self.assertIn('"lane": "private"', rows[-1])
+        with self.assertRaises(ValueError): tokens.issue("x", "anything")
+
+    def test_old_token_table_keeps_tokens_private(self):
+        self.k.db.execute("CREATE TABLE agent_tokens(name TEXT PRIMARY KEY, token_h TEXT, created REAL)")
+        self.k.db.execute("INSERT INTO agent_tokens VALUES ('old', 'h', 0)")
+        from jarvis_kernel.llm_proxy import AgentTokens
+        AgentTokens(self.k)
+        self.assertEqual(self.k.db.execute("SELECT lane FROM agent_tokens WHERE name='old'").fetchone()[0], "private")
+
     def test_no_provider_available(self):
         self.proxy([Provider("pub", "public", self.up_url, None, ["any"])])
         with self.assertRaises(urllib.error.HTTPError) as cm: self.call({"messages": [{"role": "user", "content": "x"}]})

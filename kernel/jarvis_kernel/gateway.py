@@ -76,7 +76,7 @@ def allowed(task_lane: str, provider_lane: str) -> bool:
 
 def load(path: str):
     cfg = json.load(open(path, encoding="utf-8-sig"))  # tolerate a BOM (Windows editors add one)
-    return [Provider(**p) for p in cfg["providers"]]
+    return [Provider(**{k: v for k, v in p.items() if not k.startswith("_")}) for p in cfg["providers"]]   # "_note" etc. are comments
 
 
 def plan(providers, task_lane: str, purpose: str | None = None, prefer_local: bool = True):
