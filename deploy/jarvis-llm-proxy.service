@@ -1,0 +1,19 @@
+[Unit]
+Description=JARVIS model endpoint for the agent (OpenAI-compatible, 127.0.0.1:8790; the agent never holds provider keys)
+After=network-online.target jarvis-kernel.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/jarvis/kernel
+Environment=JARVIS_SECRETS=/home/ubuntu/.jarvis/secrets
+ExecStart=/usr/bin/python3 -m jarvis_kernel llm-proxy --port 8790
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/.jarvis-kernel
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

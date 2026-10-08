@@ -41,6 +41,10 @@ def main(argv=None):
     sv = sub.add_parser("serve", help="run the node endpoint"); sv.add_argument("--bind", required=True); sv.add_argument("--port", type=int, default=8765)
     tg = sub.add_parser("telegram", help="run the Telegram bridge"); tg.add_argument("--providers", default=None)
     sub.add_parser("pair-code", help="make a one-time node pairing code")
+    lp = sub.add_parser("llm-proxy", help="OpenAI-compatible model endpoint for the agent (127.0.0.1 only)")
+    lp.add_argument("--port", type=int, default=8790); lp.add_argument("--providers", default=None)
+    at = sub.add_parser("agent-token", help="issue a model-endpoint token for an agent and write it to a file (never printed)")
+    at.add_argument("name"); at.add_argument("--out", required=True)
     sub.add_parser("nodes", help="list nodes (no state)")
     an = sub.add_parser("analyze", help="report on a node from its collected state"); an.add_argument("node", nargs="?")
     a = sub.add_parser("audit"); a.add_argument("what", choices=["verify", "anchor"])
@@ -89,6 +93,19 @@ def main(argv=None):
         from . import gateway, telegram
         cfg = args.providers or os.path.join(os.path.dirname(__file__), "..", "..", "config", "providers.json")
         telegram.from_files(k, gateway.load(cfg)).run()
+    elif args.cmd == "llm-proxy":
+        import os
+        from . import gateway, llm_proxy
+        cfg = args.providers or os.path.join(os.path.dirname(__file__), "..", "..", "config", "providers.json")
+        llm_proxy.serve(k, gateway.load(cfg), args.port)
+    elif args.cmd == "agent-token":
+        import os
+        from .llm_proxy import AgentTokens
+        tok = AgentTokens(k).issue(args.name)
+        fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(tok)
+        print("token for", args.name, "written to", args.out)
     elif args.cmd == "pair-code":
         from .nodes import Nodes
         print(Nodes(k).new_code())
