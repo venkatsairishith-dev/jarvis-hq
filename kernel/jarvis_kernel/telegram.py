@@ -77,10 +77,10 @@ class Bridge:
         word = text.strip().split(None, 1)
         cmd = word[0].lower() if word else ""
         arg = word[1].strip() if len(word) > 1 else ""
-        known = {"/start", "/help", "/status", "/analyze", "/pending", "/approve", "/deny", "/kill", "/resume", "/ask", "confirm"}
+        known = {"/start", "/help", "/status", "/analyze", "/pending", "/approve", "/deny", "/kill", "/resume", "/ask", "confirm", "/recent", "/capabilities", "/can", "/models"}
         self.k.audit.append("tg_in", {"cmd": cmd if cmd in known else ("ask" if not cmd.startswith("/") else "unknown")})
         if cmd in ("/start", "/help"):
-            return self.say("JARVIS commands: /status, /analyze [node], /pending, /approve <id>, /deny <id>, /kill, /ask <question> (or just type). "
+            return self.say("JARVIS commands: /status, /recent, /capabilities, /can <tool> <op> [target], /models, /analyze [node], /pending, /approve <id>, /deny <id>, /kill, /ask <question> (or just type). "
                             "Lifting the kill switch and approving RED actions are done at the kernel console.")
         if cmd == "/status":
             return self.status()
@@ -88,6 +88,14 @@ class Bridge:
             return self.analyze(arg)
         if cmd == "/pending":
             return self.pending()
+        if cmd == "/recent":
+            return self.recent()
+        if cmd == "/capabilities":
+            return self.capabilities()
+        if cmd == "/can":
+            return self.can(arg)
+        if cmd == "/models":
+            return self.models()
         if cmd == "/approve":
             return self.approve_start(arg)
         if cmd == "confirm":
@@ -133,6 +141,83 @@ class Bridge:
             text = build(n)
             bad = unmatched_numbers(text, n) if n["state"] else []
             self.say(text + f"\n[check] numbers not found in collected state: {bad or 'none'}")
+
+    def recent(self, hours=24):
+        """What happened while the owner was away: a summary of the audit log, no message text, no secrets."""
+        since = self.clock() - hours * 3600
+        rows = self.k.db.execute("SELECT ts, kind, payload FROM audit WHERE ts>=? ORDER BY seq", (since,)).fetchall()
+        if not rows:
+            return self.say(f"Nothing recorded in the last {hours} hours.")
+        from collections import Counter
+        c = Counter(k for _, k, _ in rows)
+        denied = sum(1 for _, k, p in rows if k == "authorize" and '"allowed": false' in p)
+        lines = [f"Last {hours} hours: {len(rows)} audit events.",
+                 f"Messages from you: {c.get('tg_in', 0)}; model calls: {c.get('model_call', 0)} ok, {c.get('model_call_failed', 0)} failed",
+                 f"Actions refused by policy: {denied}; kill switch used: {c.get('kill', 0)}; approvals given: {c.get('approved', 0) + c.get('tg_approved', 0)}",
+                 f"Node reports: {c.get('node_report', 0)}; vault writes: {c.get('vault_write', 0)} ok, {c.get('vault_write_refused', 0)} refused; strangers ignored: {c.get('tg_ignored', 0)}"]
+        notable_kinds = ("monit_alert", "kill", "resume", "nightly_run", "approved", "tg_approved", "pair_refused", "report_refused",
+                         "tg_backlog_dropped", "tg_start_check_failed")
+        notable = [(ts, k, p) for ts, k, p in rows if k in notable_kinds]
+        if notable:
+            lines.append("Notable:")
+            for ts, k, p in notable[-8:]:
+                try:
+                    d = json.loads(p)
+                except ValueError:
+                    d = {}
+                brief = ", ".join(f"{a}={str(b)[:30]}" for a, b in d.items() if a in ("service", "event", "kind", "why", "flags", "sets"))
+                lines.append(f"- {time.strftime('%H:%M', time.gmtime(ts))} UTC {k} {brief}".rstrip())
+        else:
+            lines.append("Nothing notable (no alerts, kills or approvals).")
+        self.say("\n".join(lines))
+
+    def capabilities(self):
+        """What JARVIS can do right now, from the real policy table, providers and nodes (not a guess)."""
+        from .policy import RULES, NAMES
+        from .nodes import Nodes
+        by = {}
+        for tool, ops, lvl in RULES:
+            by.setdefault(NAMES[lvl], []).append(f"{tool}.{ops}")
+        lines = ["By permission level (from the policy table):"]
+        for lvl in ("GREEN", "YELLOW_AUTO", "YELLOW_APPROVAL", "RED"):
+            if lvl in by:
+                lines.append(f"{lvl}: " + ", ".join(by[lvl]))
+        lines.append("Always refused (DENY): secrets and key files, password managers/wallets/banking sites, internal addresses, "
+                     "rule/hook/settings files for agents, the protected server, egress after reading untrusted content.")
+        lines.append("Unknown actions fail closed as RED (console approval).")
+        avail = [f"{p.name} ({p.lane})" for p in self.providers if p.available()]
+        lines.append("Model providers up now: " + (", ".join(avail) or "none"))
+        nodes = Nodes(self.k).list()
+        for n in nodes:
+            tools = [t for t, v in (n["state"].get("tools") or {}).items() if v.get("present")]
+            lines.append(f"Node {n['name']} is {'online' if n['online'] else 'offline'}; tools there: " + (", ".join(tools) or "unknown"))
+        if not nodes:
+            lines.append("No nodes paired.")
+        self.say("\n".join(lines))
+
+    def can(self, arg: str):
+        """/can <tool> <op> [target]: a verdict from the policy table. It does not run anything."""
+        parts = arg.split(None, 2)
+        if len(parts) < 2:
+            return self.say("Usage: /can <tool> <op> [target], for example: /can fs write notes.md")
+        from .policy import Action, decide
+        d = decide(Action(parts[0], parts[1], parts[2] if len(parts) > 2 else ""), None, self.k.protected)
+        verdict = {"GREEN": "YES", "YELLOW_AUTO": "YES (within limits)", "YELLOW_APPROVAL": "YES_WITH_APPROVAL (you can approve from Telegram)",
+                   "RED": "YES_WITH_CONSOLE_APPROVAL (needs the kernel console)", "DENY": "NO"}[d.name]
+        self.say(f"{verdict}\nLevel: {d.name}. Reason: {d.reason}")
+
+    def models(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "models.json")
+        try:
+            with open(path, encoding="utf-8-sig") as fh:
+                reg = json.load(fh)["models"]
+        except (OSError, ValueError, KeyError):
+            return self.say("Model registry file not found.")
+        lines = ["Model registry (measured facts only):"]
+        for m in reg:
+            speed = f", {m['tokens_per_s']} tokens/s" if "tokens_per_s" in m else ""
+            lines.append(f"- {m['id']}: {m['status']}; {m['where']}{speed}; {m['purpose']}")
+        self.say("\n".join(lines))
 
     def pending(self):
         rows = self.k.db.execute("SELECT id FROM approvals WHERE state='pending' AND expires>=? ORDER BY expires DESC LIMIT 10", (self.clock(),)).fetchall()

@@ -103,6 +103,28 @@ class H(unittest.TestCase):
         self.assertEqual(decide(Action("oci", "terminate", "ocid1.instance.oc1..abcdef"), protected=prot).level, DENY)
         self.assertEqual(decide(Action("oci", "terminate", "", {"id": "OCID1.INSTANCE.OC1..ABCDEF"}), protected=prot).level, DENY)
 
+    # common credential stores found missing by the 260-item risk benchmark (2026-10-08)
+    def test_credential_stores_are_denied_for_reads_copies_and_uploads(self):
+        for tgt in (".env", "C:/proj/.env.production", "api/.env.local", "~/.aws/credentials", "D:/x/.AWS/config", "~/.ssh/config", "~/.gnupg/secring.gpg",
+                    "~/.npmrc", "~/.pypirc", "~/.netrc", "~/.pgpass", "~/.git-credentials", "~/.kube/config", "deploy/kubeconfig", "repo/.git/config",
+                    "~/.docker/config.json", "secrets.yaml", "config/secrets.yml", "app/credentials.json", "service-account-prod.json", "terraform.tfstate",
+                    "prod.tfvars/terraform.tfvars", "C:/Users/x/AppData/Roaming/Mozilla/Firefox/Profiles/a.default/logins.json", "key4.db",
+                    "C:/Users/x/AppData/Local/Google/Chrome/User Data/Default/Cookies", "Cookies.sqlite", "Login Data", "Web Data", "Local State",
+                    "wallet.dat", "/etc/shadow", "vault.kdbx", "cert.p12", "id.pfx", "release.keystore", "google recovery codes.txt", "~/.config/gcloud/credentials.db"):
+            for op in ("read", "copy", "upload"):
+                self.assertEqual(decide(Action("fs", op, tgt)).level, DENY, (tgt, op))
+
+    def test_credential_patterns_do_not_catch_ordinary_files(self):
+        for tgt in ("README.md", "src/environment.py", "notes/environment-setup.md", "docs/secret-santa.md", "config.json", "package.json", "app/envelope.py",
+                    "data/cookies-recipe.md", "keys.md", "C:/work/gitconfig.txt", "repo/.gitignore", "repo/.github/workflows/ci.yml", ".environment", "my.env.sample.txt"):
+            self.assertEqual(decide(Action("fs", "read", tgt)).level, GREEN, tgt)
+
+    def test_changing_logs_and_history_needs_the_console(self):
+        for tgt in ("/var/log/auth.log", "/var/log/syslog", "~/.bash_history", "~/.zsh_history", "C:/Users/x/AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt", "/var/log/wtmp"):
+            for op in ("write", "delete", "truncate"):
+                self.assertGreaterEqual(decide(Action("fs", op, tgt)).level, RED, (tgt, op))
+        self.assertEqual(decide(Action("fs", "read", "/var/log/syslog")).level, GREEN)       # reading logs stays fine
+
     # rules, hooks and settings files; the protected server by name
     def test_changing_rule_files_needs_the_console(self):
         for tgt in ("D:/jarvis/CLAUDE.md", "~/.claude/settings.json", "repo/.claude/settings.local.json", "kernel/jarvis_kernel/policy.py",

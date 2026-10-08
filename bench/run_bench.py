@@ -176,7 +176,7 @@ def main():
         print(f"items {len(items)}; train {len(train)}; test {len(test)}")
     knn, llm = KNN(train), LLMClf(train)
     SIM_T = float(os.environ.get("SIM_T", "0.80"))
-    mech = {"rules": {}, "knn": {}, "llm": {}, "hybrid": {}}
+    mech = {"rules": {}, "knn": {}, "llm": {}, "hybrid": {}, "union": {}}   # union = for risk, the HIGHER level of kNN and LLM (a model may only raise)
     lat = {k: [] for k in mech}
     res = {k: defaultdict(list) for k in mech}
     for it in test:
@@ -192,6 +192,8 @@ def main():
         if task == "risk":
             hl = max([pr, hl or "GREEN"], key=lambda x: LEVEL.get(x, 0))
         lat["hybrid"].append(ms_h + ms); res["hybrid"][task].append((truth, hl))
+        ul = max([kl, pl or "GREEN"], key=lambda x: LEVEL.get(x, 0)) if task == "risk" else hl
+        lat["union"].append(ms_k + ms_l); res["union"][task].append((truth, ul))
     tasks = sorted({i["task"] for i in test})
     print("\nACCURACY on test split (correct/total)")
     print("%-12s" % "task" + "".join("%-18s" % m for m in mech))

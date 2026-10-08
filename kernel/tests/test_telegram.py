@@ -188,6 +188,44 @@ class T(unittest.TestCase):
         self.assertNotIn("SECRET_TOKEN", str(cm2.exception))
         s.shutdown()
 
+    # ---- /recent, /capabilities, /can, /models ----
+    def test_recent_summarises_the_audit_log_without_content(self):
+        self.b.handle(msg("/recent")); self.assertIn("Last 24 hours", self.last())
+        self.k.audit.append("monit_alert", {"service": "jarvis_embed", "event": "Does not exist", "kind": "fail"})
+        self.k.audit.append("kill", {"why": "cli"})
+        self.k.audit.append("authorize", {"action": {"tool": "money"}, "allowed": False, "level": "RED"})
+        self.b.handle(msg("what is 2 plus 2 gho_abcdefghijklmnopqrstuvwxyz0123"))
+        self.b.handle(msg("/recent"))
+        out = self.last()
+        self.assertIn("Notable:", out); self.assertIn("monit_alert", out); self.assertIn("jarvis_embed", out); self.assertIn("kill", out)
+        self.assertIn("Actions refused by policy: 1", out)
+        self.assertNotIn("2 plus 2", out); self.assertNotIn("gho_", out)      # message text is never in the audit log or the summary
+
+    def test_recent_with_nothing_notable(self):
+        self.b.handle(msg("/status")); self.b.handle(msg("/recent"))
+        self.assertIn("Nothing notable", self.last())
+
+    def test_capabilities_come_from_the_real_policy_and_state(self):
+        n = Nodes(self.k); tok = n.pair(n.new_code(), "laptop")
+        from test_nodes import STATE
+        n.report(tok, STATE)
+        self.b.handle(msg("/capabilities")); out = self.last()
+        for expect in ("GREEN:", "fs.read", "YELLOW_APPROVAL:", "RED:", "Always refused (DENY)", "fake (private)", "Node laptop is online", "git"):
+            self.assertIn(expect, out)
+        self.assertNotIn("ollama", out.split("Node laptop")[1])           # STATE has no ollama, so it is not claimed
+
+    def test_can_gives_a_verdict_from_the_policy_and_runs_nothing(self):
+        for text, expect in (("/can fs read notes.md", "YES\n"), ("/can fs write notes.md", "YES_WITH_APPROVAL"), ("/can money pay 5", "YES_WITH_CONSOLE_APPROVAL"),
+                             ("/can fs read D:/jarvis-secrets/keys.json", "NO\n"), ("/can oci terminate hermes-agent-vm-2", "NO\n"), ("/can nonsense thing", "YES_WITH_CONSOLE_APPROVAL")):
+            self.b.handle(msg(text)); self.assertTrue(self.last().startswith(expect), (text, self.last()))
+        self.b.handle(msg("/can")); self.assertIn("Usage", self.last())
+        self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM approvals").fetchone()[0], 0)   # asking never creates an approval
+
+    def test_models_lists_the_registry(self):
+        self.b.handle(msg("/models")); out = self.last()
+        self.assertIn("qwen3-4b-q4km-laptop", out); self.assertIn("production", out); self.assertIn("35 tokens/s", out)
+        self.assertIn("groq-gpt-oss-120b", out)
+
     def test_restart_drops_the_backlog_instead_of_replaying_it(self):
         class Queued(FakeAPI):
             def __init__(self):

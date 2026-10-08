@@ -49,6 +49,20 @@ SENSITIVE_APPS = re.compile(
     r"1password|bitwarden|keepass|lastpass|dashlane|password manager|credential manager|metamask|\bwallet\b|paypal|\bbank|netbanking|\bupi\b|\bbroker", re.I)
 # Files that hold the rules, hooks and settings the agents run under: changing them is console-only (at least RED).
 SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".claude", "hooks.json", "providers.json", "policy.py", "audit.py", "store.py"}
+# Credential and secret stores that must never be read, copied or sent by an agent (matched on the normalized path).
+SECRET_PATTERNS = re.compile(
+    r"(^|/)\.env(\.[\w.-]+)?(/|$)"                                   # .env, .env.local, .env.production
+    r"|(^|/)\.(aws|ssh|gnupg|kube|azure)(/|$)"                        # cloud and key directories
+    r"|(^|/)\.(npmrc|pypirc|netrc|pgpass|git-credentials|s3cfg|boto|my\.cnf|envrc)$|(^|/)_netrc$"
+    r"|kubeconfig|(^|/)\.git/config$|(^|/)\.docker/config\.json$"
+    r"|(^|/)(secrets?|credentials?|service-account[\w-]*)\.(ya?ml|json|db|txt|csv)$"
+    r"|terraform\.(tfstate|tfvars)"
+    r"|logins\.json|key[34]\.db|(^|/)cookies(\.sqlite)?$|login data|web data|local state"   # browser password and cookie stores
+    r"|wallet\.dat|(^|/)etc/(shadow|gshadow)|\.(p12|pfx|kdbx|jks|keystore)$|(^|/)id_(dsa|ecdsa|rsa|ed25519)(\.pub)?$"
+    r"|recovery[ _-]?codes?|(^|/)authy|(^|/)\.config/gcloud(/|$)",
+    re.I)
+# Logs and shell history: reading them is fine, changing or deleting them is tampering (at least RED).
+LOG_TAMPER = re.compile(r"(^|/)(auth\.log|syslog|secure|wtmp|btmp|lastlog|\.bash_history|\.zsh_history|consolehost_history\.txt|journal)(/|$)", re.I)
 WRITE_OPS = re.compile(r"write|edit|delete|remove|rename|move|commit|truncate|overwrite|append|chmod|rm\b", re.I)
 SECRET_COMPONENTS = {".jarvis", ".jarvis-kernel", "secrets.env", "keys.json", "protected.json", "id_ed25519", "id_rsa"}
 
@@ -126,7 +140,7 @@ def _internal_url(leaf: str) -> bool:
 
 def _is_secret_path(forms: list) -> bool:
     for f in forms:
-        if "jarvis-secrets" in f:
+        if "jarvis-secrets" in f or SECRET_PATTERNS.search(f):
             return True
         for comp in re.split(r"[/\s]+", f):  # path pieces AND words (window titles like "keys.json - Notepad")
             comp = comp.strip("'\"()[]{},;:<>")
@@ -207,6 +221,8 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         pieces = {c.strip("'\"()[]{},;:<>") for f in forms for c in re.split(r"[/\s]+", f)}
         if pieces & SAFETY_COMPONENTS:
             level, reason = RED, "changes the rules, hooks or settings the agents run under (console only)"
+    if WRITE_OPS.search(op) and level < RED and any(LOG_TAMPER.search(f) for f in forms):
+        level, reason = RED, "changes a system log or shell history (console only)"
     if tool in ("ui", "browser") and SENSITIVE_APPS.search(" ".join(forms)):
         level, reason = DENY, "UI or browser on a password manager, wallet or banking app"
     if tool == "browser" and any(_internal_url(lf) for lf in leaves):
