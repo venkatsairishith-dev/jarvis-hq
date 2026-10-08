@@ -136,6 +136,10 @@ def make_handler(kernel, providers, clock=time.time):
                     body[k] = min(int(body[k] or MAX_OUT_TOKENS), MAX_OUT_TOKENS)
             if "max_tokens" not in body and "max_completion_tokens" not in body:
                 body["max_tokens"] = MAX_OUT_TOKENS
+            for k in ("reasoning_effort", "reasoning"):   # agent-side reasoning settings vary by client and break some providers;
+                body.pop(k, None)                       # the provider entry decides (e.g. Groq: reasoning_effort "low")
+            prompt_chars = len(json.dumps(body.get("messages") or [])) + len(json.dumps(body.get("tools") or []))
+            tool_names = sorted({str((t.get("function") or {}).get("name", "?"))[:40] for t in body.get("tools") or [] if isinstance(t, dict)})[:40]
             stream = bool(body.get("stream"))
             try:
                 chain = gateway.plan(providers, "private")     # the agent works on the owner's data: private lane only
@@ -157,7 +161,7 @@ def make_handler(kernel, providers, clock=time.time):
                     resp = urllib.request.urlopen(req, timeout=p.timeout_s or 120)
                 except urllib.error.HTTPError as e:
                     last = f"HTTP {e.code}"
-                    kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last})
+                    kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "prompt_chars": prompt_chars})
                     continue
                 except Exception as e:
                     last = type(e).__name__
@@ -178,7 +182,8 @@ def make_handler(kernel, providers, clock=time.time):
                         self.wfile.flush()
                         sent += len(chunk)
                 kernel.audit.append("agent_model_call", {"agent": agent, "provider": p.name, "stream": stream, "bytes_out": sent,
-                                                         "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []), "scrubbed": findings})
+                                                         "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
+                                                         "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings})
                 return
             self._json(502, {"error": {"message": f"all providers failed ({last})"}})
 

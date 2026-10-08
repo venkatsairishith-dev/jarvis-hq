@@ -99,6 +99,14 @@ class P(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as cm: self.call({"messages": [{"role": "user", "content": "-----BEGIN OPENSSH PRIVATE KEY-----\nabc"}]})
         self.assertEqual(cm.exception.code, 400); self.assertEqual(self.seen, [])
 
+    def test_agent_reasoning_settings_are_replaced_by_the_provider_entry(self):
+        self.proxy([self.good(extra_body={"reasoning_effort": "low"})])
+        self.call({"messages": [{"role": "user", "content": "x"}], "reasoning_effort": {"enabled": True, "effort": "medium"}, "reasoning": {"effort": "high"}})
+        body = self.seen[-1][1]
+        self.assertEqual(body["reasoning_effort"], "low"); self.assertNotIn("reasoning", body)
+        rows = [r[0] for r in self.k.db.execute("SELECT payload FROM audit WHERE kind='agent_model_call'")]
+        self.assertIn("prompt_chars", rows[-1])
+
     def test_output_tokens_capped(self):
         self.proxy([self.good()])
         self.call({"messages": [{"role": "user", "content": "x"}], "max_tokens": 100000}); self.assertEqual(self.seen[-1][1]["max_tokens"], MAX_OUT_TOKENS)
