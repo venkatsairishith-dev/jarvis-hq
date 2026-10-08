@@ -51,7 +51,8 @@ def snapshot(process: str = "", max_elements: int = 60, max_depth: int = 4, valu
         raise ValueError("bad process name")
     script = (PS.replace("__PROC__", process).replace("__MAX__", str(int(max_elements))).replace("__DEPTH__", str(int(max_depth)))
               .replace("__VALUES__", "$true" if values else "$false"))
-    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, encoding="utf-8", timeout=60)
+    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, encoding="utf-8", timeout=60,
+                       creationflags=0x08000000 if os.name == "nt" else 0)  # CREATE_NO_WINDOW: no flashing console
     snap = json.loads(r.stdout)
     from jarvis_kernel.scrub import scrub  # same scrubber as the gateway and the vault
     def clean(s):

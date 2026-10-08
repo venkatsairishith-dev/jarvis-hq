@@ -56,7 +56,8 @@ def _split(target: str):
 
 def _run(script, env):
     r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True,
-                       encoding="utf-8", timeout=30, env={**os.environ, **env})
+                       encoding="utf-8", timeout=30, env={**os.environ, **env},
+                       creationflags=0x08000000 if os.name == "nt" else 0)  # CREATE_NO_WINDOW: no flashing console
     if r.returncode:
         # Only fixed reason codes raised by our own scripts are passed on; other error text could contain screen content.
         text = (r.stderr or "") + (r.stdout or "")

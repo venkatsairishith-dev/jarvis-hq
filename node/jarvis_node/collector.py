@@ -27,6 +27,8 @@ $o.ports=@(Get-NetTCPConnection -State Listen | Sort-Object LocalPort -Unique | 
 $o | ConvertTo-Json -Depth 5 -Compress
 """
 
+# Background helpers must not open a console window each time (this runs under pythonw): CREATE_NO_WINDOW.
+NOWIN = 0x08000000 if os.name == "nt" else 0
 TOOLS = ["git", "gh", "python", "node", "npm", "ollama", "docker", "tailscale", "ssh"]
 VERSION_FLAG = {"ssh": "-V", "tailscale": "version"}  # default is --version
 EXTRA_PATHS = {  # tools that are installed but not on PATH
@@ -47,7 +49,7 @@ def _user_env(name):
 
 
 def _ps() -> dict:
-    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", PS], capture_output=True, text=True, timeout=90)
+    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", PS], capture_output=True, text=True, timeout=90, creationflags=NOWIN)
     return json.loads(r.stdout)
 
 
@@ -57,7 +59,7 @@ def _tool(name: str):
         return {"present": False}
     ver = None
     try:
-        out = subprocess.run([path, VERSION_FLAG.get(name, "--version")], capture_output=True, text=True, timeout=8, stdin=subprocess.DEVNULL)
+        out = subprocess.run([path, VERSION_FLAG.get(name, "--version")], capture_output=True, text=True, timeout=8, stdin=subprocess.DEVNULL, creationflags=NOWIN)
         text = (out.stdout or out.stderr).strip()
         ver = text.splitlines()[0][:80] if text else None
     except Exception:
