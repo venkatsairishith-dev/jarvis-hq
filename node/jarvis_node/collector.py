@@ -67,10 +67,20 @@ def _tool(name: str):
     return {"present": True, "version": ver}
 
 
+_TOOLS_CACHE = {"at": 0.0, "value": None}
+TOOLS_TTL = 1800  # installed tool versions almost never change: ask every 30 minutes, not every minute
+
+
+def _tools() -> dict:
+    if _TOOLS_CACHE["value"] is None or time.time() - _TOOLS_CACHE["at"] > TOOLS_TTL:
+        _TOOLS_CACHE["value"], _TOOLS_CACHE["at"] = {t: _tool(t) for t in TOOLS}, time.time()
+    return _TOOLS_CACHE["value"]
+
+
 def collect() -> dict:
     t0 = time.time()
     s = _ps()
-    s["tools"] = {t: _tool(t) for t in TOOLS}
+    s["tools"] = _tools()
     s["env_paths"] = {k: _user_env(k) for k in ENV_ALLOW}
     s["collected_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     s["collect_seconds"] = round(time.time() - t0, 1)
