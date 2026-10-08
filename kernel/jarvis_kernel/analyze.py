@@ -1,7 +1,7 @@
 """Build the 'analyze my computer' report from collected state only. Every number printed comes from the state."""
 import re
 
-LB = "(free here means Windows free memory; cached memory is not counted)"
+LB = "(available memory: free plus cache that can be reused at once)"
 
 
 def build(node: dict) -> str:
@@ -21,8 +21,8 @@ def build(node: dict) -> str:
     L.append("Top memory use: " + ", ".join(f"{p['name']} {p['mem_mb']} MB" for p in s["processes_top"]) + ".")
     L.append(f"Services: {s['services']['running']} running; auto-start but stopped: " + (", ".join(s["services"]["stopped_auto"]) or "none") + ".")
     L.append("Listening ports: " + ", ".join(f"{p['port']} ({p['process']})" for p in s["ports"][:15]) + ".")
-    have = [f"{t} {v.get('version') or ''}".strip() for t, v in s["tools"].items() if v["present"]]
-    miss = [t for t, v in s["tools"].items() if not v["present"]]
+    have = [f"{t} {v.get('version') or ''}".strip() for t, v in s["tools"].items() if v.get("present")]
+    miss = [t for t, v in s["tools"].items() if not v.get("present")]
     L.append("Tools found: " + ("; ".join(have) or "none") + ". Not found: " + (", ".join(miss) or "none") + ".")
     # Observations come from simple thresholds on stored values.
     obs = []
@@ -31,7 +31,7 @@ def build(node: dict) -> str:
             obs.append(f"Disk {d['drive']} is low: {d['free_pct']} percent free.")
     if s["ram"]["used_pct"] > 85:
         obs.append(f"Memory is under pressure: {s['ram']['used_pct']} percent used.")
-    if not s["tools"]["ollama"]["present"]:
+    if not s["tools"].get("ollama", {}).get("present"):
         obs.append("Ollama is not installed, so no local model runtime is available yet.")
     smb = [p["port"] for p in s["ports"] if p["port"] in (139, 445)]
     if smb:
