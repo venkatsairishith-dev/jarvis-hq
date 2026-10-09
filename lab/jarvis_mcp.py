@@ -64,15 +64,18 @@ def _say(reply):
 
 @mcp.tool()
 def save_output(name: str, content: str) -> str:
-    """Save a result for the owner on their laptop, in D:\\jarvis\\outputs\\<agent>\\<name>.
-    name: a plain file name ending in .md, .txt, .html, .json, .csv, .log or .py (no folders). Never overwrites."""
+    """Give a file to the OWNER: saves it on the owner's laptop in D:\\jarvis\\outputs\\<agent>\\<name>.
+    This is the ONLY way to deliver a result to the owner; write_file only writes inside your own computer and the
+    owner never sees it. Pass the full text as content. name: a plain file name ending in .md, .txt, .html, .json,
+    .csv, .log or .py (no folders). Never overwrites."""
     r = _act("output", "save", name, {"content": content})
     return _say(_wait(r["job"]) if r.get("status") == "queued" else r)
 
 
 @mcp.tool()
 def show_output(name: str) -> str:
-    """Open a saved output on the owner's screen (text in Notepad, .html in the browser). At most 12 per hour."""
+    """Open on the owner's screen a file you ALREADY delivered with save_output (use the same name). Files written
+    with write_file cannot be shown. Text opens in Notepad, .html in the browser. At most 12 per hour."""
     r = _act("output", "show", name)
     return _say(_wait(r["job"]) if r.get("status") == "queued" else r)
 
