@@ -17,6 +17,7 @@ VM_IP = "129.159.236.212"                       # hermes-agent-vm public egress 
 MODELS = ["gpt-oss:20b"]
 CONTEXT = 32768
 RUN_HOURS = 8
+IDLE_MINUTES = 90        # stop early when nobody has used the models for this long
 
 
 def sh(cmd, timeout=3600):
@@ -32,10 +33,25 @@ def up(url):
 
 
 def main():
+    print("check: gpu", bool(sh("command -v nvidia-smi")), "| internet", bool(up("https://ollama.com")),
+          "| secrets service configured", any(k.startswith("KAGGLE_USER_SECRETS") for k in os.environ), flush=True)
+    # The ngrok token comes from the owner's PRIVATE dataset (runs started through the Kaggle API do not get editor
+    # secrets); Kaggle Secrets is the fallback. Fail fast without it: no point pulling models.
+    import glob
+    found = glob.glob("/kaggle/input/**/ngrok_authtoken.txt", recursive=True)
+    ngrok_token = open(found[0]).read().strip() if found else None
+    if not ngrok_token:
+        try:
+            from kaggle_secrets import UserSecretsClient
+            ngrok_token = UserSecretsClient().get_secret("NGROK_AUTHTOKEN")
+        except Exception as e:
+            print("ngrok token not available (dataset jarvis-ngrok or secret NGROK_AUTHTOKEN):", type(e).__name__, flush=True)
+            raise SystemExit(2)
+    print("ngrok token: found", "(dataset)" if found else "(secret)", flush=True)
     print(sh("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader"), flush=True)
     if not sh("command -v ollama"):
         print(sh("apt-get -qq install -y zstd >/dev/null 2>&1; curl -fsSL https://ollama.com/install.sh | sh 2>&1 | tail -2"), flush=True)
-    env = {**os.environ, "OLLAMA_HOST": "127.0.0.1:11434", "OLLAMA_KEEP_ALIVE": "-1", "OLLAMA_CONTEXT_LENGTH": str(CONTEXT),
+    env = {**os.environ, "OLLAMA_HOST": "0.0.0.0:11434",   # loopback-only Ollama refuses the tunnel's Host header; the container has no other inbound path "OLLAMA_KEEP_ALIVE": "-1", "OLLAMA_CONTEXT_LENGTH": str(CONTEXT),
            "OLLAMA_MAX_LOADED_MODELS": "1", "OLLAMA_NUM_PARALLEL": "1"}
     ollama = subprocess.Popen(["ollama", "serve"], env=env, stdout=open("/kaggle/working/ollama.log", "w"), stderr=subprocess.STDOUT)
     for _ in range(60):
@@ -59,8 +75,8 @@ def main():
     with open("/kaggle/working/policy.yml", "w") as fh:
         fh.write(f"on_http_request:\n  - expressions:\n      - \"conn.client_ip != '{VM_IP}'\"\n"
                  f"    actions:\n      - type: deny\n        config:\n          status_code: 403\n")
-    from kaggle_secrets import UserSecretsClient
-    nenv = {**os.environ, "NGROK_AUTHTOKEN": UserSecretsClient().get_secret("NGROK_AUTHTOKEN")}
+    nenv = {**os.environ, "NGROK_AUTHTOKEN": ngrok_token}
+    ngrok_token = None
     ngrok = subprocess.Popen(["ngrok", "http", "11434", "--url", f"https://{NGROK_DOMAIN}", "--traffic-policy-file",
                               "/kaggle/working/policy.yml", "--log", "/kaggle/working/ngrok.log", "--log-format", "json"],
                              env=nenv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -69,9 +85,21 @@ def main():
     print("tunnel", "up" if ngrok.poll() is None else "FAILED", f"https://{NGROK_DOMAIN}", flush=True)
 
     end = time.time() + RUN_HOURS * 3600
+    last_count, last_change = -1, time.time()
     while time.time() < end and ngrok.poll() is None and ollama.poll() is None:
-        time.sleep(600)
-        print(time.strftime("%H:%M"), "alive", bool(up("http://127.0.0.1:11434/api/version")), flush=True)
+        time.sleep(300)
+        try:   # requests served so far, from the ngrok agent's local API
+            t = json.loads(up("http://127.0.0.1:4040/api/tunnels") or "{}").get("tunnels") or [{}]
+            count = ((t[0].get("metrics") or {}).get("http") or {}).get("count", 0)
+        except ValueError:
+            count = last_count
+        if count != last_count:
+            last_count, last_change = count, time.time()
+        idle = (time.time() - last_change) / 60
+        print(time.strftime("%H:%M"), "alive, requests", count, f"idle {idle:.0f} min", flush=True)
+        if idle >= IDLE_MINUTES:
+            print("no requests for", IDLE_MINUTES, "minutes: stopping to save GPU quota", flush=True)
+            break
     ngrok.terminate(); ollama.terminate()
     print("stopped", flush=True)
 
