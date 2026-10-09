@@ -256,6 +256,22 @@ class Bridge:
             jobs.mark_notified(jid)
             self.k.audit.append("job_reported", {"id": jid, "state": state})
 
+    def flush_approvals(self):
+        """Tell the owner, once each, about new actions waiting for approval (e.g. an agent asking to use the PC)."""
+        self.k.db.execute("CREATE TABLE IF NOT EXISTS tg_approval_notices(id TEXT PRIMARY KEY)")
+        rows = self.k.db.execute("SELECT id FROM approvals WHERE state='pending' AND expires>=? AND id NOT IN "
+                                 "(SELECT id FROM tg_approval_notices)", (self.clock(),)).fetchall()
+        for (aid,) in rows:
+            i = self.k.approval_info(aid)
+            if not i:
+                continue
+            a = i["action"]
+            extra = json.dumps(a.get("params") or {})[:200]
+            self.say(f"Approval needed ({i['level']}): {a['tool']}.{a['op']} {str(a['target'])[:80]} {extra if extra != '{}' else ''}\n"
+                     f"Approve: /approve {aid}    Deny: /deny {aid}    ({i['seconds_left']} s left)")
+            self.k.db.execute("INSERT OR IGNORE INTO tg_approval_notices VALUES (?)", (aid,))
+            self.k.audit.append("tg_approval_notice", {"id": aid})
+
     def models(self):
         path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "models.json")
         try:
@@ -363,6 +379,7 @@ class Bridge:
         while True:
             try:
                 self.flush_jobs()
+                self.flush_approvals()
                 for u in self.api.get_updates(offset):
                     offset = u["update_id"] + 1
                     try:

@@ -10,6 +10,7 @@ including tool calls and streamed chunks, is relayed unchanged.
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import threading
 import time
@@ -24,6 +25,11 @@ MAX_BODY = 2 * 1024 * 1024
 MAX_OUT_TOKENS = 4096
 PER_MINUTE = 30
 PER_DAY = 2000
+# Agent actions (POST /v1/jarvis/actions): every one goes through kernel policy; jobs run on the owner's laptop node.
+OUTPUT_NODE = os.environ.get("JARVIS_OUTPUT_NODE", "laptop")
+ACTIONS_PER_HOUR = 60
+SHOWS_PER_HOUR = 12
+PREFERS_PER_DAY = 20
 
 
 def _h(s: str) -> str:
@@ -83,10 +89,93 @@ def _scrub_messages(body: dict):
     return body, found, blocked
 
 
+def _recent(times: list, now: float, window: float) -> list:
+    return [t for t in times if now - t < window]
+
+
 def make_handler(kernel, providers, clock=time.time):
+    from .jobs import UI_OPS, Jobs, JobError, action_for
+    from .policy import Action
+    from .store import Killed
     tokens = AgentTokens(kernel)
+    jobs = Jobs(kernel)
+    kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
     calls = {}   # agent -> list of timestamps
+    acts, shows, prefers = {}, {}, {}   # agent -> timestamps, per action limit
+
+    def preferred(lane):
+        r = kernel.db.execute("SELECT provider FROM lane_prefs WHERE lane=?", (lane,)).fetchone()
+        return r[0] if r else None
+
+    def agent_action(agent, lane, body):
+        """One agent action: (http status, reply). Lane comes from the token, never from the request."""
+        tool, op = str(body.get("tool", "")), str(body.get("op", ""))
+        target = str(body.get("target", ""))[:200]
+        p = body.get("params") if isinstance(body.get("params"), dict) else {}
+        now = clock()
+        with lock:
+            ts = _recent(acts.get(agent, []), now, 3600)
+            if len(ts) >= ACTIONS_PER_HOUR:
+                return 429, {"status": "refused", "reason": "action limit (60 per hour)"}
+            ts.append(now); acts[agent] = ts
+        try:
+            if tool == "output" and op in ("save", "show"):
+                params = {"agent": agent, "name": target}
+                if op == "save":
+                    clean, found, blocked = scrub(str(p.get("content", "")), deep=True)
+                    if blocked:
+                        return 400, {"status": "refused", "reason": "the content contains a private key"}
+                    params["content"] = clean
+                else:
+                    with lock:
+                        s = _recent(shows.get(agent, []), now, 3600)
+                        if len(s) >= SHOWS_PER_HOUR:
+                            return 429, {"status": "refused", "reason": "show limit (12 per hour)"}
+                        s.append(now); shows[agent] = s
+                jid = jobs.create(OUTPUT_NODE, "output_" + op, params, owner=agent, lane=lane)
+                return 200, {"status": "queued", "job": jid}
+            if tool == "ui" and op in UI_OPS:
+                params = {"agent": agent, "op": op, "target": target, "text": str(p.get("text", ""))[:500]}
+                aid = str(body.get("approval_id") or "") or None
+                if not aid:
+                    d, aid = kernel.request(action_for("ui_action", params, lane, untrusted=True))
+                    if d.denied:
+                        return 403, {"status": "refused", "level": d.name, "reason": d.reason}
+                    if aid:
+                        return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
+                                     "next": "the owner approves on Telegram (/approve " + aid + "); then send the same action again with approval_id"}
+                jid = jobs.create(OUTPUT_NODE, "ui_action", params, approval_id=aid, owner=agent, lane=lane)
+                return 200, {"status": "queued", "job": jid}
+            if tool == "models" and op == "status":
+                if not kernel.authorize(Action("models", "status", lane, {}, lane, True)).allowed:
+                    return 403, {"status": "refused"}
+                pref = preferred(lane)
+                return 200, {"status": "done", "lane": lane, "preferred": pref, "providers": [
+                    {"name": x.name, "available": x.available(), "priority": x.priority, "model": x.default_model}
+                    for x in providers if x.enabled and gateway.allowed(lane, x.lane)]}
+            if tool == "models" and op == "prefer":
+                match = [x for x in providers if x.name == target and x.enabled and gateway.allowed(lane, x.lane)]
+                if not match or not match[0].available():
+                    return 400, {"status": "refused", "reason": "no such usable provider in this lane"}
+                with lock:
+                    pt = _recent(prefers.get(agent, []), now, 86400)
+                    if len(pt) >= PREFERS_PER_DAY:
+                        return 429, {"status": "refused", "reason": "switch limit (20 per day)"}
+                    pt.append(now); prefers[agent] = pt
+                if not kernel.authorize(Action("models", "prefer", target, {}, lane, True)).allowed:
+                    return 403, {"status": "refused"}
+                kernel.db.execute("INSERT OR REPLACE INTO lane_prefs VALUES (?,?,?,?)", (lane, target, now, agent))
+                kernel.audit.append("lane_preference_set", {"lane": lane, "provider": target, "agent": agent})
+                return 200, {"status": "done", "preferred": target}
+            if tool == "lab" and op == "task":
+                d = kernel.authorize(Action("lab", "task", target, {"chars": len(str(p.get("prompt", "")))}, lane, True))
+                return (200, {"status": "allowed"}) if d.allowed else (403, {"status": "refused", "reason": d.reason})
+            return 400, {"status": "refused", "reason": "unknown action"}
+        except JobError as e:
+            return 403, {"status": "refused", "reason": str(e)[:200]}
+        except Killed:
+            return 503, {"status": "refused", "reason": "kill switch is on"}
 
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"   # the connection closes after each response: a stream ends when the socket closes
@@ -111,6 +200,12 @@ def make_handler(kernel, providers, clock=time.time):
                 if not self._agent()[0]:
                     return self._json(401, {"error": {"message": "unauthorized"}})
                 return self._json(200, {"object": "list", "data": [{"id": "jarvis", "object": "model", "owned_by": "jarvis"}]})
+            if self.path.startswith("/v1/jarvis/jobs/"):
+                agent, _ = self._agent()
+                if not agent:
+                    return self._json(401, {"error": {"message": "unauthorized"}})
+                j = jobs.get_for(agent, self.path.rsplit("/", 1)[-1][:40])
+                return self._json(200, j) if j else self._json(404, {"error": {"message": "no such job"}})
             self._json(404, {"error": {"message": "not found"}})
 
         def do_POST(self):
@@ -118,6 +213,20 @@ def make_handler(kernel, providers, clock=time.time):
             if not agent:
                 kernel.audit.append("agent_model_refused", {"why": "bad token"})
                 return self._json(401, {"error": {"message": "unauthorized"}})
+            if self.path.rstrip("/") == "/v1/jarvis/actions":
+                try:
+                    n = int(self.headers.get("Content-Length", "0"))
+                    if n <= 0 or n > MAX_BODY:
+                        return self._json(413, {"status": "refused", "reason": "bad size"})
+                    body = json.loads(self.rfile.read(n))
+                    if not isinstance(body, dict):
+                        raise ValueError
+                except (ValueError, OSError):
+                    return self._json(400, {"status": "refused", "reason": "bad request"})
+                code, reply = agent_action(agent, lane, body)
+                kernel.audit.append("agent_action", {"agent": agent, "lane": lane, "tool": str(body.get("tool", ""))[:20],
+                                                     "op": str(body.get("op", ""))[:20], "status": reply.get("status")})
+                return self._json(code, reply)
             if self.path.rstrip("/") != "/v1/chat/completions":
                 return self._json(404, {"error": {"message": "not found"}})
             if kernel.killed():
@@ -155,6 +264,8 @@ def make_handler(kernel, providers, clock=time.time):
                 chain = gateway.plan(providers, lane)     # the token's lane, never widened (private: the owner's agent)
             except gateway.RouteError as e:
                 return self._json(503, {"error": {"message": str(e)}})
+            pref = preferred(lane)                        # an agent's "switch model" choice, same lane only
+            chain = sorted(chain, key=lambda x: x.name != pref)
             last = "none"
             for p in chain:
                 model = p.default_model

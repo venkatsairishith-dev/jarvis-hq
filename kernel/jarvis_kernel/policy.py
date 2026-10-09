@@ -33,6 +33,12 @@ RULES = [
     ("browser", "open|snapshot|extract", GREEN),
     ("browser", "click|type|select|press", YELLOW_APPROVAL),
     ("browser", "download|upload", RED),
+    # Agent actions (owner defaults 2026-10-09): outputs go only to the laptop's outputs folder; real PC control
+    # (ui.launch/click/type below) always needs the owner's approval; model switching stays inside the token's lane.
+    ("output", "save|show", YELLOW_AUTO),
+    ("lab", "task", YELLOW_AUTO),
+    ("models", "status", GREEN),
+    ("models", "prefer", YELLOW_AUTO),
     ("ui", "snapshot|list_windows", GREEN),
     ("ui", "launch|focus|click|type|key|scroll", YELLOW_APPROVAL),
     ("money", "*", RED),

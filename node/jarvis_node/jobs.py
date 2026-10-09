@@ -86,12 +86,84 @@ def project_check(name: str, projects: dict, python: str = None) -> dict:
     return result
 
 
+OUTPUT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,79}\.(md|txt|html|json|csv|log|py)$")   # same rule as the kernel
+TEXT_VIEWER = {".md", ".txt", ".json", ".csv", ".log", ".py"}
+
+
+def outputs_root() -> str:
+    """D:\\jarvis\\outputs on the laptop (JARVIS_OUTPUTS overrides, e.g. in tests)."""
+    return os.path.realpath(os.environ.get("JARVIS_OUTPUTS") or os.path.join(os.path.dirname(__file__), "..", "..", "..", "outputs"))
+
+
+def _output_path(agent: str, name: str, root: str = None):
+    """The file inside outputs/<agent>/, or None if the names are unsafe or the path would leave that folder."""
+    root = root or outputs_root()
+    if not SAFE_NAME.match(agent or "") or not OUTPUT_NAME.match(name or "") or ".." in name:
+        return None
+    folder = os.path.realpath(os.path.join(root, agent))
+    path = os.path.realpath(os.path.join(folder, name))
+    if not path.startswith(folder + os.sep) or not folder.startswith(root + os.sep):
+        return None
+    return path
+
+
+def output_save(p: dict, root: str = None) -> dict:
+    path = _output_path(str(p.get("agent", "")), str(p.get("name", "")), root)
+    content = p.get("content")
+    if not path or not isinstance(content, str) or len(content) > 200_000:
+        return {"ok": False, "error": "refused: bad name or content"}
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    base, ext = os.path.splitext(path)
+    final, n = path, 2
+    while os.path.exists(final):            # never overwrite an earlier output
+        final, n = f"{base} ({n}){ext}", n + 1
+    with open(final, "x", encoding="utf-8", newline="") as fh:
+        fh.write(content)
+    return {"ok": True, "saved": os.path.basename(final), "folder": os.path.dirname(final), "chars": len(content)}
+
+
+def output_show(p: dict, root: str = None, opener=None) -> dict:
+    path = _output_path(str(p.get("agent", "")), str(p.get("name", "")), root)
+    if not path or not os.path.isfile(path):
+        return {"ok": False, "error": "no such saved output"}
+    if opener is None:
+        def opener(fp):
+            if os.path.splitext(fp)[1].lower() in TEXT_VIEWER:
+                subprocess.Popen(["notepad.exe", fp], creationflags=0)    # a normal window on the owner's desktop
+            else:
+                os.startfile(fp)                                          # .html: the default browser
+    opener(path)
+    return {"ok": True, "shown": os.path.basename(path)}
+
+
+def ui_action(p: dict, backend=None) -> dict:
+    """A PC action the owner approved (the kernel consumed the single-use approval before queueing this job).
+    The Windows backend itself only launches allow-listed apps and refuses password fields."""
+    if backend is None:
+        from .winbackend import BACKEND as backend
+    op = str(p.get("op", ""))
+    if op not in backend:
+        return {"ok": False, "error": "unsupported PC action"}
+    try:
+        backend[op](str(p.get("target", "")), {"text": str(p.get("text", ""))} if p.get("text") else {})
+    except Exception as e:      # the kind of failure only: its text could contain screen content
+        return {"ok": False, "error": type(e).__name__}
+    return {"ok": True, "done": op}
+
+
 def run_job(job: dict, projects: dict = None) -> dict:
     """Run one job. Unknown kinds are refused."""
-    if job.get("kind") != "project_check":
-        return {"ok": False, "error": "unknown job kind"}
+    kind, params = job.get("kind"), job.get("params") or {}
     try:
-        projects = projects if projects is not None else load_projects()
-        return project_check(str((job.get("params") or {}).get("project", "")), projects)
+        if kind == "project_check":
+            projects = projects if projects is not None else load_projects()
+            return project_check(str(params.get("project", "")), projects)
+        if kind == "output_save":
+            return output_save(params)
+        if kind == "output_show":
+            return output_show(params)
+        if kind == "ui_action":
+            return ui_action(params)
+        return {"ok": False, "error": "unknown job kind"}
     except Exception as e:   # report the kind of failure only
         return {"ok": False, "error": type(e).__name__}
