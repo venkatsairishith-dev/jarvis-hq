@@ -1,0 +1,61 @@
+# JARVIS hub: every dashboard gets its own *.localhost name on port 8088 (loopback inside the WSL box, forwarded to this
+# laptop only). Same-site names let the hub show each dashboard in a panel, logins included. Runs as the WSL user "hub".
+{
+	admin off
+	auto_https off
+	http_port 8088
+	persist_config off
+}
+
+http://hub.localhost:8088 {
+	bind 127.0.0.1
+	handle /status-check* {
+		reverse_proxy 127.0.0.1:4000
+	}
+	handle {
+		root * /opt/jarvis-hub/site
+		file_server
+		header Cache-Control "no-cache"
+	}
+}
+
+http://pc.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 127.0.0.1:6080
+}
+
+http://muse.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 127.0.0.1:8081
+}
+
+http://lab.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 127.0.0.1:9121
+}
+
+http://code.localhost:8088 {
+	bind 127.0.0.1
+	# Caddy supplies OpenCode's login (from /home/hub/.hub.env, 600) so the hub panel has no password pop-up;
+	# the WSL agent user is blocked from this port by its firewall.
+	reverse_proxy 127.0.0.1:4096 {
+		header_up Authorization "Basic {$OPENCODE_BASIC}"
+	}
+}
+
+http://hermes.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 100.125.91.51:9119 {
+		header_up Host 100.125.91.51:9119
+	}
+}
+
+http://router.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 100.125.91.51:20128 {
+		header_up Host 100.125.91.51:20128
+		# OmniRoute forbids framing everywhere; allow it only inside the hub's own page
+		header_down -X-Frame-Options
+		header_down Content-Security-Policy "frame-ancestors 'none'" "frame-ancestors http://hub.localhost:8088"
+	}
+}

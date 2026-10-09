@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS Hub</title>
+<!-- JARVIS hub: every dashboard in one page. Panels stay loaded when you switch. Status comes from the
+     Dashy status-check service behind the same origin (/status-check). Served by Caddy at hub.localhost:8088. -->
+<style>
+:root {
+  --bg: #0b0f17; --bg2: #0f1522; --panel: rgba(255,255,255,.035); --line: rgba(255,255,255,.07);
+  --text: #e6ebf5; --muted: #8c97ad; --accent: #6ea8ff; --accent2: #9b7bff;
+  --ok: #3ddc97; --warn: #f5b84b; --bad: #ff6b7a; --idle: #5b6578;
+  --radius: 14px; --ease: cubic-bezier(.2,.8,.2,1);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text); overflow: hidden;
+  font: 14px/1.45 "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+body::before {   /* slow, soft background glow */
+  content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
+  background: radial-gradient(40% 35% at 20% 15%, rgba(110,168,255,.13), transparent 70%),
+              radial-gradient(35% 30% at 85% 80%, rgba(155,123,255,.12), transparent 70%);
+  animation: drift 26s ease-in-out infinite alternate;
+}
+@keyframes drift { to { transform: translate(3%, -2%) scale(1.06); } }
+.app { display: grid; grid-template-columns: 248px 1fr; height: 100vh; }
+.app.collapsed { grid-template-columns: 68px 1fr; }
+
+/* ---------- sidebar ---------- */
+aside {
+  border-right: 1px solid var(--line); background: rgba(11,15,23,.72); backdrop-filter: blur(14px);
+  display: flex; flex-direction: column; padding: 14px 10px; gap: 4px; overflow-y: auto; transition: padding .3s var(--ease);
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 16px; cursor: pointer; user-select: none; }
+.logo {
+  width: 34px; height: 34px; border-radius: 10px; flex: none; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 6px 20px rgba(110,168,255,.35);
+  font-weight: 700; color: #0b0f17;
+}
+.brand b { font-size: 16px; letter-spacing: .5px; }
+.brand small { display: block; color: var(--muted); font-size: 11.5px; margin-top: -2px; }
+.group { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; padding: 14px 10px 6px; }
+.nav {
+  position: relative; display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 10px;
+  color: var(--text); text-decoration: none; cursor: pointer; border: 1px solid transparent;
+  transition: background .2s, border-color .2s, transform .2s var(--ease);
+}
+.nav:hover { background: var(--panel); transform: translateX(2px); }
+.nav.active { background: linear-gradient(90deg, rgba(110,168,255,.16), rgba(155,123,255,.06)); border-color: rgba(110,168,255,.25); }
+.nav.active::before {
+  content: ""; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px; border-radius: 3px;
+  background: linear-gradient(var(--accent), var(--accent2));
+}
+.nav svg { width: 18px; height: 18px; flex: none; opacity: .9; }
+.nav .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav kbd { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); flex: none; position: relative; }
+.dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.wait { background: var(--warn); }
+.dot.ok::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--ok); opacity: 0; animation: ping 2.4s var(--ease) infinite; }
+@keyframes ping { 0% { transform: scale(.5); opacity: .7; } 80%, 100% { transform: scale(1.6); opacity: 0; } }
+.collapsed .label, .collapsed .group, .collapsed .brand div, .collapsed kbd, .collapsed .foot { display: none; }
+.collapsed .nav { justify-content: center; }
+.collapsed .nav .dot { position: absolute; right: 9px; top: 9px; width: 7px; height: 7px; }
+.foot { margin-top: auto; padding: 12px 10px 4px; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+
+/* ---------- main ---------- */
+main { display: flex; flex-direction: column; min-width: 0; }
+header {
+  height: 56px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 18px;
+  border-bottom: 1px solid var(--line); background: rgba(11,15,23,.55); backdrop-filter: blur(14px);
+}
+header h1 { font-size: 15px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px; }
+header .sub { color: var(--muted); font-size: 12.5px; }
+.spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel); font-size: 12px; color: var(--muted); }
+.btn {
+  display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text); transition: background .2s, transform .15s;
+}
+.btn:hover { background: rgba(255,255,255,.08); } .btn:active { transform: scale(.94); }
+.btn svg { width: 16px; height: 16px; }
+.stage { position: relative; flex: 1; min-height: 0; }
+.view {
+  position: absolute; inset: 0; opacity: 0; visibility: hidden; transform: translateY(8px) scale(.995);
+  transition: opacity .35s var(--ease), transform .35s var(--ease), visibility 0s linear .35s;
+}
+.view.show { opacity: 1; visibility: visible; transform: none; transition: opacity .35s var(--ease), transform .35s var(--ease), visibility 0s; }
+.view iframe { width: 100%; height: 100%; border: 0; background: #111722; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; transition: opacity .3s; }
+.spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.1); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- overview ---------- */
+.home { overflow-y: auto; padding: 34px 38px 48px; }
+.hello h2 { font-size: 26px; margin: 0 0 4px; font-weight: 650; }
+.hello p { margin: 0 0 26px; color: var(--muted); }
+.stats { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+.stat { padding: 14px 18px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel); min-width: 150px; }
+.stat b { font-size: 22px; display: block; } .stat span { color: var(--muted); font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 16px; }
+.card {
+  position: relative; padding: 18px; border-radius: var(--radius); border: 1px solid var(--line); cursor: pointer;
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  opacity: 0; transform: translateY(14px); animation: rise .55s var(--ease) forwards;
+  transition: transform .25s var(--ease), border-color .25s, box-shadow .25s;
+}
+.card:hover { transform: translateY(-3px); border-color: rgba(110,168,255,.35); box-shadow: 0 14px 34px rgba(0,0,0,.35); }
+.card.static { cursor: default; }
+.card.static:hover { transform: none; }
+@keyframes rise { to { opacity: 1; transform: none; } }
+.card .top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: none; background: rgba(110,168,255,.12); color: var(--accent); }
+.icon svg { width: 20px; height: 20px; }
+.card h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.card p { margin: 0; color: var(--muted); font-size: 13px; min-height: 38px; }
+.card .meta { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 12px; color: var(--muted); }
+.section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin: 28px 0 12px; }
+
+/* ---------- down state ---------- */
+.down { position: absolute; inset: 0; display: none; place-items: center; background: var(--bg2); }
+.down.on { display: grid; animation: fade .3s var(--ease); }
+@keyframes fade { from { opacity: 0; } }
+.down .box { text-align: center; max-width: 440px; padding: 30px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
+.down h3 { margin: 12px 0 6px; } .down p { color: var(--muted); margin: 0 0 18px; }
+.down .icon { margin: 0 auto; width: 52px; height: 52px; background: rgba(245,184,75,.12); color: var(--warn); }
+.down button { padding: 9px 16px; border-radius: 10px; border: 1px solid var(--line); background: rgba(110,168,255,.15); color: var(--text); cursor: pointer; font: inherit; }
+.down button:hover { background: rgba(110,168,255,.25); }
+.toast { position: fixed; right: 18px; bottom: 18px; padding: 10px 14px; border-radius: 10px; background: #1a2232; border: 1px solid var(--line); opacity: 0; transform: translateY(10px); transition: .3s var(--ease); pointer-events: none; }
+.toast.on { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .card { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside>
+    <div class="brand" id="brand" title="Collapse or expand the sidebar">
+      <div class="logo">J</div>
+      <div><b>JARVIS</b><small>Mission control</small></div>
+    </div>
+    <div id="nav"></div>
+    <div class="foot">Keys 1 to 7 switch panels, Esc goes home.<br>Logins: D:\jarvis-secrets\lab_ui_login.txt</div>
+  </aside>
+  <main>
+    <header>
+      <h1><span class="dot" id="hdot"></span><span id="htitle">Overview</span></h1>
+      <span class="sub" id="hsub"></span>
+      <div class="spacer"></div>
+      <span class="pill" id="health"><span class="dot"></span>checking</span>
+      <button class="btn" id="reload" title="Reload this panel"></button>
+      <button class="btn" id="newtab" title="Open in a new tab"></button>
+      <button class="btn" id="full" title="Full screen"></button>
+    </header>
+    <div class="stage" id="stage">
+      <div class="view home show" id="view-home">
+        <div class="hello"><h2 id="greet">Hello</h2><p>Everything JARVIS runs, in one place. Click a card or use the sidebar.</p></div>
+        <div class="stats" id="stats"></div>
+        <div id="cards"></div>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+"use strict";
+const I = {   // small inline icons (no external files)
+  home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  chat: '<path d="M4 5h16v11H8l-4 4z"/>',
+  tree: '<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2h12v2"/>',
+  code: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13 6l-2 12"/>',
+  bot: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/>',
+  route: '<circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+  cloud: '<path d="M7 18a4 4 0 1 1 .5-7.97A6 6 0 0 1 19 11a3.5 3.5 0 0 1-.5 7z"/>',
+  scale: '<path d="M12 4v16M6 8h12M6 8l-3 6h6zM18 8l-3 6h6z"/>',
+  reload: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>',
+  ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5"/>',
+  full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  warn: '<path d="M12 4l9 16H3zM12 10v4M12 17h.01"/>'
+};
+const svg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[k]}</svg>`;
+
+const P = "http://", D = ".localhost:8088";
+const SERVICES = [
+  { id: "pc", group: "Lab (this laptop)", name: "Agent PC", icon: "pc", url: P + "pc" + D + "/vnc.html?autoconnect=1&resize=scale&reconnect=1",
+    check: "http://127.0.0.1:6080/vnc.html", desc: "The lab computer's desktop. Watch the agents and take over with mouse and keyboard.",
+    down: "The agent desktop is not running. It starts with the lab box at logon." },
+  { id: "muse", group: "Lab (this laptop)", name: "openmuse", icon: "chat", url: P + "muse" + D, check: "http://127.0.0.1:8081",
+    desc: "Personal-agent app: chat, tasks, approvals and its own browser.",
+    down: "openmuse is waiting for the CopilotKit sign-in. Finish it in the sign-in window, then tell Claude 'done'." },
+  { id: "lab", group: "Lab (this laptop)", name: "Hermes lab", icon: "tree", url: P + "lab" + D, check: "http://127.0.0.1:9121",
+    desc: "The lab's main agent and the OpenCode sub-agents it starts.", down: "The lab Hermes dashboard is not answering." },
+  { id: "code", group: "Lab (this laptop)", name: "OpenCode", icon: "code", url: P + "code" + D, check: "http://127.0.0.1:4096", accept: "401",
+    desc: "OpenCode's runs, step by step.", down: "The OpenCode web view is not answering." },
+  { id: "hermes", group: "Server", name: "Hermes (main)", icon: "bot", url: P + "hermes" + D, check: "http://100.125.91.51:9119",
+    desc: "Your main agent on the server. Private lane.", down: "The server's Hermes dashboard is not reachable. Is Tailscale on?" },
+  { id: "router", group: "Server", name: "OmniRoute", icon: "route", url: P + "router" + D, check: "http://100.125.91.51:20128",
+    desc: "Model router on the server (login required).", down: "OmniRoute is not reachable. Is Tailscale on?" },
+  { id: "endpoint", group: "Models", name: "JARVIS model endpoint", icon: "shield", check: "http://100.125.91.51:8790/v1/models", accept: "401",
+    desc: "Every agent's model calls pass here: lane checks, scrubbing, audit." },
+  { id: "gpu", group: "Models", name: "GPU model server", icon: "cloud", check: "MODEL_SERVER_STATUS_URL", accept: "403",
+    desc: "Open models on the free cloud GPU (only the server may use it, so a refusal here means it is up)." },
+  { id: "jev", group: "Models", name: "OpenJev", icon: "scale", check: "http://127.0.0.1:8091/v1/models",
+    desc: "Fast typed decisions (yes/no, choice) on the CPU." }
+];
+const panels = SERVICES.filter(s => s.url);
+const state = {};       // id -> "ok" | "bad" | "wait"
+const meta = {};        // id -> latency text
+let current = "home";
+const $ = (id) => document.getElementById(id);
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 1800); }
+
+function buildNav() {
+  let html = `<a class="nav active" data-id="home">${svg("home")}<span class="label">Overview</span><kbd>Esc</kbd></a>`;
+  let group = "";
+  panels.forEach((s, i) => {
+    if (s.group !== group) { group = s.group; html += `<div class="group">${group}</div>`; }
+    html += `<a class="nav" data-id="${s.id}" title="${s.name}">${svg(s.icon)}<span class="label">${s.name}</span><kbd>${i + 1}</kbd><span class="dot" id="dot-${s.id}"></span></a>`;
+  });
+  $("nav").innerHTML = html;
+  $("nav").querySelectorAll(".nav").forEach(a => a.addEventListener("click", () => open(a.dataset.id)));
+}
+
+function buildHome() {
+  const h = new Date().getHours();
+  $("greet").textContent = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  let html = "", group = "", n = 0;
+  SERVICES.forEach(s => {
+    if (s.group !== group) { if (group) html += "</div>"; group = s.group; html += `<div class="section-title">${group}</div><div class="grid">`; }
+    html += `<div class="card ${s.url ? "" : "static"}" data-id="${s.id}" style="animation-delay:${0.04 * n++}s">
+      <div class="top"><div class="icon">${svg(s.icon)}</div><h3>${s.name}</h3></div>
+      <p>${s.desc}</p>
+      <div class="meta"><span class="dot" id="cdot-${s.id}"></span><span id="ctext-${s.id}">checking</span></div></div>`;
+  });
+  html += "</div>";
+  $("cards").innerHTML = html;
+  $("cards").querySelectorAll(".card").forEach(c => { if (!c.classList.contains("static")) c.addEventListener("click", () => open(c.dataset.id)); });
+}
+
+function ensureView(s) {
+  let v = $("view-" + s.id);
+  if (v) return v;
+  v = document.createElement("div");
+  v.className = "view"; v.id = "view-" + s.id;
+  v.innerHTML = `<div class="loading"><div class="spinner"></div></div>
+    <div class="down"><div class="box"><div class="icon">${svg("warn")}</div><h3>${s.name} is not available</h3><p>${s.down || ""}</p><button>Try again</button></div></div>`;
+  v.querySelector(".down button").addEventListener("click", async () => { await check(s); if (state[s.id] === "ok") load(s, true); else toast(s.name + " is still down"); });
+  $("stage").appendChild(v);
+  return v;
+}
+
+function load(s, force) {
+  const v = ensureView(s);
+  const down = v.querySelector(".down");
+  if (state[s.id] === "bad") { down.classList.add("on"); v.querySelector(".loading").style.opacity = 0; return; }
+  down.classList.remove("on");
+  let f = v.querySelector("iframe");
+  if (f && !force) return;
+  if (f) f.remove();
+  f = document.createElement("iframe");
+  f.allow = "clipboard-read; clipboard-write; fullscreen";
+  f.addEventListener("load", () => { v.querySelector(".loading").style.opacity = 0; });
+  v.querySelector(".loading").style.opacity = 1;
+  f.src = s.url;
+  v.prepend(f);
+}
+
+function open(id) {
+  if (id !== "home" && !panels.find(s => s.id === id)) return;
+  current = id;
+  try { localStorage.setItem("jarvis-hub-panel", id); } catch (e) {}
+  document.querySelectorAll(".nav").forEach(a => a.classList.toggle("active", a.dataset.id === id));
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("show"));
+  if (id === "home") {
+    $("view-home").classList.add("show"); $("htitle").textContent = "Overview"; $("hsub").textContent = "";
+    $("hdot").className = "dot";
+  } else {
+    const s = panels.find(x => x.id === id);
+    load(s, false);
+    requestAnimationFrame(() => $("view-" + id).classList.add("show"));
+    $("htitle").textContent = s.name; $("hsub").textContent = s.desc;
+    $("hdot").className = "dot " + (state[id] || "");
+  }
+}
+
+async function check(s) {
+  const t0 = performance.now();
+  let ok = false;
+  try {
+    const q = "/status-check?url=" + encodeURIComponent(s.check) + (s.accept ? "&acceptCodes=" + s.accept : "");
+    const r = await fetch(q, { cache: "no-store" });
+    ok = !!(await r.json()).successStatus;
+  } catch (e) { ok = false; }
+  state[s.id] = ok ? "ok" : "bad";
+  meta[s.id] = ok ? Math.round(performance.now() - t0) + " ms" : "not responding";
+  for (const p of ["dot-", "cdot-"]) { const d = $(p + s.id); if (d) d.className = "dot " + state[s.id]; }
+  const ct = $("ctext-" + s.id); if (ct) ct.textContent = ok ? "Running · " + meta[s.id] : (s.id === "muse" ? "Waiting for sign-in" : "Not responding");
+  if (current === s.id) $("hdot").className = "dot " + state[s.id];
+}
+
+async function checkAll() {
+  await Promise.all(SERVICES.map(check));
+  const up = SERVICES.filter(s => state[s.id] === "ok").length;
+  $("health").innerHTML = `<span class="dot ${up === SERVICES.length ? "ok" : up ? "wait" : "bad"}"></span>${up} of ${SERVICES.length} running`;
+  $("stats").innerHTML = `<div class="stat"><b>${up}/${SERVICES.length}</b><span>services running</span></div>
+    <div class="stat"><b>${panels.filter(s => state[s.id] === "ok").length}</b><span>dashboards ready</span></div>
+    <div class="stat"><b>${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</b><span>last check</span></div>`;
+  if (current !== "home") { const s = panels.find(x => x.id === current); if (s && state[s.id] === "ok" && $("view-" + s.id).querySelector(".down.on")) load(s, true); }
+}
+
+$("reload").innerHTML = svg("reload"); $("newtab").innerHTML = svg("ext"); $("full").innerHTML = svg("full");
+$("reload").addEventListener("click", () => { if (current === "home") { checkAll(); toast("Status refreshed"); } else { load(panels.find(s => s.id === current), true); toast("Reloaded"); } });
+$("newtab").addEventListener("click", () => { const s = panels.find(x => x.id === current); if (s) window.open(s.url, "_blank", "noopener"); else toast("Pick a dashboard first"); });
+$("full").addEventListener("click", () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); });
+$("brand").addEventListener("click", () => $("app").classList.toggle("collapsed"));
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea")) return;
+  if (e.key === "Escape") open("home");
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= panels.length && !e.ctrlKey && !e.altKey && !e.metaKey) open(panels[n - 1].id);
+});
+
+buildNav(); buildHome();
+checkAll().then(() => { let last = "home"; try { last = localStorage.getItem("jarvis-hub-panel") || "home"; } catch (e) {} open(last); });
+setInterval(checkAll, 20000);
+</script>
+</body>
+</html>
