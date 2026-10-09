@@ -12,7 +12,7 @@ import subprocess
 import time
 import urllib.request
 
-NGROK_DOMAIN = "REPLACE_WITH_STATIC_DOMAIN"     # e.g. something.ngrok-free.app (not a secret)
+NGROK_DOMAIN = "letdown-campsite-ecology.ngrok-free.dev"   # the owner's free ngrok dev domain (not a secret)
 VM_IP = "129.159.236.212"                       # hermes-agent-vm public egress address
 MODELS = ["gpt-oss:20b"]
 CONTEXT = 32768
