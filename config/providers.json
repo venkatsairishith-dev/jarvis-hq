@@ -15,9 +15,9 @@
     {"name": "colab-ollama", "lane": "public", "base_url": "https://2de2-34-143-149-50.ngrok-free.app/v1", "key_file": null, "models": ["any", "research"], "paid": false, "enabled": false,
      "os_only": "posix", "priority": 15, "timeout_s": 300, "default_model": "gpt-oss-16k", "model_pattern": "^(gpt-oss-16k|gpt-oss:20b|qwen3:8b)$", "extra_body": {"reasoning_effort": "low"},
      "_note": "Owner's free Colab T4 through ngrok (2026-10-09). Public lane: traffic passes ngrok. ngrok refuses every caller except the VM's address. The URL changes when the Colab runtime restarts: update base_url. gpt-oss-16k = gpt-oss:20b with a 16,384-token context, created through the Ollama API."},
-    {"name": "puter", "lane": "public", "base_url": "https://api.puter.com/puterai/openai/v1", "key_file": "providers/puter.key", "models": ["any", "research"], "paid": false, "enabled": true,
+    {"name": "puter", "lane": "public", "base_url": "https://api.puter.com/puterai/openai/v1", "key_file": "providers/puter.key", "models": ["any", "research"], "paid": false, "enabled": false,
      "priority": 15, "timeout_s": 180, "default_model": "gpt-5.4-nano", "model_pattern": "^(gpt-5\\.4-nano|gemini-3\\.5-flash-lite)$",
-     "_note": "Owner decision 2026-10-09: Puter for the lab lane (Kaggle parked). Cloud models (Puter, then OpenAI or Google): public lane only, never private data. The key is the owner's Puter account token (whole-account scope): keep it in secrets only. Free allowance is undocumented; cheap models only."},
+     "_note": "Owner decision 2026-10-09: Puter for the lab lane (Kaggle parked). Cloud models (Puter, then OpenAI or Google): public lane only, never private data. The key is the owner's Puter account token (whole-account scope): keep it in secrets only. Free allowance is undocumented; cheap models only. Measured 2026-10-09: every model returns HTTP 402 subscription_required (the free credits cover Puter apps in the browser, not the API), so it stays off: no paid plans."},
     {"name": "openrouter-public", "lane": "public", "base_url": "https://openrouter.ai/api/v1", "key_file": "providers/openrouter.key", "models": ["research"], "paid": false, "enabled": false,
      "default_model": "apodex/apodex-1.1-mini:free", "model_pattern": ":free$"}
   ]
