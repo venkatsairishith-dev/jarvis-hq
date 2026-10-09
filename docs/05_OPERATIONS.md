@@ -36,6 +36,30 @@ Windows 10 Pro 22H2 build 19045 under Boot Camp. Mainstream support ended 14 Oct
 - Reusable procedures live as project skills in D:\jarvis\.claude\skills, with a copy in jarvis-hq: cost-check, phase-gate, vault-write, oracle-delete.
 - Repos: github.com/venkatsairishith-dev/jarvis-hq (docs, skills) and jarvis-vault (memory). Local: D:\jarvis\hq (jarvis-hq) and D:\jarvis\vault.
 
+## Lab operations (added 2026-10-10)
+**Take control** (Windows): open the JARVIS Hub, go to Agent PC, press **Take control**, and work. The agents are frozen where they were, and windows they opened stay usable. Press **Continue task** to hand back; the agents carry on with what is left and look at the screen first. Activity shows each task's goal, time and last step.
+- The VNC password is asked once per hub session.
+- If the buttons say "Control service not answering", run in WSL as root: `systemctl status jarvis-lab-control`.
+
+**Lab models (Dahl).** Lab tasks only, public lane, never private data.
+- The key lives in D:\jarvis-secrets\providers\dahl.key (copied from the owner's dahl-credentials.txt without printing). The server's copy is ~/.jarvis/secrets/providers/dahl.key (600).
+- HTTP 402 means the key's allocation is used up. Allocate more from the free pool on the Dahl account page; **never top up** (that is a purchase).
+- HTTP 429 means the model is busy: the endpoint falls back to the next Dahl model.
+- Check the models with GET https://inference.dahl.global/v1/models (key needed). Health: /v1/status (no key; also shown on the hub).
+- After a key change, copy it to the server the same way and restart jarvis-llm-proxy.
+
+**Tests (laptop):**
+- Demo suite in WSL as agent: `cd ~/lab && python3 demo.py --timeout 900`. 6 tasks x 3 agents; the "desktop" task is checked against the laptop's own confirmations.
+- On Windows, after the suite (they pause or switch the lab's agents):
+  - `python hq\lab\tests\takeover_live.py`
+  - `python hq\lab\tests\switch_live.py`
+  - `python hq\lab\tests\approval_live.py` (needs your /approve on Telegram)
+- Unit tests: `python -m unittest discover -s hq/lab/tests` and the kernel suite.
+
+**Kaggle and Colab model servers are parked** (rules on tunnels). If ever restarted on purpose, push with a hard session limit (`kaggle kernels push -p DIR -t <seconds>`; the CLI cannot cancel a run). Stop it in the Kaggle UI when done.
+
+**WSL:** .wslconfig keeps the lab running when idle (instanceIdleTimeout=-1, vmIdleTimeout=-1, effective after the next `wsl --shutdown`). The logon task JarvisLab starts it.
+
 ## Corrections after independent review (2026-10-07)
 - The 4 OCPU / 24 GB, 10 TB egress and VCN-count figures are from Oracle's docs page and a community thread. They are NOT confirmed in the console for this tenancy [verify]. A Pay As You Go account bills anything over the free allowance. The $1 budget alert is a tripwire, not a cap.
 - Protected resources: D:\jarvis-secrets\protected.json lists the OCIDs of hermes-agent-vm-2, its boot volume and its VNIC, and the shared subnet. Any Oracle script must load it and refuse to write to those. Names are matched exactly, never by prefix.

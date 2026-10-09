@@ -15,7 +15,10 @@ import urllib.request
 NGROK_DOMAIN = "letdown-campsite-ecology.ngrok-free.dev"   # the owner's free ngrok dev domain (not a secret)
 VM_IP = "129.159.236.212"                       # hermes-agent-vm public egress address
 MODELS = ["gpt-oss:20b"]
-CONTEXT = 32768
+CONTEXT = 65536          # Hermes refuses less than 64K; OpenCode compacts constantly below it (fits 2xT4 with q8_0 KV cache)
+# Only the endpoints JARVIS uses pass the tunnel: Ollama's own API (pull, push, create, delete) has no authentication
+# (CVE-2025-63389) and must never be reachable, even from the JARVIS server.
+ALLOWED_PATHS = ["/v1/chat/completions", "/v1/models", "/api/version"]
 RUN_HOURS = 8
 IDLE_MINUTES = 90        # stop early when nobody has used the models for this long
 
@@ -51,8 +54,10 @@ def main():
     print(sh("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader"), flush=True)
     if not sh("command -v ollama"):
         print(sh("apt-get -qq install -y zstd >/dev/null 2>&1; curl -fsSL https://ollama.com/install.sh | sh 2>&1 | tail -2"), flush=True)
-    env = {**os.environ, "OLLAMA_HOST": "0.0.0.0:11434",   # loopback-only Ollama refuses the tunnel's Host header; the container has no other inbound path "OLLAMA_KEEP_ALIVE": "-1", "OLLAMA_CONTEXT_LENGTH": str(CONTEXT),
-           "OLLAMA_MAX_LOADED_MODELS": "1", "OLLAMA_NUM_PARALLEL": "1"}
+    # OLLAMA_HOST: a loopback-only Ollama refuses the tunnel's Host header; the container has no other inbound path.
+    env = {**os.environ, "OLLAMA_HOST": "0.0.0.0:11434", "OLLAMA_KEEP_ALIVE": "-1", "OLLAMA_CONTEXT_LENGTH": str(CONTEXT),
+           "OLLAMA_MAX_LOADED_MODELS": "1", "OLLAMA_NUM_PARALLEL": "1",
+           "OLLAMA_FLASH_ATTENTION": "1", "OLLAMA_KV_CACHE_TYPE": "q8_0"}
     ollama = subprocess.Popen(["ollama", "serve"], env=env, stdout=open("/kaggle/working/ollama.log", "w"), stderr=subprocess.STDOUT)
     for _ in range(60):
         if up("http://127.0.0.1:11434/api/version"):
@@ -72,9 +77,11 @@ def main():
            "echo 'deb https://ngrok-agent.s3.amazonaws.com buster main' > /etc/apt/sources.list.d/ngrok.list && "
            "apt-get -qq update >/dev/null && apt-get -qq install -y ngrok >/dev/null")
     print(sh("ngrok version"), flush=True)
-    with open("/kaggle/working/policy.yml", "w") as fh:
+    with open("/kaggle/working/policy.yml", "w") as fh:     # deny rules are free on ngrok's free plan
         fh.write(f"on_http_request:\n  - expressions:\n      - \"conn.client_ip != '{VM_IP}'\"\n"
-                 f"    actions:\n      - type: deny\n        config:\n          status_code: 403\n")
+                 f"    actions:\n      - type: deny\n        config:\n          status_code: 403\n"
+                 f"  - expressions:\n      - \"!(req.url.path in [{', '.join(repr(p) for p in ALLOWED_PATHS)}])\"\n"
+                 f"    actions:\n      - type: deny\n        config:\n          status_code: 404\n")
     nenv = {**os.environ, "NGROK_AUTHTOKEN": ngrok_token}
     ngrok_token = None
     ngrok = subprocess.Popen(["ngrok", "http", "11434", "--url", f"https://{NGROK_DOMAIN}", "--traffic-policy-file",

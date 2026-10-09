@@ -156,6 +156,37 @@ def _disks() -> list:
     return out
 
 
+def _outputs(root: str = None, limit: int = 40) -> list:
+    """The newest files agents delivered to D:\\jarvis\\outputs (agent folder, name, size, time; never contents),
+    for the hub's outputs gallery."""
+    if root is None:
+        from .jobs import outputs_root
+        root = outputs_root()
+    items = []
+    try:
+        agents = os.listdir(root)
+    except OSError:
+        return []
+    for agent in agents:
+        folder = os.path.join(root, agent)
+        if not os.path.isdir(folder):
+            continue
+        try:
+            names = os.listdir(folder)
+        except OSError:
+            continue
+        for name in names:
+            try:
+                st = os.stat(os.path.join(folder, name))
+            except OSError:
+                continue
+            if not os.path.isdir(os.path.join(folder, name)):
+                items.append((st.st_mtime, agent, name, st.st_size))
+    items.sort(reverse=True)
+    return [{"agent": a, "name": n, "bytes": b, "modified": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(t))}
+            for t, a, n, b in items[:limit]]
+
+
 def collect() -> dict:
     t0 = time.time()
     vm = psutil.virtual_memory()
@@ -184,6 +215,7 @@ def collect() -> dict:
     except ValueError:
         pass
     s["tools"] = _tools()
+    s["outputs"] = _outputs()
     s["env_paths"] = {k: _user_env(k) for k in ENV_ALLOW}
     s["collected_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     s["collect_seconds"] = round(time.time() - t0, 1)

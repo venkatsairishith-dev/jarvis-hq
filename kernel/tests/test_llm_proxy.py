@@ -19,13 +19,17 @@ TOOL_REPLY = {"id": "x", "object": "chat.completion", "choices": [{"index": 0, "
 SSE = [b'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n', b'data: {"choices":[{"delta":{"content":"lo"}}]}\n\n', b"data: [DONE]\n\n"]
 
 
-def upstream(name, seen, status=200):
+def upstream(name, seen, status=200, fail_first=0):
+    fails = [fail_first]
     class U(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"
         def log_message(self, *a): pass
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             seen.append((name, body, self.headers.get("Authorization")))
+            if fails[0] > 0:
+                fails[0] -= 1
+                self.send_response(500); self.send_header("Content-Length", "0"); self.end_headers(); return
             if status != 200:
                 self.send_response(status); self.send_header("Content-Length", "0"); self.end_headers(); return
             if body.get("stream"):
@@ -126,7 +130,20 @@ class P(unittest.TestCase):
         out, _ = self.call({"messages": [{"role": "user", "content": "hi"}]})
         self.assertEqual(json.loads(out), TOOL_REPLY)
         used = [(n, b["model"]) for n, b, a in self.seen]
-        self.assertEqual(used, [("bad", "default"), ("good", "openai/gpt-oss-120b")])   # public never tried; paid model never sent
+        # public never tried; paid model never sent; the failing provider gets one more try before the fallback
+        self.assertEqual(used, [("bad", "default"), ("bad", "default"), ("good", "openai/gpt-oss-120b")])
+
+    def test_a_failed_sample_is_retried_once_on_the_same_provider_but_a_bad_request_is_not(self):
+        flaky, flaky_url = upstream("flaky", self.seen, fail_first=1)
+        refuses, refuses_url = upstream("refuses", self.seen, status=400)
+        self.servers += [flaky, refuses]
+        self.proxy([Provider("refuses", "private", refuses_url, None, ["any"], priority=1),
+                    Provider("flaky", "private", flaky_url, None, ["any"], priority=2)])
+        out, _ = self.call({"messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(json.loads(out), TOOL_REPLY)
+        self.assertEqual([n for n, b, a in self.seen], ["refuses", "flaky", "flaky"])
+        fails = [json.loads(r[0]) for r in self.k.db.execute("SELECT payload FROM audit WHERE kind='agent_model_call_failed'")]
+        self.assertEqual([(f["provider"], f["error"], f["attempt"]) for f in fails], [("refuses", "HTTP 400", 1), ("flaky", "HTTP 500", 1)])
 
     def test_kill_switch_and_rate_limit(self):
         self.proxy([self.good()])
@@ -147,7 +164,7 @@ class P(unittest.TestCase):
         lab = tokens.issue("lab", "public"); owner = tokens.issue("hermes")
         with self.assertRaises(urllib.error.HTTPError) as cm: self.call({"messages": [{"role": "user", "content": "x"}]}, tok=lab)
         self.assertEqual(cm.exception.code, 502)
-        self.assertEqual([n for n, b, a in self.seen], ["bad"])                    # the public token never reached the private provider
+        self.assertEqual([n for n, b, a in self.seen], ["bad", "bad"])             # retried once, never reached the private provider
         self.seen.clear(); self.call({"messages": [{"role": "user", "content": "x"}]}, tok=owner)
         self.assertEqual([n for n, b, a in self.seen], ["good"])                   # the private token never reached the public one
         rows = [r[0] for r in self.k.db.execute("SELECT payload FROM audit WHERE kind='agent_model_call'")]

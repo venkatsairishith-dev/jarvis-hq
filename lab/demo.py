@@ -2,7 +2,7 @@
 
 Runs inside the WSL box (JarvisLab) as the unprivileged user. Each agent gets each task in a fresh folder; a checker
 written here (never the agent's own claim) decides pass or fail. Results go to ~/lab/results/<time>.json.
-Usage: python3 demo.py [--agents hermes,opencode,goose] [--tasks build,fix,data,delegate,refactor] [--timeout 900]
+Usage: python3 demo.py [--agents hermes,opencode,goose] [--tasks build,fix,data,delegate,refactor,desktop] [--timeout 900]
 Custom code, justified: Terminal-Bench (the standard terminal-agent benchmark) needs Docker, which this box does not
 have; this is a 5-task acceptance check for our own setup, not a benchmark.
 """
@@ -217,12 +217,48 @@ def refactor_check(d, state, log):
     return rc == 0, out.strip()[-200:]
 
 
+ACTIVITY = os.path.join(HOME, "lab", "activity.jsonl")   # written by the jarvis tool server, with the laptop's answers
+
+
+def desktop_setup(d):
+    return {"t0": time.time(), "agent": os.path.basename(os.path.dirname(d))}
+
+
+DESKTOP_PROMPT = ("This task uses your own computer (the Agent PC) and your jarvis tools. "
+                  "1) Open https://en.wikipedia.org/wiki/Tallinn on your computer with desktop_open. "
+                  "2) Find the population of Tallinn (read the page with any tool you have). "
+                  "3) Deliver a 3-line note to the owner with save_output named tallinn-note.md: the population and the "
+                  "page address. 4) Show it on the owner's screen with show_output. Then reply with the population.")
+
+
+def desktop_check(d, state, log):
+    seen = []
+    try:
+        with open(ACTIVITY, errors="replace") as fh:
+            for line in fh:
+                try:
+                    e = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(e, dict) and float(e.get("ts") or 0) >= state["t0"] and e.get("agent") == state["agent"]:
+                    seen.append((str(e.get("tool")), str(e.get("detail", "")).lower()))
+    except OSError:
+        return False, "no activity log"
+    opened = any(t == "desktop_open" and "tallinn" in x for t, x in seen)
+    saved = any(t == "save_output:done" and "tallinn" in x for t, x in seen)     # the laptop confirmed the file
+    shown = any(t == "show_output:done" for t, x in seen)
+    if opened and saved and shown:
+        return True, "opened the page on its computer; the laptop confirmed the note was saved and shown"
+    return False, f"opened={opened} delivered={saved} shown={shown}; jarvis tools used: {sorted({t for t, _ in seen})[:8]}"
+
+
 TASKS = {
     "build": (build_setup, BUILD_PROMPT, build_check),
     "fix": (fix_setup, FIX_PROMPT, fix_check),
     "data": (data_setup, DATA_PROMPT, data_check),
     "delegate": (delegate_setup, DELEGATE_PROMPT, delegate_check),
     "refactor": (refactor_setup, REFACTOR_PROMPT, refactor_check),
+    "desktop": (desktop_setup, DESKTOP_PROMPT, desktop_check),
 }
 
 

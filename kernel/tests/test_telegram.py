@@ -281,13 +281,76 @@ class T(unittest.TestCase):
     def test_poll_errors_back_off_and_are_audited_without_token(self):
         class Bad(FakeAPI):
             def get_updates(self, offset, wait=25): raise RuntimeError("telegram error URLError")
-        import jarvis_kernel.telegram as tg
-        slept = []; old = tg.time.sleep; tg.time.sleep = lambda s: slept.append(s)
-        try:
-            Bridge(self.k, Bad(), OWNER, self.prov).run(once=True)
-        finally:
-            tg.time.sleep = old
+        # Swap only the bridge's own back-off sleep. Patching the global time.sleep also caught other code's sleeps
+        # (on Linux, subprocess wait loops while gitleaks ran), which made this test flaky on a busy server.
+        slept = []
+        Bridge(self.k, Bad(), OWNER, self.prov, sleep=slept.append).run(once=True)
         self.assertEqual(slept, [1]); self.assertIn("tg_poll_error", self.audit_kinds())
+
+    # ---- plain messages go to the owner's Hermes (JARVIS itself) ----
+    def agent_bridge(self, agent):
+        pending = []
+        b = Bridge(self.k, self.api, OWNER, self.prov, clock=lambda: self.now[0], agent=agent, spawn=pending.append)
+        return b, pending
+
+    def test_plain_message_is_a_request_to_the_agent_in_the_background(self):
+        asked = []
+        b, pending = self.agent_bridge(lambda text: asked.append(text) or "Opened Downloads on your laptop.")
+        b.handle(msg("open my downloads folder"))
+        self.assertEqual(self.last(), "On it.")
+        b.handle(msg("open spotify"))                                   # one request at a time
+        self.assertIn("Still working", self.last())
+        b.handle(msg("/status"))                                        # commands still answer while it works
+        self.assertIn("Kill switch", self.last())
+        pending[0]()
+        self.assertEqual((asked, self.last()), (["open my downloads folder"], "Opened Downloads on your laptop."))
+        b.handle(msg("open spotify"))                                   # free again
+        self.assertEqual(self.last(), "On it.")
+        self.assertEqual(LLM.seen, [])                                  # the plain model was not used
+        b.handle(msg("/ask what is 2+2"))                               # /ask stays the quick model answer
+        self.assertEqual(len(LLM.seen), 1)
+        self.assertIn("tg_agent_turn", self.audit_kinds())
+
+    def test_agent_failure_is_reported_and_releases_the_turn(self):
+        def boom(text): raise RuntimeError("agent HTTP 500")
+        b, pending = self.agent_bridge(boom)
+        b.handle(msg("open spotify")); pending[0]()
+        self.assertIn("could not finish", self.last()); self.assertIn("tg_agent_failed", self.audit_kinds())
+        b.handle(msg("try again")); self.assertEqual(self.last(), "On it.")
+
+    def test_agent_obeys_kill_switch_and_limits(self):
+        b, pending = self.agent_bridge(lambda text: "ok")
+        self.k.kill("t"); b.handle(msg("open spotify"))
+        self.assertIn("Kill switch", self.last()); self.assertEqual(pending, [])
+        self.k.resume()
+        for i in range(20):
+            b.handle(msg(f"request {i}")); pending.pop()()
+        b.handle(msg("one more")); self.assertIn("limit", self.last())
+
+    def test_hermes_api_call_sends_key_and_session_and_hides_errors(self):
+        from jarvis_kernel.telegram import hermes_agent
+        seen = []
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                seen.append((self.path, self.headers.get("Authorization"), self.headers.get("X-Hermes-Session-Id"), body))
+                code = 500 if body["messages"][0]["content"] == "fail" else 200
+                out = json.dumps({"choices": [{"message": {"content": "Opened Downloads."}}]}).encode()
+                self.send_response(code); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            keyf = os.path.join(self.tmp.name, "hermes_api_key.txt"); open(keyf, "w").write("hk_SECRETVALUE_123\n")
+            call = hermes_agent(keyf, f"http://127.0.0.1:{srv.server_address[1]}")
+            self.assertEqual(call("open my downloads folder"), "Opened Downloads.")
+            path, auth, session, body = seen[0]
+            self.assertEqual((path, auth, session, body["model"]), ("/v1/chat/completions", "Bearer hk_SECRETVALUE_123", "telegram-owner", "hermes-agent"))
+            with self.assertRaises(RuntimeError) as cm:
+                call("fail")
+            self.assertNotIn("SECRETVALUE", str(cm.exception))
+        finally:
+            srv.shutdown()
 
 
 if __name__ == "__main__":

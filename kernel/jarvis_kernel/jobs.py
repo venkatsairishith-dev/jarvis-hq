@@ -15,12 +15,14 @@ NAME = re.compile(r"^[A-Za-z0-9_.-]{1,40}$")
 OUTPUT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,79}\.(md|txt|html|json|csv|log|py)$")
 MAX_OUTPUT = 200_000    # characters per saved output
 UI_OPS = {"launch", "click", "type"}
+PC_OPS = {"open_app", "open_folder", "open_file", "list_folder"}   # "open Spotify", "open the X folder in Downloads"
 KINDS = {
     # kind: (policy tool, policy op or None when the op comes from the job's params)
     "project_check": ("tests", "run"),
     "output_save": ("output", "save"),
     "output_show": ("output", "show"),
     "ui_action": ("ui", None),
+    "pc_open": ("pc", None),
 }
 
 
@@ -43,6 +45,11 @@ def _check_params(kind: str, params: dict):
     elif kind == "ui_action":
         ok = (keys == {"agent", "op", "target", "text"} and NAME.match(str(params["agent"])) and params["op"] in UI_OPS
               and isinstance(params["target"], str) and 0 < len(params["target"]) <= 120 and isinstance(params["text"], str) and len(params["text"]) <= 500)
+    elif kind == "pc_open":
+        ok = (keys == {"agent", "op", "target", "path"} and NAME.match(str(params["agent"])) and params["op"] in PC_OPS
+              and isinstance(params["target"], str) and 0 < len(params["target"].strip()) <= 80
+              and isinstance(params["path"], str) and len(params["path"]) <= 200
+              and not any(c in params["target"] + params["path"] for c in "\r\n\0"))
     else:
         ok = False
     if not ok:
@@ -58,6 +65,8 @@ def action_for(kind: str, params: dict, lane: str = "private", untrusted: bool =
         return Action(tool, op, params["project"])
     if kind in ("output_save", "output_show"):
         return Action(tool, op, f"outputs/{params['agent']}/{params['name']}", {}, lane, untrusted)
+    if kind == "pc_open":
+        return Action("pc", params["op"], params["target"], {"path": params["path"]} if params["path"] else {}, lane, untrusted)
     return Action("ui", params["op"], params["target"], {"text": params["text"]} if params["text"] else {}, lane, untrusted)
 
 
@@ -67,7 +76,7 @@ class Jobs:
         kernel.db.execute(
             "CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, node TEXT, kind TEXT, params TEXT, state TEXT, created REAL, expires REAL, "
             "result TEXT, notified INT DEFAULT 0, started REAL)")
-        for col in ("started REAL", "owner TEXT"):   # older databases were created without these columns
+        for col in ("started REAL", "owner TEXT", "finished REAL"):   # older databases were created without these columns
             try:
                 kernel.db.execute("ALTER TABLE jobs ADD COLUMN " + col)
             except Exception:
@@ -114,8 +123,8 @@ class Jobs:
         blob = json.dumps(result, default=str)
         if len(blob) > 60000:
             result, blob = {"ok": False, "error": "result too large"}, '{"ok": false, "error": "result too large"}'
-        cur = self.k.db.execute("UPDATE jobs SET state=?, result=? WHERE id=? AND node=? AND state='running'",
-                                ("done" if result.get("ok") else "failed", blob, jid, node))
+        cur = self.k.db.execute("UPDATE jobs SET state=?, result=?, finished=? WHERE id=? AND node=? AND state='running'",
+                                ("done" if result.get("ok") else "failed", blob, time.time(), jid, node))
         self.k.audit.append("job_finished", {"id": jid, "ok": bool(result.get("ok")), "accepted": cur.rowcount == 1})
         return cur.rowcount == 1
 

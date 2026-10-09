@@ -25,6 +25,9 @@ MAX_BODY = 2 * 1024 * 1024
 MAX_OUT_TOKENS = 4096
 PER_MINUTE = 30
 PER_DAY = 2000
+# A provider's 5xx is tried once more before falling back: Ollama answers a gpt-oss tool call it cannot parse with
+# HTTP 500 "error parsing tool call" (ollama/ollama#12884), and a fresh sample usually parses.
+RETRY_SAME_PROVIDER = {500, 502, 503}
 # Agent actions (POST /v1/jarvis/actions): every one goes through kernel policy; jobs run on the owner's laptop node.
 OUTPUT_NODE = os.environ.get("JARVIS_OUTPUT_NODE", "laptop")
 ACTIONS_PER_HOUR = 60
@@ -48,8 +51,9 @@ class AgentTokens:
             kernel.db.execute("ALTER TABLE agent_tokens ADD COLUMN lane TEXT NOT NULL DEFAULT 'private'")
 
     def issue(self, name: str, lane: str = "private") -> str:
-        if lane not in ("private", "public"):
-            raise ValueError("lane must be private or public")
+        """lane "dashboard": the owner's hub reads the overview with it and can do nothing else (no model, no action)."""
+        if lane not in ("private", "public", "dashboard"):
+            raise ValueError("lane must be private, public or dashboard")
         tok = secrets.token_urlsafe(32)
         self.k.db.execute("INSERT OR REPLACE INTO agent_tokens(name, token_h, created, lane) VALUES (?,?,?,?)", (name, _h(tok), time.time(), lane))
         self.k.audit.append("agent_token_issued", {"name": name, "lane": lane})
@@ -94,7 +98,7 @@ def _recent(times: list, now: float, window: float) -> list:
 
 
 def make_handler(kernel, providers, clock=time.time):
-    from .jobs import UI_OPS, Jobs, JobError, action_for
+    from .jobs import PC_OPS, UI_OPS, Jobs, JobError, action_for
     from .policy import Action
     from .store import Killed
     tokens = AgentTokens(kernel)
@@ -147,6 +151,18 @@ def make_handler(kernel, providers, clock=time.time):
                                      "next": "the owner approves on Telegram (/approve " + aid + "); then send the same action again with approval_id"}
                 jid = jobs.create(OUTPUT_NODE, "ui_action", params, approval_id=aid, owner=agent, lane=lane)
                 return 200, {"status": "queued", "job": jid}
+            if tool == "pc" and op in PC_OPS:
+                params = {"agent": agent, "op": op, "target": target[:80], "path": str(p.get("path", ""))[:200]}
+                aid = str(body.get("approval_id") or "") or None
+                if not aid:
+                    d, aid = kernel.request(action_for("pc_open", params, lane, untrusted=True))
+                    if d.denied:
+                        return 403, {"status": "refused", "level": d.name, "reason": d.reason}
+                    if aid:
+                        return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
+                                     "next": "the owner approves on Telegram (/approve " + aid + "); then send the same action again with approval_id"}
+                jid = jobs.create(OUTPUT_NODE, "pc_open", params, approval_id=aid, owner=agent, lane=lane)
+                return 200, {"status": "queued", "job": jid}
             if tool == "models" and op == "status":
                 if not kernel.authorize(Action("models", "status", lane, {}, lane, True)).allowed:
                     return 403, {"status": "refused"}
@@ -196,6 +212,14 @@ def make_handler(kernel, providers, clock=time.time):
             return tokens.identify(auth[7:]) if auth.startswith("Bearer ") else (None, None)
 
         def do_GET(self):
+            if self.path.rstrip("/") == "/v1/jarvis/overview":
+                agent, lane = self._agent()
+                if not agent:
+                    return self._json(401, {"error": {"message": "unauthorized"}})
+                if lane != "dashboard":                  # agents never read the owner's overview
+                    return self._json(403, {"error": {"message": "dashboard token only"}})
+                from .overview import overview
+                return self._json(200, overview(kernel, providers, clock()))
             if self.path.rstrip("/") == "/v1/models":
                 if not self._agent()[0]:
                     return self._json(401, {"error": {"message": "unauthorized"}})
@@ -213,6 +237,8 @@ def make_handler(kernel, providers, clock=time.time):
             if not agent:
                 kernel.audit.append("agent_model_refused", {"why": "bad token"})
                 return self._json(401, {"error": {"message": "unauthorized"}})
+            if lane == "dashboard":                      # the hub's read-only token: no model calls, no actions
+                return self._json(403, {"error": {"message": "read-only token"}})
             if self.path.rstrip("/") == "/v1/jarvis/actions":
                 try:
                     n = int(self.headers.get("Content-Length", "0"))
@@ -278,15 +304,22 @@ def make_handler(kernel, providers, clock=time.time):
                     with open(p.key_path(), encoding="utf-8-sig") as fh:
                         headers["Authorization"] = "Bearer " + fh.read().strip()
                 req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
-                try:
-                    resp = urllib.request.urlopen(req, timeout=p.timeout_s or 120)
-                except urllib.error.HTTPError as e:
-                    last = f"HTTP {e.code}"
-                    kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "prompt_chars": prompt_chars})
-                    continue
-                except Exception as e:
-                    last = type(e).__name__
-                    kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last})
+                resp = None
+                for attempt in (1, 2):
+                    try:
+                        resp = urllib.request.urlopen(req, timeout=p.timeout_s or 120)
+                        break
+                    except urllib.error.HTTPError as e:
+                        last = f"HTTP {e.code}"
+                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last,
+                                                                        "prompt_chars": prompt_chars, "attempt": attempt})
+                        if e.code not in RETRY_SAME_PROVIDER:
+                            break
+                    except Exception as e:
+                        last = type(e).__name__
+                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "attempt": attempt})
+                        break
+                if resp is None:
                     continue
                 with resp:   # from here on we are committed to this provider
                     self.send_response(200)
@@ -306,6 +339,7 @@ def make_handler(kernel, providers, clock=time.time):
                                                          "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
                                                          "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings})
                 return
+            kernel.audit.append("agent_model_request_failed", {"agent": agent, "lane": lane, "error": last})
             self._json(502, {"error": {"message": f"all providers failed ({last})"}})
 
     return H, tokens

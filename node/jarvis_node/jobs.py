@@ -164,6 +164,9 @@ def run_job(job: dict, projects: dict = None) -> dict:
             return output_show(params)
         if kind == "ui_action":
             return ui_action(params)
+        if kind == "pc_open":
+            from .pcopen import pc_open
+            return pc_open(params)
         return {"ok": False, "error": "unknown job kind"}
     except Exception as e:   # report the kind of failure only
         return {"ok": False, "error": type(e).__name__}

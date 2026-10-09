@@ -46,7 +46,7 @@ def main(argv=None):
     lp.add_argument("--bind", action="append", default=[], help="extra listen address, e.g. the Tailscale IP")
     at = sub.add_parser("agent-token", help="issue a model-endpoint token for an agent and write it to a file (never printed)")
     at.add_argument("name"); at.add_argument("--out", required=True)
-    at.add_argument("--lane", choices=["private", "public"], default="private")
+    at.add_argument("--lane", choices=["private", "public", "dashboard"], default="private")
     sub.add_parser("nodes", help="list nodes (no state)")
     an = sub.add_parser("analyze", help="report on a node from its collected state"); an.add_argument("node", nargs="?")
     a = sub.add_parser("audit"); a.add_argument("what", choices=["verify", "anchor"])

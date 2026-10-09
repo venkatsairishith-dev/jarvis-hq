@@ -1,0 +1,17 @@
+# WSL lab box (JarvisLab): the laptop's D:\jarvis\outputs, read-only, readable only by the hub user (Caddy serves it as
+# the hub's outputs gallery on its own origin, outputs.localhost:8088, in a script-free sandbox). The agent user cannot
+# read it, and nothing else of the Windows drives is mounted (automount stays off).
+[Unit]
+Description=JARVIS hub: the laptop's outputs folder, read-only, for the gallery
+After=local-fs.target
+Before=jarvis-hub-caddy.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/mkdir -p /mnt/jarvis-outputs
+ExecStart=/bin/sh -c 'mountpoint -q /mnt/jarvis-outputs || mount -t drvfs "D:\\jarvis\\outputs" /mnt/jarvis-outputs -o ro,noexec,nosuid,nodev,uid=$(id -u hub),gid=$(id -g hub),umask=077'
+ExecStop=/bin/umount /mnt/jarvis-outputs
+
+[Install]
+WantedBy=multi-user.target

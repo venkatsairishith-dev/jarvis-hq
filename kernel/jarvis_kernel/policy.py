@@ -41,6 +41,9 @@ RULES = [
     ("models", "prefer", YELLOW_AUTO),
     ("ui", "snapshot|list_windows", GREEN),
     ("ui", "launch|focus|click|type|key|scroll", YELLOW_APPROVAL),
+    # Opening things on the laptop (2026-10-10): the owner's own agent (private lane) at once; a lab agent (public
+    # lane) only with the owner's approval and never a folder listing (raised in decide below).
+    ("pc", "open_app|open_folder|open_file|list_folder", YELLOW_AUTO),
     ("money", "*", RED),
     ("delete", "*", RED),
     ("credential", "*", RED),
@@ -229,8 +232,13 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
             level, reason = RED, "changes the rules, hooks or settings the agents run under (console only)"
     if WRITE_OPS.search(op) and level < RED and any(LOG_TAMPER.search(f) for f in forms):
         level, reason = RED, "changes a system log or shell history (console only)"
-    if tool in ("ui", "browser") and SENSITIVE_APPS.search(" ".join(forms)):
+    if tool in ("ui", "browser", "pc") and SENSITIVE_APPS.search(" ".join(forms)):
         level, reason = DENY, "UI or browser on a password manager, wallet or banking app"
+    if tool == "pc" and _name(a.lane) == "public" and level < DENY:
+        if op == "list_folder":
+            level, reason = DENY, "a lab agent may not read the owner's folders (the names would reach a public-lane model)"
+        elif level < YELLOW_APPROVAL:
+            level, reason = YELLOW_APPROVAL, "a lab agent acting on the owner's PC needs the owner's approval"
     if tool == "browser" and any(_internal_url(lf) for lf in leaves):
         level, reason = DENY, "browser pointed at an internal address"
     if protected:

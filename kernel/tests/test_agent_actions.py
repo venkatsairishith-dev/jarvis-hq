@@ -48,6 +48,7 @@ class Actions(unittest.TestCase):
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
         self.lab = tokens.issue("lab", "public"); self.other = tokens.issue("lab2", "public"); self.owner = tokens.issue("hermes")
+        self.tokens = tokens
 
     def tearDown(self):
         for s, _ in self.ups: s.shutdown()
@@ -97,6 +98,66 @@ class Actions(unittest.TestCase):
         code, r = self.act({**a, "approval_id": aid}); self.assertEqual(r["status"], "refused")        # single use
         code, r = self.act({"tool": "ui", "op": "launch", "target": "bitwarden"}); self.assertEqual((code, r["status"]), (403, "refused"))
         code, r = self.act({"tool": "ui", "op": "format_disk", "target": "c"}); self.assertEqual(r["status"], "refused")
+
+    def test_opening_things_on_the_pc_owner_at_once_lab_only_with_approval(self):
+        # the owner's own agent (private lane): queued at once
+        code, r = self.act({"tool": "pc", "op": "open_app", "target": "Spotify"}, tok=self.owner)
+        self.assertEqual((code, r["status"]), (200, "queued"))
+        row = self.k.db.execute("SELECT kind, params FROM jobs WHERE id=?", (r["job"],)).fetchone()
+        self.assertEqual(row[0], "pc_open")
+        self.assertEqual(json.loads(row[1]), {"agent": "hermes", "op": "open_app", "target": "Spotify", "path": ""})
+        code, r = self.act({"tool": "pc", "op": "list_folder", "target": "Downloads"}, tok=self.owner)
+        self.assertEqual(r["status"], "queued")
+        # a lab agent (public lane): needs the owner's approval, and never lists the owner's folders
+        a = {"tool": "pc", "op": "open_folder", "target": "Downloads", "params": {"path": "invoices"}}
+        code, r = self.act(a)
+        self.assertEqual((code, r["status"]), (202, "needs_approval"))
+        self.assertTrue(self.k.approve(r["approval_id"]))
+        code, r = self.act({**a, "approval_id": r["approval_id"]})
+        self.assertEqual((code, r["status"]), (200, "queued"))
+        code, r = self.act({"tool": "pc", "op": "list_folder", "target": "Downloads"})
+        self.assertEqual((code, r["status"]), (403, "refused"))
+        # never: password managers and wallets, the secrets folder, unknown operations (both lanes)
+        for tok in (self.owner, self.lab):
+            for bad in ({"op": "open_app", "target": "Bitwarden"}, {"op": "open_folder", "target": "Documents", "params": {"path": "jarvis-secrets"}},
+                        {"op": "run_program", "target": "cmd"}):
+                code, r = self.act({"tool": "pc", **bad}, tok=tok)
+                self.assertEqual(r["status"], "refused", (tok == self.owner, bad))
+
+    def test_hub_overview_is_read_only_and_holds_no_prompt_text(self):
+        hub = self.tokens.issue("hub", "dashboard")
+        def post(path, body, tok):
+            r = urllib.request.Request(self.url + path, data=json.dumps(body).encode(), method="POST",
+                                       headers={"Content-Type": "application/json", "Authorization": "Bearer " + tok})
+            try:
+                return urllib.request.urlopen(r, timeout=10).status
+            except urllib.error.HTTPError as e:
+                return e.code
+        def get(tok):
+            r = urllib.request.Request(self.url + "/v1/jarvis/overview", headers={"Authorization": "Bearer " + tok} if tok else {})
+            try:
+                resp = urllib.request.urlopen(r, timeout=10); return resp.status, resp.read().decode()
+            except urllib.error.HTTPError as e:
+                return e.code, ""
+        secret_words = "PURPLE-ELEPHANT ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+        self.assertEqual(post("/v1/chat/completions", {"messages": [{"role": "user", "content": secret_words}]}, self.lab), 200)
+        self.act({"tool": "output", "op": "save", "target": "r.md", "params": {"content": secret_words}})
+        self.act({"tool": "ui", "op": "click", "target": "notepad|Save"})                  # stays pending
+        code, text = get(hub)
+        self.assertEqual(code, 200)
+        o = json.loads(text)
+        self.assertEqual((o["kpis"]["model_calls_24h"], o["kpis"]["approvals_pending"], o["killed"]), (1, 1, False))
+        self.assertEqual(o["agents"][0]["name"], "lab"); self.assertEqual(o["agents"][0]["provider"], "pubA")
+        self.assertEqual(o["actions_24h"], {"output.save": 1, "ui.click": 1})
+        self.assertEqual((sum(o["series_24h"]["calls"]), o["series_24h"]["calls"][-1], sum(o["series_24h"]["actions"])), (1, 1, 2))
+        self.assertEqual([j["kind"] for j in o["jobs"]], ["output_save"])
+        self.assertEqual(o["approvals"][0]["tool"], "ui")
+        self.assertNotIn("PURPLE-ELEPHANT", text); self.assertNotIn("ghp_", text)          # counts and names, never content
+        for tok in (self.lab, self.owner):                                                 # agents never read it
+            self.assertEqual(get(tok)[0], 403)
+        self.assertEqual(get(None)[0], 401)
+        self.assertEqual(post("/v1/chat/completions", {"messages": [{"role": "user", "content": "x"}]}, hub), 403)
+        self.assertEqual(post("/v1/jarvis/actions", {"tool": "output", "op": "save", "target": "x.md", "params": {"content": "x"}}, hub), 403)
 
     def test_owner_is_told_about_pending_approvals_once(self):
         self.act({"tool": "ui", "op": "type", "target": "notepad|Text editor", "params": {"text": "hello"}})
@@ -157,6 +218,69 @@ class NodeOutputs(unittest.TestCase):
         bad = NJ.ui_action({"op": "click", "target": "x", "text": ""}, {"click": boom})
         self.assertEqual(bad, {"ok": False, "error": "ValueError"})
         self.assertFalse(NJ.ui_action({"op": "format", "target": "x"}, {})["ok"])
+
+
+class NodeOpen(unittest.TestCase):
+    """The laptop node's opener, on a fake Downloads folder and a fake Start list (nothing really opens)."""
+    APPS = [("Spotify", "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"), ("Google Chrome", "Chrome"),
+            ("Uninstall Spotify", "x"), ("Notepad", "{1AC14E77}\\notepad.exe"), ("Bitwarden", "8bit.bitwarden"),
+            ("Microsoft Word", "Microsoft.Office.WINWORD.EXE.15"), ("Microsoft Edge", "MSEdge")]
+
+    def setUp(self):
+        from jarvis_node import pcopen
+        self.P = pcopen
+        self.tmp = tempfile.TemporaryDirectory(); self.root = os.path.realpath(self.tmp.name)
+        for d in ("Invoices 2026", "Photos/Trip to Goa", "Projects/jarvis-site"):
+            os.makedirs(os.path.join(self.root, d))
+        for f, body in (("Invoices 2026/march.pdf", "x"), ("setup.exe", "MZ"), ("notes.txt", "hi"), ("run.bat", "@echo")):
+            open(os.path.join(self.root, f), "w").write(body)
+        self.roots, self.opened, self.launched = {"downloads": self.root}, [], []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_op(self, **p):
+        return self.P.pc_open(p, roots=self.roots, apps=self.APPS, opener=self.opened.append, launcher=self.launched.append)
+
+    def test_apps_open_from_the_start_list_by_name(self):
+        self.assertEqual(self.run_op(op="open_app", target="spotify"), {"ok": True, "opened": "Spotify"})
+        self.assertEqual(self.run_op(op="open_app", target="chrome")["opened"], "Google Chrome")
+        self.assertEqual(self.run_op(op="open_app", target="word")["opened"], "Microsoft Word")
+        self.assertEqual(self.launched, ["SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify", "Chrome", "Microsoft.Office.WINWORD.EXE.15"])
+        no = self.run_op(op="open_app", target="photoshop")
+        self.assertFalse(no["ok"]); self.assertIn("closest", no)
+        self.assertFalse(self.run_op(op="open_app", target="microsoft")["ok"])          # Word or Edge: ambiguous, ask
+        self.assertFalse(self.run_op(op="open_app", target="bitwarden")["ok"])          # never
+        self.assertEqual(len(self.launched), 3)
+
+    def test_folders_by_name_inside_the_known_folder_only(self):
+        r = self.run_op(op="open_folder", target="Downloads", path="invoices")
+        self.assertEqual(r, {"ok": True, "opened": os.path.join("Downloads", "Invoices 2026")})
+        self.assertEqual(self.run_op(op="open_folder", target="downloads", path="goa")["opened"], os.path.join("Downloads", "Photos", "Trip to Goa"))
+        self.assertEqual(self.run_op(op="open_folder", target="Downloads")["opened"], "Downloads")
+        for bad in ("..", "../..", "C:\\Windows", "/etc", "..\\Invoices 2026"):
+            self.assertFalse(self.run_op(op="open_folder", target="Downloads", path=bad)["ok"], bad)
+        self.assertFalse(self.run_op(op="open_folder", target="System32")["ok"])          # only the known folders
+        self.assertEqual(len(self.opened), 3)
+        self.assertTrue(all(p.startswith(self.root) for p in self.opened))
+
+    def test_only_documents_open_never_programs_or_scripts(self):
+        self.assertTrue(self.run_op(op="open_file", target="Downloads", path="march")["ok"])
+        self.assertTrue(self.run_op(op="open_file", target="Downloads", path="notes.txt")["ok"])
+        for bad in ("setup", "setup.exe", "run.bat"):
+            self.assertFalse(self.run_op(op="open_file", target="Downloads", path=bad)["ok"], bad)
+        self.assertEqual([os.path.basename(p) for p in self.opened], ["march.pdf", "notes.txt"])
+
+    def test_list_newest_first(self):
+        r = self.run_op(op="list_folder", target="Downloads")
+        self.assertTrue(r["ok"]); self.assertEqual(r["count"], 6)                    # 3 folders + 3 files at the top
+        self.assertIn("Invoices 2026\\", [i["name"] for i in r["items"]])
+        self.assertEqual(self.opened, [])
+
+    def test_start_list_parsing(self):
+        apps = self.P.start_apps(lambda: '[{"Name": "Spotify", "AppID": "S!App"}, {"Name": "", "AppID": "x"}]')
+        self.assertEqual(apps, [("Spotify", "S!App")])
+        self.assertEqual(self.P.start_apps(lambda: '{"Name": "One", "AppID": "1"}'), [("One", "1")])
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@
 import hashlib
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -50,10 +51,35 @@ class TelegramAPI:
         self._call("sendMessage", {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}, 20)  # no parse_mode: plain text only
 
 
+def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: str = "telegram-owner", timeout: int = 900):
+    """The owner's own Hermes (private lane, its kernel-gated tools) through its API server on loopback. One ongoing
+    session, so "open it" refers back to what was said before. The key is read from its file on every call."""
+    def call(text: str) -> str:
+        with open(key_path, encoding="utf-8-sig") as fh:
+            key = fh.read().strip()
+        body = {"model": "hermes-agent", "messages": [{"role": "user", "content": text}], "stream": False}
+        req = urllib.request.Request(base.rstrip("/") + "/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer " + key,
+                                              "X-Hermes-Session-Id": session})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                reply = json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"agent HTTP {e.code}") from None
+        except Exception as e:
+            raise RuntimeError(f"agent error {type(e).__name__}") from None
+        return ((reply.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+    return call
+
+
 class Bridge:
-    def __init__(self, kernel, api, owner_chat_id: int, providers=None, clock=time.time):
+    def __init__(self, kernel, api, owner_chat_id: int, providers=None, clock=time.time, sleep=time.sleep, agent=None, spawn=None):
         self.k, self.api, self.owner, self.providers, self.clock = kernel, api, int(owner_chat_id), providers or [], clock
+        self.sleep = sleep      # the poll back-off only; tests swap this, never the global time.sleep
         self.ask_times, self.confirm, self.bad_ids = [], {}, []
+        self.agent = agent      # plain messages go to the owner's Hermes when set; /ask stays a quick model answer
+        self.spawn = spawn or (lambda work: threading.Thread(target=work, daemon=True).start())
+        self.agent_busy = threading.Lock()
 
     # ---------- output ----------
     def say(self, text: str):
@@ -80,8 +106,9 @@ class Bridge:
         known = {"/start", "/help", "/status", "/analyze", "/pending", "/approve", "/deny", "/kill", "/resume", "/ask", "confirm", "/recent", "/capabilities", "/can", "/models", "/check"}
         self.k.audit.append("tg_in", {"cmd": cmd if cmd in known else ("ask" if not cmd.startswith("/") else "unknown")})
         if cmd in ("/start", "/help"):
-            return self.say("JARVIS commands: /status, /check <project>, /recent, /capabilities, /can <tool> <op> [target], /models, /analyze [node], /pending, /approve <id>, /deny <id>, /kill, /ask <question> (or just type). "
-                            "Lifting the kill switch and approving RED actions are done at the kernel console.")
+            return self.say(("Just type a request (\"open my Downloads folder\", \"open Spotify\") and JARVIS does it. " if self.agent else "") +
+                            "JARVIS commands: /status, /check <project>, /recent, /capabilities, /can <tool> <op> [target], /models, /analyze [node], /pending, /approve <id>, /deny <id>, /kill, /ask <question> (a quick model answer"
+                            + (")" if self.agent else ", or just type)") + ". Lifting the kill switch and approving RED actions are done at the kernel console.")
         if cmd == "/status":
             return self.status()
         if cmd == "/analyze":
@@ -113,7 +140,7 @@ class Bridge:
             return self.ask(arg)
         if cmd.startswith("/"):
             return self.say("Unknown command. Try /help.")
-        return self.ask(text.strip())
+        return self.agent_turn(text.strip()) if self.agent else self.ask(text.strip())
 
     # ---------- commands ----------
     def status(self):
@@ -338,6 +365,36 @@ class Bridge:
         self.k.audit.append("tg_denied", {"id": aid, "ok": cur.rowcount == 1})
         self.say("Denied." if cur.rowcount == 1 else "No such pending approval.")
 
+    def agent_turn(self, text: str):
+        """A plain message is a request to JARVIS itself: the owner's Hermes does it with its tools (open an app or a
+        folder on the laptop, save and show outputs...), each action still decided by the kernel's policy. It runs in
+        the background, so /kill, /approve and job reports keep working while the agent thinks."""
+        if not text:
+            return
+        if self.k.killed():
+            return self.say("Kill switch is on: the agent does nothing.")
+        now = self.clock()
+        self.ask_times = [t for t in self.ask_times if now - t < 3600]
+        if len(self.ask_times) >= ASK_PER_HOUR:
+            return self.say("Request limit reached (20 per hour). Try later.")
+        if not self.agent_busy.acquire(blocking=False):
+            return self.say("Still working on your last request. /kill stops everything.")
+        self.ask_times.append(now)
+        self.k.audit.append("tg_agent_turn", {"chars": len(text)})
+        self.say("On it.")
+
+        def work():
+            try:
+                out = self.agent(text).strip()
+                self.k.audit.append("tg_agent_done", {"chars": len(out)})
+                self.say(out or "Done (no reply text).")
+            except Exception as e:
+                self.k.audit.append("tg_agent_failed", {"type": type(e).__name__})
+                self.say("JARVIS could not finish that (" + str(e)[:80] + "). /ask still gets a quick model answer.")
+            finally:
+                self.agent_busy.release()
+        self.spawn(work)
+
     def ask(self, text: str):
         if not text:
             return self.say("Ask something after /ask, or just type your question.")
@@ -389,7 +446,7 @@ class Bridge:
                 backoff = 1
             except Exception as e:
                 self.k.audit.append("tg_poll_error", {"msg": str(e)[:80]})
-                time.sleep(backoff)
+                self.sleep(backoff)
                 backoff = min(backoff * 2, 60)
             if once:
                 return
@@ -401,4 +458,6 @@ def from_files(kernel, providers):
         token = fh.read().strip()
     with open(os.path.join(d, "telegram_chat_id.txt"), encoding="utf-8-sig") as fh:
         owner = int(fh.read().strip())
-    return Bridge(kernel, TelegramAPI(token), owner, providers)
+    key = os.path.join(d, "hermes_api_key.txt")      # present on the server: plain messages go to the owner's Hermes
+    agent = hermes_agent(key, os.environ.get("JARVIS_HERMES_API", "http://127.0.0.1:8642")) if os.path.exists(key) else None
+    return Bridge(kernel, TelegramAPI(token), owner, providers, agent=agent)

@@ -1,0 +1,26 @@
+# WSL lab box (JarvisLab): owner's "Take control" / "Continue task" for the Agent PC. Install:
+#   install -o root -g root -m 644 lab_control.py /opt/jarvis-hub/lab_control.py
+#   install -o root -g root -m 644 jarvis-lab-control.service /etc/systemd/system/ && systemctl enable --now jarvis-lab-control
+[Unit]
+Description=JARVIS lab control (owner takes the Agent PC and hands it back)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/jarvis-hub/lab_control.py
+# /run/jarvis-lab: root-owned, readable by the agents' tool server; kept across restarts of this service, not reboots
+RuntimeDirectory=jarvis-lab
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+Restart=on-failure
+RestartSec=3
+# Root only to pause and resume the agent user's processes and read its logs.
+CapabilityBoundingSet=CAP_KILL CAP_CHOWN CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+# No PrivateNetwork: the Agent PC's display :1 is reached through its abstract X socket (WSLg owns /tmp/.X11-unix),
+# which a private network namespace cannot see. The service itself still listens only on its Unix socket.
+
+[Install]
+WantedBy=multi-user.target

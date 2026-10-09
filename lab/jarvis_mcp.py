@@ -1,8 +1,11 @@
-"""JARVIS tools for lab agents (MCP, stdio). Runs inside the WSL lab box as the agent user.
+"""JARVIS tools for agents (MCP, stdio).
 
-Every tool is a thin client: it sends the action to the JARVIS kernel with the agent's own token (public lane) and
-reports what the kernel decided. The kernel's policy, approvals, limits and audit log decide; nothing here can widen
-them. Outputs land on the owner's laptop in D:\\jarvis\\outputs\\<agent>\\ (written by the laptop node, not by this box).
+Profile "lab" (default): lab agents in the WSL lab box, public-lane token; includes their own computer (the Agent PC).
+Profile "owner" (JARVIS_MCP_PROFILE=owner): the owner's own Hermes on the server, private-lane token; adds reading the
+owner's folders, drops the lab-only tools.
+Every tool is a thin client: it sends the action to the JARVIS kernel with the agent's own token and reports what the
+kernel decided. The kernel's policy, approvals, limits and audit log decide; nothing here can widen them. Outputs land
+on the owner's laptop in D:\\jarvis\\outputs\\<agent>\\ (written by the laptop node).
 """
 import json
 import os
@@ -14,6 +17,7 @@ import uuid
 
 from mcp.server.mcpserver import Image, MCPServer   # mcp 2.x (FastMCP was renamed)
 
+PROFILE = os.environ.get("JARVIS_MCP_PROFILE", "lab")
 ENDPOINT = os.environ.get("JARVIS_ENDPOINT", "http://100.125.91.51:8790")
 TOKEN = open(os.path.expanduser("~/.jarvis-llm-token")).read().strip()
 TASKS = os.path.expanduser("~/work/tasks")
@@ -23,6 +27,13 @@ AGENT_CMDS = {
     "goose": lambda p, d: ["goose", "run", "--max-turns", "40", "-t", p],
 }
 mcp = MCPServer("jarvis")
+
+
+def tool(*profiles):
+    """Register the function as a tool only in the given profiles."""
+    def deco(fn):
+        return mcp.tool()(fn) if PROFILE in profiles else fn
+    return deco
 
 
 def _call(method, path, body=None):
@@ -58,55 +69,167 @@ def _wait(job, seconds=75):
     return {"state": "still queued", "id": job}
 
 
+CONTROL_STATE = "/run/jarvis-lab/control.json"      # written by lab_control.py (root): who has the Agent PC
+ACTIVITY = os.path.expanduser(os.environ.get("JARVIS_ACTIVITY", "~/lab/activity.jsonl"))
+STARTED = time.time()
+_seen_return = [None]
+_who = []
+
+
+def _caller():
+    """Which agent started this tool server (for the hub's activity feed): its program name, never its prompt."""
+    if not _who:
+        try:
+            argv = [a.decode(errors="replace") for a in open(f"/proc/{os.getppid()}/cmdline", "rb").read().split(b"\0") if a]
+            head = " ".join(os.path.basename(a) for a in argv[:2])
+            _who.append(next((k for k in ("hermes", "opencode", "goose") if k in head), "agent"))
+        except OSError:
+            _who.append("agent")
+    return _who[0]
+
+
+def _log(tool, detail=""):
+    try:
+        with open(ACTIVITY, "a") as fh:
+            fh.write(json.dumps({"ts": time.time(), "time": time.strftime("%H:%M:%S"), "agent": _caller(), "tool": tool,
+                                 "detail": str(detail)[:160], "ppid": os.getppid()}) + "\n")
+    except OSError:
+        pass
+
+
+def _control():
+    try:
+        with open(CONTROL_STATE) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {"mode": "agent"}
+
+
 def _say(reply):
+    """After a takeover the next reply carries the owner's hand-back note once, so the agent re-checks the screen.
+    Agents started after the owner handed back never get it."""
+    s = _control()
+    back = s.get("returned_at")
+    if back and back > STARTED and back != _seen_return[0]:
+        _seen_return[0] = back
+        start = s.get("owner_since") or back
+        if isinstance(reply, dict):
+            reply = {**reply, "note": f"The owner had control of your computer from {time.strftime('%H:%M:%S', time.localtime(start))} "
+                                      f"to {time.strftime('%H:%M:%S', time.localtime(back))} and may have changed things. Look again "
+                                      "(desktop_windows or desktop_screenshot) before you continue with what is left of your task."}
     return json.dumps(reply, ensure_ascii=False)
 
 
-@mcp.tool()
+def _owner_has_control():
+    return _control().get("mode") == "owner"
+
+
+def _outcome(tool, r):
+    """Log what the owner's laptop reported, not just that the agent asked (hub activity feed, demo checker)."""
+    res = (r or {}).get("result") or {}
+    if r.get("state") == "done" and res.get("ok"):
+        _log(tool + ":done", res.get("saved") or res.get("shown") or res.get("opened") or res.get("folder") or res.get("done") or "")
+    else:
+        _log(tool + ":failed", r.get("state") or r.get("status") or res.get("error") or "")
+    return r
+
+
+OWNER_BUSY = {"status": "waiting", "reason": "the owner has taken control of this computer; wait a minute, then call desktop_windows to see if they handed it back"}
+
+
+@tool("lab", "owner")
 def save_output(name: str, content: str) -> str:
     """Give a file to the OWNER: saves it on the owner's laptop in D:\\jarvis\\outputs\\<agent>\\<name>.
     This is the ONLY way to deliver a result to the owner; write_file only writes inside your own computer and the
     owner never sees it. Pass the full text as content. name: a plain file name ending in .md, .txt, .html, .json,
     .csv, .log or .py (no folders). Never overwrites."""
+    _log("save_output", name)
     r = _act("output", "save", name, {"content": content})
-    return _say(_wait(r["job"]) if r.get("status") == "queued" else r)
+    return _say(_outcome("save_output", _wait(r["job"]) if r.get("status") == "queued" else r))
 
 
-@mcp.tool()
+@tool("lab", "owner")
 def show_output(name: str) -> str:
     """Open on the owner's screen a file you ALREADY delivered with save_output (use the same name). Files written
     with write_file cannot be shown. Text opens in Notepad, .html in the browser. At most 12 per hour."""
+    _log("show_output", name)
     r = _act("output", "show", name)
-    return _say(_wait(r["job"]) if r.get("status") == "queued" else r)
+    return _say(_outcome("show_output", _wait(r["job"]) if r.get("status") == "queued" else r))
 
 
-@mcp.tool()
+@tool("lab", "owner")
 def pc_action(op: str, target: str, text: str = "", approval_id: str = "") -> str:
     """Act on the owner's Windows PC. op: launch (notepad, calc or mspaint), click or type; target: 'app|element name'.
     The owner must approve every action. First call without approval_id: you get one back and the owner is asked on
     Telegram. After they approve, call again with the SAME op, target and text plus that approval_id. Password
     managers, banking and wallets are always refused."""
+    _log("pc_action", f"{op} {target}" + (" (approved)" if approval_id else ""))
     r = _act("ui", op, target, {"text": text} if text else {}, approval_id)
-    return _say(_wait(r["job"]) if r.get("status") == "queued" else r)
+    if r.get("status") == "queued":
+        return _say(_outcome("pc_action", _wait(r["job"])))
+    return _say(r)
 
 
-@mcp.tool()
+def _pc(op, target, path="", approval_id=""):
+    """Open something on the owner's laptop through the kernel (pc.<op>): the owner's own agent at once, a lab agent
+    after the owner approves on Telegram (call again with the same arguments plus approval_id)."""
+    _log(op, f"{target} {path}".strip() + (" (approved)" if approval_id else ""))
+    r = _act("pc", op, target, {"path": path} if path else {}, approval_id)
+    if r.get("status") == "queued":
+        return _say(_outcome(op, _wait(r["job"])))
+    return _say(r)
+
+
+@tool("lab", "owner")
+def open_app(name: str, approval_id: str = "") -> str:
+    """Open an app on the OWNER's Windows laptop by its Start-menu name, e.g. 'Spotify', 'Google Chrome', 'Word',
+    'Notepad'. If the name is unclear you get the closest names back: ask the owner which one. Password managers,
+    wallets and banking apps are never opened."""
+    return _pc("open_app", name, "", approval_id)
+
+
+@tool("lab", "owner")
+def open_folder(folder: str, path: str = "", approval_id: str = "") -> str:
+    """Open a folder on the OWNER's laptop in File Explorer. folder: Downloads, Documents, Desktop, Pictures, Videos or
+    Music. path: optional sub-folder inside it, a relative path or just a name to look for (e.g. 'invoices' finds
+    'Downloads\\Invoices 2026'). If several match you get the closest names back: ask the owner which one."""
+    return _pc("open_folder", folder, path, approval_id)
+
+
+@tool("lab", "owner")
+def open_file(folder: str, path: str, approval_id: str = "") -> str:
+    """Open a document or media file on the OWNER's laptop with its usual app (PDF, Word, Excel, images, video,
+    music, text...). folder: Downloads, Documents, Desktop, Pictures, Videos or Music; path: the file's name or relative
+    path. Programs and scripts are never opened."""
+    return _pc("open_file", folder, path, approval_id)
+
+
+@tool("owner")
+def list_folder(folder: str, path: str = "") -> str:
+    """List what is in one of the OWNER's folders (Downloads, Documents, Desktop, Pictures, Videos, Music), newest
+    first, up to 200 entries; folders end with a backslash. Use it before open_folder/open_file when unsure of a name."""
+    return _pc("list_folder", folder, path)
+
+
+@tool("lab", "owner")
 def models_status() -> str:
-    """List the models this lab may use, whether each is reachable, and which one is preferred."""
+    """List the models you may use (your lane only), whether each is reachable, and which one is preferred."""
     return _say(_act("models", "status"))
 
 
-@mcp.tool()
+@tool("lab", "owner")
 def switch_model(provider: str) -> str:
     """Prefer another model provider (same lane only) when the current one is failing. At most 20 switches a day."""
+    _log("switch_model", provider)
     return _say(_act("models", "prefer", provider))
 
 
-@mcp.tool()
+@tool("lab")
 def start_lab_task(agent: str, prompt: str) -> str:
     """Hand a task to another lab agent (hermes, opencode or goose). Returns a task id; check it with lab_task_result."""
     if agent not in AGENT_CMDS:
         return _say({"status": "refused", "reason": "agent must be hermes, opencode or goose"})
+    _log("start_lab_task", f"{agent}: {prompt[:100]}")
     r = _act("lab", "task", agent, {"prompt": prompt})
     if r.get("status") != "allowed":
         return _say(r)
@@ -128,7 +251,7 @@ def start_lab_task(agent: str, prompt: str) -> str:
     return _say({"status": "started", "task_id": tid, "folder": d})
 
 
-@mcp.tool()
+@tool("lab")
 def lab_task_result(task_id: str) -> str:
     """Status and the last lines of output of a task started with start_lab_task."""
     d = os.path.join(TASKS, os.path.basename(task_id))
@@ -174,10 +297,13 @@ def _focus(window):
     return True
 
 
-@mcp.tool()
+@tool("lab")
 def desktop_open(target: str) -> str:
     """Open something on YOUR OWN computer (the Agent PC the owner watches): a web address starting with http:// or
     https:// opens in Firefox; 'firefox', 'terminal' or 'files' opens that app. Windows stay open after you finish."""
+    if _owner_has_control():
+        return _say(OWNER_BUSY)
+    _log("desktop_open", target)
     if target.startswith(("http://", "https://")):
         cmd = DESKTOP_APPS["firefox"] + [target]
     elif target in DESKTOP_APPS:
@@ -189,9 +315,12 @@ def desktop_open(target: str) -> str:
     return _say({"status": "opened", "target": target})
 
 
-@mcp.tool()
+@tool("lab")
 def desktop_windows() -> str:
     """List the windows open on your computer (title only), to know what to focus."""
+    if _owner_has_control():
+        return _say(OWNER_BUSY)
+    _log("desktop_windows")
     code, ids = _x("search", "--onlyvisible", "--name", ".")
     titles = []
     for wid in (ids.splitlines() if not code else [])[:40]:
@@ -201,41 +330,51 @@ def desktop_windows() -> str:
     return _say({"windows": titles})
 
 
-@mcp.tool()
+@tool("lab")
 def desktop_click(x: int, y: int, window: str = "") -> str:
     """Click at screen pixel (x, y) of your 1600x900 screen (use desktop_screenshot to see it). window: optional part
     of a window title to bring to the front first."""
     if not (0 <= x < 1600 and 0 <= y < 900):
         return _say({"status": "refused", "reason": "outside the 1600x900 screen"})
+    if _owner_has_control():
+        return _say(OWNER_BUSY)
+    _log("desktop_click", f"{x},{y} {window}")
     if not _focus(window):
         return _say({"status": "no such window", "window": window})
     _x("mousemove", str(x), str(y), "click", "1")
     return _say({"status": "clicked", "x": x, "y": y})
 
 
-@mcp.tool()
+@tool("lab")
 def desktop_type(text: str, window: str = "") -> str:
     """Type text with the keyboard into whatever has focus (click the field first). window: optional title part."""
     if len(text) > 2000:
         return _say({"status": "refused", "reason": "at most 2000 characters at a time"})
+    if _owner_has_control():
+        return _say(OWNER_BUSY)
+    _log("desktop_type", f"{len(text)} characters {window}")
     if not _focus(window):
         return _say({"status": "no such window", "window": window})
     _x("type", "--delay", "25", text, timeout=120)
     return _say({"status": "typed", "chars": len(text)})
 
 
-@mcp.tool()
+@tool("lab")
 def desktop_key(keys: str, window: str = "") -> str:
     """Press keys, e.g. 'Return', 'ctrl+l', 'ctrl+t', 'Tab', 'Escape', 'alt+F4'. window: optional title part."""
+    if _owner_has_control():
+        return _say(OWNER_BUSY)
+    _log("desktop_key", f"{keys} {window}")
     if not _focus(window):
         return _say({"status": "no such window", "window": window})
     code, _ = _x("key", *keys.split())
     return _say({"status": "pressed" if code == 0 else "failed", "keys": keys})
 
 
-@mcp.tool()
+@tool("lab")
 def desktop_screenshot() -> Image:
     """A picture of your whole screen (1600x900). Use it to find where to click."""
+    _log("desktop_screenshot")
     png = os.path.join(TASKS, "..", "last-screen.png")
     os.makedirs(TASKS, exist_ok=True)
     subprocess.run(f"xwd -root -silent | convert xwd:- png:{png}", shell=True, env=_denv(), timeout=30)

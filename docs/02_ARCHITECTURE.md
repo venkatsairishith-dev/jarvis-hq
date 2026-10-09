@@ -91,10 +91,91 @@ Owner rules: Colab hosts models only; every agent and test runs on the laptop un
 - OmniRoute 3.8.51 runs on the VM (dedicated user, loopback only, login and API key required) but routes nothing yet: OpenCode's free tier answers "can only be used from within OpenCode", so it was switched off; Pollinations needs a free key.
 
 ## One window for everything (added 2026-10-09)
-The JARVIS Hub (desktop shortcut "JARVIS Hub", an Edge app window on http://hub.localhost:8088) shows every dashboard as a panel: Agent PC, openmuse, Hermes lab, OpenCode, Hermes main (server), OmniRoute, plus live status of the JARVIS model endpoint, the GPU model server and OpenJev. Caddy in the WSL box (user hub, loopback, port 8088, forwarded to this laptop only) gives each one its own *.localhost name. The agent PC is a real XFCE desktop in the WSL box (TigerVNC display :1, loopback), viewable in the hub (noVNC) or as a native Remote Desktop window (shortcut "JARVIS Agent PC", xrdp on localhost:3390, VNC password). The WSL agent user is blocked from the hub proxy and the status checker so neither can be used to get around its firewall (measured). The server's Hermes now serves its full dashboard on 100.125.91.51:9119; OmniRoute's dashboard is reachable on the Tailscale address with its login.
+The JARVIS Hub (desktop shortcut "JARVIS Hub", an Edge app window on http://hub.localhost:8088) shows every dashboard as a panel: Agent PC, openmuse, Hermes lab, OpenCode, Hermes main (server), OmniRoute, plus live status of the JARVIS model endpoint, the GPU model server and OpenJev. Caddy in the WSL box (user hub, loopback, port 8088, forwarded to this laptop only) gives each one its own *.localhost name. The agent PC is a real XFCE desktop in the WSL box (TigerVNC display :1, loopback), viewable in the hub (noVNC). The native Remote Desktop route (xrdp on localhost:3390) was removed on 2026-10-10: xrdp 0.9.24 is end-of-life with unpatched CVEs. The WSL agent user is blocked from the hub proxy and the status checker so neither can be used to get around its firewall (measured). The server's Hermes now serves its full dashboard on 100.125.91.51:9119; OmniRoute's dashboard is reachable on the Tailscale address with its login.
 
 ## Agent control (added 2026-10-09, owner defaults)
 Lab agents (Hermes, OpenCode, goose) get a small MCP tool server (hq/lab/jarvis_mcp.py, official MCP Python SDK 2.3.0) inside the WSL box. Each tool only forwards to the kernel through the model endpoint (POST /v1/jarvis/actions, the lab's public-lane token); the kernel's policy, single-use approvals, limits and audit decide. Tools: save_output and show_output (laptop node writes only inside D:\jarvis\outputs\<agent>\, never overwrites, opens text in Notepad and .html in the browser; YELLOW_AUTO; 12 shows per hour), pc_action (launch allow-listed apps, click, type through the existing Windows UI layer; YELLOW_APPROVAL every time: the owner gets a Telegram message and approves with /approve then CONFIRM; password managers, wallets and banking always refused), models_status and switch_model (same lane only, 20 switches per day; the endpoint puts the preferred provider first), start_lab_task and lab_task_result (hand work to another lab agent). Agent jobs are untrusted sessions, only their agent can read the result, and they are not reported to the owner's Telegram. Measured end to end: a save landed in D:\jarvis\outputs\lab in 4 s, the show opened Notepad on the owner's desktop, an escaping name was refused. Not yet: openmuse tasks (openmuse not running); OmniRoute has no active provider, so model failover happens in the JARVIS gateway.
 
 ## The Agent PC is the agents' own computer (added 2026-10-09)
-The XFCE desktop in the WSL box (display :1) is the agents' computer; the owner watches it in the hub or in Remote Desktop and can take over. Lab Hermes has its computer_use toolset on, driven by cua-driver 0.21.0 (installed pinned through Hermes's package manager; telemetry off by default): health check passed for screen capture, AT-SPI and input on display :1. Firefox 157 from Mozilla's signed apt repository, with an enterprise policy that turns telemetry and first-run screens off. Accessibility works after putting the desktop, the driver and Hermes on the agent user's systemd session bus (970 elements read from a Wikipedia page, versus 1 before). Measured gaps in cua-driver's Linux support (it calls it alpha): typing into web pages through AT-SPI leaves them empty, and element frames are offset by the window position. So the JARVIS tool server adds desktop_open, desktop_windows, desktop_click, desktop_type, desktop_key and desktop_screenshot on xdotool and xwd; measured: a Wikipedia search typed and submitted on the Agent PC. These act only inside the lab box. Each agent's own instruction file (Hermes SOUL.md, OpenCode AGENTS.md, goose .goosehints) says it has this computer; goose's computercontroller extension is on. Not yet tested: an agent driving the desktop by itself, because the lab lane only has the server's 4B CPU model (a vision-capable model on a free GPU is needed).
+The XFCE desktop in the WSL box (display :1) is the agents' computer; the owner watches it in the hub or in Remote Desktop and can take over. Lab Hermes has its computer_use toolset on, driven by cua-driver 0.21.0 (installed pinned through Hermes's package manager; telemetry off by default): health check passed for screen capture, AT-SPI and input on display :1. Firefox 157 from Mozilla's signed apt repository, with an enterprise policy that turns telemetry and first-run screens off. Accessibility works after putting the desktop, the driver and Hermes on the agent user's systemd session bus (970 elements read from a Wikipedia page, versus 1 before). Measured gaps in cua-driver's Linux support (it calls it alpha): typing into web pages through AT-SPI leaves them empty, and element frames are offset by the window position. So the JARVIS tool server adds desktop_open, desktop_windows, desktop_click, desktop_type, desktop_key and desktop_screenshot on xdotool and xwd; measured: a Wikipedia search typed and submitted on the Agent PC. These act only inside the lab box. Each agent's own instruction file (Hermes SOUL.md, OpenCode AGENTS.md, goose .goosehints) says it has this computer. Correction 2026-10-10: goose's computercontroller extension is now off, because goose 1.47+ has no screen tools on Linux but still claims a screenshot tool.
+
+## Take control and Continue task (added 2026-10-10)
+The owner watches the Agent PC in the hub without disturbing the agents and can take it over at any moment.
+
+**Hub controls.** The Agent PC panel's header shows the state ("2 agents working · you are watching" or "You have control · agents paused") and three buttons: Take control, Continue task, and Activity.
+- **Activity** is a drawer listing each task (goal, running time, working or paused, last step) and the latest 14 actions.
+- **Watching** uses noVNC's own View Only switch, flipped live inside the screen. noVNC is served on the hub's own address (/pc/), so switching never reconnects or asks for the VNC password again.
+- **Shared viewing:** Xvnc runs with -AlwaysShared -AcceptSetDesktopSize=0. Several viewers never kick each other off, and none can resize the agents' 1600x900 screen. Logging in to watch never stops an agent.
+
+**lab_control.py** (WSL box) does the work:
+- It runs as root and listens only on the Unix socket /run/jarvis-lab/control.sock (root:hub 0660; Caddy route /control/*; every request needs the header X-Jarvis-Hub: 1). There is no TCP port for Windows' localhost forwarding to expose, and the agent user cannot open the socket (measured).
+- **Take control** freezes (SIGSTOP) every agent task of the agent user with everything it runs, whether or not the child has its own session (Hermes starts commands that way). Agent tasks are recognised by program and subcommand (hermes chat, opencode run, goose run), never by prompt text. Anything driving the screen (cua-driver, xdotool) is frozen wherever it runs.
+- Windows the agents opened (Firefox, terminals, file manager) keep running for the owner. Programs the owner starts from the desktop are never touched. A task that starts while the owner has control is frozen within 2 seconds.
+- **Continue task** unfreezes them. On its next call each agent that was running learns, once, that "the owner had control of your computer from X to Y… look again before you continue with what is left". Agents started later never get that note. While the owner has control, the desktop tools answer "waiting".
+- Activity data comes from ~agent/lab/activity.jsonl: the JARVIS tool server logs each call and, since today, the laptop's answer (save_output:done and so on). It also uses Hermes's log. Root reads both without following links, and only files the agent user owns. Last steps are matched by process for JARVIS tools and by Hermes session for Hermes's own tools.
+
+**Measured:**
+- Unit tests: 10 on Linux; 6 run on Windows, where 4 Linux-only tests skip.
+- With dummy tasks: frozen (T) while a "window" child stayed running (S), a task started during the takeover was frozen, Continue resumed everything, and the note was given once, only to tasks that were running.
+- Hub buttons in headless Edge: same screen session, View Only flipped live, no reload.
+
+**Also changed:** xrdp is off. Version 0.9.24 is end-of-life with unpatched CVEs, including a 9.8 in its VNC module, so the Agent PC is viewed in the hub only. Screen blanking and the screensaver are off.
+
+## JARVIS acts on the owner's requests (added 2026-10-10)
+A plain Telegram message ("open my Downloads folder", "open Spotify") now goes to the owner's own Hermes on the server: its API server on 127.0.0.1:8642, one ongoing session. It runs in the background, so /kill, /approve and job reports keep working while it thinks. /ask stays a quick model answer without tools.
+
+Hermes gets the JARVIS tool server in its owner profile (/opt/jarvis-mcp, root-owned; its toolset is allowed on the API platform):
+- save_output and show_output;
+- pc_action;
+- open_app, open_folder, open_file and list_folder;
+- models_status and switch_model.
+
+Opening things on the laptop is a new job kind, pc_open:
+- **Apps** come from Windows' own Start list and open through shell:AppsFolder\<AppID>, so no agent-written command line runs.
+- **Folders** are the known folders (Downloads, Documents, Desktop, Pictures, Videos, Music), resolved by Windows. Anything inside one is found by name, two levels deep, and cannot escape it.
+- **Files** open only if they are document or media types, never programs or scripts.
+- **Never opened:** password managers, wallets, banking apps and the secrets folder.
+
+Policy:
+- The owner's private lane runs at once.
+- A lab agent (public lane) needs the owner's approval every time and can never list the owner's folders, since the names would reach a public model.
+
+## Mission control (the hub's overview, added 2026-10-10)
+The hub's first page is now the Agent OS dashboard. It follows the owner's references: the Contentstack Agent OS dashboard, the "agentic OS dashboard" articles, and dashboard design practice. It shows:
+- **Top bar:** live KPI chips.
+- **KPI tiles:** model calls, success rate, agent actions and approvals waiting, each with a 24-hour sparkline.
+- **Agent cards:** JARVIS and the three lab agents, with status, current step, elapsed time and heartbeat.
+- **The Agent PC:** a live thumbnail with Take control and Continue task.
+- **Task board:**
+  - Waiting on you: approvals.
+  - Queued and Running: kernel jobs and lab tasks.
+  - Paused, Done and Failed.
+- **Delivered to you:** a gallery of D:\jarvis\outputs, with previews.
+- **Model routing and services.**
+- **Live activity rail:** filters and pause.
+- **Ctrl+K command palette.**
+
+Data sources, all read-only:
+- **Kernel:** GET /v1/jarvis/overview, served only to a new "dashboard" lane token that cannot call models or act. Caddy adds the token, so the browser never holds it. The response has counts, states, names and times only; the fields are whitelisted, with no prompt text and no tool arguments (tested).
+- **lab_control:** tasks, a screen thumbnail and the activity log.
+- **Outputs:** D:\jarvis\outputs is mounted read-only for the hub user only and served on its own origin (outputs.localhost) with a sandbox CSP. An agent-written HTML file can never script the hub.
+
+Design and assets: Lucide icons (ISC), the Geist font (OFL) and @fnando/sparkline (MIT), all vendored and sanitised. Dashboard projects with their own approval and audit stores (Mission Control, Paperclip) were not adopted, because the kernel stays the single authority.
+
+## Lab models: Dahl (added 2026-10-10; replaces the Kaggle and Colab model servers)
+**Why Kaggle and Colab are parked.** Serving a model from a notebook through a tunnel breaks Colab's rules (explicit) and reportedly Kaggle's ("server farming"), and there are account-ban reports. A Kaggle run was also cancelled without an error. The prepared server code (hq/kaggle/model-server) stays, at 64K context with the tunnel limited to three paths.
+
+**Dahl.** The lab lane now uses Dahl (inference.dahl.global, run by FROMZERO OÜ, Estonia): an OpenAI-compatible API on the Gonka network whose terms allow agents and API automation.
+- It is a prepaid promotional pool on the owner's one account: no card billing, never topped up. The key holds an allocation from that pool, which caps what a leak could spend.
+- Requests run on independent GPU operators who may see them, so it is **public lane only**. A config test refuses any dahl*, gonka*, kaggle*, colab* or omniroute* provider outside the public lane.
+
+**One provider entry per model**, so a busy model (HTTP 429) falls through to the next and agents can switch_model between them:
+- dahl-minimax (MiniMax-M2.7) first.
+- dahl-glm (GLM-5.3-Flash) second.
+- dahl-deepseek (DeepSeek-V4-Flash) off: its text replies loop until max_tokens (measured), which burns the pool.
+
+Measured from the server: all three list, answer and make correct tool calls, and stream with the first chunk in 0.5-0.8 s. MiniMax's reasoning arrives in <think> tags and is kept on purpose, because MiniMax says removing it from the history hurts its agent work.
+
+**Agent settings.**
+- Lab agents use a 64K window: Hermes's minimum, and Hermes cannot probe the window through the endpoint. OpenCode is set to 65536 context and 8192 output; goose has GOOSE_CONTEXT_LIMIT=65536.
+- The endpoint retries a provider's 5xx once before falling back. (Ollama answers an unparsable gpt-oss tool call with HTTP 500.)

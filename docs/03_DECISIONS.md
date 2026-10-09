@@ -102,3 +102,47 @@ OpenJev (razorback16/openjev, Apache-2.0, pinned 75f22b6) installed in D:\jarvis
 | rules+knn+llm+verdict | 78% | 2/200 | 53 | |
 | laya-1.0 alone | 32% | 143/200 | 13 | 340 ms; not useful here |
 Reading: Verdict can stand in for the 4B LLM in the union at the same false-allow rate, much faster and cheaper, at the price of about 23 more over-cautious escalations per 260. Alone it is not safe enough. The deterministic policy stays the authority; any model stays advisory and may only raise a level. Same caveat as before: one author wrote the items. Not adopted into the kernel yet: owner's choice between fewer approvals (current) and speed (Verdict).
+
+## D11 Where the lab's models run (2026-10-10)
+- **Problem:** the lab agents need a model strong enough for multi-step tool use, free, and without risk to the owner's accounts.
+- **Options:**
+  - Kaggle notebook (Ollama gpt-oss:20b on 2xT4) through ngrok. Used 2026-10-09: about 50 tokens/s, but 6 of 15 demo runs passed. gpt-oss tool calls failed in Ollama's parser, and the session was cancelled mid-suite.
+  - Free cloud APIs.
+  - The laptop GPU (4 GB: small models only).
+  - Dahl.
+- **Evidence:**
+  - Colab's FAQ forbids web services and remote proxies from notebooks. Kaggle's acceptable use policy reportedly forbids "server farming" (could not be loaded to verify). There are reports of account bans for tunnels.
+  - Dahl's terms allow agents and API automation.
+  - Measured on Dahl from the server: MiniMax-M2.7 and GLM-5.3-Flash answer correctly and make correct tool calls. DeepSeek-V4-Flash loops its text output.
+- **Decision (owner):** Dahl for the lab lane: dahl-minimax first, dahl-glm second, dahl-deepseek off.
+  - Public lane only: Gonka GPU operators may see requests.
+  - Never top up the pool.
+  - Kaggle and Colab serving are parked.
+- **Fallback:** the other Dahl model on a 429, then the laptop or VM local models. The prepared Kaggle server stays in the repo for a deliberate owner decision.
+
+## D12 Known problems others hit with this stack, and what was done (2026-10-10)
+**Source:** six parallel reviews of GitHub issues, advisories, docs and forums for Hermes Agent and the MCP SDK, Ollama and ngrok, Kaggle/Colab/WSL2/unittest, OpenCode and goose, openmuse and OmniRoute, and cua-driver/VNC/xrdp/AT-SPI. Issue numbers are in the daily note of 2026-10-10.
+
+| Problem | Applied to us | Done |
+|---|---|---|
+| Ollama's default context is 4K/32K, and Hermes refuses windows under 64K | yes | 64K in Hermes, OpenCode and goose; Kaggle server prepared at 64K with flash attention and q8 KV cache |
+| Our own model-server bug: a code comment swallowed KEEP_ALIVE and CONTEXT_LENGTH | yes | fixed in model_server.py |
+| gpt-oss tool calls in Ollama: HTTP 500 "error parsing tool call", calls to tools never offered | yes (Kaggle era) | endpoint retries a 5xx once on the same provider; lab moved to models with working tool calls |
+| OpenCode compacts after every step when context minus output is small | yes (it was 16K - 4K) | 65536 / 8192 |
+| `opencode run` auto-rejects every "ask" permission and stops silently | yes | external_directory and doom_loop allowed |
+| goose computercontroller has no Linux screen tools since 1.47 but claims a screenshot tool | yes | off; .goosehints lists the real tools ("no read_file: use the shell") |
+| goose ends on a reasoning-only reply | yes (gpt-oss) | models with content now; an endpoint-side retry of empty replies is not built |
+| Hermes ACP delegation to OpenCode hangs on permission prompts | yes | no "ask" left in OpenCode |
+| VNC viewers kick each other off; xrdp resizes the agents' screen | yes | Xvnc -AlwaysShared -AcceptSetDesktopSize=0 |
+| xrdp 0.9.24 end-of-life with unpatched CVEs (one is 9.8, in its VNC module) | yes | xrdp off |
+| Screen saver or blanking on the agents' desktop | yes | off |
+| WSL stops the distro 15 s after the last Windows client | yes | logon keeper task (earlier), plus instanceIdleTimeout=-1 and vmIdleTimeout=-1 from the next WSL start |
+| Patching time.sleep globally makes subprocess waits spin | yes (flaky server test) | the Telegram bridge takes `sleep` as a parameter; server suite 230 OK |
+| Hermes deps: PyJWT 2.13 (critical forged-token advisory), httpx2/httpcore2 2.7 (decompression memory DoS) | partly | upgraded to 2.14.0 / 2.12.0 on the server and the lab; imports, CLI and a live server call pass |
+| MCP SDK 2.0.0 client advisories (fixed in 2.2.0) | low: only our own MCP server is connected | accepted until Hermes moves its pin |
+| Ollama's API has no authentication (CVE-2025-63389) | Kaggle era | tunnel allow-list of three paths prepared (parked) |
+| OmniRoute: all-interface bind; some builds treat a wrong key as anonymous | checked | wrong key gets 401; public address unreachable (Oracle security list plus host firewall, tailscale0 only) |
+| Kaggle/Colab rules on tunnels | yes | parked (D11) |
+| Firefox fields ignore AT-SPI typing; Xvnc cannot do background key presses | yes | agents told to click, then desktop_type (xdotool); cua-driver 0.34 upgrade pending |
+| Hermes computer_use screenshots with a text-only model | yes | open: needs a vision model on the lab lane |
+| openmuse: CopilotKit Intelligence 503s; MCP SDK 1.30 advisory in its dependencies | yes | nothing upstream yet; watch |

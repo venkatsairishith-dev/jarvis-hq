@@ -212,7 +212,8 @@ class G(unittest.TestCase):
                 self.assertEqual(p.model_pattern, ":free$", p.name)        # OpenRouter may only use free models
         priv = [p for p in provs if p.name == "openrouter-private"][0]
         self.assertEqual(priv.extra_body, {"provider": {"data_collection": "deny"}})
-        self.assertFalse([p for p in provs if p.lane == "private" and p.name.startswith(("colab", "omniroute"))])  # tunnelled or free-for-all routes are never private
+        # tunnelled, free-for-all or decentralised (operators can read requests) routes are never private
+        self.assertFalse([p for p in provs if p.lane != "public" and p.name.startswith(("colab", "kaggle", "omniroute", "dahl", "gonka"))])
 
 
 if __name__ == "__main__":
