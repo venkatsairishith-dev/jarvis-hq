@@ -201,8 +201,8 @@ const SERVICES = [
     desc: "Model router on the server (login required).", down: "OmniRoute is not reachable. Is Tailscale on?" },
   { id: "endpoint", group: "Models", name: "JARVIS model endpoint", icon: "shield", check: "http://100.125.91.51:8790/v1/models", accept: "401",
     desc: "Every agent's model calls pass here: lane checks, scrubbing, audit." },
-  { id: "gpu", group: "Models", name: "GPU model server", icon: "cloud", check: "MODEL_SERVER_STATUS_URL", accept: "403",
-    desc: "Open models on the free cloud GPU (only the server may use it, so a refusal here means it is up)." },
+  { id: "gpu", group: "Models", name: "Lab models (Puter)", icon: "cloud", check: "https://api.puter.com/puterai/openai/v1/models", accept: "401",
+    desc: "Cloud models for the lab agents through Puter. Public lane only: never private data." },
   { id: "jev", group: "Models", name: "OpenJev", icon: "scale", check: "http://127.0.0.1:8091/v1/models",
     desc: "Fast typed decisions (yes/no, choice) on the CPU." }
 ];
