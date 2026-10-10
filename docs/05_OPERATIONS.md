@@ -87,3 +87,16 @@ Never restart while a lab job runs: a runner report sent during the restart is l
 - Delete checklist: also verify the OCID is not in protected.json.
 - ESU: free only if enrollment shows no price. Source: Microsoft's ESU page (the Q&A thread said 13 Oct 2026; the Microsoft page says 12 Oct 2027) [verify in the Windows settings screen].
 - Secrets: files only, no environment variables. The Windows D: partition is visible from macOS under Boot Camp, so D:\jarvis-secrets is user-locked on Windows and is not copied to macOS.
+
+## Skills, traces and evals (added 2026-10-10)
+**Skills** (Windows; Python with pyyaml: `D:\jarvis\tools\skillgate-venv\Scripts\python`):
+- `skillgate.py scan | stage <category/name> | guard <name> | activate <name> [--approval-id ID] | deactivate <name> | status`
+- Medium-risk skills print an approval id. Approve it on Telegram (`/approve <id>`), then rerun with `--approval-id`.
+- The kernel token is in `D:\jarvis-secrets\kernel\skill-operator.token`.
+- Active now: `adversarial-ux-test`. Staged, waiting for approval: `code-wiki`, `grill-me`.
+
+**Traces** (server): `cd ~/jarvis/kernel && python3 -m jarvis_kernel trace <task> [--public]`, or `trace-analyze --days 7`.
+
+**Evals** (Windows): `python hq\evals\run_evals.py --baseline hq\evals\baseline.json`. Add `--kernel <dir>` to test another checkout. Run it before every kernel deploy.
+
+**Measured provider limits:** if a provider changes plan or model, measure again and update `max_input_tokens` / `max_total_tokens` in `providers.json`.

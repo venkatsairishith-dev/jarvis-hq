@@ -359,12 +359,20 @@ SMOKE = ("Use the skill_view tool to load the skill named '{name}'. Then reply w
          "'SKILL-OK {name}:' followed by the skill's purpose in under 15 words. If you cannot load it, reply 'SKILL-MISSING'.")
 
 
-def smoke(name, timeout=600):
-    """A controlled functional check in the lab: a fresh Hermes session must find and load the skill."""
-    r = wsl(["timeout", str(timeout), "/home/agent/.local/bin/hermes", "chat", "-q", SMOKE.format(name=name), "--oneshot", "--quiet",
-             "--max-turns", "6"])
-    out = r.stdout.decode(errors="replace")
-    return f"SKILL-OK {name}" in out, out.strip()[-300:]
+def smoke(name, timeout=600, tries=3):
+    """A controlled functional check in the lab: a fresh Hermes session must find and load the skill. A model that
+    gives no reply at all is inconclusive (a known intermittent fault of the lab model), so it is asked again, at
+    most *tries* times; SKILL-MISSING or any other answer fails at once."""
+    out = ""
+    for i in range(1, tries + 1):
+        r = wsl(["timeout", str(timeout), "/home/agent/.local/bin/hermes", "chat", "-q", SMOKE.format(name=name), "--oneshot", "--quiet",
+                 "--max-turns", "6"])
+        out = r.stdout.decode(errors="replace").strip()
+        if f"SKILL-OK {name}" in out:
+            return True, f"try {i}: {out[-300:]}"
+        if out and "No reply" not in out and "didn't produce a reply" not in out:
+            return False, f"try {i}: {out[-300:]}"
+    return False, f"inconclusive after {tries} tries (the lab model gave no reply): {out[-200:]}"
 
 
 def cmd_activate(a):
@@ -402,9 +410,12 @@ def cmd_activate(a):
     ok, out = smoke(a.name) if not a.no_smoke else (True, "skipped")
     prov["checks"]["smoke"] = {"passed": ok, "output": out}
     save_prov(a.name, prov)
-    if not ok:
-        print("smoke test failed, rolling back:", out)
-        return cmd_deactivate(argparse.Namespace(name=a.name)) or 1
+    if not ok:                                   # roll back first; reporting must never stand between a failure and its rollback
+        try:
+            cmd_deactivate(argparse.Namespace(name=a.name))
+        finally:
+            print("smoke test failed; rolled back:", out)
+        return 1
     print(f"active in the lab: {a.name} (kernel {r.get('level')}, smoke: {out[:160]})")
     return 0
 
@@ -434,6 +445,11 @@ def cmd_status(_a):
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):      # lab output carries emoji; a Windows console must not crash on it
+        try:
+            stream.reconfigure(errors="replace")
+        except AttributeError:
+            pass
     ap = argparse.ArgumentParser(prog="skillgate")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("scan")

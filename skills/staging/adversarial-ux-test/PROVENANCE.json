@@ -54,7 +54,11 @@
     "LintFinding(severity='warning', rule='missing-section', message=\"no '## When to Use' section found; skills need explicit trigger conditions near the top.\")"
    ]
   },
-  "guard": "passed"
+  "guard": "passed",
+  "smoke": {
+   "passed": true,
+   "output": "try 1: SKILL-OK adversarial-ux-test: Roleplay a hostile user to find and triage UX pain points."
+  }
  },
  "manifest_sha256": "44500250584e6bb4226377fb014c43e085b77309cbe8fbca6185b56675019f2d"
 }

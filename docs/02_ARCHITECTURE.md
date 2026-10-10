@@ -247,3 +247,36 @@ Measured from the server: all three list, answer and make correct tool calls, an
 **Agent settings.**
 - Lab agents use a 64K window: Hermes's minimum, and Hermes cannot probe the window through the endpoint. OpenCode is set to 65536 context and 8192 output; goose has GOOSE_CONTEXT_LIMIT=65536.
 - The endpoint retries a provider's 5xx once before falling back. (Ollama answers an unparsable gpt-oss tool call with HTTP 500.)
+
+## Request sizing, traces, evals and the skill gate (added 2026-10-10, OpenJarvis integration)
+**Gateway request sizing** (`jarvis_kernel/sizing.py`, port 8790 stays the only model path):
+- Each provider carries its **measured** limit in `providers.json`: `max_input_tokens`, or `max_total_tokens` (input plus reserved answer).
+- Before a call, the gateway estimates the request and skips providers it cannot fit. For input-plus-output limits it shrinks the answer budget to what is left (at least 1,024 tokens).
+- If nothing in the lane fits, the agent gets one fast **413 `context_length_exceeded`**. Hermes treats that as "compress"; no provider is called.
+- A provider's 413 or "context length" 400 counts as *too large*: no retry on the same provider.
+- A 429 benches that provider for its `Retry-After`, or 1 h for a used-up daily quota. When every provider that fits is benched, the agent gets **429 with Retry-After**, never a 502.
+- `/v1/models` reports the lane's `context_length` (private lane: 56000), so Hermes compacts in time.
+
+**Kernel database:** the one SQLite connection is wrapped (`SafeDB`). Each statement holds one re-entrant lock and is read in full, and an audit transaction holds the same lock from `BEGIN` to `COMMIT`. This fixed live 401 and 404 errors under concurrent requests.
+
+**Telegram continuity:** a new Hermes session (each day, or after a failed turn) starts with the kernel's card of open and recent tasks. Preferences live in Hermes memory.
+
+**Task traces** (`jarvis_kernel/traces.py`, `python -m jarvis_kernel trace <id> [--public] [--save dir]`, `trace-analyze --days N`):
+- A read-only view built from tasks, task_events, jobs and the audit log, through its own read-only connection. There is no second task store.
+- Free text is scrubbed and clipped. Traces are capped at 48 kB, and `--public` drops all free text.
+- The analyzer reports recurring problems, provider failures, refused actions and corrected tasks, with suggestions. It never changes anything.
+
+**Eval suite** (`hq/evals/run_evals.py`):
+- 19 fixed cases over the real kernel and gateway code, with fake providers that behave like the measured ones.
+- Deterministic scorers check the resulting state, never an agent's claim.
+- `--baseline evals/baseline.json` fails on any regression. `--traces <data dir>` adds live metrics: task completion accuracy, verifier agreement, attempts.
+- The kernel before this work scored 11/17, with 6 regressions caught. The current kernel scores 19/19.
+
+**Skill gate** (`hq/skills/skillgate.py`):
+1. Stages Hermes optional skills from the pinned source (`818c13be`) byte-for-byte. Scripts are never copied.
+2. Writes `PROVENANCE.json`: repo, commit, licence, SHA-256 and git blob per file, tool mapping onto the JARVIS registry, dependencies, purpose, data sensitivity, permissions, risk and findings.
+3. Runs Hermes's own `skills_guard` in the lab; its findings can only raise the risk.
+4. Activates only allowlisted skills with passed checks, through the kernel (`skill.activate`): low risk is automatic and audited, medium needs the owner's approval, anything else is denied.
+5. Installs into the lab's `~/.hermes/skills/jarvis-staged/` and runs a live smoke test. A failure is rolled back automatically.
+
+The lab Hermes has its skill tools on, with `skills.write_approval: true`, so the agent cannot change a skill without approval.

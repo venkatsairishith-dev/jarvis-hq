@@ -1,0 +1,267 @@
+{
+ "trace_version": 1,
+ "task": "9f98013ab16f",
+ "lane": "private",
+ "source": "jarvis",
+ "category": "software",
+ "goal": null,
+ "criteria": 6,
+ "environment": {
+  "lab_agent": "hermes",
+  "nodes": [
+   "lab",
+   "laptop"
+  ],
+  "agents": [
+   "hermes",
+   "lab"
+  ]
+ },
+ "outcome": {
+  "state": "completed",
+  "verified": true,
+  "attempts": 1,
+  "max_attempts": 3,
+  "result": null,
+  "failure_class": null,
+  "corrected": false
+ },
+ "timing": {
+  "created": 1791638231,
+  "duration_s": 1123,
+  "first_dispatch_s": 164,
+  "lab_s": 959
+ },
+ "events": [
+  {
+   "t": 0,
+   "state": "planning",
+   "kind": "created",
+   "note": null
+  },
+  {
+   "t": 164,
+   "state": "queued",
+   "kind": "state",
+   "note": null
+  },
+  {
+   "t": 170,
+   "state": "running",
+   "kind": "state",
+   "note": null
+  },
+  {
+   "t": 321,
+   "state": "running",
+   "kind": "update",
+   "note": null
+  },
+  {
+   "t": 755,
+   "state": "verifying",
+   "kind": "state",
+   "note": null
+  },
+  {
+   "t": 1060,
+   "state": "verifying",
+   "kind": "update",
+   "note": null
+  },
+  {
+   "t": 1123,
+   "state": "completed",
+   "kind": "state",
+   "note": null
+  }
+ ],
+ "verification": {
+  "passed": true,
+  "criteria": [
+   {
+    "criterion": null,
+    "met": true,
+    "evidence": null
+   },
+   {
+    "criterion": null,
+    "met": true,
+    "evidence": null
+   },
+   {
+    "criterion": null,
+    "met": true,
+    "evidence": null
+   },
+   {
+    "criterion": null,
+    "met": true,
+    "evidence": null
+   },
+   {
+    "criterion": null,
+    "met": true,
+    "evidence": null
+   },
+   {
+    "criterion": null,
+    "met": true,
+    "evidence": null
+   }
+  ],
+  "attempt_history": [
+   {
+    "attempt": 1,
+    "worker_exit": 0,
+    "worker_s": 585,
+    "passed": true
+   }
+  ],
+  "problems": 0
+ },
+ "repairs": [],
+ "jobs": [
+  {
+   "id": "2e0695b353a0",
+   "kind": "lab_run",
+   "node": "lab",
+   "state": "done",
+   "s": 959
+  },
+  {
+   "id": "8ff8dd45fe0b",
+   "kind": "output_save",
+   "node": "laptop",
+   "state": "done",
+   "s": 7
+  },
+  {
+   "id": "73ca846390b9",
+   "kind": "output_save",
+   "node": "laptop",
+   "state": "done",
+   "s": 22
+  },
+  {
+   "id": "f1b10db846ba",
+   "kind": "output_save",
+   "node": "laptop",
+   "state": "done",
+   "s": 37
+  },
+  {
+   "id": "6188e3777685",
+   "kind": "output_save",
+   "node": "laptop",
+   "state": "done",
+   "s": 51
+  }
+ ],
+ "deliveries": [
+  {
+   "job": "8ff8dd45fe0b",
+   "state": "done",
+   "saved": "README.md",
+   "path": null
+  },
+  {
+   "job": "73ca846390b9",
+   "state": "done",
+   "saved": "sample.txt",
+   "path": null
+  },
+  {
+   "job": "f1b10db846ba",
+   "state": "done",
+   "saved": "test_wordstat.py",
+   "path": null
+  },
+  {
+   "job": "6188e3777685",
+   "state": "done",
+   "saved": "wordstat.py",
+   "path": null
+  }
+ ],
+ "delivery_evidence": 4,
+ "models": {
+  "calls": [
+   {
+    "role": "lab worker/verifier",
+    "provider": "dahl-minimax",
+    "n": 33
+   },
+   {
+    "role": "planner",
+    "provider": "openrouter-private",
+    "n": 12
+   }
+  ],
+  "failures": [
+   {
+    "role": "planner",
+    "provider": "groq",
+    "error": "HTTP 413",
+    "class": "",
+    "n": 13
+   }
+  ],
+  "routing": [],
+  "gateway_refusals": {},
+  "est_tokens_in": 1289009,
+  "bytes_out": 2617893,
+  "cost_usd": 0.0
+ },
+ "actions": [
+  {
+   "role": "planner",
+   "action": "task.get",
+   "status": "done",
+   "n": 6
+  },
+  {
+   "role": "planner",
+   "action": "output.save",
+   "status": "queued",
+   "n": 3
+  },
+  {
+   "role": "planner",
+   "action": "task.create",
+   "status": "done",
+   "n": 1
+  },
+  {
+   "role": "planner",
+   "action": "task.dispatch",
+   "status": "refused",
+   "n": 1
+  },
+  {
+   "role": "planner",
+   "action": "task.dispatch",
+   "status": "queued",
+   "n": 1
+  },
+  {
+   "role": "planner",
+   "action": "task.update",
+   "status": "refused",
+   "n": 1
+  },
+  {
+   "role": "planner",
+   "action": "task.update",
+   "status": "done",
+   "n": 1
+  },
+  {
+   "role": "planner",
+   "action": "models.status",
+   "status": "done",
+   "n": 1
+  }
+ ],
+ "notes": "model and action rows are attributed by time window and agent; lab rows assume one lab job at a time"
+}
