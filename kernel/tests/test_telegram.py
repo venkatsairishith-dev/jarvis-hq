@@ -341,6 +341,19 @@ class T(unittest.TestCase):
         sid[0] = "s2"; b.handle(msg("next day"))
         self.assertIn(tid, sent[2])                                                # a fresh session gets it again
 
+    def test_the_off_switch(self):
+        from jarvis_kernel import telegram as T
+        old = T.OFF_FILE
+        try:
+            T.OFF_FILE = os.path.join(self.tmp.name, "telegram.off")
+            self.assertFalse(T.disabled())
+            open(T.OFF_FILE, "w").close()
+            self.assertTrue(T.disabled())
+            from jarvis_kernel.cli import main
+            self.assertEqual(main(["--data", os.path.join(self.tmp.name, "k"), "telegram"]), 0)   # returns at once, no bridge
+        finally:
+            T.OFF_FILE = old
+
     def test_hermes_api_call_sends_key_and_session_and_hides_errors(self):
         from jarvis_kernel.telegram import hermes_agent
         seen = []

@@ -51,6 +51,16 @@ class TelegramAPI:
         self._call("sendMessage", {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}, 20)  # no parse_mode: plain text only
 
 
+OFF_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "telegram.off")
+
+
+def disabled() -> bool:
+    """The owner switched Telegram off (2026-10-10: "no need of Telegram for now"): config/telegram.off exists, or
+    JARVIS_TELEGRAM=off. Then the bridge does not run and alerts and reports stay on the server (audit + alerts.log).
+    Delete the file to switch Telegram back on."""
+    return os.environ.get("JARVIS_TELEGRAM", "").lower() == "off" or os.path.exists(OFF_FILE)
+
+
 def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: str = "telegram-owner", timeout: int = 900,
                  state_path: str = None, clock=time.time):
     """The owner's own Hermes (private lane, its kernel-gated tools) through its API server on loopback. One session per

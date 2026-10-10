@@ -146,3 +146,16 @@ Reading: Verdict can stand in for the 4B LLM in the union at the same false-allo
 | Firefox fields ignore AT-SPI typing; Xvnc cannot do background key presses | yes | agents told to click, then desktop_type (xdotool); cua-driver 0.34 upgrade pending |
 | Hermes computer_use screenshots with a text-only model | yes | open: needs a vision model on the lab lane |
 | openmuse: CopilotKit Intelligence 503s; MCP SDK 1.30 advisory in its dependencies | yes | nothing upstream yet; watch |
+
+## D13 Telegram switched off (owner, 2026-10-10)
+The owner: "no need of Telegram totally for now". The switch is the file `config/telegram.off`. While it exists:
+- **Bridge:** the `jarvis-telegram` service is stopped and disabled, and it refuses to start. Monit no longer watches it.
+- **Monit alerts:** they go to the kernel audit log (`monit_alert`) and to `~/jarvis/alerts.log` on the server.
+- **Nightly report:** it is saved as before, but not sent.
+- **Approvals** (medium-risk skills, PC actions, RED actions): given at the kernel console on the server: `ssh -t ubuntu@hermes-agent-vm`, then `cd ~/jarvis/kernel && python3 -m jarvis_kernel approve <id>`.
+- **Task outcomes:** they show in Mission Control's Outcome tasks panel.
+
+Nothing was deleted (code, token, chat id and service file all remain). To switch back on:
+1. Delete `config/telegram.off` (in the repo and on the server).
+2. Restore the `jarvis_telegram` block in `deploy/monit-jarvis.conf`, install it to `/etc/monit/conf.d/jarvis`, then run `sudo monit -t` and restart monit.
+3. Run `sudo systemctl enable --now jarvis-telegram`.

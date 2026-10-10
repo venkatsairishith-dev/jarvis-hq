@@ -71,7 +71,7 @@ Never restart while a lab job runs: a runner report sent during the restart is l
 
 **monit** restarts `jarvis-telegram` within about 2 minutes if it stops. Its HTTP interface is off, so `monit unmonitor` does not work. To test with a second bridge, don't stop the service; let it handle everything after the first turn.
 
-**Owner task control:** on Telegram, `/tasks` and `/task <id> [pause|resume|cancel]`. Each task's files land in `D:\jarvis\outputs\task-<id>\`.
+**Owner task control:** Telegram is off (D13). Use Mission Control to watch tasks; pause/resume/cancel through the kernel on the server. Each task's files land in `D:\jarvis\outputs\task-<id>\`.
 
 **If a token is ever printed:**
 1. Run `python3 -m jarvis_kernel agent-token <name> --lane <lane> --out <tmpfile>`.
@@ -91,7 +91,7 @@ Never restart while a lab job runs: a runner report sent during the restart is l
 ## Skills, traces and evals (added 2026-10-10)
 **Skills** (Windows; Python with pyyaml: `D:\jarvis\tools\skillgate-venv\Scripts\python`):
 - `skillgate.py scan | stage <category/name> | guard <name> | activate <name> [--approval-id ID] | deactivate <name> | status`
-- Medium-risk skills print an approval id. Approve it on Telegram (`/approve <id>`), then rerun with `--approval-id`.
+- Medium-risk skills print an approval id. Telegram is off (D13), so approve it at the kernel console on the server (`python3 -m jarvis_kernel approve <id>`), then rerun with `--approval-id`.
 - The kernel token is in `D:\jarvis-secrets\kernel\skill-operator.token`.
 - Active now: `adversarial-ux-test`. Staged, waiting for approval: `code-wiki`, `grill-me`.
 

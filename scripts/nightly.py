@@ -66,8 +66,9 @@ def main():
                          + (f"; high-risk let through {fa[0]}/{fa[1]}" if fa else "") + f"; p95 {r['p95_ms'].get('union')} ms")
     summary = "\n".join(lines)
     print(summary)
-    if "--no-telegram" not in sys.argv:
-        sys.path.insert(0, os.path.join(ROOT, "kernel"))
+    sys.path.insert(0, os.path.join(ROOT, "kernel"))
+    from jarvis_kernel import telegram as _tg
+    if "--no-telegram" not in sys.argv and not _tg.disabled():   # config/telegram.off switches the report off too
         from jarvis_kernel import gateway, telegram
         from jarvis_kernel.store import Kernel
         k = Kernel()

@@ -112,6 +112,11 @@ def main(argv=None):
         import os
         from . import gateway, telegram
         cfg = args.providers or os.path.join(os.path.dirname(__file__), "..", "..", "config", "providers.json")
+        if telegram.disabled():
+            k.audit.append("tg_disabled", {"why": "config/telegram.off"})
+            print("Telegram is switched off (config/telegram.off); the bridge does not run.")
+            k.db.close()
+            return 0
         telegram.from_files(k, gateway.load(cfg)).run()
     elif args.cmd == "llm-proxy":
         import os

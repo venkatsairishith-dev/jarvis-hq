@@ -23,6 +23,10 @@ def main():
     text = f"{head}: {svc} - {event}. {desc}".strip()
     k = Kernel()
     k.audit.append("monit_alert", {"service": svc, "event": event, "kind": kind})
+    if telegram.disabled():                       # Telegram switched off: the alert stays on the server
+        with open(os.path.join(ROOT, "alerts.log"), "a", encoding="utf-8") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S ") + text + "\n")
+        return 0
     for attempt in range(3):   # the network may be the thing that is failing: try a few times
         try:
             telegram.from_files(k, []).say(text)
