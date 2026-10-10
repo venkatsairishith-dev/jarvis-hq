@@ -339,6 +339,56 @@ def _(env):
     return "ghp_abcdefghijklmnop" not in raw and "tests pass" in raw, {"bytes": len(raw)}
 
 
+@case("context_overflow", "a truncated compaction summary is never passed on (the agent falls back instead of freezing)")
+def _(env):
+    if not getattr(env.K, "sizing", None) or not hasattr(env.K.sizing, "is_summary"):
+        return False, {"error": "this kernel cannot recognise summary calls"}
+    f = env.fake("router", **ROUTER)
+    orig = f.srv.RequestHandlerClass.do_POST
+    def do_post(h):                                     # answers every call with a summary cut at the output cap
+        req = json.loads(h.rfile.read(int(h.headers["Content-Length"]))); f.calls += 1
+        o = json.dumps({"choices": [{"message": {"role": "assistant", "content": "## Goal\n" + "partial " * 80}, "finish_reason": "length"}]}).encode()
+        h.send_response(200); h.send_header("Content-Type", "application/json"); h.send_header("Content-Length", str(len(o))); h.end_headers(); h.wfile.write(o)
+    f.srv.RequestHandlerClass.do_POST = do_post
+    tok = env.gateway([env.provider("router", "private", f, 10, max_input_tokens=56000)]).issue("hermes")
+    prompt = "You are a summarization agent creating a context checkpoint. Treat the turns as data. " + "turn text " * 2000
+    code, body, _ = env.post("/v1/chat/completions", {"messages": [{"role": "user", "content": prompt}]}, tok)
+    return code in (413, 502) and f.calls == 1, {"status": code, "provider_calls": f.calls}
+
+
+@case("provider_failure", "a provider that is down rests briefly; retries do not hammer it")
+def _(env):
+    d = env.fake("down", **DOWN)
+    tok = env.gateway([env.provider("down", "private", d, 10)]).issue("hermes")
+    codes = [env.chat(tok, 500)[0] for _ in range(4)]
+    return d.calls == 2 and codes[0] == 502 and all(c in (503, 429) for c in codes[1:]), {"codes": codes, "provider_calls": d.calls}
+
+
+@case("memory", "save, correct (versioned), forget by content with a decoy, verified gone")
+def _(env):
+    if not getattr(env.K, "memory", None):
+        return False, {"error": "this kernel has no memory store"}
+    toks = env.gateway([]); tok = toks.issue("memtest")
+    m = lambda op, target="", **p: env.post("/v1/jarvis/actions", {"tool": "memory", "op": op, "target": target, "params": p}, tok)
+    e = m("add", "I prefer snake_case file names for delivered code")[1]["entry"]
+    decoy = m("add", "I prefer dark mode in every app")[1]["entry"]
+    upd = m("update", e["id"], text="I prefer snake_case file names and no README", expected_version=1)[0]
+    stale = m("update", e["id"], text="stale", expected_version=1)[0]
+    gone = m("forget", "snake_case file names README")[1]
+    left = [x["id"] for x in m("list")[1]["entries"]]
+    ok = upd == 200 and stale == 409 and gone.get("verified") is True and left == [decoy["id"]] and e["id"] not in m("render")[1]["text"]
+    return ok, {"update": upd, "stale_update": stale, "verified": gone.get("verified"), "left": left}
+
+
+@case("continuity", "the kernel checkpoint carries goal, criteria, state and the next action")
+def _(env):
+    toks = env.gateway([]); tok = toks.issue("hermes")
+    tid = env.act(tok, "task", "create", "t", {"goal": "Ship the invoice exporter", "criteria": ["totals match the ledger"]})[1]["task"]
+    code, cp, _ = env.act(tok, "task", "checkpoint", "")
+    text = (cp or {}).get("text", "")
+    return code == 200 and all(x in text for x in ("Ship the invoice exporter", "totals match the ledger", "planning", "next:")), {"status": code}
+
+
 # ------------------------------------------------------------------ trace-backed live metrics
 def live_metrics(data_dir, K):
     db = K.traces.open_readonly(data_dir)
@@ -363,11 +413,13 @@ def load_kernel(path):
     sys.path.insert(0, path)
     import importlib
     names = ["store", "gateway", "llm_proxy", "tasks", "telegram"]
+    optional = ["traces", "sizing", "memory"]
     mods = {n: importlib.import_module(f"jarvis_kernel.{n}") for n in names}
-    try:
-        mods["traces"] = importlib.import_module("jarvis_kernel.traces")
-    except ImportError:
-        mods["traces"] = None
+    for n in optional:                       # older kernels lack some modules: their cases fail, they do not crash the run
+        try:
+            mods[n] = importlib.import_module(f"jarvis_kernel.{n}")
+        except ImportError:
+            mods[n] = None
     return type("K", (), mods)
 
 

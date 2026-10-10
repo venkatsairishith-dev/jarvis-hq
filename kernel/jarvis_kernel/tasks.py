@@ -128,6 +128,48 @@ class Tasks:
                        self.k.db.execute("SELECT ts, state, kind, note FROM task_events WHERE task=? ORDER BY id DESC LIMIT 40", (tid,)).fetchall()]
         return t
 
+    NEXT_ACTION = {
+        "planning": "refine the plan and criteria, then hand the work to the lab (lab_work) once",
+        "waiting_approval": "wait for the owner's approval",
+        "queued": "wait: the lab will start it", "running": "wait: the lab is working; you will be told the outcome",
+        "verifying": "wait: an independent check is running", "repairing": "wait: the lab is fixing what the check found",
+        "paused": "wait until the owner resumes it",
+        "completed": "tell the owner the verified result and where the files are",
+        "failed": "tell the owner the exact blocker and what would unblock it",
+        "cancelled": "nothing; the owner cancelled it",
+    }
+
+    def checkpoint(self, owner, limit=3, max_chars=1800):
+        """A small, durable picture of the owner's open (and just-finished) tasks, for a fresh or compacted session:
+        goal, criteria, state, steps done, steps pending, decisions, next action."""
+        rows = self.k.db.execute("SELECT id FROM tasks WHERE owner=? AND (state NOT IN ('completed','failed','cancelled') OR updated>?) "
+                                 "ORDER BY updated DESC LIMIT ?", (owner, time.time() - 86400, limit)).fetchall()
+        out = []
+        for (tid,) in rows:
+            t = self.get(tid)
+            ev = list(reversed(t["events"]))
+            done = [e["note"] for e in ev if e["kind"] == "state" and e["note"]][-6:]
+            decisions = [e["note"] for e in ev if e["kind"] in ("update", "correction") and e["note"]][-4:]
+            out.append({"id": tid, "goal": t["goal"], "criteria": t["criteria"], "state": t["state"],
+                        "attempts": f"{t['attempts']}/{t['max_attempts']}", "done": done, "pending": t["plan"] if t["state"] == "planning" else [],
+                        "decisions": decisions, "result": t["result"], "next": self.NEXT_ACTION.get(t["state"], "")})
+        text, lines = "", []
+        for c in out:
+            block = [f"Task {c['id']} [{c['state']}, attempts {c['attempts']}]: {c['goal']}",
+                     "  criteria: " + "; ".join(map(str, c["criteria"]))[:300]]
+            if c["done"]:
+                block.append("  done: " + " | ".join(map(str, c["done"]))[:300])
+            if c["pending"]:
+                block.append("  pending: " + "; ".join(map(str, c["pending"]))[:200])
+            if c["decisions"]:
+                block.append("  decisions: " + " | ".join(map(str, c["decisions"]))[:250])
+            if c["result"]:
+                block.append("  result: " + str(c["result"])[:200])
+            block.append("  next: " + c["next"])
+            lines.append("\n".join(block))
+        text = "\n".join(lines)[:max_chars]
+        return {"tasks": out, "text": text}
+
     def recent(self, limit=30):
         rows = self.k.db.execute("SELECT id FROM tasks ORDER BY updated DESC LIMIT ?", (limit,)).fetchall()
         return [self.get(r[0]) for r in rows]

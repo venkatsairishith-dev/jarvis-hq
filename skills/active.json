@@ -6,6 +6,13 @@
    "risk": "low",
    "activated": "2026-10-10T22:53:01",
    "backup": "/home/agent/.hermes/skills/jarvis-staged/adversarial-ux-test.bak-1791652981"
+  },
+  "decision-questionnaire": {
+   "sha256": "c672fdec5da6446e4b0c96bca7178ad797f7481f79801743d258a7946e257e11",
+   "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
+   "risk": "low",
+   "activated": "2026-10-11T00:20:32",
+   "backup": "/home/agent/.hermes/skills/jarvis-staged/decision-questionnaire.bak-1791658232"
   }
  },
  "log": [
@@ -37,6 +44,12 @@
    "at": "2026-10-10T22:53:01",
    "op": "activate",
    "skill": "adversarial-ux-test",
+   "kernel": "YELLOW_AUTO"
+  },
+  {
+   "at": "2026-10-11T00:20:32",
+   "op": "activate",
+   "skill": "decision-questionnaire",
    "kernel": "YELLOW_AUTO"
   }
  ]

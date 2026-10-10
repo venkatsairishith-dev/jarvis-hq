@@ -16,6 +16,7 @@ import json
 import os
 import pwd
 import re
+import shutil
 import stat
 import signal
 import subprocess
@@ -51,8 +52,10 @@ def api(path, body=None):
 
 
 def agent_env(kind):
+    # The agent's own bin goes LAST: a worker once planted ~/.local/bin/python3 (rewriting print(1+1) to 3, to game a
+    # check) and, first on PATH, it shadowed the real Python for every later task. System tools always win now.
     env = {"HOME": HOME, "USER": AGENT, "LOGNAME": AGENT, "LANG": "C.UTF-8", "TERM": "dumb",
-           "PATH": f"{LOCAL_BIN}:/usr/local/bin:/usr/bin:/bin", "XDG_RUNTIME_DIR": f"/run/user/{PW.pw_uid}",
+           "PATH": f"/usr/local/bin:/usr/bin:/bin:{LOCAL_BIN}", "XDG_RUNTIME_DIR": f"/run/user/{PW.pw_uid}",
            "DBUS_SESSION_BUS_ADDRESS": f"unix:path=/run/user/{PW.pw_uid}/bus", "DISPLAY": ":1"}
     if kind == "goose":
         try:
@@ -217,7 +220,8 @@ def portable_check(folder, files):
             os.chown(os.path.join(d, name), PW.pw_uid, PW.pw_gid)
         os.chown(d, PW.pw_uid, PW.pw_gid)        # then hand it to the agent user (tests may write files)
         r = subprocess.run(["runuser", "-u", AGENT, "--", "env", "-i", *[f"{k}={v}" for k, v in agent_env("hermes").items()],
-                            "timeout", "180", "python3", "-m", "unittest"], cwd=d, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+                            "timeout", "180", "/usr/bin/python3", "-m", "unittest"], cwd=d, capture_output=True, text=True,
+                           stdin=subprocess.DEVNULL)
         if r.returncode != 0:
             tail = (r.stderr or r.stdout).strip().splitlines()[-6:]
             return [f"the delivered tests fail when run from a fresh folder (python3 -m unittest, exit {r.returncode}): " + " | ".join(tail)[:500]]
@@ -254,6 +258,94 @@ def deliver(jid, files):
     return lines, ""
 
 
+USAGE = os.path.join(HOME, ".hermes", "skills", ".usage.json")    # Hermes's own skill telemetry (tools/skill_usage.py)
+
+# The agent's toolchain and start-up files: a task must never change them (a planted ~/.local/bin/python3 gamed a check
+# and broke every later task). Fingerprinted around each worker/verifier run; any change is put back and fails the attempt.
+GUARDED_DIRS = [LOCAL_BIN, os.path.join(HOME, ".hermes", "skills", "jarvis-staged")]
+GUARDED_FILES = [os.path.join(HOME, f) for f in (".bashrc", ".profile", ".bash_profile", ".bash_login", ".pythonrc", ".pydistutils.cfg",
+                                                  ".config/pip/pip.conf", ".hermes/config.yaml", ".hermes/SOUL.md")]
+QUARANTINE = "/root/quarantine"
+SMALL = 2_000_000                              # files up to this size are kept in memory so a change can be put back
+
+
+def _fingerprint():
+    """{path: (kind, size, mtime_ns, inode, content or None)} for the guarded paths (links are not followed)."""
+    out = {}
+    paths = list(GUARDED_FILES)
+    for d in GUARDED_DIRS:
+        for root, dirs, files in os.walk(d):
+            paths += [os.path.join(root, f) for f in files + [x for x in dirs if os.path.islink(os.path.join(root, x))]]
+    for p in paths:
+        try:
+            st = os.lstat(p)
+        except OSError:
+            continue
+        kind = "link" if stat.S_ISLNK(st.st_mode) else "file"
+        data = os.readlink(p) if kind == "link" else (open(p, "rb").read() if st.st_size <= SMALL else None)
+        out[p] = (kind, st.st_size, st.st_mtime_ns, st.st_ino, st.st_mode & 0o7777, data)
+    return out
+
+
+def _same(a, b):
+    """Same file: content for small files (a rewrite with identical bytes is no change), else size/mtime/inode."""
+    if a[0] != b[0] or a[4] != b[4]:
+        return False
+    if a[5] is not None and b[5] is not None:
+        return a[5] == b[5]
+    return a[1:4] == b[1:4]
+
+
+def guard_restore(before, label):
+    """Compare with the fingerprint taken before the run; put back anything changed. Returns the problems found."""
+    after, problems = _fingerprint(), []
+    qdir = os.path.join(QUARANTINE, time.strftime("%Y%m%d-%H%M%S") + "-" + label)
+    for p, now in after.items():
+        old = before.get(p)
+        if old and _same(old, now):
+            continue
+        rel = p.replace(HOME, "~")
+        os.makedirs(qdir, mode=0o700, exist_ok=True)
+        shutil.move(p, os.path.join(qdir, rel.replace("/", "_")))       # keep the evidence, out of the agent's reach
+        if old and old[5] is not None:                                   # changed: put the original back
+            if old[0] == "link":
+                os.symlink(old[5], p)
+            else:
+                with open(p, "wb") as fh:
+                    fh.write(old[5])
+                os.chmod(p, old[4]); os.chown(p, PW.pw_uid, PW.pw_gid)
+            problems.append(f"the task changed {rel}; it was put back")
+        elif old:
+            problems.append(f"the task changed {rel} (too large to put back automatically; moved to quarantine)")
+        else:
+            problems.append(f"the task added {rel}; it was removed")
+    for p in set(before) - set(after):
+        old = before[p]
+        if old[5] is not None:
+            if old[0] == "link":
+                os.symlink(old[5], p)
+            else:
+                with open(p, "wb") as fh:
+                    fh.write(old[5])
+                os.chmod(p, old[4]); os.chown(p, PW.pw_uid, PW.pw_gid)
+        problems.append(f"the task deleted {p.replace(HOME, '~')}; it was put back")
+    return [x + ". Never change the toolchain or start-up files to satisfy a check." for x in problems][:8]
+
+
+def skill_counts():
+    """{skill: views + uses} from Hermes's usage file (read like any agent file: no links, the agent's own)."""
+    try:
+        data = json.loads(safe_read(USAGE, 2_000_000) or "{}")
+    except ValueError:
+        return {}
+    return {str(k)[:80]: int(v.get("view_count") or 0) + int(v.get("use_count") or 0) for k, v in data.items() if isinstance(v, dict)}
+
+
+def skills_used(before):
+    after = skill_counts()
+    return sorted(k for k, n in after.items() if n > before.get(k, 0))[:20]
+
+
 def handle(job):
     p = job["params"]
     jid, task, kind = job["id"], p["task"], p["agent"]
@@ -272,8 +364,15 @@ def handle(job):
                                                    "step": f"attempt {attempt}: {kind} is working"})
         if code != 200:
             return finish(jid, False, f"could not start attempt {attempt}: {r.get('reason', code)}", attempt)
+        usage0, guard0 = skill_counts(), _fingerprint()
         rc, secs, why = run_agent(jid, kind, work_prompt(task, folder, p["instructions"], p["criteria"], attempt, problems),
                                   folder, per_try, f"work-{attempt}.log")
+        tampered = guard_restore(guard0, f"{task}-work-{attempt}")
+        if tampered:
+            api("/v1/jarvis/runner/report", {"job": jid, "note": "integrity: " + "; ".join(tampered)[:900]})
+        used = skills_used(usage0)
+        if used:                                                 # the kernel's history says which skills shaped this attempt
+            api("/v1/jarvis/runner/report", {"job": jid, "note": f"skills used (attempt {attempt}): " + ", ".join(used)})
         if why in ("stopped by the owner", "task closed"):
             return finish(jid, False, why, attempt)
         try:
@@ -282,7 +381,9 @@ def handle(job):
             pass
         api("/v1/jarvis/runner/report", {"job": jid, "state": "verifying",
                                           "step": f"attempt {attempt}: independent check ({'worker timed out' if rc is None else f'worker exit {rc}'}, {int(secs)} s)"})
+        guard1 = _fingerprint()
         vrc, vsecs, vwhy = run_agent(jid, "hermes", verify_prompt(task, p["criteria"]), folder, 900, f"verify-{attempt}.log")
+        tampered += guard_restore(guard1, f"{task}-verify-{attempt}")
         if vwhy in ("stopped by the owner", "task closed"):
             return finish(jid, False, vwhy, attempt)
         verdict = read_json(os.path.join(folder, "VERIFY.json")) or {"passed": False, "problems": ["the verifier wrote no VERIFY.json"],
@@ -290,6 +391,10 @@ def handle(job):
         if rc is None:
             verdict.setdefault("problems", []).insert(0, f"the worker ran out of time ({per_try} s)")
             verdict["failure_class"] = "timeout"
+        if tampered:                                             # a changed toolchain voids the attempt, whatever the verifier said
+            verdict["passed"] = False
+            verdict["failure_class"] = "integrity"
+            verdict["problems"] = tampered + list(verdict.get("problems") or [])
         files, bad = deliverables(folder, wants)
         if not bad and verdict.get("passed") is True:
             bad = portable_check(folder, files)

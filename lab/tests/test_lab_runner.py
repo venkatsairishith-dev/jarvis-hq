@@ -1,5 +1,6 @@
 """Lab runner delivery: what leaves ./deliver/ and when. Runs inside the WSL lab box as root (it needs the agent user):
     sudo python3 -m unittest test_lab_runner   (from hq/lab/tests, with lab_runner.py next to it or on PYTHONPATH)"""
+import json
 import os
 import sys
 import tempfile
@@ -78,6 +79,22 @@ class Deliverables(unittest.TestCase):
         self.assertTrue(bad and "fresh folder" in bad[0], bad)
         self.assertEqual(R.portable_check(self.folder, [("notes.md", "# hi\n")]), [])   # no tests: nothing to run
 
+    def test_skills_used_come_from_hermes_usage_counts(self):
+        usage = os.path.join(self.folder, "usage.json")
+        old = R.USAGE
+        try:
+            R.USAGE = usage
+            self.assertEqual(R.skill_counts(), {})                                   # no file yet
+            with open(usage, "w") as fh:
+                json.dump({"grill-me": {"view_count": 1}, "code-wiki": {"use_count": 2}}, fh)
+            os.chown(usage, R.PW.pw_uid, R.PW.pw_gid)
+            before = R.skill_counts()
+            with open(usage, "w") as fh:
+                json.dump({"grill-me": {"view_count": 2}, "code-wiki": {"use_count": 2}, "adversarial-ux-test": {"view_count": 1}}, fh)
+            self.assertEqual(R.skills_used(before), ["adversarial-ux-test", "grill-me"])
+        finally:
+            R.USAGE = old
+
     def test_the_delivery_loop_waits_for_the_laptop_and_reports_the_real_path(self):
         calls, polls = [], {"n": 0}
 
@@ -109,3 +126,44 @@ class Deliverables(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(R is not None and os.geteuid() == 0, "lab box only, as root")
+class Integrity(unittest.TestCase):
+    """A task must not change the agent's toolchain or start-up files; if it does, it is put back and the attempt fails."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); t = self.tmp.name
+        self.bin = os.path.join(t, "bin"); os.mkdir(self.bin)
+        self.rc = os.path.join(t, ".bashrc")
+        with open(self.rc, "w") as fh:
+            fh.write("export A=1\n")
+        with open(os.path.join(self.bin, "tool"), "w") as fh:
+            fh.write("#!/bin/sh\necho real\n")
+        self.saved = (R.GUARDED_DIRS, R.GUARDED_FILES, R.QUARANTINE)
+        R.GUARDED_DIRS, R.GUARDED_FILES, R.QUARANTINE = [self.bin], [self.rc], os.path.join(t, "q")
+
+    def tearDown(self):
+        R.GUARDED_DIRS, R.GUARDED_FILES, R.QUARANTINE = self.saved
+        self.tmp.cleanup()
+
+    def test_a_planted_python3_and_an_edited_startup_file_are_put_back(self):
+        before = R._fingerprint()
+        with open(os.path.join(self.bin, "python3"), "w") as fh:          # what a worker really did
+            fh.write("#!/usr/bin/env python3\n# patches print(1+1) to 3\n")
+        with open(self.rc, "a") as fh:
+            fh.write("alias python3=~/bin/python3\n")
+        os.remove(os.path.join(self.bin, "tool"))
+        problems = R.guard_restore(before, "t1")
+        self.assertFalse(os.path.exists(os.path.join(self.bin, "python3")))
+        self.assertEqual(open(self.rc).read(), "export A=1\n")
+        self.assertEqual(open(os.path.join(self.bin, "tool")).read(), "#!/bin/sh\necho real\n")
+        joined = " ".join(problems)
+        for word in ("added", "changed", "deleted"):
+            self.assertIn(word, joined)
+        self.assertTrue(os.listdir(R.QUARANTINE))                         # the evidence is kept, out of reach
+
+    def test_no_change_no_problem_even_if_rewritten_identically(self):
+        before = R._fingerprint()
+        with open(self.rc, "w") as fh:
+            fh.write("export A=1\n")
+        self.assertEqual(R.guard_restore(before, "t2"), [])

@@ -30,6 +30,7 @@ PER_DAY = 2000
 # A provider's 5xx is tried once more before falling back: Ollama answers a gpt-oss tool call it cannot parse with
 # HTTP 500 "error parsing tool call" (ollama/ollama#12884), and a fresh sample usually parses.
 RETRY_SAME_PROVIDER = {500, 502, 503}
+OUTAGE_REST_S = 30                       # a provider that failed twice with server errors rests this long
 MAX_OUTPUT_CHARS = 200_000
 # Agent actions (POST /v1/jarvis/actions): every one goes through kernel policy; jobs run on the owner's laptop node.
 OUTPUT_NODE = os.environ.get("JARVIS_OUTPUT_NODE", "laptop")
@@ -111,11 +112,14 @@ def make_handler(kernel, providers, clock=time.time):
     tokens = AgentTokens(kernel)
     jobs = Jobs(kernel)
     from .tasks import Tasks, TaskError
+    from .memory import Conflict, Memories, MemoryError
     tasks = Tasks(kernel)
+    memories = Memories(kernel)
     kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
     dispatch_lock = threading.Lock()            # one dispatch decision at a time (the server answers on many threads)
     cooling = {}                                # provider name -> clock() until which it is not asked (it said 429)
+    outage = {}                                 # provider name -> clock() until which it rests after server errors
     calls = {}   # agent -> list of timestamps
     acts, shows, prefers = {}, {}, {}   # agent -> timestamps, per action limit
 
@@ -227,6 +231,8 @@ def make_handler(kernel, providers, clock=time.time):
                 return 200, {"status": "done", "preferred": target}
             if tool == "task":
                 return task_action(agent, lane, op, target, p)
+            if tool == "memory":
+                return memory_action(agent, lane, op, target, p)
             if tool == "lab" and op == "task":
                 d = kernel.authorize(Action("lab", "task", target, {"chars": len(str(p.get("prompt", "")))}, lane, True))
                 return (200, {"status": "allowed"}) if d.allowed else (403, {"status": "refused", "reason": d.reason})
@@ -238,8 +244,47 @@ def make_handler(kernel, providers, clock=time.time):
         except Killed:
             return 503, {"status": "refused", "reason": "kill switch is on"}
 
+    def memory_action(agent, lane, op, target, p):
+        """The agent's own durable memory (memory.py): stable ids, versions, verified deletion. Policy first."""
+        if op not in ("list", "get", "resolve", "render", "add", "update", "forget"):
+            return 400, {"status": "refused", "reason": "unknown memory operation"}
+        d = kernel.authorize(Action("memory", op, target[:80], {}, lane, True))
+        if not d.allowed:
+            return 403, {"status": "refused", "reason": d.reason}
+        scope = str(p.get("scope") or "default")[:40]
+        try:
+            if op == "list":
+                return 200, {"status": "done", "entries": memories.list(agent, scope, p.get("query"))}
+            if op == "get":
+                m = memories.get(agent, target)
+                return (200, {"status": "done", "entry": m}) if m else (404, {"status": "refused", "reason": "no such entry"})
+            if op == "resolve":
+                return 200, {"status": "done", **memories.resolve(agent, target, scope)}
+            if op == "render":
+                return 200, {"status": "done", "text": memories.render(agent, scope)}
+            if op == "add":
+                return 200, {"status": "done", "entry": memories.add(agent, target, str(p.get("kind") or "preference"), scope)}
+            if op == "update":
+                return 200, {"status": "done", "entry": memories.update(agent, target, p.get("text"), p.get("expected_version", -1))}
+            mid = target
+            if not mid.startswith("m-"):                  # forget by content: only one clear match, never a guess
+                r = memories.resolve(agent, target, scope)
+                if not r["unique"]:
+                    return 409, {"status": "refused", "reason": "no single entry clearly matches; forget by id", "candidates": r["candidates"]}
+                mid = r["candidates"][0]["id"]
+            return 200, {"status": "done", **memories.forget(agent, mid, p.get("expected_version"))}
+        except Conflict as e:
+            return 409, {"status": "refused", "reason": str(e), "current": {k: e.current[k] for k in ("id", "text", "version")}}
+        except MemoryError as e:
+            return 400, {"status": "refused", "reason": str(e)[:200]}
+
     def task_action(agent, lane, op, target, p):
         """Outcome tasks (tasks.py): create, update, get, dispatch to the lab. Each goes through policy first."""
+        if op == "checkpoint":                            # the agent's open tasks, compact, for a fresh or compacted session
+            if not kernel.authorize(Action("task", "get", "checkpoint", {}, lane, True)).allowed:
+                return 403, {"status": "refused"}
+            tasks.expire()
+            return 200, {"status": "done", **tasks.checkpoint(agent)}
         if op not in ("create", "update", "get", "dispatch"):
             return 400, {"status": "refused", "reason": "unknown task operation"}
         tasks.expire()
@@ -376,7 +421,7 @@ def make_handler(kernel, providers, clock=time.time):
                     return self._json(401, {"error": {"message": "unauthorized"}})
                 m = {"id": "jarvis", "object": "model", "owned_by": "jarvis"}
                 try:                                   # agents size their history (and compression) from this
-                    ctx = sizing.lane_context_length(gateway.plan(providers, lane)) if lane in ("private", "public") else None
+                    ctx = sizing.reported_context_length(gateway.plan(providers, lane)) if lane in ("private", "public") else None
                 except gateway.RouteError:
                     ctx = None
                 if ctx:
@@ -470,18 +515,36 @@ def make_handler(kernel, providers, clock=time.time):
             pref = preferred(lane)                        # an agent's "switch model" choice, same lane only
             chain = sorted(chain, key=lambda x: x.name != pref)
             est = sizing.estimate_tokens(body)
-            too_small = [p.name for p in chain if not sizing.fits(p, est)]
-            chain = [p for p in chain if sizing.fits(p, est)]    # never send a request to a provider it cannot fit
+            summary = sizing.is_summary(body)            # a context-compression call: needs room for a whole checkpoint
+            need_out = sizing.SUMMARY_MIN_OUTPUT if summary else sizing.MIN_OUTPUT
+            if summary:
+                body.pop("max_completion_tokens", None)
+                body["max_tokens"] = sizing.SUMMARY_MAX_OUTPUT
+            full = list(chain)
+            too_small = [p.name for p in chain if not sizing.fits_with_output(p, est, need_out)]
+            chain = [p for p in chain if sizing.fits_with_output(p, est, need_out)]   # never send a request it cannot fit
             if not chain:
                 return self._too_large(agent, lane, est)
             with lock:
-                benched = {p.name: cooling[p.name] for p in chain if cooling.get(p.name, 0) > now}
+                rest_until = {n: max(cooling.get(n, 0), outage.get(n, 0)) for n in {p.name for p in full}}
+                benched = {p.name: rest_until[p.name] for p in chain if rest_until[p.name] > now}
+                resting = {n for n, t in rest_until.items() if t > now}
+                down_only = bool(benched) and all(outage.get(n, 0) > now and cooling.get(n, 0) <= now for n in benched)
             chain = [p for p in chain if p.name not in benched]  # a provider that said "rate limited" rests until it may be asked again
             if too_small or benched:
                 kernel.audit.append("agent_model_skipped", {"agent": agent, "lane": lane, "est_tokens": est, "providers": too_small,
-                                                            "cooling": sorted(benched)})
+                                                            "cooling": sorted(benched), **({"summary": True} if summary else {})})
             if not chain:
-                return self._rate_limited(agent, lane, max(1, math.ceil(min(benched.values()) - now)))
+                # Only resting providers could take it. If a provider that is not resting could take the part that
+                # compression cannot shrink (system prompt + tools), ask the agent to compress (413); a summary call
+                # also gets 413, so the agent uses its own fallback summary. Otherwise it must wait (429).
+                fixed = sizing.estimate_fixed(body)
+                if summary or any(sizing.fits_with_output(p, fixed + 2000, need_out) for p in full if p.name not in resting):
+                    return self._too_large(agent, lane, est)
+                wait = max(1, math.ceil(min(benched.values()) - now))
+                if down_only:                            # resting after an outage: a short, plain "unavailable" (not 429:
+                    return self._unavailable(agent, lane, wait)   # agents back off for minutes on a rate limit)
+                return self._rate_limited(agent, lane, wait)
             last, outcomes = "none", []
             for p in chain:
                 model, why = p.default_model, "other"
@@ -492,12 +555,14 @@ def make_handler(kernel, providers, clock=time.time):
                     if k in payload:
                         payload[k] = sizing.output_budget(p, est, payload[k])
                 payload.update(p.extra_body)
+                if summary:
+                    payload["stream"] = False                        # read the whole summary to check it before passing it on
                 headers = {"Content-Type": "application/json", "User-Agent": "jarvis-llm-proxy/0.1"}
                 if p.key_file:
                     with open(p.key_path(), encoding="utf-8-sig") as fh:
                         headers["Authorization"] = "Bearer " + fh.read().strip()
                 req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
-                resp = None
+                resp, t_call = None, time.time()
                 for attempt in (1, 2):
                     try:
                         resp = urllib.request.urlopen(req, timeout=p.timeout_s or 120)
@@ -516,15 +581,41 @@ def make_handler(kernel, providers, clock=time.time):
                         kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": why,
                                                                         "prompt_chars": prompt_chars, "est_tokens": est, "attempt": attempt,
                                                                         **({"cooldown_s": rest} if rest else {})})
+                        if e.code >= 500 and attempt == 2:      # failed twice: rest it briefly, so retries do not hammer it
+                            with lock:
+                                outage[p.name] = clock() + OUTAGE_REST_S
                         if e.code not in RETRY_SAME_PROVIDER or why == "too_large":
                             break
                     except Exception as e:
                         last, why = type(e).__name__, "other"
                         kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "attempt": attempt})
+                        with lock:                               # unreachable: rest it briefly as well
+                            outage[p.name] = clock() + OUTAGE_REST_S
                         break
                 if resp is None:
                     outcomes.append(why)
                     continue
+                if summary:
+                    try:
+                        with resp:
+                            reply = json.loads(resp.read())
+                    except (ValueError, OSError) as e:
+                        reply, last = {}, type(e).__name__
+                    ok, bad = sizing.summary_ok(reply)
+                    if not ok:                               # a cut-off or empty checkpoint would freeze the agent's compaction
+                        last = f"summary {bad}"
+                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last,
+                                                                        "class": "summary_" + bad, "est_tokens": est})
+                        outcomes.append("other")
+                        continue
+                    for ch in reply.get("choices") or []:     # the checkpoint is the content; reasoning text must not stand in for it
+                        for k in ("reasoning", "reasoning_content", "reasoning_details"):
+                            (ch.get("message") or {}).pop(k, None)
+                    self._send_reply(reply, stream)
+                    kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "summary": True,
+                                                             "prompt_chars": prompt_chars, "est_tokens": est,
+                                                             "out_chars": len(reply["choices"][0]["message"]["content"]), "ms": int((time.time() - t_call) * 1000)})
+                    return
                 with resp:   # from here on we are committed to this provider
                     self.send_response(200)
                     self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
@@ -541,7 +632,8 @@ def make_handler(kernel, providers, clock=time.time):
                         sent += len(chunk)
                 kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "stream": stream, "bytes_out": sent,
                                                          "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
-                                                         "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings})
+                                                         "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings,
+                                                         "est_tokens": est, "ms": int((time.time() - t_call) * 1000)})
                 return
             kernel.audit.append("agent_model_request_failed", {"agent": agent, "lane": lane, "error": last, "classes": outcomes})
             if outcomes and all(o == "too_large" for o in outcomes):
@@ -551,6 +643,26 @@ def make_handler(kernel, providers, clock=time.time):
                     waits = [cooling.get(p.name, 0) - clock() for p in chain]
                 return self._rate_limited(agent, lane, max(1, math.ceil(min(waits))) if waits else 30)
             self._json(502, {"error": {"message": f"all providers failed ({last})"}})
+
+        def _send_reply(self, reply, stream):
+            """A checked, complete reply: as JSON, or as a one-chunk event stream when the agent asked to stream."""
+            if not stream:
+                return self._json(200, reply)
+            ch = (reply.get("choices") or [{}])[0]
+            base = {k: reply.get(k) for k in ("id", "created", "model") if reply.get(k) is not None}
+            chunks = [dict(base, object="chat.completion.chunk", choices=[{"index": 0, "delta": {"role": "assistant",
+                           "content": (ch.get("message") or {}).get("content") or ""}, "finish_reason": None}]),
+                      dict(base, object="chat.completion.chunk", choices=[{"index": 0, "delta": {},
+                           "finish_reason": ch.get("finish_reason") or "stop"}], **({"usage": reply["usage"]} if reply.get("usage") else {}))]
+            data = b"".join(b"data: " + json.dumps(c).encode() + b"\n\n" for c in chunks) + b"data: [DONE]\n\n"
+            self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.send_header("Cache-Control", "no-cache")
+            self.end_headers(); self.wfile.write(data); self.wfile.flush()
+
+        def _unavailable(self, agent, lane, wait):
+            kernel.audit.append("agent_model_unavailable", {"agent": agent, "lane": lane, "retry_after_s": wait})
+            b = json.dumps({"error": {"message": f"the providers that fit this request are down; retry in {wait} s", "type": "server_error"}}).encode()
+            self.send_response(503); self.send_header("Retry-After", str(wait)); self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
 
         def _rate_limited(self, agent, lane, wait):
             kernel.audit.append("agent_model_rate_limited", {"agent": agent, "lane": lane, "retry_after_s": wait})

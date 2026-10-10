@@ -49,6 +49,9 @@ RULES = [
     ("task", "create|update|get|dispatch", YELLOW_AUTO),
     ("lab", "dispatch", YELLOW_AUTO),
     # Skills (2026-10-10): a staged, checked skill; the level depends on its recorded risk and where it goes (decide below).
+    # Durable memory (2026-10-11): each agent reads and changes only its own entries (owner = its token).
+    ("memory", "list|get|resolve|render", GREEN),
+    ("memory", "add|update|forget", YELLOW_AUTO),
     ("skill", "activate", YELLOW_AUTO),
     ("skill", "deactivate", YELLOW_AUTO),
     ("money", "*", RED),

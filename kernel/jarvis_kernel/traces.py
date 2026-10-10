@@ -90,7 +90,7 @@ def build(db, tid: str, public: bool = False) -> dict | None:
         "SELECT ts, kind, payload FROM audit WHERE ts BETWEEN ? AND ? AND (kind LIKE 'agent_model%' OR kind='agent_action' "
         "OR kind LIKE 'task_%' OR kind='job_queued' OR kind LIKE 'tg_%') ORDER BY seq", (t["created"] - 600, end + 5)).fetchall()]
     calls, fails, skipped, actions = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
-    prompt_chars, out_bytes, routing = 0, 0, []
+    prompt_chars, out_bytes, routing, latency = 0, 0, [], {}
     for ts, kind, d in audit:
         agent = d.get("agent")
         if agent and not in_task(ts, agent):
@@ -101,6 +101,8 @@ def build(db, tid: str, public: bool = False) -> dict | None:
         if kind == "agent_model_call":
             calls[(role, d.get("provider"))] += 1
             prompt_chars += int(d.get("prompt_chars") or 0); out_bytes += int(d.get("bytes_out") or 0)
+            if d.get("ms") is not None:
+                latency.setdefault(d.get("provider"), []).append(int(d["ms"]))
         elif kind == "agent_model_call_failed":
             fails[(role, d.get("provider"), d.get("error"), d.get("class", ""))] += 1
         elif kind in ("agent_model_skipped", "agent_model_too_large", "agent_model_rate_limited", "agent_model_request_failed"):
@@ -140,7 +142,10 @@ def build(db, tid: str, public: bool = False) -> dict | None:
         "models": {"calls": [{"role": r, "provider": p, "n": n} for (r, p), n in calls.most_common(10)],
                    "failures": [{"role": r, "provider": p, "error": e, "class": c, "n": n} for (r, p, e, c), n in fails.most_common(12)],
                    "routing": routing, "gateway_refusals": {f"{r}:{k}": n for (r, k), n in skipped.items()},
-                   "est_tokens_in": int(prompt_chars / 3.5), "bytes_out": out_bytes, "cost_usd": 0.0},
+                   "est_tokens_in": int(prompt_chars / 3.5), "bytes_out": out_bytes, "cost_usd": 0.0,
+                   "latency_ms": {p: {"n": len(v), "p50": sorted(v)[len(v) // 2], "max": max(v)} for p, v in latency.items() if v}},
+        "skills": sorted({s.strip() for e in events if str(e["note"] or "").startswith("skills used")
+                          for s in str(e["note"]).split(":", 1)[1].split(",") if s.strip()}),
         "actions": [{"role": r, "action": a, "status": s, "n": n} for (r, a, s), n in actions.most_common(15)],
         "notes": "model and action rows are attributed by time window and agent; lab rows assume one lab job at a time",
     }
@@ -195,6 +200,49 @@ def analyze(db, days: float = 7, public: bool = False) -> dict:
             if a["status"] not in ("done", "queued", "allowed"):
                 actions[(a["action"], a["status"])] += a["n"]
     corrected = [tr["task"] for tr in traces if tr["outcome"]["corrected"]]
+    # skills <-> outcomes: which skills shaped tasks that were verified, failed, or later corrected
+    skill_out = {}
+    for tr in traces:
+        for s in tr.get("skills") or []:
+            o = skill_out.setdefault(s, {"tasks": 0, "verified": 0, "failed": 0, "corrected": 0})
+            o["tasks"] += 1
+            o["verified"] += tr["outcome"]["verified"] and not tr["outcome"]["corrected"]
+            o["failed"] += tr["outcome"]["state"] == "failed"
+            o["corrected"] += tr["outcome"]["corrected"]
+    # provider latency and context failures, over the whole window (not only task-attributed calls)
+    lat, ctx_fail = {}, collections.Counter()
+    for kind, p in db.execute("SELECT kind, payload FROM audit WHERE ts>=? AND kind IN ('agent_model_call','agent_model_too_large',"
+                              "'agent_model_rate_limited','agent_model_call_failed')", (since,)).fetchall():
+        d = json.loads(p)
+        if kind == "agent_model_call" and d.get("ms") is not None:
+            lat.setdefault(d.get("provider"), []).append(int(d["ms"]))
+        elif kind == "agent_model_too_large":
+            ctx_fail["no provider could fit the request (413 to the agent)"] += 1
+        elif kind == "agent_model_rate_limited":
+            ctx_fail["every fitting provider was resting (429 to the agent)"] += 1
+        elif str(d.get("class", "")).startswith("summary_") or d.get("class") == "too_large":
+            ctx_fail[f"{d.get('provider')}: {d.get('class')}"] += 1
+    latency = {p: {"n": len(v), "p50_ms": sorted(v)[len(v) // 2], "p95_ms": sorted(v)[int(len(v) * 0.95) - 1 if len(v) > 1 else 0]}
+               for p, v in lat.items()}
+    # corrections: did later tasks of the same category avoid the problem? (verified first time, not corrected)
+    follow = []
+    for tr in traces:
+        if tr["outcome"]["corrected"]:
+            later = [x for x in traces if x["timing"]["created"] > tr["timing"]["created"] and x["category"] == tr["category"]]
+            follow.append({"task": tr["task"], "category": tr["category"], "later_tasks": len(later),
+                           "later_verified_uncorrected": sum(1 for x in later if x["outcome"]["verified"] and not x["outcome"]["corrected"])})
+    # changes (skills, routing, provider limits deployed) and the outcome rate before / after each
+    changes = [(ts, kind, json.loads(p)) for ts, kind, p in db.execute(
+        "SELECT ts, kind, payload FROM audit WHERE ts>=? AND kind IN ('skill_activate','skill_deactivate','lane_preference_set') ORDER BY seq",
+        (since,)).fetchall()]
+    regress = []
+    for ts, kind, d in changes[-10:]:
+        def rate(xs):
+            return round(sum(1 for x in xs if x["outcome"]["verified"] and not x["outcome"]["corrected"]) / len(xs), 2) if xs else None
+        before = [x for x in lab if x["timing"]["created"] < ts][-5:]
+        after = [x for x in lab if x["timing"]["created"] >= ts][:5]
+        regress.append({"change": f"{kind} {d.get('skill') or d.get('provider')}", "at": round(ts), "before": rate(before),
+                        "after": rate(after), "n_after": len(after)})
     suggestions = []
     total_fail = sum(provider_fail.values())
     for (prov, err, cls), n in provider_fail.most_common(5):
@@ -221,6 +269,18 @@ def analyze(db, days: float = 7, public: bool = False) -> dict:
     if corrected:
         suggestions.append(f"verification gap: {len(corrected)} task(s) needed a correction after 'completed' ({', '.join(corrected)}); "
                            "add an owner-side check of the delivered files to the eval set")
+    for s, o in skill_out.items():
+        if o["tasks"] >= 3 and (o["failed"] + o["corrected"]) / o["tasks"] >= 0.5:
+            suggestions.append(f"skill: {s} was used in {o['tasks']} tasks and half or more failed or needed correction; review it "
+                               "against the eval set before keeping it active")
+    for r in regress:
+        if r["before"] is not None and r["after"] is not None and r["n_after"] >= 3 and r["after"] < r["before"] - 0.2:
+            suggestions.append(f"regression: after '{r['change']}' the verified rate fell from {r['before']} to {r['after']}; "
+                               "compare on the fixed eval set and consider rolling it back")
+    for c in follow:
+        if c["later_tasks"] and not c["later_verified_uncorrected"]:
+            suggestions.append(f"learning: after the correction on {c['task']} no later {c['category']} task was verified "
+                               "without correction; the fix has not shown up in real work yet")
     for (a, s), n in actions.most_common(5):
         if n >= 2:
             suggestions.append(f"planner: {a} was {s} {n} times (rate limits, guards or bad input: check the audit for the reasons)")
@@ -234,6 +294,11 @@ def analyze(db, days: float = 7, public: bool = False) -> dict:
         "provider_failure_total": total_fail,
         "gateway_refusals": dict(refusals), "refused_actions": [{"action": a, "status": s, "n": n} for (a, s), n in actions.most_common(10)],
         "corrected_tasks": corrected,
+        "skills_and_outcomes": skill_out,
+        "provider_latency": latency,
+        "context_failures": dict(ctx_fail),
+        "corrections_followed_up": follow,
+        "changes_and_outcomes": regress,
         "suggestions": suggestions if not public else len(suggestions),
         "note": "read-only report: nothing was changed; suggestions need evidence from the eval suite before any change",
     }

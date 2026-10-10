@@ -23,7 +23,7 @@ class T(unittest.TestCase):
         self.tid = self.T.create("hermes", "private", "build it", "Build a Python CLI with tests", criteria=["tests pass", "delivered"])
         a = self.k.audit.append
         a("agent_model_call_failed", {"agent": "hermes", "provider": "groq", "error": "HTTP 413", "class": "too_large"})
-        a("agent_model_call", {"agent": "hermes", "provider": "openrouter-private", "prompt_chars": 35000, "bytes_out": 900})
+        a("agent_model_call", {"agent": "hermes", "provider": "openrouter-private", "prompt_chars": 35000, "bytes_out": 900, "ms": 2400})
         a("agent_action", {"agent": "hermes", "tool": "task", "op": "dispatch", "status": "queued"})
         job = J.create("lab", "lab_run", {"task": self.tid, "agent": "hermes", "instructions": "x", "criteria": ["tests pass"],
                                           "max_attempts": 2, "timeout_s": 600}, owner="hermes")
@@ -32,6 +32,7 @@ class T(unittest.TestCase):
             a("agent_model_call", {"agent": "lab", "provider": "dahl-minimax", "prompt_chars": 7000, "bytes_out": 500})
         a("agent_model_call_failed", {"agent": "lab", "provider": "dahl-glm", "error": "HTTP 502"})
         self.T.update(None, self.tid, state="running", attempt=True)
+        self.T.update(None, self.tid, note="skills used (attempt 1): adversarial-ux-test, grill-me")
         self.T.update(None, self.tid, state="verifying")
         self.T.update(None, self.tid, state="repairing", note=f"tests fail; token {SECRET} in config.py")
         self.T.update(None, self.tid, state="running", attempt=True)
@@ -62,6 +63,8 @@ class T(unittest.TestCase):
         self.assertEqual(calls[("lab worker/verifier", "dahl-minimax")], 6); self.assertEqual(calls[("planner", "openrouter-private")], 1)
         self.assertIn({"role": "planner", "provider": "groq", "error": "HTTP 413", "class": "too_large", "n": 1}, t["models"]["failures"])
         self.assertEqual(t["delivery_evidence"][0][:10], "delivered:")
+        self.assertEqual(t["skills"], ["adversarial-ux-test", "grill-me"])
+        self.assertEqual(t["models"]["latency_ms"]["openrouter-private"]["p50"], 2400)
 
     def test_public_mode_drops_all_free_text(self):
         t = traces.build(self.ro(), self.tid, public=True)
@@ -83,6 +86,8 @@ class T(unittest.TestCase):
         r = traces.analyze(self.ro(), days=1)
         self.assertEqual(r["tasks"], 1); self.assertEqual(r["first_attempt_verified"], 0); self.assertEqual(r["avg_attempts"], 2)
         self.assertTrue(any("groq refused" in s for s in r["suggestions"]), r["suggestions"])
+        self.assertEqual(r["skills_and_outcomes"]["grill-me"], {"tasks": 1, "verified": 1, "failed": 0, "corrected": 0})
+        self.assertEqual(r["provider_latency"]["openrouter-private"]["p50_ms"], 2400)
         self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM audit").fetchone()[0], before + 6)   # only the test's own rows
         self.assertEqual(traces.analyze(self.ro(), days=1, public=True)["suggestions"], len(r["suggestions"]))
 

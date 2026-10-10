@@ -1,0 +1,226 @@
+{
+ "name": "godmode",
+ "staged_at": "2026-10-11T00:19:21",
+ "source": {
+  "repo": "https://github.com/NousResearch/hermes-agent",
+  "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
+  "path": "optional-skills/security/godmode",
+  "license": "MIT",
+  "license_source": "frontmatter"
+ },
+ "description": "Jailbreak LLMs: Parseltongue, GODMODE, ULTRAPLINIAN.",
+ "version": "1.0.0",
+ "author": "Hermes Agent + Teknium",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 20239,
+   "sha256": "f68b2f329580f40bad1af024af884530e77f098eeddbfeefc2b00b1016e2ab9d",
+   "git_blob": "0739be00aff9bb4d979a9f9a5838dc364dc5f491"
+  },
+  {
+   "path": "references/jailbreak-templates.md",
+   "bytes": 7392,
+   "sha256": "b95344eef9f80c094ee46a340ab1c09c98c9de16b6895338475c49e2a5519773",
+   "git_blob": "4764a413ae20707fb518b7c0fe36abd1bb206e05"
+  },
+  {
+   "path": "references/refusal-detection.md",
+   "bytes": 6242,
+   "sha256": "9b223e125f85c8928cf28cb2b92f47a9af9c8efdb8b37301e42a49773d5996a1",
+   "git_blob": "5a6abd3cbee2b3bf2825af5cdc1964cb1b96fc4b"
+  },
+  {
+   "path": "templates/prefill-subtle.json",
+   "bytes": 654,
+   "sha256": "1ae0ea27dff040a8da6b5e1a0557d3ee8f6355b5f5ce5e4dacfd533e4259669f",
+   "git_blob": "a8418962bd4bd2a11ccfe9cb98085062285b2c31"
+  },
+  {
+   "path": "templates/prefill.json",
+   "bytes": 907,
+   "sha256": "834a066c5fcf3d82db2e919d6f28d4be1a880c27df139e6cefeca5565524f2ab",
+   "git_blob": "e7ff485396e13413a7d7cacedd1203f9dd4a380a"
+  }
+ ],
+ "excluded": [
+  {
+   "path": "scripts/auto_jailbreak.py",
+   "bytes": 33539,
+   "sha256": "b42394b4ee2f94a4e06845e1a49f985dfe4b0f2b29646602114c2659eb4385b7",
+   "why": "script or non-text: excluded until its source is reviewed"
+  },
+  {
+   "path": "scripts/godmode_race.py",
+   "bytes": 25934,
+   "sha256": "f84a52c0bce17e3b9684a170cf3694cb079d0051812b5ff919303409346c4f10",
+   "why": "script or non-text: excluded until its source is reviewed"
+  },
+  {
+   "path": "scripts/load_godmode.py",
+   "bytes": 1570,
+   "sha256": "f0e9d025516192f228f4e53cf86844a7dfec0301d277745646eea74dca2feaf2",
+   "why": "script or non-text: excluded until its source is reviewed"
+  },
+  {
+   "path": "scripts/parseltongue.py",
+   "bytes": 23146,
+   "sha256": "151008ed1aec8ede16ac599f5b57f5c304d3e3670057be2586d57b201b440530",
+   "why": "script or non-text: excluded until its source is reviewed"
+  }
+ ],
+ "tools": {
+  "execute_code": "lab-native (its own sandbox computer)",
+  "patch": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [
+  "OpenRouter",
+  "DeepSeek",
+  "WiFi",
+  "OpenAI"
+ ],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "reject",
+  "reasons": [
+   "reject rules: secrets",
+   "its instructions rely on scripts, which are excluded until their source is reviewed",
+   "medium rules: api_key, external_service"
+  ],
+  "reject_findings": [
+   {
+    "rule": "secrets",
+    "file": "SKILL.md",
+    "line": 406,
+    "text": "12. **execute_code sandbox has no env vars** \u2014 When Hermes runs auto_jailbreak via execute_code, the sandbox doesn't inherit the Hermes `.env`. Load dotenv expl"
+   }
+  ],
+  "medium_findings": [
+   {
+    "rule": "api_key",
+    "file": "SKILL.md",
+    "line": 240,
+    "text": "api_key=os.getenv(\"OPENROUTER_API_KEY\"),"
+   },
+   {
+    "rule": "api_key",
+    "file": "SKILL.md",
+    "line": 291,
+    "text": "api_key=os.getenv(\"OPENROUTER_API_KEY\"),"
+   },
+   {
+    "rule": "external_service",
+    "file": "SKILL.md",
+    "line": 292,
+    "text": "base_url=\"https://openrouter.ai/api/v1\""
+   },
+   {
+    "rule": "external_service",
+    "file": "SKILL.md",
+    "line": 354,
+    "text": "- **Pliny the Prompter:** [@elder_plinius](https://x.com/elder_plinius)"
+   }
+  ],
+  "purpose": "other",
+  "data_sensitivity": "personal",
+  "permissions": [
+   "files",
+   "shell"
+  ],
+  "scripts_referenced": true
+ },
+ "checks": {
+  "static": "failed",
+  "hermes_skills_guard": {
+   "verdict": "caution",
+   "allowed": false,
+   "reason": "Blocked (community source + caution verdict, 10 findings). Use --force to override.",
+   "findings": [
+    {
+     "pattern_id": "python_getenv_secret",
+     "severity": "medium",
+     "category": "exfiltration",
+     "file": "SKILL.md",
+     "line": "240",
+     "description": "reads secret via os.getenv() (normal API-key access; informational)"
+    },
+    {
+     "pattern_id": "python_getenv_secret",
+     "severity": "medium",
+     "category": "exfiltration",
+     "file": "SKILL.md",
+     "line": "291",
+     "description": "reads secret via os.getenv() (normal API-key access; informational)"
+    },
+    {
+     "pattern_id": "hermes_config_mod",
+     "severity": "high",
+     "category": "persistence",
+     "file": "SKILL.md",
+     "line": "137",
+     "description": "modification language aimed at Hermes configuration files (verify intent)"
+    },
+    {
+     "pattern_id": "hermes_config_ref",
+     "severity": "low",
+     "category": "persistence",
+     "file": "SKILL.md",
+     "line": "87",
+     "description": "references Hermes configuration files (informational; only modification intent is scored)"
+    },
+    {
+     "pattern_id": "hermes_config_ref",
+     "severity": "low",
+     "category": "persistence",
+     "file": "SKILL.md",
+     "line": "137",
+     "description": "references Hermes configuration files (informational; only modification intent is scored)"
+    },
+    {
+     "pattern_id": "hermes_config_ref",
+     "severity": "low",
+     "category": "persistence",
+     "file": "SKILL.md",
+     "line": "175",
+     "description": "references Hermes configuration files (informational; only modification intent is scored)"
+    },
+    {
+     "pattern_id": "educational_pretext",
+     "severity": "medium",
+     "category": "injection",
+     "file": "SKILL.md",
+     "line": "268",
+     "description": "educational pretext often used to justify harmful content"
+    },
+    {
+     "pattern_id": "python_getenv_secret",
+     "severity": "medium",
+     "category": "exfiltration",
+     "file": "PROVENANCE.json",
+     "line": "104",
+     "description": "reads secret via os.getenv() (normal API-key access; informational)"
+    },
+    {
+     "pattern_id": "python_getenv_secret",
+     "severity": "medium",
+     "category": "exfiltration",
+     "file": "PROVENANCE.json",
+     "line": "110",
+     "description": "reads secret via os.getenv() (normal API-key access; informational)"
+    },
+    {
+     "pattern_id": "hermes_config_ref",
+     "severity": "low",
+     "category": "persistence",
+     "file": "references/jailbreak-templates.md",
+     "line": "96",
+     "description": "references Hermes configuration files (informational; only modification intent is scored)"
+    }
+   ],
+   "lint": []
+  },
+  "guard": "failed"
+ },
+ "manifest_sha256": "e69e995fd782f40006997f6ff4396074935e832eab19bac85bf9312db20d87a9"
+}

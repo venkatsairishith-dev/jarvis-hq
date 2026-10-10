@@ -1,0 +1,57 @@
+{
+ "name": "decision-questionnaire",
+ "staged_at": "2026-10-11T00:19:21",
+ "source": {
+  "repo": "https://github.com/NousResearch/hermes-agent",
+  "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
+  "path": "optional-skills/productivity/decision-questionnaire",
+  "license": "MIT",
+  "license_source": "frontmatter"
+ },
+ "description": "Turn an unanswerable decision into a questionnaire doc.",
+ "version": "1.0.0",
+ "author": "Matt Pocock (mattpocock/skills, to-questionnaire) + Hermes Agent",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 4171,
+   "sha256": "84a781708b86a797e41d4a0b9234d4da48f95d14fc9cee23a0eb2cf8574e8ca2",
+   "git_blob": "5545bcd32175c00192fb869f445335e61bef71ee"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "write_file": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "documentation",
+  "data_sensitivity": "none",
+  "permissions": [
+   "files"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed",
+  "hermes_skills_guard": {
+   "verdict": "safe",
+   "allowed": true,
+   "reason": "Allowed (community source, safe verdict)",
+   "findings": [],
+   "lint": []
+  },
+  "guard": "passed",
+  "smoke": {
+   "passed": true,
+   "output": "try 1:  in under 15 words.\n\nThe description is: \"Turn an unanswerable decision into a questionnaire doc.\"\n\nCounting words: \"Turn an unanswerable decision into a questionnaire doc.\" = 7 words. Perfect, under 15 words.\n\n\nSKILL-OK decision-questionnaire: Turn an unanswerable decision into a questionnaire doc."
+  }
+ },
+ "manifest_sha256": "c672fdec5da6446e4b0c96bca7178ad797f7481f79801743d258a7946e257e11"
+}

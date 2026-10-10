@@ -60,6 +60,7 @@ class Base(unittest.TestCase):
         H, tokens = make_handler(self.k, [])
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
+        self.tokens = tokens
         self.owner, self.lab = tokens.issue("hermes"), tokens.issue("lab", "public")
         self.runner, self.hub = tokens.issue("lab-runner", "runner"), tokens.issue("hub", "dashboard")
 

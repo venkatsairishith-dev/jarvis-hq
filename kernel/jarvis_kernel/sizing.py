@@ -50,6 +50,46 @@ def estimate_tokens(body: dict) -> int:
 
 
 MIN_OUTPUT = 1024        # a provider is only used if at least this much answer still fits
+SUMMARY_MIN_OUTPUT = 4096   # a context-compression summary needs room for a whole checkpoint (Hermes asks ~2-7k)
+SUMMARY_MAX_OUTPUT = 8192
+SUMMARY_PREFIX = "You are a summarization agent creating a context checkpoint"   # Hermes context_compressor.py
+
+
+def is_summary(body: dict) -> bool:
+    """A Hermes context-compression call: one user message with the summarizer preamble and no tools."""
+    msgs = body.get("messages") or []
+    if body.get("tools") or not msgs:
+        return False
+    first = msgs[0].get("content") if isinstance(msgs[0], dict) else None
+    if isinstance(first, list):
+        first = " ".join(str(p.get("text", "")) for p in first if isinstance(p, dict))
+    return isinstance(first, str) and first.lstrip().startswith(SUMMARY_PREFIX)
+
+
+def estimate_fixed(body: dict) -> int:
+    """The part of a request that compressing the conversation cannot shrink: system messages and tool schemas."""
+    sys_msgs = [m for m in body.get("messages") or [] if isinstance(m, dict) and m.get("role") == "system"]
+    chars = len(json.dumps(sys_msgs, ensure_ascii=False)) + len(json.dumps(body.get("tools") or [], ensure_ascii=False))
+    return max(1, int(chars / CHARS_PER_TOKEN) + 4 * len(sys_msgs))
+
+
+def fits_with_output(provider, tokens: int, out: int) -> bool:
+    limit, total = getattr(provider, "max_input_tokens", None), getattr(provider, "max_total_tokens", None)
+    return (not limit or tokens <= limit) and (not total or tokens + out <= total)
+
+
+def summary_ok(reply: dict) -> tuple:
+    """(ok, why) for a non-streamed summary reply: complete (not cut at the output cap) and with real content."""
+    try:
+        ch = reply["choices"][0]
+    except (KeyError, IndexError, TypeError):
+        return False, "no choices"
+    if ch.get("finish_reason") == "length":
+        return False, "truncated"
+    text = (ch.get("message") or {}).get("content") or ""
+    if len(text.strip()) < 200:
+        return False, "empty"
+    return True, ""
 
 
 def fits(provider, tokens: int) -> bool:
@@ -89,9 +129,19 @@ def cooldown_s(retry_after, text: str) -> int:
     return 60
 
 
+AGENT_MIN_CONTEXT = 64000   # Hermes refuses to run (and to summarize) with a window below 64K (agent_init, CONV:2108)
+
+
+def reported_context_length(providers) -> int | None:
+    """What /v1/models tells agents: the lane's real largest window, raised to Hermes's 64K minimum. Safe because the
+    gateway never forwards a request a provider cannot fit: anything between the real window and 64K gets a fast 413,
+    which makes the agent compress (its compaction trigger is set lower, by threshold_tokens)."""
+    real = lane_context_length(providers)
+    return max(real, AGENT_MIN_CONTEXT) if real else None
+
+
 def lane_context_length(providers) -> int | None:
-    """What the gateway reports as the context length of its one model for a lane: the largest known input limit
-    among the lane's providers (the agent compresses before reaching it; smaller providers are skipped per request)."""
+    """The largest known input limit among the lane's providers (smaller providers are skipped per request)."""
     limits = []
     for p in providers:
         a, t = getattr(p, "max_input_tokens", None), getattr(p, "max_total_tokens", None)
