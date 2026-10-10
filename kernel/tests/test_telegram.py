@@ -347,7 +347,7 @@ class T(unittest.TestCase):
             call = hermes_agent(keyf, f"http://127.0.0.1:{srv.server_address[1]}", state_path=state, clock=lambda: now[0])
             self.assertEqual(call("open my downloads folder"), "Opened Downloads.")
             path, auth, session, body = seen[0]
-            self.assertEqual((path, auth, session, body["model"]), ("/v1/chat/completions", "Bearer hk_SECRETVALUE_123", "telegram-owner-20261010", "hermes-agent"))
+            self.assertEqual((path, auth, session, body["model"]), ("/v1/chat/completions", "Bearer hk_SECRETVALUE_123", "telegram-owner-20261010", "hermes-agent"))  # gitleaks:allow (fake test key)
             call("open it"); self.assertEqual(seen[1][2], "telegram-owner-20261010")       # same conversation
             with self.assertRaises(RuntimeError) as cm:
                 call("fail")
