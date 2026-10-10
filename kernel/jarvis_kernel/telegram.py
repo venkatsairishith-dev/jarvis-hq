@@ -103,11 +103,12 @@ class Bridge:
         word = text.strip().split(None, 1)
         cmd = word[0].lower() if word else ""
         arg = word[1].strip() if len(word) > 1 else ""
-        known = {"/start", "/help", "/status", "/analyze", "/pending", "/approve", "/deny", "/kill", "/resume", "/ask", "confirm", "/recent", "/capabilities", "/can", "/models", "/check"}
+        known = {"/start", "/help", "/status", "/analyze", "/pending", "/approve", "/deny", "/kill", "/resume", "/ask", "confirm", "/recent", "/capabilities", "/can", "/models", "/check",
+                 "/tasks", "/task"}
         self.k.audit.append("tg_in", {"cmd": cmd if cmd in known else ("ask" if not cmd.startswith("/") else "unknown")})
         if cmd in ("/start", "/help"):
             return self.say(("Just type a request (\"open my Downloads folder\", \"open Spotify\") and JARVIS does it. " if self.agent else "") +
-                            "JARVIS commands: /status, /check <project>, /recent, /capabilities, /can <tool> <op> [target], /models, /analyze [node], /pending, /approve <id>, /deny <id>, /kill, /ask <question> (a quick model answer"
+                            "JARVIS commands: /status, /tasks, /task <id> [pause|resume|cancel], /check <project>, /recent, /capabilities, /can <tool> <op> [target], /models, /analyze [node], /pending, /approve <id>, /deny <id>, /kill, /ask <question> (a quick model answer"
                             + (")" if self.agent else ", or just type)") + ". Lifting the kill switch and approving RED actions are done at the kernel console.")
         if cmd == "/status":
             return self.status()
@@ -125,6 +126,10 @@ class Bridge:
             return self.can(arg)
         if cmd == "/models":
             return self.models()
+        if cmd == "/tasks":
+            return self.tasks_list()
+        if cmd == "/task":
+            return self.task_control(arg)
         if cmd == "/approve":
             return self.approve_start(arg)
         if cmd == "confirm":
@@ -298,6 +303,41 @@ class Bridge:
                      f"Approve: /approve {aid}    Deny: /deny {aid}    ({i['seconds_left']} s left)")
             self.k.db.execute("INSERT OR IGNORE INTO tg_approval_notices VALUES (?)", (aid,))
             self.k.audit.append("tg_approval_notice", {"id": aid})
+
+    def tasks_list(self):
+        from .tasks import Tasks
+        rows = Tasks(self.k).recent(8)
+        if not rows:
+            return self.say("No tasks yet.")
+        self.say("Tasks (newest first):\n" + "\n".join(
+            f"- {t['id']} {t['state']} {t['attempts']}/{t['max_attempts']}: {str(t['goal'])[:70]}" for t in rows))
+
+    def task_control(self, arg: str):
+        """The owner's own control of a task, straight to the kernel (no model in between): show it, pause it (the lab
+        freezes the worker), resume it, or cancel it (the lab stops the worker)."""
+        from .tasks import Tasks, TaskError
+        parts = arg.split()
+        T = Tasks(self.k)
+        t = T.get(parts[0]) if parts else None
+        if not t:
+            return self.say("Usage: /task <id> [pause|resume|cancel]. /tasks lists them.")
+        op = parts[1].lower() if len(parts) > 1 else ""
+        if not op:
+            ev = "\n".join(f"  {time.strftime('%H:%M', time.localtime(e['ts']))} {e['state']}: {str(e['note'])[:90]}" for e in t["events"][:6])
+            return self.say(f"Task {t['id']}: {t['state']}, attempt {t['attempts']}/{t['max_attempts']}\nGoal: {t['goal']}\n"
+                            f"Step: {t['step'] or '-'}\nResult: {t['result'] or '-'}\nLatest:\n{ev}")
+        target = {"pause": "paused", "cancel": "cancelled", "resume": "running"}.get(op)
+        if not target:
+            return self.say("Use pause, resume or cancel.")
+        if op == "resume" and t["state"] != "paused":
+            return self.say(f"Task {t['id']} is {t['state']}, not paused.")
+        try:
+            T.update(None, t["id"], state=target, note=f"{op} by the owner (Telegram)")
+        except TaskError as e:
+            return self.say(f"Refused: {e}")
+        self.k.audit.append("tg_task_control", {"id": t["id"], "op": op})
+        self.say(f"Task {t['id']}: {target}." + (" The lab stops the worker within about 20 s." if op == "cancel" else
+                                                  " The lab freezes the worker within about 20 s." if op == "pause" else ""))
 
     def task_facts(self, since: float) -> str:
         """The kernel's own record of tasks touched during this turn, appended to the agent's reply: a claim like

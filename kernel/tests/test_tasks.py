@@ -88,6 +88,9 @@ class API(Base):
         self.assertEqual((code, "public_ok" in r["reason"]), (400, True))                  # private lane must say it may be shared
         code, r = self.act("dispatch", tid, {"instructions": "-----BEGIN OPENSSH PRIVATE KEY-----\nx", "public_ok": True}, self.owner)
         self.assertEqual(code, 400)
+        for where in ("Save it in D:\\jarvis\\outputs\\hermes", "copy to /mnt/d/jarvis", "put it on C:/Users/me"):
+            code, r = self.act("dispatch", tid, {"instructions": where, "public_ok": True}, self.owner)
+            self.assertEqual(code, 400, where); self.assertIn("cannot see the owner's computer", r["reason"])
         code, r = self.act("dispatch", tid, {"instructions": "Make the tests pass. token ghp_abcdefghijklmnopqrstuvwxyz0123456789",
                                              "public_ok": True, "agent": "opencode"}, self.owner)
         self.assertEqual((code, r["status"]), (200, "queued")); self.assertIn("END your turn", r["next"])
@@ -96,6 +99,10 @@ class API(Base):
         self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM jobs WHERE kind='lab_run'").fetchone()[0], 1)
         self.assertEqual(self.act("update", tid, {"state": "repairing"}, self.owner)[0], 409)   # the lab owns the state now
         self.assertEqual(self.act("update", tid, {"note": "owner asked for a README too"}, self.owner)[0], 200)
+        code, r = self.post("/v1/jarvis/actions", {"tool": "output", "op": "save", "target": "tool.py", "params": {"content": "x"}}, self.owner)
+        self.assertEqual(code, 409); self.assertIn(f"task-{tid}", r["reason"])           # no copy racing the lab's delivery
+        self.assertEqual(self.post("/v1/jarvis/actions", {"tool": "output", "op": "save", "target": "n.md", "params": {"content": "x"}},
+                                   self.lab)[0], 200)                                     # other agents are not affected
         # the runner: narrow token, only runner endpoints
         self.assertEqual(self.post("/v1/jarvis/runner/next", {}, self.lab)[0], 403)
         self.assertEqual(self.post("/v1/chat/completions", {"messages": []}, self.runner)[0], 403)
@@ -173,6 +180,26 @@ class Honesty(Base):
         self.k.db.execute("UPDATE jobs SET state='done' WHERE id=?", (jid,))
         code, r = self.act("update", tid, {"state": "completed", "evidence": [f"saved job:{jid}"]}, self.owner)
         self.assertEqual((code, r["state"]), (200, "completed"))
+
+    def test_the_owner_controls_tasks_from_telegram_without_a_model(self):
+        class Api:
+            sent = []
+            def send(self, chat, text): Api.sent.append(text)
+        T = Tasks(self.k); tid = T.create("hermes", "private", "", "Build the tool", criteria=["tests pass"])
+        T.update("hermes", tid, state="running")
+        b = Bridge(self.k, Api(), 1, [])
+        say = lambda text: b.handle({"update_id": 1, "message": {"text": text, "chat": {"id": 1, "type": "private"}, "from": {"id": 1}}}) or Api.sent[-1]
+        self.assertIn(tid, say("/tasks"))
+        self.assertIn("Goal: Build the tool", say(f"/task {tid}"))
+        self.assertIn("not paused", say(f"/task {tid} resume"))
+        self.assertIn("paused", say(f"/task {tid} pause")); self.assertEqual(T.get(tid)["state"], "paused")
+        self.assertIn("running", say(f"/task {tid} resume")); self.assertEqual(T.get(tid)["state"], "running")
+        self.assertIn("cancelled", say(f"/task {tid} cancel")); self.assertEqual(T.get(tid)["state"], "cancelled")
+        self.assertIn("Refused", say(f"/task {tid} pause"))                    # final stays final
+        self.assertIn("Usage", say("/task nope"))
+        b2 = Bridge(self.k, Api(), 1, [])
+        b2.handle({"update_id": 2, "message": {"text": f"/task {tid} cancel", "chat": {"id": 9, "type": "private"}, "from": {"id": 9}}})
+        self.assertEqual(len([s for s in Api.sent if "Refused" in s]), 1)      # strangers are ignored
 
     def test_telegram_reply_carries_the_kernel_record_of_the_task(self):
         class Api:

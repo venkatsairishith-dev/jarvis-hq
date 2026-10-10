@@ -32,6 +32,7 @@ RETRY_SAME_PROVIDER = {500, 502, 503}
 MAX_OUTPUT_CHARS = 200_000
 # Agent actions (POST /v1/jarvis/actions): every one goes through kernel policy; jobs run on the owner's laptop node.
 OUTPUT_NODE = os.environ.get("JARVIS_OUTPUT_NODE", "laptop")
+OWNER_PATH = re.compile(r"(?i)(?<![a-z0-9])[a-z]:[\\/]|/mnt/[a-z]/|\\\\[a-z0-9]")   # D:\, C:/, /mnt/d/, \\server
 ACTIONS_PER_HOUR = 60
 SHOWS_PER_HOUR = 12
 PREFERS_PER_DAY = 20
@@ -132,6 +133,11 @@ def make_handler(kernel, providers, clock=time.time):
             if tool == "output" and op in ("save", "show"):
                 params = {"agent": agent, "name": target}
                 if op == "save":
+                    at_lab = kernel.db.execute("SELECT json_extract(params,'$.task') FROM jobs WHERE kind='lab_run' AND owner=? "
+                                               "AND state IN ('queued','running')", (agent,)).fetchone()
+                    if at_lab:                          # no second, unverified copy racing the lab's verified delivery
+                        return 409, {"status": "refused", "reason": f"task {at_lab[0]} is at the lab: its verified files arrive in "
+                                     f"D:\\jarvis\\outputs\\task-{at_lab[0]}\\ by themselves. Do not write them yourself; end your turn."}
                     clean, found, blocked = scrub(str(p.get("content", "")), deep=True)
                     if blocked:
                         return 400, {"status": "refused", "reason": "the content contains a private key"}
@@ -251,6 +257,10 @@ def make_handler(kernel, providers, clock=time.time):
         crit = [scrub(str(c)[:500], deep=True)[0] for c in (p.get("criteria") or t["criteria"])[:20]]
         if blocked or not instr.strip() or not crit:
             return 400, {"status": "refused", "reason": "instructions and acceptance criteria are required, and no private keys"}
+        if OWNER_PATH.search("\n".join([instr, *crit])):      # the lab cannot see them: such work stalls or "verifies" stale files
+            return 400, {"status": "refused", "reason": "the lab cannot see the owner's computer: remove D:\\ / C:\\ / /mnt/ paths from "
+                         "the instructions and criteria. The runner delivers verified files to D:\\jarvis\\outputs\\task-<id>\\ itself; "
+                         "use a criterion like 'the files are delivered to the owner'."}
         agent_kind = str(p.get("agent") or "hermes")
         params = {"task": target, "agent": agent_kind, "instructions": instr, "criteria": crit,
                   "max_attempts": int(t["max_attempts"]), "timeout_s": max(120, min(int(t["deadline"] - clock()), 5400))}
