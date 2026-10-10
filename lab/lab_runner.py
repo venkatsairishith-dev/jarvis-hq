@@ -124,7 +124,9 @@ def work_prompt(task, folder, instructions, criteria, attempt, problems):
             f"sub-folders). After an independent check passes, the system copies ./{DELIVER}/ to the owner's computer itself; "
             "that is how 'save' or 'deliver to the owner' criteria are met.\n\n"
             "Rules: check your own work by actually running it (tests, commands, opening pages), including the copies in "
-            f"./{DELIVER}/. When you are done, write EVIDENCE.md: for each criterion, what you did and the command or check that "
+            f"./{DELIVER}/. Delivered files must work from any folder on another computer: no absolute paths (find files "
+            "relative to the test file itself), and the tests must pass when only the delivered files are copied to an empty "
+            "folder; the system checks exactly that. When you are done, write EVIDENCE.md: for each criterion, what you did and the command or check that "
             "shows it holds, with its real output. If something cannot be done, say exactly why in EVIDENCE.md instead of "
             "pretending. Do not write VERIFY.json.")
 
@@ -135,8 +137,8 @@ def verify_prompt(task, criteria):
             "claims or EVIDENCE.md. Check each acceptance criterion yourself by running the code, the tests and the commands, "
             "and by reading the files. Do not fix anything and do not change any file except VERIFY.json.\n\n"
             f"Acceptance criteria:\n{crit}\n\n"
-            f"Delivery: the files in ./{DELIVER}/ are exactly what the owner will receive; check THOSE copies (run the tests "
-            f"inside ./{DELIVER}/). You cannot see the owner's computer and must not judge it: a criterion about saving or "
+            f"Delivery: the files in ./{DELIVER}/ are exactly what the owner will receive; check THOSE copies: copy them to a "
+            "new empty folder (mktemp -d) and run the tests there, so nothing else in this workspace helps them pass. You cannot see the owner's computer and must not judge it: a criterion about saving or "
             f"delivering files to the owner is met when the right, working files are in ./{DELIVER}/ (the system delivers them "
             "after your check and confirms each one). Never cite files outside this folder as delivered.\n\n"
             'Then write VERIFY.json exactly like {"passed": true or false, "criteria": [{"criterion": "...", "met": true, '
@@ -194,7 +196,34 @@ def deliverables(folder, required):
         problems.append(f"./{DELIVER}/ has {len(files)} files; at most {DELIVER_MAX_FILES}")
     if required and not files and not problems:
         problems.append(f"nothing to deliver: put the owner's files in ./{DELIVER}/")
+    for name, text in files:                     # the owner's computer has no lab paths: such files break once delivered
+        if os.path.realpath(folder) in text or "/home/agent" in text:
+            problems.append(f"./{DELIVER}/{name} refers to the lab path {folder}: use paths relative to the file itself")
     return files, problems
+
+
+def portable_check(folder, files):
+    """Run the delivered tests from a fresh, empty folder (as the agent user, time-limited), the way the owner will.
+    Returns the problems found ([] when there are no tests or they pass)."""
+    if not any(n.startswith("test") and n.endswith(".py") for n, _ in files):
+        return []
+    import tempfile
+    d = tempfile.mkdtemp(prefix="portable-")    # the service's private /tmp, root 700 while root writes (no link races)
+    try:
+        for name, text in files:
+            fd = os.open(os.path.join(d, name), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            os.chown(os.path.join(d, name), PW.pw_uid, PW.pw_gid)
+        os.chown(d, PW.pw_uid, PW.pw_gid)        # then hand it to the agent user (tests may write files)
+        r = subprocess.run(["runuser", "-u", AGENT, "--", "env", "-i", *[f"{k}={v}" for k, v in agent_env("hermes").items()],
+                            "timeout", "180", "python3", "-m", "unittest"], cwd=d, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        if r.returncode != 0:
+            tail = (r.stderr or r.stdout).strip().splitlines()[-6:]
+            return [f"the delivered tests fail when run from a fresh folder (python3 -m unittest, exit {r.returncode}): " + " | ".join(tail)[:500]]
+        return []
+    finally:
+        subprocess.run(["rm", "-rf", "--one-file-system", d])
 
 
 def deliver(jid, files):
@@ -262,6 +291,8 @@ def handle(job):
             verdict.setdefault("problems", []).insert(0, f"the worker ran out of time ({per_try} s)")
             verdict["failure_class"] = "timeout"
         files, bad = deliverables(folder, wants)
+        if not bad and verdict.get("passed") is True:
+            bad = portable_check(folder, files)
         if bad:                                                  # the runner's own check; the verifier cannot override it
             verdict["passed"] = False
             verdict["problems"] = bad + list(verdict.get("problems") or [])

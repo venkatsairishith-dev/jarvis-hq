@@ -64,6 +64,20 @@ class Deliverables(unittest.TestCase):
         self.write("big.txt", "x" * (R.DELIVER_MAX_CHARS + 1))
         self.assertTrue(any("big.txt" in b for b in R.deliverables(self.folder, False)[1]))
 
+    def test_files_that_point_into_the_lab_are_not_delivered(self):
+        self.mkdir()
+        self.write("test_x.py", 'cwd="/home/agent/work/jobs/abc"\n')
+        self.assertIn("lab path", R.deliverables(self.folder, True)[1][0])
+
+    def test_delivered_tests_must_pass_from_a_fresh_folder(self):
+        good = [("calc.py", "def add(a, b):\n    return a + b\n"),
+                ("test_calc.py", "import unittest, calc\nclass T(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(calc.add(1, 2), 3)\n")]
+        self.assertEqual(R.portable_check(self.folder, good), [])
+        needs_workspace = [("test_calc.py", "import unittest, calc\nclass T(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(calc.add(1, 2), 3)\n")]
+        bad = R.portable_check(self.folder, needs_workspace)                 # calc.py stayed behind in the workspace
+        self.assertTrue(bad and "fresh folder" in bad[0], bad)
+        self.assertEqual(R.portable_check(self.folder, [("notes.md", "# hi\n")]), [])   # no tests: nothing to run
+
     def test_the_delivery_loop_waits_for_the_laptop_and_reports_the_real_path(self):
         calls, polls = [], {"n": 0}
 

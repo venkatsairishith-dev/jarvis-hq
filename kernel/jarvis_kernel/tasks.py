@@ -101,7 +101,7 @@ class Tasks:
     def expire(self, now=None):
         """Tasks past their deadline fail: no task runs forever."""
         now = now or time.time()
-        ids = [r[0] for r in self.k.db.execute(f"SELECT id FROM tasks WHERE deadline < ? AND state NOT IN ({','.join('?' * len(FINAL))})", (now, *FINAL))]
+        ids = [r[0] for r in self.k.db.execute(f"SELECT id FROM tasks WHERE deadline < ? AND state NOT IN ({','.join('?' * len(FINAL))})", (now, *FINAL)).fetchall()]
         for tid in ids:
             self.k.db.execute("UPDATE tasks SET state='failed', updated=?, result=CASE WHEN result='' THEN 'time budget used up' ELSE result END WHERE id=?", (now, tid))
             self._event(tid, "failed", "state", "time budget used up")
@@ -115,7 +115,7 @@ class Tasks:
         r = self.k.db.execute("SELECT * FROM tasks WHERE id=?", (tid,)).fetchone()
         if not r:
             return None
-        cols = [d[1] for d in self.k.db.execute("PRAGMA table_info(tasks)")]
+        cols = [d[1] for d in self.k.db.execute("PRAGMA table_info(tasks)").fetchall()]
         return dict(zip(cols, r))
 
     def get(self, tid, owner=None):
@@ -125,7 +125,7 @@ class Tasks:
         for c in ("plan", "criteria", "evidence", "verification"):
             t[c] = json.loads(t[c] or ("{}" if c == "verification" else "[]"))
         t["events"] = [{"ts": ts, "state": s, "kind": k, "note": n} for ts, s, k, n in
-                       self.k.db.execute("SELECT ts, state, kind, note FROM task_events WHERE task=? ORDER BY id DESC LIMIT 40", (tid,))]
+                       self.k.db.execute("SELECT ts, state, kind, note FROM task_events WHERE task=? ORDER BY id DESC LIMIT 40", (tid,)).fetchall()]
         return t
 
     def recent(self, limit=30):

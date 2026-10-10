@@ -40,7 +40,7 @@ def overview(kernel, providers, now=None) -> dict:
 
     def hour(ts):
         return min(23, max(0, 23 - int((now - ts) // 3600)))
-    for ts, kind, payload in db.execute("SELECT ts, kind, payload FROM audit WHERE ts >= ? ORDER BY seq", (since,)):
+    for ts, kind, payload in db.execute("SELECT ts, kind, payload FROM audit WHERE ts >= ? ORDER BY seq", (since,)).fetchall():
         if kind == "agent_model_call":
             series["calls"][hour(ts)] += 1
         elif kind == "agent_model_request_failed":
@@ -71,7 +71,7 @@ def overview(kernel, providers, now=None) -> dict:
 
     jobs, durations = [], []
     for jid, kind, state, owner, created, started, finished, result in db.execute(
-            "SELECT id, kind, state, owner, created, started, finished, result FROM jobs ORDER BY created DESC LIMIT 25"):
+            "SELECT id, kind, state, owner, created, started, finished, result FROM jobs ORDER BY created DESC LIMIT 25").fetchall():
         r = _load(result)
         jobs.append({"id": jid, "kind": kind, "state": state, "owner": owner or "owner", "created": created, "started": started,
                      "finished": finished, "result": {k: (str(r[k])[:80] if isinstance(r[k], str) else r[k])
@@ -82,7 +82,7 @@ def overview(kernel, providers, now=None) -> dict:
 
     pending = []
     for aid, level, expires, action in db.execute(
-            "SELECT id, level, expires, action FROM approvals WHERE state='pending' AND expires >= ? ORDER BY expires", (now,)):
+            "SELECT id, level, expires, action FROM approvals WHERE state='pending' AND expires >= ? ORDER BY expires", (now,)).fetchall():
         a = _load(action)
         pending.append({"id": aid, "level": level, "expires": expires, "tool": str(a.get("tool", ""))[:20],
                         "op": str(a.get("op", ""))[:20], "target": str(a.get("target", ""))[:60], "lane": a.get("lane")})
@@ -114,7 +114,7 @@ def overview(kernel, providers, now=None) -> dict:
                                         "step", "attempts", "max_attempts", "deadline", "result", "evidence", "verification", "events")}
                  for t in T.recent(15)]
     tail = [{**_short(_load(payload)), "seq": seq, "ts": ts, "kind": kind}
-            for seq, ts, kind, payload in db.execute("SELECT seq, ts, kind, payload FROM audit ORDER BY seq DESC LIMIT 40")]
+            for seq, ts, kind, payload in db.execute("SELECT seq, ts, kind, payload FROM audit ORDER BY seq DESC LIMIT 40").fetchall()]
     return {
         "now": now,
         "killed": kernel.killed(),

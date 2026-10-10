@@ -47,9 +47,9 @@ class AgentTokens:
     local and private providers; public tokens (test agents, never given private data) reach only local and public ones."""
 
     def __init__(self, kernel):
-        self.k = kernel
+        self.k, self.lock = kernel, threading.Lock()
         kernel.db.execute("CREATE TABLE IF NOT EXISTS agent_tokens(name TEXT PRIMARY KEY, token_h TEXT, created REAL)")
-        cols = [r[1] for r in kernel.db.execute("PRAGMA table_info(agent_tokens)")]
+        cols = [r[1] for r in kernel.db.execute("PRAGMA table_info(agent_tokens)").fetchall()]
         if "lane" not in cols:   # older databases: every existing token stays private
             kernel.db.execute("ALTER TABLE agent_tokens ADD COLUMN lane TEXT NOT NULL DEFAULT 'private'")
 
@@ -66,7 +66,9 @@ class AgentTokens:
     def identify(self, tok: str):
         """(name, lane) for a valid token, else (None, None)."""
         th = _h(tok)
-        for name, h, lane in self.k.db.execute("SELECT name, token_h, lane FROM agent_tokens"):
+        with self.lock:                          # one shared connection, many server threads: never iterate a live cursor
+            rows = self.k.db.execute("SELECT name, token_h, lane FROM agent_tokens").fetchall()
+        for name, h, lane in rows:
             if hmac.compare_digest(h, th):
                 return name, lane
         return None, None
@@ -111,6 +113,7 @@ def make_handler(kernel, providers, clock=time.time):
     tasks = Tasks(kernel)
     kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
+    dispatch_lock = threading.Lock()            # one dispatch decision at a time (the server answers on many threads)
     calls = {}   # agent -> list of timestamps
     acts, shows, prefers = {}, {}, {}   # agent -> timestamps, per action limit
 
@@ -250,11 +253,6 @@ def make_handler(kernel, providers, clock=time.time):
         t = tasks.get(target, owner=agent)
         if not t:
             return 404, {"status": "refused", "reason": "no such task"}
-        active = kernel.db.execute("SELECT id FROM jobs WHERE kind='lab_run' AND state IN ('queued','running') AND params LIKE ?",
-                                   (f'%"task": "{target}"%',)).fetchone()
-        if active or t["state"] not in ("planning", "paused"):   # checked before anything is created: no duplicate work
-            return 409, {"status": "refused", "reason": f"the lab is already on this task (state {t['state']}); do not dispatch again. "
-                         "End your turn: you will be told in this conversation when it ends."}
         if lane == "private" and p.get("public_ok") is not True:
             return 400, {"status": "refused", "reason": "the lab uses public-lane models: send only what may be shared and set public_ok true"}
         instr, _, blocked = scrub(str(p.get("instructions", ""))[:8000], deep=True)
@@ -266,10 +264,17 @@ def make_handler(kernel, providers, clock=time.time):
                          "the instructions and criteria. The runner delivers verified files to D:\\jarvis\\outputs\\task-<id>\\ itself; "
                          "use a criterion like 'the files are delivered to the owner'."}
         agent_kind = str(p.get("agent") or "hermes")
-        params = {"task": target, "agent": agent_kind, "instructions": instr, "criteria": crit,
-                  "max_attempts": int(t["max_attempts"]), "timeout_s": max(120, min(int(t["deadline"] - clock()), 5400))}
-        jid = jobs.create("lab", "lab_run", params, owner=agent, lane=lane)
-        tasks.update(agent, target, state="queued", step=f"dispatched to the lab ({agent_kind})", criteria=crit, note="lab job " + jid)
+        with dispatch_lock:                     # check and create as one step: two requests at once must not both pass
+            t = tasks.get(target, owner=agent)
+            active = kernel.db.execute("SELECT id FROM jobs WHERE kind='lab_run' AND state IN ('queued','running') AND params LIKE ?",
+                                       (f'%"task": "{target}"%',)).fetchone()
+            if active or t["state"] not in ("planning", "paused"):
+                return 409, {"status": "refused", "reason": f"the lab is already on this task (state {t['state']}); do not dispatch again. "
+                             "End your turn: you will be told in this conversation when it ends."}
+            params = {"task": target, "agent": agent_kind, "instructions": instr, "criteria": crit,
+                      "max_attempts": int(t["max_attempts"]), "timeout_s": max(120, min(int(t["deadline"] - clock()), 5400))}
+            jid = jobs.create("lab", "lab_run", params, owner=agent, lane=lane)
+            tasks.update(agent, target, state="queued", step=f"dispatched to the lab ({agent_kind})", criteria=crit, note="lab job " + jid)
         return 200, {"status": "queued", "task": target, "job": jid, "next": (
             "Tell the owner in one or two lines that the lab has started (give the task id) and END your turn now. "
             "Do not wait, poll or dispatch again: you will be told the verified outcome in this conversation.")}

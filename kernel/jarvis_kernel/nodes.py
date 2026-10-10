@@ -48,7 +48,7 @@ class Nodes:
 
     def report(self, token: str, state: dict):
         th = _hash(token)
-        for name, h in self.k.db.execute("SELECT name, token_h FROM nodes"):
+        for name, h in self.k.db.execute("SELECT name, token_h FROM nodes").fetchall():
             if hmac.compare_digest(h, th):
                 self.k.db.execute("UPDATE nodes SET last_seen=?, state=? WHERE name=?", (time.time(), json.dumps(state), name))
                 self.k.db.commit()
@@ -59,14 +59,14 @@ class Nodes:
 
     def identify(self, token: str):
         th = _hash(token)
-        for name, h in self.k.db.execute("SELECT name, token_h FROM nodes"):
+        for name, h in self.k.db.execute("SELECT name, token_h FROM nodes").fetchall():
             if hmac.compare_digest(h, th):
                 return name
         return None
 
     def list(self):
         out = []
-        for name, last, state in self.k.db.execute("SELECT name, last_seen, state FROM nodes"):
+        for name, last, state in self.k.db.execute("SELECT name, last_seen, state FROM nodes").fetchall():
             age = time.time() - last
             out.append({"name": name, "online": age <= OFFLINE_AFTER, "seconds_since_report": round(age, 1), "state": json.loads(state)})
         return out

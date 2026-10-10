@@ -166,6 +166,23 @@ class Delivery(Base):
         self.assertEqual(deliver("late.py")[0], 409)                          # nothing after completion
 
 
+class Race(Base):
+    def test_simultaneous_dispatches_create_one_lab_job(self):
+        tid = self.act("create", "t", {"goal": "A tool", "criteria": ["tests pass"]}, self.owner)[1]["task"]
+        codes, threads = [], []
+        go = threading.Event()
+
+        def send():
+            go.wait(); codes.append(self.act("dispatch", tid, {"instructions": "build it", "public_ok": True}, self.owner)[0])
+        for _ in range(6):
+            th = threading.Thread(target=send); th.start(); threads.append(th)
+        go.set()
+        for th in threads:
+            th.join()
+        self.assertEqual(sorted(codes), [200, 409, 409, 409, 409, 409])
+        self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM jobs WHERE kind='lab_run'").fetchone()[0], 1)
+
+
 class Honesty(Base):
     def test_an_agent_cannot_mark_a_task_completed_without_proof(self):
         code, r = self.act("create", "x", {"goal": "Deliver a tool", "criteria": ["tests pass"]}, self.owner)
