@@ -193,6 +193,20 @@ If the request asks for delivery and `./deliver/` is empty, the runner fails the
 - Found and fixed live: a duplicate dispatch (two extra jobs were cancelled), and a runner that killed work on a network blip.
 - Task 5079247275a1 (temperature converter) was reported completed, but nothing reached the laptop. The verifier could not see the laptop, and it cited stale files from an earlier try. The code itself was right (12 tests, CLI checked by hand). A correction event is on its record, and runner-side delivery replaced the old design.
 - Cancel test: the owner cancelled a running task, and the runner stopped the worker 21 s later.
+- Full loop (task 9f98013ab16f, wordstat): the request went through the Telegram bridge. A dispatch naming `D:\` paths was refused; the next one was accepted. The lab built the tool, the independent check passed attempt 1, and 4 files reached `outputs\task-9f98013ab16f\`, each confirmed by the laptop. On Windows: 13/13 tests pass and the CLI is correct.
+- Robustness (task 84f6f4708cd5, FizzBuzz), all in one run:
+  - pause froze the worker (process state T) and resume continued it;
+  - a 60 s outage of the kernel endpoint did not stop the work;
+  - a killed worker (exit 137) went straight to the independent check;
+  - the task completed and was delivered.
+- Found by the same tests, and fixed:
+  - Simultaneous dispatches made 2 jobs. The check-and-create step is now under one lock; six at once give one job.
+  - A valid token got a 401 under concurrent requests, from a lazy cursor on the shared database connection.
+  - Delivered tests hard-coded the lab folder and failed on the laptop. The runner now refuses lab paths and runs delivered tests from a fresh folder.
+- JARVIS's single Telegram session grew to about 200k characters. The models rejected it and turns hung for 15 minutes. Sessions now last one day, and a failed turn starts a new one. Hermes compaction is capped at 30k tokens; its summary step still fails with a reasoning model.
+- Memory (Hermes USER.md):
+  - saved a preference, recalled it in a new session, replaced it on correction, and applied the corrected version;
+  - removing it on request failed, because JARVIS looked for a label it had dropped when saving. The test entry was cleared by hand.
 
 ## Mission control (the hub's overview, added 2026-10-10)
 The hub's first page is now the Agent OS dashboard. It follows the owner's references: the Contentstack Agent OS dashboard, the "agentic OS dashboard" articles, and dashboard design practice. It shows:

@@ -58,6 +58,27 @@ Windows 10 Pro 22H2 build 19045 under Boot Camp. Mainstream support ended 14 Oct
 
 **Kaggle and Colab model servers are parked** (rules on tunnels). If ever restarted on purpose, push with a hard session limit (`kaggle kernels push -p DIR -t <seconds>`; the CLI cannot cancel a run). Stop it in the Kaggle UI when done.
 
+**Deploying the kernel** (Windows → server):
+1. Pack `hq/kernel` and copy it to the server.
+2. Unpack it and move the live `~/jarvis/kernel` to `kernel.old.<ts>`.
+3. Run the tests **in place**. In the unpack folder they fail, because there is no `config/` beside them.
+4. If the tests fail, the new code goes to `~/downloads/kernel.failed.<ts>` and the old one comes back. The failing tests are printed from `~/downloads/deploy-tests.log`.
+5. Restart only `jarvis-llm-proxy`, `jarvis-kernel` and `jarvis-telegram`.
+
+Never restart while a lab job runs: a runner report sent during the restart is lost. Check the active jobs first.
+
+**Lab runner:** install `hq/lab/lab_runner.py` to `/opt/jarvis-hub/lab_runner.py` (root 644, with a `.bak-<ts>` copy). Then run `systemctl restart jarvis-lab-runner` in WSL as root.
+
+**monit** restarts `jarvis-telegram` within about 2 minutes if it stops. Its HTTP interface is off, so `monit unmonitor` does not work. To test with a second bridge, don't stop the service; let it handle everything after the first turn.
+
+**Owner task control:** on Telegram, `/tasks` and `/task <id> [pause|resume|cancel]`. Each task's files land in `D:\jarvis\outputs\task-<id>\`.
+
+**If a token is ever printed:**
+1. Run `python3 -m jarvis_kernel agent-token <name> --lane <lane> --out <tmpfile>`.
+2. Swap the new token into its users. For `hermes`, that is the Hermes `config.yaml` `model.api_key` and `/home/jarvis-agent/.jarvis-llm-token`.
+3. Restart the services that read it.
+4. Confirm that the old token gets 401.
+
 **WSL:** .wslconfig keeps the lab running when idle (instanceIdleTimeout=-1, vmIdleTimeout=-1, effective after the next `wsl --shutdown`). The logon task JarvisLab starts it.
 
 ## Corrections after independent review (2026-10-07)
