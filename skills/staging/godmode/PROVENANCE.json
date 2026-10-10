@@ -1,6 +1,6 @@
 {
  "name": "godmode",
- "staged_at": "2026-10-11T00:19:21",
+ "staged_at": "2026-10-11T00:39:20",
  "source": {
   "repo": "https://github.com/NousResearch/hermes-agent",
   "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
@@ -131,96 +131,8 @@
   "scripts_referenced": true
  },
  "checks": {
-  "static": "failed",
-  "hermes_skills_guard": {
-   "verdict": "caution",
-   "allowed": false,
-   "reason": "Blocked (community source + caution verdict, 10 findings). Use --force to override.",
-   "findings": [
-    {
-     "pattern_id": "python_getenv_secret",
-     "severity": "medium",
-     "category": "exfiltration",
-     "file": "SKILL.md",
-     "line": "240",
-     "description": "reads secret via os.getenv() (normal API-key access; informational)"
-    },
-    {
-     "pattern_id": "python_getenv_secret",
-     "severity": "medium",
-     "category": "exfiltration",
-     "file": "SKILL.md",
-     "line": "291",
-     "description": "reads secret via os.getenv() (normal API-key access; informational)"
-    },
-    {
-     "pattern_id": "hermes_config_mod",
-     "severity": "high",
-     "category": "persistence",
-     "file": "SKILL.md",
-     "line": "137",
-     "description": "modification language aimed at Hermes configuration files (verify intent)"
-    },
-    {
-     "pattern_id": "hermes_config_ref",
-     "severity": "low",
-     "category": "persistence",
-     "file": "SKILL.md",
-     "line": "87",
-     "description": "references Hermes configuration files (informational; only modification intent is scored)"
-    },
-    {
-     "pattern_id": "hermes_config_ref",
-     "severity": "low",
-     "category": "persistence",
-     "file": "SKILL.md",
-     "line": "137",
-     "description": "references Hermes configuration files (informational; only modification intent is scored)"
-    },
-    {
-     "pattern_id": "hermes_config_ref",
-     "severity": "low",
-     "category": "persistence",
-     "file": "SKILL.md",
-     "line": "175",
-     "description": "references Hermes configuration files (informational; only modification intent is scored)"
-    },
-    {
-     "pattern_id": "educational_pretext",
-     "severity": "medium",
-     "category": "injection",
-     "file": "SKILL.md",
-     "line": "268",
-     "description": "educational pretext often used to justify harmful content"
-    },
-    {
-     "pattern_id": "python_getenv_secret",
-     "severity": "medium",
-     "category": "exfiltration",
-     "file": "PROVENANCE.json",
-     "line": "104",
-     "description": "reads secret via os.getenv() (normal API-key access; informational)"
-    },
-    {
-     "pattern_id": "python_getenv_secret",
-     "severity": "medium",
-     "category": "exfiltration",
-     "file": "PROVENANCE.json",
-     "line": "110",
-     "description": "reads secret via os.getenv() (normal API-key access; informational)"
-    },
-    {
-     "pattern_id": "hermes_config_ref",
-     "severity": "low",
-     "category": "persistence",
-     "file": "references/jailbreak-templates.md",
-     "line": "96",
-     "description": "references Hermes configuration files (informational; only modification intent is scored)"
-    }
-   ],
-   "lint": []
-  },
-  "guard": "failed"
+  "static": "failed"
  },
- "manifest_sha256": "e69e995fd782f40006997f6ff4396074935e832eab19bac85bf9312db20d87a9"
+ "manifest_sha256": "e69e995fd782f40006997f6ff4396074935e832eab19bac85bf9312db20d87a9",
+ "files_kept": false
 }

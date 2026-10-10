@@ -238,6 +238,16 @@ def cmd_stage(a):
         "manifest_sha256": None,
     }
     prov["manifest_sha256"] = sha256(json.dumps(prov["files"], sort_keys=True).encode())
+    if r["tier"] == "reject":                    # a rejected skill keeps only its record: its content is not kept or committed
+        for rel, _ in files:
+            os.remove(os.path.join(dest, *rel.split("/")))
+        for root, dirs, _ in os.walk(dest, topdown=False):
+            for d in dirs:
+                try:
+                    os.rmdir(os.path.join(root, d))
+                except OSError:
+                    pass
+        prov["files_kept"] = False
     with open(os.path.join(dest, "PROVENANCE.json"), "w", encoding="utf-8") as fh:
         json.dump(prov, fh, indent=1)
     print(json.dumps({k: prov[k] for k in ("name", "source", "tools", "dependencies")}, indent=1))
