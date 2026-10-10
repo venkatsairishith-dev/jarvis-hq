@@ -1,0 +1,4 @@
+# Reviewed false positives (gitleaks fingerprints). Each line is a finding a person checked by hand.
+# hk_SECRETVALUE_123: a FAKE Hermes key used by kernel/tests/test_telegram.py to prove real keys never appear
+# in error messages (commit 08aef13, before the inline gitleaks:allow marker was added in e4c01bc).
+08aef133698ea678f3bb075fc4cb084b46121b38:kernel/tests/test_telegram.py:generic-api-key:350
