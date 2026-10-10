@@ -200,7 +200,7 @@ def list_folder(folder: str, path: str = "") -> str:
 @tool("owner")
 def task_start(goal: str, criteria: list[str], plan: list[str] | None = None, request: str = "", max_attempts: int = 3,
                budget_minutes: int = 120) -> str:
-    r"""Open an outcome task for real work (not a quick answer). goal: one sentence; criteria: 2-8 checks anyone can verify; plan: short steps; request: the owner's words. Returns the task id."""
+    r"""Open an outcome task for real work (not a quick answer). goal: one sentence; criteria: 2-8 checks anyone can verify; plan: short steps; request: the owner's words. Returns the task id. Criteria must not require folder layouts: delivered files are flat."""
     _log("task_start", goal)
     return _say(_act("task", "create", goal, {"goal": goal, "criteria": criteria, "plan": plan or [], "request": request,
                                               "source": "jarvis", "max_attempts": max_attempts,
@@ -226,7 +226,7 @@ def task_get(task_id: str) -> str:
 
 @tool("owner")
 def lab_work(task_id: str, instructions: str, agent: str = "hermes", public_ok: bool = False) -> str:
-    r"""Send a task's hands-on work (code, tests, web, files) to the lab ONCE; an independent check verifies every criterion and failures are repaired. You are told the outcome later: tell the owner it started and stop. agent: hermes, opencode (coding) or goose. Public-lane models: only shareable info, public_ok=true. The lab cannot see the owner's PC: no D:\ or C:\ paths; verified files are delivered to D:\jarvis\outputs\task-<id>\ automatically (add a criterion 'files delivered to the owner')."""
+    r"""Send a task's hands-on work (code, tests, web, files) to the lab ONCE; an independent check verifies every criterion and failures are repaired. You are told the outcome later: tell the owner it started and stop. agent: hermes, opencode (coding) or goose. Public-lane models: only shareable info, public_ok=true. The lab cannot see the owner's PC: no D:\ or C:\ paths; verified files are delivered to D:\jarvis\outputs\task-<id>\ automatically (add a criterion 'files delivered to the owner'). Delivered files are flat (no sub-folders): never require folder layouts such as tests/x.py in criteria."""
     _log("lab_work", f"{task_id} {agent}")
     return _say(_act("task", "dispatch", task_id, {"instructions": instructions, "agent": agent, "public_ok": public_ok}))
 

@@ -124,7 +124,8 @@ def work_prompt(task, folder, instructions, criteria, attempt, problems):
             "Delivery: the owner's computer and its folders (D:\\..., C:\\..., /mnt/...) are NOT visible from here; never ask "
             "for access to them and never wait for it. Put the final version of every file the owner should receive in "
             f"./{DELIVER}/ (plain file names, .py .md .txt .html .json .csv .log only, at most {DELIVER_MAX_FILES} files, no "
-            f"sub-folders). After an independent check passes, the system copies ./{DELIVER}/ to the owner's computer itself; "
+            f"sub-folders: if a criterion names a path such as tests/test_x.py, deliver it flat as ./{DELIVER}/test_x.py and make "
+            f"it work there). After an independent check passes, the system copies ./{DELIVER}/ to the owner's computer itself; "
             "that is how 'save' or 'deliver to the owner' criteria are met.\n\n"
             "Rules: check your own work by actually running it (tests, commands, opening pages), including the copies in "
             f"./{DELIVER}/. Delivered files must work from any folder on another computer: no absolute paths (find files "
@@ -143,7 +144,9 @@ def verify_prompt(task, criteria):
             f"Delivery: the files in ./{DELIVER}/ are exactly what the owner will receive; check THOSE copies: copy them to a "
             "new empty folder (mktemp -d) and run the tests there, so nothing else in this workspace helps them pass. You cannot see the owner's computer and must not judge it: a criterion about saving or "
             f"delivering files to the owner is met when the right, working files are in ./{DELIVER}/ (the system delivers them "
-            "after your check and confirms each one). Never cite files outside this folder as delivered.\n\n"
+            "after your check and confirms each one). Never cite files outside this folder as delivered. Delivered files are flat "
+            f"(no sub-folders): a criterion that names a path like tests/test_x.py is met by test_x.py in ./{DELIVER}/ if it works "
+            "there.\n\n"
             'Then write VERIFY.json exactly like {"passed": true or false, "criteria": [{"criterion": "...", "met": true, '
             '"evidence": "what you ran and saw"}], "problems": ["specific problem to fix", ...]}. passed is true only if every '
             "criterion is met.")

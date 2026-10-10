@@ -42,7 +42,28 @@ def turn(text, label):
             "tools_used": tools, "store": [(e["id"], e["version"], e["text"]) for e in kernel("list")["entries"]]}
 
 
+def act(tool, op, target="", **params):
+    r = urllib.request.Request(GW + "/v1/jarvis/actions", method="POST", data=json.dumps(
+        {"tool": tool, "op": op, "target": target, "params": params}).encode(),
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + TOKEN})
+    with urllib.request.urlopen(r, timeout=20) as x:
+        return json.loads(x.read())
+
+
 def main():
+    prefer = os.environ.get("PREFER")                      # e.g. dahl-glm: switched through the kernel, restored after
+    before = act("models", "status").get("preferred") if prefer else None
+    if prefer:
+        act("models", "prefer", prefer)
+    try:
+        run_steps()
+    finally:
+        if prefer:
+            act("models", "prefer", before or "dahl-minimax")
+            print(json.dumps({"lane_preference_restored_to": act("models", "status").get("preferred")}))
+
+
+def run_steps():
     for e in kernel("list")["entries"]:                       # a clean disposable store
         kernel("forget", e["id"])
     decoy = kernel("add", "I prefer dark mode in every app I use")["entry"]
