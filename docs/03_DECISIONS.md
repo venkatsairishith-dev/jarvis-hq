@@ -161,7 +161,7 @@ Nothing was deleted (code, token, chat id and service file all remain). To switc
 3. Run `sudo systemctl enable --now jarvis-telegram`.
 
 ## D14 Memory, context limits and lab integrity (2026-10-11)
-- **The kernel is the store of record for durable memory.** Hermes's built-in user profile (USER.md) is off for JARVIS. Preferences live in the kernel, with ids and versions, and reach Hermes through the `jarvis_memory` plugin (Hermes's own memory-provider extension point). Built-in MEMORY.md (agent notes) stays on.
+- **The kernel is the store of record for durable memory.** Hermes's built-in user profile (USER.md) is off for JARVIS. Preferences live in the kernel, with ids and versions, and reach Hermes through the `jarvis_memory` plugin (Hermes's own memory-provider extension point). Built-in MEMORY.md is off too (2026-10-11): with two memory tools side by side the model wrote a second copy and 'cleaned up' the corrected entry under a new id; with one (the kernel's), a correction is a single versioned update. Agent notes use the kernel's `fact` / `instruction` kinds.
 - **The gateway reports at least 64K to agents** (Hermes's hard minimum). Correctness comes from per-request sizing, not from the reported number.
 - **Measured limits beat published ones:**
   - Groq: 131K published, 8000 per request (input plus output) on the free tier.

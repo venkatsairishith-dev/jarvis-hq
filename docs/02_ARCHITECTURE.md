@@ -300,7 +300,7 @@ The lab Hermes has its skill tools on, with `skills.write_approval: true`, so th
 - `compression.tail_mode: legacy` (smaller summaries)
 - `compression.abort_on_summary_failure: false`
 - `memory.provider: jarvis_memory`
-- `memory.user_profile_enabled: false`
+- `memory.user_profile_enabled: false` and `memory.memory_enabled: false` (the kernel is JARVIS's only memory)
 
 **Durable memory** (`jarvis_kernel/memory.py`, `hermes/plugins/jarvis_memory`). The kernel is the store of record:
 - Entries have ids (`m-xxxxxxxx`) and versions, and belong to the agent whose token wrote them.
