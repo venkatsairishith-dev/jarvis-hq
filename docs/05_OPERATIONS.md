@@ -100,3 +100,17 @@ Never restart while a lab job runs: a runner report sent during the restart is l
 **Evals** (Windows): `python hq\evals\run_evals.py --baseline hq\evals\baseline.json`. Add `--kernel <dir>` to test another checkout. Run it before every kernel deploy.
 
 **Measured provider limits:** if a provider changes plan or model, measure again and update `max_input_tokens` / `max_total_tokens` in `providers.json`.
+
+## Context, memory and integrity (added 2026-10-11)
+**Rollback:**
+- Kernel: `kernel.old.<ts>` on the server.
+- Hermes config: `~/.hermes/config.yaml.bak-memory-<ts>` and `.bak-ctx-<ts>` (as jarvis-agent).
+- Plugin: remove `~/.hermes/plugins/jarvis_memory` and set `memory.provider: ""`.
+- Lab runner: `/opt/jarvis-hub/lab_runner.py.bak-<ts>`.
+- Restart only the services concerned: `jarvis-llm-proxy`, `jarvis-kernel`, `jarvis-hermes-gateway`, `jarvis-hermes-serve`; in WSL, `jarvis-lab-runner`.
+
+**Tests outside the owner's data:**
+- `hq/evals/ctx_recovery.py`: real Hermes plus fake providers. Runs in the WSL lab as root with a throwaway `HERMES_HOME`. The server firewall rightly blocks the Hermes user from other local ports.
+- `hq/evals/memory_lifecycle.py`: real gateway. Runs in the disposable `jtest` profile with its own `memtest` token; the owner's memory is never touched.
+
+**Quarantine:** files a lab task planted or changed go to `/root/quarantine/<time>-<task>` in WSL, where root can review them.

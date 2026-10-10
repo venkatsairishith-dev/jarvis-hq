@@ -28,10 +28,8 @@ except ImportError:                                    # tests outside Hermes
 
 log = logging.getLogger(__name__)
 TIMEOUT = 8
-GUIDE = ("Durable memory (JARVIS kernel). These are the owner's saved preferences and facts, each with an id and a "
-         "version. To save one use jarvis_memory_add; to correct one use jarvis_memory_update with its id and the version "
-         "shown; to delete one use jarvis_memory_forget with its id and confirm from the result that it was forgotten. "
-         "Do not keep preferences anywhere else.")
+GUIDE = ("Durable memory (JARVIS kernel): the owner's saved entries, each [id vN]. Save: jarvis_memory_add. Correct: "
+         "jarvis_memory_update(id, text, expected_version). Delete: jarvis_memory_forget(id); check the result says forgotten.")
 
 
 class JarvisMemoryProvider(MemoryProvider):

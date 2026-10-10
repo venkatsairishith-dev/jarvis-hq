@@ -139,11 +139,11 @@ class Tasks:
         "cancelled": "nothing; the owner cancelled it",
     }
 
-    def checkpoint(self, owner, limit=3, max_chars=1800):
+    def checkpoint(self, owner, limit=3, max_chars=900, recent_s=6 * 3600):
         """A small, durable picture of the owner's open (and just-finished) tasks, for a fresh or compacted session:
         goal, criteria, state, steps done, steps pending, decisions, next action."""
         rows = self.k.db.execute("SELECT id FROM tasks WHERE owner=? AND (state NOT IN ('completed','failed','cancelled') OR updated>?) "
-                                 "ORDER BY updated DESC LIMIT ?", (owner, time.time() - 86400, limit)).fetchall()
+                                 "ORDER BY updated DESC LIMIT ?", (owner, time.time() - recent_s, limit)).fetchall()
         out = []
         for (tid,) in rows:
             t = self.get(tid)

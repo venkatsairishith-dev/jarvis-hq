@@ -34,7 +34,7 @@ class Units(unittest.TestCase):
     def test_estimate_counts_tools_and_messages(self):
         small = sizing.estimate_tokens({"messages": [{"role": "user", "content": "hi"}]})
         tools = sizing.estimate_tokens({"messages": [{"role": "user", "content": "hi"}], "tools": [{"function": {"name": "x" * 700}}]})
-        self.assertLess(small, 20); self.assertGreater(tools, small + 190)
+        self.assertLess(small, 20); self.assertGreater(tools, small + int(700 / sizing.CHARS_PER_TOKEN) - 10)
 
 
 class Base(unittest.TestCase):

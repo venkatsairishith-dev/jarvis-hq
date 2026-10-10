@@ -30,10 +30,15 @@ def turn(text, label):
     from run_agent import AIAgent
     a = AIAgent(base_url=GW + "/v1", api_key=TOKEN, provider="custom", model="jarvis", enabled_toolsets=["memory"],
                 quiet_mode=True, skip_context_files=True, session_id=f"memtest-{label}-{int(time.time())}", max_iterations=6)
-    t0 = time.time()
-    r = a.run_conversation(text) or {}
+    t0, tries = time.time(), 0
+    for tries in range(1, 4):                 # the lab model sometimes ends with no reply at all: ask again, count it
+        a = AIAgent(base_url=GW + "/v1", api_key=TOKEN, provider="custom", model="jarvis", enabled_toolsets=["memory"],
+                    quiet_mode=True, skip_context_files=True, session_id=f"memtest-{label}-{int(time.time())}-{tries}", max_iterations=6)
+        r = a.run_conversation(text) or {}
+        if "No reply" not in str(r.get("final_response") or ""):
+            break
     tools = [tc["function"]["name"] for m in (r.get("messages") or []) for tc in (m.get("tool_calls") or []) if isinstance(tc, dict)]
-    return {"step": label, "seconds": round(time.time() - t0), "answer": str(r.get("final_response") or r.get("error") or "")[:300],
+    return {"step": label, "tries": tries, "seconds": round(time.time() - t0), "answer": str(r.get("final_response") or r.get("error") or "")[:300],
             "tools_used": tools, "store": [(e["id"], e["version"], e["text"]) for e in kernel("list")["entries"]]}
 
 

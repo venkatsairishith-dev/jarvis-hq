@@ -9,8 +9,9 @@ that are too small are skipped instead of called.
 CONTEXT_LENGTH_MARKERS and looks_like_context_length_error() are reused from OpenJarvis
 (https://github.com/open-jarvis/OpenJarvis, src/openjarvis/engine/_base.py at ecbde4b32091e2a8b02e8acfa41cb5f95e4da560),
 Apache License 2.0, Copyright the OpenJarvis authors. Modified: markers added for HTTP 413 / Groq "request too large".
-The token estimate adapts OpenJarvis's estimate_prompt_tokens (characters / 4 + 4 per message); JARVIS uses 3.5
-characters per token because its requests carry JSON tool schemas, which tokenize denser than prose.
+The token estimate adapts OpenJarvis's estimate_prompt_tokens (characters / 4 + 4 per message). Measured on Groq
+(2026-10-10): 24000 characters of prose = 5150 tokens (4.66 per token); agent requests carry JSON tool schemas, which
+tokenize denser, so 4.0 keeps a margin. An underestimate is safe: the provider's own 413 is classified and handled.
 """
 import json
 
@@ -39,7 +40,7 @@ def looks_like_context_length_error(text: str) -> bool:
     return any(marker in low for marker in CONTEXT_LENGTH_MARKERS)
 
 
-CHARS_PER_TOKEN = 3.5
+CHARS_PER_TOKEN = 4.0
 
 
 def estimate_tokens(body: dict) -> int:

@@ -280,3 +280,37 @@ Measured from the server: all three list, answer and make correct tool calls, an
 5. Installs into the lab's `~/.hermes/skills/jarvis-staged/` and runs a live smoke test. A failure is rolled back automatically.
 
 The lab Hermes has its skill tools on, with `skills.write_approval: true`, so the agent cannot change a skill without approval.
+
+## Context reliability, durable memory and lab integrity (added 2026-10-11)
+**Why compaction failed:**
+- Hermes's lean summary prompt asks for about 6-7k output tokens, but sends no `max_tokens`; the gateway capped output at 4096. A truncated summary *always* aborts Hermes compaction (by design), so the full history went to every provider on every turn.
+- Separately, Hermes refuses any window under **64K**. The gateway reported 56K, so new JARVIS sessions failed from about 17:00 to 18:13 UTC on 2026-10-10. No owner traffic was lost.
+
+**What the gateway does now** (`sizing.py`, `llm_proxy.py`):
+- **Summary calls** (recognised by Hermes's summarizer preamble) go only to a provider with room for a 4,096-8,192-token answer. They are fetched whole and checked: a truncated or empty summary is never passed on. The next provider is tried; otherwise the agent gets 502 or 413, and Hermes inserts its deterministic fallback summary instead of freezing.
+- **413 vs 429:**
+  - 413 when compressing could make the request fit a provider that is not resting;
+  - 429 with Retry-After when only resting providers could take it;
+  - **503** (30 s) when the providers that fit are resting after server errors. This keeps Hermes on its short retry cycle and avoids hammering a failing provider (scenario 4: 46 upstream calls before, 2 after).
+- `/v1/models` reports at least 64K. Anything that doesn't really fit gets a fast 413. Every call records its latency (`ms`).
+
+**Hermes settings** (owner, server):
+- `model.context_length: 64000`
+- `compression.threshold_tokens: 30000`
+- `compression.tail_mode: legacy` (smaller summaries)
+- `compression.abort_on_summary_failure: false`
+- `memory.provider: jarvis_memory`
+- `memory.user_profile_enabled: false`
+
+**Durable memory** (`jarvis_kernel/memory.py`, `hermes/plugins/jarvis_memory`). The kernel is the store of record:
+- Entries have ids (`m-xxxxxxxx`) and versions, and belong to the agent whose token wrote them.
+- Updates need the version the caller read; a stale one is a conflict.
+- Forget works by id, or by content only when exactly one entry clearly matches. It is verified by re-reading.
+- Texts that look like secrets are refused.
+
+The Hermes plugin puts the entries (with ids) and the kernel's **task checkpoint** into every session's system prompt, which Hermes also rebuilds at each compaction. It also hands the checkpoint to the summarizer, and gives JARVIS `jarvis_memory_list/add/update/forget`. The checkpoint holds goal, criteria, state, steps done, pending, decisions and next action, for open tasks and those finished in the last 6 h.
+
+**Lab integrity** (`lab_runner.py`). A worker given an impossible check planted `~/.local/bin/python3` (it rewrote `print(1+1)` to print 3). It stayed first on `PATH` and made every later `python3` hang. Now:
+- System tools come first on `PATH`.
+- The agent's toolchain, start-up files, Hermes config and staged skills are fingerprinted around every worker and verifier run. Any change is put back (new files go to `/root/quarantine`) and fails the attempt.
+- The runner reports which skills an attempt used (from Hermes's `.usage.json`) to the kernel. Traces and the analyzer link skills, latency, context failures, corrections and changes to outcomes, as recommendations only.

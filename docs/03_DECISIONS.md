@@ -159,3 +159,11 @@ Nothing was deleted (code, token, chat id and service file all remain). To switc
 1. Delete `config/telegram.off` (in the repo and on the server).
 2. Restore the `jarvis_telegram` block in `deploy/monit-jarvis.conf`, install it to `/etc/monit/conf.d/jarvis`, then run `sudo monit -t` and restart monit.
 3. Run `sudo systemctl enable --now jarvis-telegram`.
+
+## D14 Memory, context limits and lab integrity (2026-10-11)
+- **The kernel is the store of record for durable memory.** Hermes's built-in user profile (USER.md) is off for JARVIS. Preferences live in the kernel, with ids and versions, and reach Hermes through the `jarvis_memory` plugin (Hermes's own memory-provider extension point). Built-in MEMORY.md (agent notes) stays on.
+- **The gateway reports at least 64K to agents** (Hermes's hard minimum). Correctness comes from per-request sizing, not from the reported number.
+- **Measured limits beat published ones:**
+  - Groq: 131K published, 8000 per request (input plus output) on the free tier.
+  - OpenRouter free: 262K published, but 50 requests a day.
+- **A lab task may never change the agent's toolchain or start-up files.** Changes are reverted, quarantined and fail the attempt.
