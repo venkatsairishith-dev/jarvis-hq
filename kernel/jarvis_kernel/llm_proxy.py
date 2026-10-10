@@ -36,6 +36,9 @@ MAX_OUTPUT_CHARS = 200_000
 OUTPUT_NODE = os.environ.get("JARVIS_OUTPUT_NODE", "laptop")
 OWNER_PATH = re.compile(r"(?i)(?<![a-z0-9])[a-z]:[\\/]|/mnt/[a-z]/|\\\\[a-z0-9]")   # D:\, C:/, /mnt/d/, \\server
 ACTIONS_PER_HOUR = 60
+READS_PER_HOUR = 600           # reads (memory/checkpoint at every session start, task get) have their own budget
+READ_ACTIONS = {("memory", "list"), ("memory", "get"), ("memory", "resolve"), ("memory", "render"),
+                ("task", "get"), ("task", "checkpoint"), ("models", "status")}
 SHOWS_PER_HOUR = 12
 PREFERS_PER_DAY = 20
 
@@ -133,11 +136,13 @@ def make_handler(kernel, providers, clock=time.time):
         target = str(body.get("target", ""))[:200]
         p = body.get("params") if isinstance(body.get("params"), dict) else {}
         now = clock()
+        read = (tool, op) in READ_ACTIONS             # a session's start-up reads must never use up the budget for real actions
+        key, limit = ((agent, "read"), READS_PER_HOUR) if read else (agent, ACTIONS_PER_HOUR)
         with lock:
-            ts = _recent(acts.get(agent, []), now, 3600)
-            if len(ts) >= ACTIONS_PER_HOUR:
-                return 429, {"status": "refused", "reason": "action limit (60 per hour)"}
-            ts.append(now); acts[agent] = ts
+            ts = _recent(acts.get(key, []), now, 3600)
+            if len(ts) >= limit:
+                return 429, {"status": "refused", "reason": f"{'read' if read else 'action'} limit ({limit} per hour)"}
+            ts.append(now); acts[key] = ts
         try:
             if tool == "output" and op in ("save", "show"):
                 params = {"agent": agent, "name": target}

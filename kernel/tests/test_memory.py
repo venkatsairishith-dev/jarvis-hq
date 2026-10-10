@@ -66,3 +66,15 @@ class Lifecycle(TT.Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Budget(TT.Base):
+    def test_reads_do_not_use_up_the_action_budget(self):
+        import jarvis_kernel.llm_proxy as LP
+        for _ in range(70):                                                   # more than the 60 actions per hour
+            self.assertEqual(self.post("/v1/jarvis/actions", {"tool": "memory", "op": "render", "target": "", "params": {}}, self.owner)[0], 200)
+        code, r = self.act("create", "t", {"goal": "Still allowed", "criteria": ["x"]}, self.owner)
+        self.assertEqual(code, 200)                                           # a real action still goes through
+        for _ in range(LP.ACTIONS_PER_HOUR):
+            self.post("/v1/jarvis/actions", {"tool": "memory", "op": "add", "target": f"note {_}", "params": {}}, self.owner)
+        self.assertEqual(self.post("/v1/jarvis/actions", {"tool": "memory", "op": "add", "target": "one more", "params": {}}, self.owner)[0], 429)

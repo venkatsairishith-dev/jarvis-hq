@@ -139,10 +139,7 @@ OWNER_BUSY = {"status": "waiting", "reason": "the owner has taken control of thi
 
 @tool("lab", "owner")
 def save_output(name: str, content: str) -> str:
-    """Give a file to the OWNER: saves it on the owner's laptop in D:\\jarvis\\outputs\\<agent>\\<name>.
-    This is the ONLY way to deliver a result to the owner; write_file only writes inside your own computer and the
-    owner never sees it. Pass the full text as content. name: a plain file name ending in .md, .txt, .html, .json,
-    .csv, .log or .py (no folders). Never overwrites."""
+    r"""Give the owner a file: saved on their laptop in D:\jarvis\outputs\<agent>\<name> (never overwrites). name: plain file name ending .md .txt .html .json .csv .log .py; content: the full text. Code you cannot run is refused: use task_start + lab_work for code."""
     _log("save_output", name)
     r = _act("output", "save", name, {"content": content})
     return _say(_outcome("save_output", _wait(r["job"]) if r.get("status") == "queued" else r))
@@ -150,8 +147,7 @@ def save_output(name: str, content: str) -> str:
 
 @tool("lab", "owner")
 def show_output(name: str) -> str:
-    """Open on the owner's screen a file you ALREADY delivered with save_output (use the same name). Files written
-    with write_file cannot be shown. Text opens in Notepad, .html in the browser. At most 12 per hour."""
+    r"""Open on the owner's screen a file you already delivered with save_output (same name). At most 12 per hour."""
     _log("show_output", name)
     r = _act("output", "show", name)
     return _say(_outcome("show_output", _wait(r["job"]) if r.get("status") == "queued" else r))
@@ -159,10 +155,7 @@ def show_output(name: str) -> str:
 
 @tool("lab", "owner")
 def pc_action(op: str, target: str, text: str = "", approval_id: str = "") -> str:
-    """Act on the owner's Windows PC. op: launch (notepad, calc or mspaint), click or type; target: 'app|element name'.
-    The owner must approve every action. First call without approval_id: you get one back and the owner is asked on
-    Telegram. After they approve, call again with the SAME op, target and text plus that approval_id. Password
-    managers, banking and wallets are always refused."""
+    r"""Act on the owner's PC: op launch (notepad, calc, mspaint), click or type; target 'app|element'. Every action needs the owner's approval: the first call returns an approval_id; the owner approves at the kernel console; then repeat the same call with that approval_id. Password managers, banking and wallets are refused."""
     _log("pc_action", f"{op} {target}" + (" (approved)" if approval_id else ""))
     r = _act("ui", op, target, {"text": text} if text else {}, approval_id)
     if r.get("status") == "queued":
@@ -182,42 +175,32 @@ def _pc(op, target, path="", approval_id=""):
 
 @tool("lab", "owner")
 def open_app(name: str, approval_id: str = "") -> str:
-    """Open an app on the OWNER's Windows laptop by its Start-menu name, e.g. 'Spotify', 'Google Chrome', 'Word',
-    'Notepad'. If the name is unclear you get the closest names back: ask the owner which one. Password managers,
-    wallets and banking apps are never opened."""
+    r"""Open an app on the owner's laptop by its Start-menu name (e.g. 'Spotify', 'Word'). Unclear name: you get the closest names; ask the owner. Password managers, wallets and banking apps are never opened."""
     return _pc("open_app", name, "", approval_id)
 
 
 @tool("lab", "owner")
 def open_folder(folder: str, path: str = "", approval_id: str = "") -> str:
-    """Open a folder on the OWNER's laptop in File Explorer. folder: Downloads, Documents, Desktop, Pictures, Videos or
-    Music. path: optional sub-folder inside it, a relative path or just a name to look for (e.g. 'invoices' finds
-    'Downloads\\Invoices 2026'). If several match you get the closest names back: ask the owner which one."""
+    r"""Open one of the owner's folders (Downloads, Documents, Desktop, Pictures, Videos, Music) in Explorer; path: optional sub-folder or a name to look for. Several matches: ask the owner which."""
     return _pc("open_folder", folder, path, approval_id)
 
 
 @tool("lab", "owner")
 def open_file(folder: str, path: str, approval_id: str = "") -> str:
-    """Open a document or media file on the OWNER's laptop with its usual app (PDF, Word, Excel, images, video,
-    music, text...). folder: Downloads, Documents, Desktop, Pictures, Videos or Music; path: the file's name or relative
-    path. Programs and scripts are never opened."""
+    r"""Open a document or media file on the owner's laptop with its usual app. folder: Downloads, Documents, Desktop, Pictures, Videos or Music; path: file name or relative path. Programs and scripts are never opened."""
     return _pc("open_file", folder, path, approval_id)
 
 
 @tool("owner")
 def list_folder(folder: str, path: str = "") -> str:
-    """List what is in one of the OWNER's folders (Downloads, Documents, Desktop, Pictures, Videos, Music), newest
-    first, up to 200 entries; folders end with a backslash. Use it before open_folder/open_file when unsure of a name."""
+    r"""List one of the owner's folders (Downloads, Documents, Desktop, Pictures, Videos, Music), newest first, up to 200 entries. Use it when unsure of a name."""
     return _pc("list_folder", folder, path)
 
 
 @tool("owner")
 def task_start(goal: str, criteria: list[str], plan: list[str] | None = None, request: str = "", max_attempts: int = 3,
                budget_minutes: int = 120) -> str:
-    """Open an outcome task for a request that needs real work (not a quick answer). goal: the outcome in one sentence.
-    criteria: 2-8 acceptance criteria anyone can CHECK (e.g. 'all pages return 200 and show no console errors'), not
-    vague wishes. plan: short steps. request: the owner's words. The owner sees the task live in Mission Control.
-    Returns the task id."""
+    r"""Open an outcome task for real work (not a quick answer). goal: one sentence; criteria: 2-8 checks anyone can verify; plan: short steps; request: the owner's words. Returns the task id."""
     _log("task_start", goal)
     return _say(_act("task", "create", goal, {"goal": goal, "criteria": criteria, "plan": plan or [], "request": request,
                                               "source": "jarvis", "max_attempts": max_attempts,
@@ -227,8 +210,7 @@ def task_start(goal: str, criteria: list[str], plan: list[str] | None = None, re
 @tool("owner")
 def task_update(task_id: str, state: str = "", step: str = "", note: str = "", result: str = "",
                 evidence: list[str] | None = None) -> str:
-    """Record progress on your task. state (optional): running, verifying, repairing, paused, completed, failed or
-    cancelled. completed only with evidence that every criterion holds; otherwise failed with the exact blocker in result."""
+    r"""Record progress on your task: state (running, paused, completed, failed, cancelled), step, note, result, evidence. completed needs evidence for every criterion; otherwise failed with the exact blocker."""
     params = {k: v for k, v in (("state", state), ("step", step), ("note", note), ("result", result)) if v}
     if evidence:
         params["evidence"] = evidence
@@ -244,14 +226,7 @@ def task_get(task_id: str) -> str:
 
 @tool("owner")
 def lab_work(task_id: str, instructions: str, agent: str = "hermes", public_ok: bool = False) -> str:
-    """Hand a task's hands-on work to the lab: agents with a terminal, files, code, the web and their own computer.
-    The lab runner executes it, an independent verifier checks every acceptance criterion, failures are repaired up to
-    the retry budget, and you get the outcome in this conversation when it ends (minutes, not seconds; tell the owner
-    it has started). agent: hermes (general, uses sub-agents), opencode (coding) or goose. The lab runs on PUBLIC-lane
-    models: put only information that may be shared in instructions and set public_ok to true. The lab CANNOT see the
-    owner's computer: never put D:\\ or C:\\ paths in instructions and never ask it to save there. Files the owner should
-    get are delivered by the runner itself after verification, to D:\\jarvis\\outputs\\task-<task_id>\\; just include a
-    criterion like 'the files are delivered to the owner'. Call this ONCE per task."""
+    r"""Send a task's hands-on work (code, tests, web, files) to the lab ONCE; an independent check verifies every criterion and failures are repaired. You are told the outcome later: tell the owner it started and stop. agent: hermes, opencode (coding) or goose. Public-lane models: only shareable info, public_ok=true. The lab cannot see the owner's PC: no D:\ or C:\ paths; verified files are delivered to D:\jarvis\outputs\task-<id>\ automatically (add a criterion 'files delivered to the owner')."""
     _log("lab_work", f"{task_id} {agent}")
     return _say(_act("task", "dispatch", task_id, {"instructions": instructions, "agent": agent, "public_ok": public_ok}))
 
