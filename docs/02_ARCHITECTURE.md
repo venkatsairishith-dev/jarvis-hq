@@ -157,12 +157,28 @@ Hands-on work is dispatched to the lab.
 3. On failure, a repair attempt gets the verifier's findings.
 4. Evidence and the verdict go to the kernel.
 
-The runner follows the owner's pause and cancel. Root reads agent files only without following links.
+The runner follows the owner's pause and cancel. Root reads agent files only without following links. A failed status request (network blip, kernel restart) never stops the work.
+
+**Delivery.** The lab cannot see the owner's computer, so delivery is the runner's job, after verification:
+1. The worker puts the files the owner should get in `./deliver/` in its workspace.
+2. The verifier checks those copies. It never judges the laptop.
+3. After a pass, the runner sends each file through the kernel (`/runner/deliver`, allowed only while the task is verifying). The laptop node writes it to `D:\jarvis\outputs\task-<id>\`.
+4. The runner waits until the laptop confirms each file. Only then is the task completed, with evidence naming each laptop path and its `job:<id>`.
+5. If the laptop does not confirm, the task fails: "verified, but NOT delivered".
+
+If the request asks for delivery and `./deliver/` is empty, the runner fails the check itself. Each task has its own folder, so files from older tasks are never mistaken for this task's results.
 
 **Honesty guards:**
 - The kernel refuses "completed" from an agent unless an independent verification passed, or the evidence cites finished jobs (`job:<id>`).
 - Every Telegram reply carries the kernel's own record of the tasks touched in that turn ("planning, NOT verified yet").
-- Dispatch is refused while the task already has lab work, so there is no duplicate work.
+- Dispatch is refused while the task already has lab work, so there is no duplicate work. While the lab works, the agent may only pause, cancel or add notes.
+- Dispatch is refused if the instructions or criteria name the owner's paths (`D:\`, `C:\`, `/mnt/`). The lab cannot see them, and work like that stalls or "verifies" stale files.
+- The owner's agent cannot save files while its own task is at the lab, so no unverified copy races the verified delivery. It cannot deliver `.py` code at all, because it cannot run code. Code reaches the owner only through a verified lab task.
+
+**Owner control on Telegram, with no model in between:**
+- `/tasks` lists tasks.
+- `/task <id>` shows one.
+- `/task <id> pause|resume|cancel` changes it. The runner freezes or stops the worker within about 20 s.
 
 **Lanes:**
 - The lab runs on public-lane models.
@@ -175,6 +191,8 @@ The runner follows the owner's pause and cancel. Root reads agent files only wit
 - Before the guards, JARVIS wrote code itself and claimed "all tests pass". Checking its files showed the tests erroring and output "212.0 None".
 - After the guards, the same request went to the lab. The verifier rejected attempt 1 (no files in the workspace), and attempt 2 repaired it.
 - Found and fixed live: a duplicate dispatch (two extra jobs were cancelled), and a runner that killed work on a network blip.
+- Task 5079247275a1 (temperature converter) was reported completed, but nothing reached the laptop. The verifier could not see the laptop, and it cited stale files from an earlier try. The code itself was right (12 tests, CLI checked by hand). A correction event is on its record, and runner-side delivery replaced the old design.
+- Cancel test: the owner cancelled a running task, and the runner stopped the worker 21 s later.
 
 ## Mission control (the hub's overview, added 2026-10-10)
 The hub's first page is now the Agent OS dashboard. It follows the owner's references: the Contentstack Agent OS dashboard, the "agentic OS dashboard" articles, and dashboard design practice. It shows:

@@ -176,6 +176,8 @@ class Honesty(Base):
         code, r = self.act("update", tid, {"state": "completed", "evidence": ["job:abcdefabcdef"]}, self.owner)
         self.assertEqual(code, 409)                                            # a job id that does not exist / not done
         code, r = self.post("/v1/jarvis/actions", {"tool": "output", "op": "save", "target": "tool.py", "params": {"content": "x"}}, self.owner)
+        self.assertEqual(code, 409); self.assertIn("lab_work", r["reason"])          # code it cannot run is never delivered
+        code, r = self.post("/v1/jarvis/actions", {"tool": "output", "op": "save", "target": "notes.md", "params": {"content": "x"}}, self.owner)
         jid = r["job"]
         self.k.db.execute("UPDATE jobs SET state='done' WHERE id=?", (jid,))
         code, r = self.act("update", tid, {"state": "completed", "evidence": [f"saved job:{jid}"]}, self.owner)

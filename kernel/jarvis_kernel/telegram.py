@@ -51,24 +51,49 @@ class TelegramAPI:
         self._call("sendMessage", {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}, 20)  # no parse_mode: plain text only
 
 
-def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: str = "telegram-owner", timeout: int = 900):
-    """The owner's own Hermes (private lane, its kernel-gated tools) through its API server on loopback. One ongoing
-    session, so "open it" refers back to what was said before. The key is read from its file on every call."""
+def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: str = "telegram-owner", timeout: int = 900,
+                 state_path: str = None, clock=time.time):
+    """The owner's own Hermes (private lane, its kernel-gated tools) through its API server on loopback. One session per
+    day, so "open it" refers back to what was said before, and a fresh one after a failed turn: a session that grew past
+    what the models accept (or got stuck) must not break every later turn. Durable facts live in Hermes memory and the
+    kernel's task records, not in the session. The key is read from its file on every call."""
+    def current():
+        day = time.strftime("%Y%m%d", time.gmtime(clock()))
+        try:
+            with open(state_path, encoding="utf-8") as fh:
+                sid = fh.read().strip()
+            if sid.startswith(f"{session}-{day}"):
+                return sid
+        except (OSError, TypeError):
+            pass
+        return f"{session}-{day}"
+
+    def fresh(old):
+        sid = f"{session}-{time.strftime('%Y%m%d', time.gmtime(clock()))}-{int(clock())}"
+        if state_path:
+            with open(state_path, "w", encoding="utf-8") as fh:
+                fh.write(sid)
+        return sid
+
     def call(text: str) -> str:
         with open(key_path, encoding="utf-8-sig") as fh:
             key = fh.read().strip()
+        sid = current()
         body = {"model": "hermes-agent", "messages": [{"role": "user", "content": text}], "stream": False}
         req = urllib.request.Request(base.rstrip("/") + "/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
                                      headers={"Content-Type": "application/json", "Authorization": "Bearer " + key,
-                                              "X-Hermes-Session-Id": session})
+                                              "X-Hermes-Session-Id": sid})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 reply = json.loads(r.read())
         except urllib.error.HTTPError as e:
-            raise RuntimeError(f"agent HTTP {e.code}") from None
+            fresh(sid)
+            raise RuntimeError(f"agent HTTP {e.code}; the next message starts a fresh conversation") from None
         except Exception as e:
-            raise RuntimeError(f"agent error {type(e).__name__}") from None
+            fresh(sid)
+            raise RuntimeError(f"agent error {type(e).__name__}; the next message starts a fresh conversation") from None
         return ((reply.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+    call.session = current
     return call
 
 
@@ -553,5 +578,6 @@ def from_files(kernel, providers):
     with open(os.path.join(d, "telegram_chat_id.txt"), encoding="utf-8-sig") as fh:
         owner = int(fh.read().strip())
     key = os.path.join(d, "hermes_api_key.txt")      # present on the server: plain messages go to the owner's Hermes
-    agent = hermes_agent(key, os.environ.get("JARVIS_HERMES_API", "http://127.0.0.1:8642")) if os.path.exists(key) else None
+    agent = hermes_agent(key, os.environ.get("JARVIS_HERMES_API", "http://127.0.0.1:8642"),
+                         state_path=os.path.join(str(kernel.dir), "tg_session.txt")) if os.path.exists(key) else None
     return Bridge(kernel, TelegramAPI(token), owner, providers, agent=agent)

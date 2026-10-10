@@ -197,6 +197,16 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 .tcard { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px 12px; animation: rise var(--d-4) var(--e-enter) both; }
 .tcard .t { font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tcard .m { color: var(--text-3); font-size: 12px; margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
+.otasks { display: flex; flex-direction: column; gap: 8px; }
+.otask { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 12px 14px; }
+.otask .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.otask .row .chip { margin-left: 0; }
+.otask .g { font-weight: 500; flex: 1 1 240px; min-width: 0; }
+.otask .s { color: var(--text-2); font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
+.otask .dl { font-size: 12px; margin-top: 6px; color: var(--done-fg); overflow-wrap: anywhere; }
+.otask details { margin-top: 8px; font-size: 12px; color: var(--text-2); }
+.otask summary { cursor: pointer; color: var(--text-3); }
+.otask ol, .otask ul { margin: 6px 0 0 18px; padding: 0; } .otask li { margin: 2px 0; overflow-wrap: anywhere; }
 
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
 .out { padding: 0; overflow: hidden; cursor: pointer; transition: transform var(--d-3) var(--e-standard), border-color var(--d-2); animation: rise var(--d-4) var(--e-enter) both; text-align: left; }
@@ -340,6 +350,8 @@ dialog[open] { animation: pop var(--d-3) var(--e-enter); }
             <button class="act primary" id="pv-take">Take control</button><button class="act go" id="pv-cont" disabled>Continue task</button></div></div>
         <div class="card focus"><h4>Tasks on the Agent PC</h4><div id="focus-tasks"></div></div>
       </div>
+      <div class="sec"><h3>Outcome tasks</h3><span class="hint">The kernel's record: only a passed independent check counts as verified</span></div>
+      <div class="otasks" id="otasks"></div>
       <div class="sec"><h3>Task board</h3><span class="hint">Jobs and approvals from the kernel, lab tasks from the Agent PC</span></div>
       <div class="board" id="board"></div>
       <div class="sec"><h3>Delivered to you</h3><span class="hint">What agents saved in D:\jarvis\outputs on this laptop</span></div>
@@ -616,7 +628,31 @@ $("pv-open").addEventListener("click", () => open("pc"));
 
 /* ============================== overview rendering ============================== */
 function emptyState(icon, title, text) { return `<div class="empty-state"><div class="ic">${ic(icon)}</div><b>${esc(title)}</b>${esc(text)}</div>`; }
-function renderAll() { renderSummary(); renderKpis(); renderAgents(); renderFocus(); renderBoard(); renderGallery(); renderProviders(); renderChips(); }
+function renderAll() { renderSummary(); renderKpis(); renderAgents(); renderFocus(); renderOutcomeTasks(); renderBoard(); renderGallery(); renderProviders(); renderChips(); }
+
+const TASK_CHIP = { planning: ["", "Planning"], waiting_approval: ["wait", "Waiting on you"], queued: ["", "Queued"], running: ["run", "Working"],
+  verifying: ["run", "Checking"], repairing: ["run", "Repairing"], paused: ["wait", "Paused"], completed: ["done", "Completed"],
+  failed: ["err", "Failed"], cancelled: ["", "Cancelled"] };
+function renderOutcomeTasks() {
+  const k = S.kernel, ts = k ? (k.tasks || []).slice(0, 8) : [];
+  let html;
+  if (!k) html = `<div class="otask"><div class="skel" style="width:60%"></div></div>`;
+  else if (!ts.length) html = `<div class="card">${emptyState("list-checks", "No outcome tasks yet", "Ask JARVIS for real work on Telegram: it plans, the lab builds, an independent check verifies.")}</div>`;
+  else html = ts.map(t => {
+    const c = TASK_CHIP[t.state] || ["", t.state], v = t.verification || {}, ev = t.evidence || [];
+    const verified = v.passed === true ? `<span class="chip done">Verified</span>` : t.state === "completed" ? `<span class="chip err">Not verified</span>` : "";
+    const delivered = ev.filter(e => String(e).startsWith("delivered: "));
+    const corr = (t.events || []).filter(e => e.kind === "correction");
+    return `<div class="otask"><div class="row"><span class="chip ${c[0]}">${esc(c[1])}</span>${verified}<span class="g">${esc(t.goal)}</span>
+        <span class="mono" title="task id">${esc(t.id)}</span><span class="num">${t.attempts}/${t.max_attempts} tries</span><span class="num">${ago(t.updated)}</span></div>
+      <div class="s">${esc(t.result || (["completed", "failed", "cancelled"].includes(t.state) ? ((t.events || []).find(e => e.kind === "state") || {}).note : t.step) || "")}</div>
+      ${delivered.length ? `<div class="dl">${delivered.map(d => esc(d.replace(/ job:[0-9a-f]+.*/, ""))).join("<br>")}</div>` : ""}
+      ${corr.map(e => `<div class="s" style="color:var(--err-fg)">Correction: ${esc(e.note)}</div>`).join("")}
+      <details><summary>Criteria and history</summary><ol>${(t.criteria || []).map(x => `<li>${esc(x)}</li>`).join("")}</ol>
+        <ul>${(t.events || []).slice(0, 12).map(e => `<li><span class="mono">${clock(e.ts)}</span> ${esc(e.state)}${e.note ? " · " + esc(e.note) : ""}</li>`).join("")}</ul></details></div>`;
+  }).join("");
+  if ($("otasks").dataset.html !== html) { $("otasks").innerHTML = html; $("otasks").dataset.html = html; }
+}
 
 function renderSummary() {
   const h = new Date().getHours();

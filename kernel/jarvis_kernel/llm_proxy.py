@@ -138,6 +138,10 @@ def make_handler(kernel, providers, clock=time.time):
                     if at_lab:                          # no second, unverified copy racing the lab's verified delivery
                         return 409, {"status": "refused", "reason": f"task {at_lab[0]} is at the lab: its verified files arrive in "
                                      f"D:\\jarvis\\outputs\\task-{at_lab[0]}\\ by themselves. Do not write them yourself; end your turn."}
+                    if lane == "private" and str(target).lower().endswith(".py"):
+                        # the owner's agent cannot run code: code reaches the owner only through a verified lab task
+                        return 409, {"status": "refused", "reason": "code you cannot run is never delivered: open a task (task_start) "
+                                     "and hand it to the lab (lab_work); verified files are delivered by the runner"}
                     clean, found, blocked = scrub(str(p.get("content", "")), deep=True)
                     if blocked:
                         return 400, {"status": "refused", "reason": "the content contains a private key"}
