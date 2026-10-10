@@ -1,0 +1,238 @@
+{
+ "label": "current",
+ "kernel": "D:\\jarvis\\hq\\kernel",
+ "at": "2026-10-10 22:36:45",
+ "summary": {
+  "passed": 19,
+  "total": 19,
+  "accuracy": 1.0,
+  "by_category": {
+   "context_overflow": "3/3",
+   "provider_failure": "3/3",
+   "lane_enforcement": "1/1",
+   "secret_protection": "3/3",
+   "duplicate_dispatch": "1/1",
+   "cancellation": "1/1",
+   "retry_exhaustion": "1/1",
+   "verification": "1/1",
+   "delivery": "2/2",
+   "approval": "1/1",
+   "continuity": "1/1",
+   "skills": "1/1"
+  },
+  "p50_seconds": 1.57
+ },
+ "results": [
+  {
+   "category": "context_overflow",
+   "case": "oversized history: one fast 413, no provider called",
+   "passed": true,
+   "seconds": 2.58,
+   "detail": {
+    "status": 413,
+    "upstream_calls": 0,
+    "seconds": 0.988
+   }
+  },
+  {
+   "category": "context_overflow",
+   "case": "long history goes straight to the provider that fits",
+   "passed": true,
+   "seconds": 2.06,
+   "detail": {
+    "status": 200,
+    "groq": 0,
+    "openrouter": 1,
+    "cpu": 0
+   }
+  },
+  {
+   "category": "context_overflow",
+   "case": "short turn: Groq answers with the output budget it can afford",
+   "passed": true,
+   "seconds": 2.62,
+   "detail": {
+    "status": 200,
+    "groq": 1,
+    "openrouter": 0
+   }
+  },
+  {
+   "category": "provider_failure",
+   "case": "used-up daily quota: asked once, then rested",
+   "passed": true,
+   "seconds": 2.85,
+   "detail": {
+    "codes": [
+     200,
+     200,
+     200
+    ],
+    "quota_provider_calls": 1
+   }
+  },
+  {
+   "category": "provider_failure",
+   "case": "only provider rate limited: 429 with Retry-After, not 502",
+   "passed": true,
+   "seconds": 1.57,
+   "detail": {
+    "status": 429,
+    "retry_after": "3600"
+   }
+  },
+  {
+   "category": "provider_failure",
+   "case": "outage: falls back within the lane",
+   "passed": true,
+   "seconds": 1.34,
+   "detail": {
+    "status": 200,
+    "down_calls": 2
+   }
+  },
+  {
+   "category": "lane_enforcement",
+   "case": "public token never reaches a private provider",
+   "passed": true,
+   "seconds": 1.08,
+   "detail": {
+    "status": 503,
+    "private_calls": 0
+   }
+  },
+  {
+   "category": "secret_protection",
+   "case": "private key in a prompt: refused before any provider",
+   "passed": true,
+   "seconds": 1.05,
+   "detail": {
+    "status": 400,
+    "provider_calls": 0
+   }
+  },
+  {
+   "category": "secret_protection",
+   "case": "API token in a prompt: scrubbed before the provider",
+   "passed": true,
+   "seconds": 1.52,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "category": "duplicate_dispatch",
+   "case": "six simultaneous dispatches make one lab job",
+   "passed": true,
+   "seconds": 2.89,
+   "detail": {
+    "codes": [
+     200,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "lab_jobs": 1
+   }
+  },
+  {
+   "category": "cancellation",
+   "case": "owner cancel reaches the runner's status check",
+   "passed": true,
+   "seconds": 2.77,
+   "detail": {
+    "update": 200,
+    "runner_sees": "cancelled"
+   }
+  },
+  {
+   "category": "retry_exhaustion",
+   "case": "no attempt beyond the budget; the task fails honestly",
+   "passed": true,
+   "seconds": 2.28,
+   "detail": {
+    "report_codes": [
+     200,
+     200,
+     200,
+     200,
+     200,
+     409,
+     200
+    ],
+    "state": "failed"
+   }
+  },
+  {
+   "category": "verification",
+   "case": "a claim of success without proof is refused",
+   "passed": true,
+   "seconds": 0.92,
+   "detail": {
+    "status": 409
+   }
+  },
+  {
+   "category": "delivery",
+   "case": "nothing is delivered before verification, nor after completion",
+   "passed": true,
+   "seconds": 3.34,
+   "detail": {
+    "before_verify": 409,
+    "while_verifying": 200
+   }
+  },
+  {
+   "category": "delivery",
+   "case": "lab work naming the owner's folders is refused",
+   "passed": true,
+   "seconds": 1.9,
+   "detail": {
+    "status": 400
+   }
+  },
+  {
+   "category": "approval",
+   "case": "a PC action needs a single-use owner approval",
+   "passed": true,
+   "seconds": 0.9,
+   "detail": {
+    "first": 202,
+    "approved_use": 200,
+    "reuse": 403
+   }
+  },
+  {
+   "category": "continuity",
+   "case": "a new conversation starts with the open tasks",
+   "passed": true,
+   "seconds": 1.2,
+   "detail": {
+    "card": true
+   }
+  },
+  {
+   "category": "skills",
+   "case": "activation follows the recorded risk: low automatic, medium owner-approved, reject refused",
+   "passed": true,
+   "seconds": 0.99,
+   "detail": {
+    "low": 200,
+    "medium": 202,
+    "reject": 403,
+    "lab_agent_low": 403
+   }
+  },
+  {
+   "category": "secret_protection",
+   "case": "task traces never carry a secret",
+   "passed": true,
+   "seconds": 0.19,
+   "detail": {
+    "bytes": 1051
+   }
+  }
+ ]
+}

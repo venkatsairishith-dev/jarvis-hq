@@ -27,7 +27,7 @@ class AuditLog:
 
     def append(self, kind: str, payload: dict) -> int:
         body = json.dumps(payload, sort_keys=True, default=str)
-        with _LOCK:
+        with _LOCK, getattr(self.db, "lock", _LOCK):   # the connection's own lock too: no other thread's statement inside BEGIN..COMMIT
             self.db.execute("BEGIN IMMEDIATE")  # takes the write lock before reading the head: no two writers share a seq
             try:
                 seq, prev = self.head()

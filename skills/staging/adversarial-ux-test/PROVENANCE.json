@@ -1,0 +1,60 @@
+{
+ "name": "adversarial-ux-test",
+ "staged_at": "2026-10-10T22:24:47",
+ "source": {
+  "repo": "https://github.com/NousResearch/hermes-agent",
+  "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
+  "path": "optional-skills/dogfood/adversarial-ux-test",
+  "license": "MIT",
+  "license_source": "frontmatter"
+ },
+ "description": "Roleplay a hostile user to find and triage UX pain points.",
+ "version": "1.0.0",
+ "author": "Omni @ Comelse",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 8960,
+   "sha256": "d687ee7727174fd58acbe638038b207f7fb86ea27603a34cb3b0f1b0889b0dd7",
+   "git_blob": "2c5ba20c513b2049416f5d570303309c27bab423"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "read_file": "lab-native (its own sandbox computer)",
+  "write_file": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [
+  "WhatsApp",
+  "McAllister",
+  "SaaS"
+ ],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "code_review",
+  "data_sensitivity": "personal",
+  "permissions": [
+   "files"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed",
+  "hermes_skills_guard": {
+   "verdict": "safe",
+   "allowed": true,
+   "reason": "Allowed (community source, safe verdict)",
+   "findings": [],
+   "lint": [
+    "LintFinding(severity='warning', rule='missing-section', message=\"no '## When to Use' section found; skills need explicit trigger conditions near the top.\")"
+   ]
+  },
+  "guard": "passed"
+ },
+ "manifest_sha256": "44500250584e6bb4226377fb014c43e085b77309cbe8fbca6185b56675019f2d"
+}

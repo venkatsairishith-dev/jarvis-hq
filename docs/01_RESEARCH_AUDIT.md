@@ -96,3 +96,31 @@ Rejected with reasons: litellm (PyPI 1.82.7 and 1.82.8 were malicious on 2026-03
 **Lab models (2026-10-10): Dahl.** It is used as a service through its OpenAI-compatible API, with no code. One provider entry per model, and only in the public lane.
 - Kaggle and Colab model serving is parked because of those platforms' rules on tunnels.
 - The known-issues review behind the 2026-10-10 fixes is summarised in 03_DECISIONS.md, D12.
+
+## OpenJarvis compatibility report (2026-10-10)
+**Source:** https://github.com/open-jarvis/OpenJarvis, pinned at `ecbde4b32091e2a8b02e8acfa41cb5f95e4da560`. Apache-2.0 (LICENSE file; no NOTICE file, no per-file headers). Checked out read-only at `D:\jarvis\research\OpenJarvis`.
+**Rule followed:** improve JARVIS, never replace it. Hermes, the kernel, the task store, the lab runner, the laptop node, Telegram and Mission Control all stay. No OpenJarvis runtime is installed: `pip install` would bring the whole runtime, including python-telegram-bot, posthog, ddgs and a Rust extension.
+
+| Subsystem | What OpenJarvis has (files) | Decision for JARVIS | Why |
+|---|---|---|---|
+| **Skill import** | `skills/importer.py`, `sources/hermes.py`, `parser.py`, `types.py`, `tool_translator.py`, `security.py` | **Vendored** `parser.py`, `types.py` and `tool_translator.py` (stdlib + pyyaml) into `hq/skills/vendor/openjarvis/`. The rest of the gate is new: `hq/skills/skillgate.py`. | The importer tracks HEAD (no pinned commit), stores no hashes or licence, re-serialises SKILL.md (so hashes no longer match upstream), installs straight into active skills with no staging or rollback, and its capability check almost never fires for Hermes skills. |
+| **Skill optimisation and benchmark** | `learning/agents/skill_optimizer.py` (DSPy/GEPA), `evals/skill_benchmark.py` | Not used. | Needs optional heavy dependencies and an Ollama model, and writes overlays automatically. |
+| **Traces** | `core/types.py` Trace/TraceStep, `traces/store.py`, `collector.py`, `analyzer.py` | **Pattern adapted.** `jarvis_kernel/traces.py` builds a read-only view from the kernel's own tasks, task_events, jobs and audit. | OpenJarvis keeps its own `traces.db` holding raw prompts and tool output, with no redaction and no size limit. Its `outcome` field is never set in production. |
+| **Trace → skill discovery** | `learning/agents/skill_discovery.py` | Idea only: the analyzer reports recurring problems. | It counts tool-name sequences and writes manifests that cannot run. |
+| **Evals** | `evals/core/*` (EvalRecord, Scorer, RunSummary), `learning/spec_search/gate/regression.py` | **Pattern adapted.** `hq/evals/run_evals.py`: fixed cases, deterministic scorers, regression check against a baseline. | Its datasets download from HuggingFace, its judges default to cloud `gpt-5-mini`, and its trackers send data out. None of that is allowed here. |
+| **Context-length errors** | `engine/_base.py` `CONTEXT_LENGTH_MARKERS`, `looks_like_context_length_error`, `estimate_prompt_tokens` | **Reused directly** in `jarvis_kernel/sizing.py`, with markers added (Groq 413 and llama.cpp wording, as measured) and the estimate adapted to 3.5 chars per token. | Small, pure functions. OpenJarvis itself never handles 413 and does not size requests. |
+| **Model catalog** | `intelligence/model_catalog.py` | Not used. Limits were measured instead (below). | Hand-written, not kept current, some values wrong, and used only for display. |
+| **Compaction** | `agents/hybrid/mini_swe_agent.py` (untested), `agents/loop_guard.py` (counts messages) | Ideas only: bound the summary input and output, and keep a fallback. | Hermes has its own compressor; the fix was to give it correct limits. |
+| **Memory** | `memory/*`, sqlite/bm25 backends | Not used. | It needs the Rust extension. FAISS and dense backends only soft-delete, which conflicts with "forget means forget". Hermes memory already works (tested). |
+| **Security and sandbox** | `security/*`, `sandbox/*` | Not used. | Scanning silently switches off without the Rust module. Capability policy is open by default. The subprocess sandbox fails on Windows. The kernel policy and gitleaks stay. |
+
+**Licence duties:** the vendored files keep the Apache-2.0 text, with `NOTICE.md` listing the one modified line. Adapted files name their source and commit in their docstrings.
+
+**Measured provider limits (2026-10-10, private lane, now in `providers.json`):**
+- **Groq `gpt-oss-120b`:** 8,000 tokens per request, *input plus reserved output* ("Requested 8085" was refused). JARVIS reserved up to 4,096 output tokens, so its prompts were capped at about 3,900.
+- **llama.cpp on the server:** `n_ctx` 4,096.
+- **OpenRouter free:** about 56k input tokens, but only **50 requests a day** ("free-models-per-day"). It ran out today.
+
+**Risks still open:**
+- The private lane has no free provider with high capacity. JARVIS's median request is 85k characters. This needs the owner's decision on another free provider.
+- Hermes's summariser can still fail when only OpenRouter can take its input and the quota is used up. It now fails fast (429 with Retry-After), and the next turn starts a fresh session with the task card.

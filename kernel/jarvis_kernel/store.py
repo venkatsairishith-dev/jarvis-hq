@@ -20,6 +20,44 @@ class Killed(Exception):
     pass
 
 
+class _Rows:
+    """A statement's result, read in full while the connection was held: safe to use after another thread moves on."""
+    def __init__(self, cur, rows):
+        self.rowcount, self.lastrowid, self.description, self._rows = cur.rowcount, cur.lastrowid, cur.description, rows
+
+    def fetchone(self):
+        return self._rows.pop(0) if self._rows else None
+
+    def fetchall(self):
+        rows, self._rows = self._rows, []
+        return rows
+
+    def __iter__(self):
+        return iter(self.fetchall())
+
+
+class SafeDB:
+    """The kernel's one SQLite connection, shared by the server threads. Every statement runs under one re-entrant
+    lock and is read in full, so threads never interleave inside another's statement (found live: a valid token got
+    401 and an existing task 404 under concurrent requests). A transaction holds the same lock from BEGIN to
+    COMMIT/ROLLBACK (see AuditLog.append), so no other thread's statement lands inside it."""
+    def __init__(self, conn):
+        self._c, self.lock = conn, threading.RLock()
+
+    def execute(self, sql, args=()):
+        with self.lock:
+            cur = self._c.execute(sql, args)
+            return _Rows(cur, cur.fetchall())
+
+    def commit(self):
+        with self.lock:
+            self._c.commit()
+
+    def close(self):
+        with self.lock:
+            self._c.close()
+
+
 class Kernel:
     APPROVAL_TTL = 600  # seconds
 
@@ -27,7 +65,7 @@ class Kernel:
         self.dir = Path(data_dir or os.environ.get("JARVIS_DATA") or Path.home() / ".jarvis-kernel").resolve()
         self.dir.mkdir(parents=True, exist_ok=True)
         # isolation_level=None: we issue BEGIN/COMMIT ourselves. check_same_thread=False: the node server uses threads.
-        self.db = sqlite3.connect(self.dir / "state.db", timeout=30, isolation_level=None, check_same_thread=False)
+        self.db = SafeDB(sqlite3.connect(self.dir / "state.db", timeout=30, isolation_level=None, check_same_thread=False))
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS approvals(id TEXT PRIMARY KEY, action_hash TEXT, level INT, expires REAL, state TEXT, action TEXT)"

@@ -51,7 +51,25 @@ def main(argv=None):
     an = sub.add_parser("analyze", help="report on a node from its collected state"); an.add_argument("node", nargs="?")
     a = sub.add_parser("audit"); a.add_argument("what", choices=["verify", "anchor"])
     a.add_argument("--anchor-file")
+    tr = sub.add_parser("trace", help="redacted trace of one task (read-only)"); tr.add_argument("task")
+    tr.add_argument("--public", action="store_true", help="drop all free text"); tr.add_argument("--save", help="folder to write <task>.json")
+    ta = sub.add_parser("trace-analyze", help="recurring failures and suggestions over recent tasks (read-only)")
+    ta.add_argument("--days", type=float, default=7); ta.add_argument("--public", action="store_true")
     args = p.parse_args(argv)
+    if args.cmd in ("trace", "trace-analyze"):     # own read-only connection: never opens the kernel's writer
+        from . import traces
+        db = traces.open_readonly(args.data)
+        try:
+            if args.cmd == "trace":
+                t = traces.build(db, args.task, public=args.public)
+                if not t:
+                    print("no such task"); return 2
+                print(f"saved {traces.save(t, args.save)}" if args.save else json.dumps(t, indent=1))
+            else:
+                print(json.dumps(traces.analyze(db, args.days, public=args.public), indent=1))
+            return 0
+        finally:
+            db.close()
     k = Kernel(args.data)
 
     if args.cmd == "check":

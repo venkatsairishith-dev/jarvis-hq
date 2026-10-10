@@ -19,7 +19,7 @@ TOOL_REPLY = {"id": "x", "object": "chat.completion", "choices": [{"index": 0, "
 SSE = [b'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n', b'data: {"choices":[{"delta":{"content":"lo"}}]}\n\n', b"data: [DONE]\n\n"]
 
 
-def upstream(name, seen, status=200, fail_first=0):
+def upstream(name, seen, status=200, fail_first=0, err_body=b""):
     fails = [fail_first]
     class U(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"
@@ -31,7 +31,7 @@ def upstream(name, seen, status=200, fail_first=0):
                 fails[0] -= 1
                 self.send_response(500); self.send_header("Content-Length", "0"); self.end_headers(); return
             if status != 200:
-                self.send_response(status); self.send_header("Content-Length", "0"); self.end_headers(); return
+                self.send_response(status); self.send_header("Content-Length", str(len(err_body))); self.end_headers(); self.wfile.write(err_body); return
             if body.get("stream"):
                 self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
                 for c in SSE: self.wfile.write(c); self.wfile.flush()

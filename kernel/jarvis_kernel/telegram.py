@@ -364,6 +364,27 @@ class Bridge:
         self.say(f"Task {t['id']}: {target}." + (" The lab stops the worker within about 20 s." if op == "cancel" else
                                                   " The lab freezes the worker within about 20 s." if op == "pause" else ""))
 
+    def with_context(self, text: str) -> str:
+        """The first message of a new conversation (a new day, or a fresh one after a failed turn) carries the kernel's
+        record of the owner's tasks, so a session change never loses track of work in progress. Preferences need no
+        card: they live in the agent's own memory, which every session loads."""
+        sid = self.agent.session() if hasattr(self.agent, "session") else None
+        if sid is None or sid == getattr(self, "_seen_session", None):
+            return text
+        self._seen_session = sid
+        try:
+            from .tasks import Tasks
+            rows = [t for t in Tasks(self.k).recent(12) if t["state"] not in ("completed", "failed", "cancelled")
+                    or time.time() - t["updated"] < 86400][:6]
+        except Exception:
+            rows = []
+        if not rows:
+            return text
+        card = "\n".join(f"- {t['id']} {t['state']} ({t['attempts']}/{t['max_attempts']}): {str(t['goal'])[:90]}" for t in rows)
+        self.k.audit.append("tg_context_card", {"tasks": len(rows)})
+        return (f"[JARVIS kernel] New conversation. Tasks open or ended in the last 24 h (task tool, op get, for details):\n"
+                f"{card}\n\n{text}")
+
     def task_facts(self, since: float) -> str:
         """The kernel's own record of tasks touched during this turn, appended to the agent's reply: a claim like
         "done" cannot hide a task that was never verified."""
@@ -406,7 +427,7 @@ class Bridge:
 
                 def work(prompt=prompt, summary=summary):
                     try:
-                        self.say(self.agent(prompt).strip() or summary)
+                        self.say(self.agent(self.with_context(prompt)).strip() or summary)
                     except Exception as e:
                         self.k.audit.append("tg_agent_failed", {"type": type(e).__name__})
                         self.say(summary)
@@ -503,7 +524,7 @@ class Bridge:
         def work():
             t0 = time.time()
             try:
-                out = self.agent(text).strip()
+                out = self.agent(self.with_context(text)).strip()
                 self.k.audit.append("tg_agent_done", {"chars": len(out)})
                 self.say((out or "Done (no reply text).") + self.task_facts(t0))
             except Exception as e:

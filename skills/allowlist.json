@@ -1,0 +1,11 @@
+{
+ "_note": "Skills that may be activated in the lab after staging and checks. Start small: research, documentation, code review, software testing. Adding a name here does not activate anything; skillgate.py still requires passed checks and the kernel's authorization (owner approval above low risk).",
+ "skills": [
+  {"name": "code-wiki", "source": "software-development/code-wiki", "purpose": "documentation",
+   "why": "turns a codebase into wiki docs and Mermaid diagrams: useful for the owner's projects and for lab handovers"},
+  {"name": "adversarial-ux-test", "source": "dogfood/adversarial-ux-test", "purpose": "software testing",
+   "why": "structured hostile-user walkthrough of a site with triaged findings: the owner's 'go through all pages and report errors' use case"},
+  {"name": "grill-me", "source": "software-development/grill-me", "purpose": "code and plan review",
+   "why": "adversarial plan review before building; medium risk (starts sub-agents), so it needs the owner's approval"}
+ ]
+}

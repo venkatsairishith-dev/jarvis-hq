@@ -10,6 +10,7 @@ including tool calls and streamed chunks, is relayed unchanged.
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import secrets
@@ -19,7 +20,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import gateway
+from . import gateway, sizing
 from .scrub import scrub
 
 MAX_BODY = 2 * 1024 * 1024
@@ -114,6 +115,7 @@ def make_handler(kernel, providers, clock=time.time):
     kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
     dispatch_lock = threading.Lock()            # one dispatch decision at a time (the server answers on many threads)
+    cooling = {}                                # provider name -> clock() until which it is not asked (it said 429)
     calls = {}   # agent -> list of timestamps
     acts, shows, prefers = {}, {}, {}   # agent -> timestamps, per action limit
 
@@ -169,6 +171,27 @@ def make_handler(kernel, providers, clock=time.time):
                                      "next": "the owner approves on Telegram (/approve " + aid + "); then send the same action again with approval_id"}
                 jid = jobs.create(OUTPUT_NODE, "ui_action", params, approval_id=aid, owner=agent, lane=lane)
                 return 200, {"status": "queued", "job": jid}
+            if tool == "skill" and op in ("activate", "deactivate"):
+                # A staged skill becomes active (or is rolled back) only with the kernel's say-so: policy decides by the
+                # risk the skill gate recorded; the owner approves anything above low risk (hq/skills/skillgate.py).
+                a = Action("skill", op, target[:80], {"risk": str(p.get("risk", ""))[:10], "where": str(p.get("where", ""))[:10],
+                                                     "sha256": str(p.get("sha256", ""))[:64]}, lane, True)
+                aid = str(body.get("approval_id") or "") or None
+                if aid:
+                    d = kernel.authorize(a, aid)
+                else:
+                    d, aid = kernel.request(a)
+                    if d.denied:
+                        return 403, {"status": "refused", "level": d.name, "reason": d.reason}
+                    if aid:
+                        return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
+                                     "next": "the owner approves on Telegram (/approve " + aid + "); then send the same request with approval_id"}
+                    d = kernel.authorize(a)              # no approval needed: the final gate still decides
+                if not d.allowed:
+                    return 403, {"status": "refused", "level": d.name, "reason": d.reason}
+                kernel.audit.append("skill_" + op, {"agent": agent, "skill": target[:80], "risk": a.params["risk"], "where": a.params["where"],
+                                                     "sha256": a.params["sha256"]})
+                return 200, {"status": "allowed", "level": d.name}
             if tool == "pc" and op in PC_OPS:
                 params = {"agent": agent, "op": op, "target": target[:80], "path": str(p.get("path", ""))[:200]}
                 aid = str(body.get("approval_id") or "") or None
@@ -348,9 +371,17 @@ def make_handler(kernel, providers, clock=time.time):
                 from .overview import overview
                 return self._json(200, overview(kernel, providers, clock()))
             if self.path.rstrip("/") == "/v1/models":
-                if not self._agent()[0]:
+                agent, lane = self._agent()
+                if not agent:
                     return self._json(401, {"error": {"message": "unauthorized"}})
-                return self._json(200, {"object": "list", "data": [{"id": "jarvis", "object": "model", "owned_by": "jarvis"}]})
+                m = {"id": "jarvis", "object": "model", "owned_by": "jarvis"}
+                try:                                   # agents size their history (and compression) from this
+                    ctx = sizing.lane_context_length(gateway.plan(providers, lane)) if lane in ("private", "public") else None
+                except gateway.RouteError:
+                    ctx = None
+                if ctx:
+                    m.update(context_length=ctx, max_model_len=ctx)
+                return self._json(200, {"object": "list", "data": [m]})
             if self.path.startswith("/v1/jarvis/jobs/"):
                 agent, _ = self._agent()
                 if not agent:
@@ -438,12 +469,28 @@ def make_handler(kernel, providers, clock=time.time):
                 return self._json(503, {"error": {"message": str(e)}})
             pref = preferred(lane)                        # an agent's "switch model" choice, same lane only
             chain = sorted(chain, key=lambda x: x.name != pref)
-            last = "none"
+            est = sizing.estimate_tokens(body)
+            too_small = [p.name for p in chain if not sizing.fits(p, est)]
+            chain = [p for p in chain if sizing.fits(p, est)]    # never send a request to a provider it cannot fit
+            if not chain:
+                return self._too_large(agent, lane, est)
+            with lock:
+                benched = {p.name: cooling[p.name] for p in chain if cooling.get(p.name, 0) > now}
+            chain = [p for p in chain if p.name not in benched]  # a provider that said "rate limited" rests until it may be asked again
+            if too_small or benched:
+                kernel.audit.append("agent_model_skipped", {"agent": agent, "lane": lane, "est_tokens": est, "providers": too_small,
+                                                            "cooling": sorted(benched)})
+            if not chain:
+                return self._rate_limited(agent, lane, max(1, math.ceil(min(benched.values()) - now)))
+            last, outcomes = "none", []
             for p in chain:
-                model = p.default_model
+                model, why = p.default_model, "other"
                 if not p.model_ok(model):
                     continue
                 payload = dict(body, model=model)
+                for k in ("max_tokens", "max_completion_tokens"):    # shrink the answer budget to what still fits this provider
+                    if k in payload:
+                        payload[k] = sizing.output_budget(p, est, payload[k])
                 payload.update(p.extra_body)
                 headers = {"Content-Type": "application/json", "User-Agent": "jarvis-llm-proxy/0.1"}
                 if p.key_file:
@@ -457,15 +504,26 @@ def make_handler(kernel, providers, clock=time.time):
                         break
                     except urllib.error.HTTPError as e:
                         last = f"HTTP {e.code}"
-                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last,
-                                                                        "prompt_chars": prompt_chars, "attempt": attempt})
-                        if e.code not in RETRY_SAME_PROVIDER:
+                        try:
+                            text = e.read(4000).decode(errors="replace")      # classified, never logged
+                        except Exception:
+                            text = ""
+                        why = sizing.classify(e.code, text)
+                        rest = sizing.cooldown_s(e.headers.get("Retry-After") if e.headers else None, text) if why == "rate_limited" else 0
+                        if rest:
+                            with lock:
+                                cooling[p.name] = clock() + rest
+                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": why,
+                                                                        "prompt_chars": prompt_chars, "est_tokens": est, "attempt": attempt,
+                                                                        **({"cooldown_s": rest} if rest else {})})
+                        if e.code not in RETRY_SAME_PROVIDER or why == "too_large":
                             break
                     except Exception as e:
-                        last = type(e).__name__
+                        last, why = type(e).__name__, "other"
                         kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "attempt": attempt})
                         break
                 if resp is None:
+                    outcomes.append(why)
                     continue
                 with resp:   # from here on we are committed to this provider
                     self.send_response(200)
@@ -485,8 +543,30 @@ def make_handler(kernel, providers, clock=time.time):
                                                          "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
                                                          "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings})
                 return
-            kernel.audit.append("agent_model_request_failed", {"agent": agent, "lane": lane, "error": last})
+            kernel.audit.append("agent_model_request_failed", {"agent": agent, "lane": lane, "error": last, "classes": outcomes})
+            if outcomes and all(o == "too_large" for o in outcomes):
+                return self._too_large(agent, lane, est)       # the agent must shorten its history, not retry the same request
+            if outcomes and all(o == "rate_limited" for o in outcomes):
+                with lock:
+                    waits = [cooling.get(p.name, 0) - clock() for p in chain]
+                return self._rate_limited(agent, lane, max(1, math.ceil(min(waits))) if waits else 30)
             self._json(502, {"error": {"message": f"all providers failed ({last})"}})
+
+        def _rate_limited(self, agent, lane, wait):
+            kernel.audit.append("agent_model_rate_limited", {"agent": agent, "lane": lane, "retry_after_s": wait})
+            b = json.dumps({"error": {"message": f"all providers in this lane are rate limited; retry in {wait} s", "type": "rate_limit_error"}}).encode()
+            self.send_response(429); self.send_header("Retry-After", str(wait)); self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
+        def _too_large(self, agent, lane, est):
+            """One fast, clear answer when no provider in the lane can take the request: an OpenAI-style context error
+            with HTTP 413, which agents (Hermes) treat as "compress the conversation", never as an outage to retry."""
+            kernel.audit.append("agent_model_too_large", {"agent": agent, "lane": lane, "est_tokens": est})
+            limit = sizing.lane_context_length(gateway.plan(providers, lane))
+            return self._json(413, {"error": {
+                "message": f"context length exceeded: this request is about {est} tokens; the largest model in this lane accepts "
+                           f"{limit or 'fewer'}. Compress the conversation and try again.",
+                "type": "invalid_request_error", "code": "context_length_exceeded"}})
 
     return H, tokens
 

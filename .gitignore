@@ -9,3 +9,4 @@ KILL
 *.pem
 node_token*
 
+evals/results/

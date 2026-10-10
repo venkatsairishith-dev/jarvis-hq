@@ -327,6 +327,20 @@ class T(unittest.TestCase):
             b.handle(msg(f"request {i}")); pending.pop()()
         b.handle(msg("one more")); self.assertIn("limit", self.last())
 
+    def test_a_new_conversation_starts_with_the_kernels_task_record(self):
+        from jarvis_kernel.tasks import Tasks
+        tid = Tasks(self.k).create("hermes", "private", "", "Build the report tool", criteria=["tests pass"])
+        sent, sid = [], ["s1"]
+        def agent(text):
+            sent.append(text); return "ok"
+        agent.session = lambda: sid[0]
+        b = Bridge(self.k, self.api, OWNER, [], agent=agent, spawn=lambda w: w())
+        b.handle(msg("hello")); b.handle(msg("and again"))
+        self.assertIn(tid, sent[0]); self.assertIn("New conversation", sent[0]); self.assertTrue(sent[0].endswith("hello"))
+        self.assertEqual(sent[1], "and again")                                    # same session: no card
+        sid[0] = "s2"; b.handle(msg("next day"))
+        self.assertIn(tid, sent[2])                                                # a fresh session gets it again
+
     def test_hermes_api_call_sends_key_and_session_and_hides_errors(self):
         from jarvis_kernel.telegram import hermes_agent
         seen = []

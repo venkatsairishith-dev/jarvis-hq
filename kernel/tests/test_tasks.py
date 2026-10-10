@@ -183,6 +183,30 @@ class Race(Base):
         self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM jobs WHERE kind='lab_run'").fetchone()[0], 1)
 
 
+class Skills(Base):
+    def skill(self, op, name, risk, tok, aid=None, where="lab"):
+        body = {"tool": "skill", "op": op, "target": name, "params": {"risk": risk, "where": where, "sha256": "ab" * 32}}
+        if aid:
+            body["approval_id"] = aid
+        return self.post("/v1/jarvis/actions", body, tok)
+
+    def test_activation_follows_the_recorded_risk_and_is_audited(self):
+        self.assertEqual(self.skill("activate", "ux-test", "low", self.owner), (200, {"status": "allowed", "level": "YELLOW_AUTO"}))
+        code, r = self.skill("activate", "grill-me", "medium", self.owner)
+        self.assertEqual((code, r["status"]), (202, "needs_approval"))
+        self.assertEqual(self.skill("activate", "grill-me", "medium", self.owner, aid=r["approval_id"])[0], 403)   # not yet approved
+        self.k.approve(r["approval_id"])
+        self.assertEqual(self.skill("activate", "grill-me", "medium", self.owner, aid=r["approval_id"])[0], 200)
+        self.assertEqual(self.skill("activate", "grill-me", "medium", self.owner, aid=r["approval_id"])[0], 403)   # single use
+        self.assertEqual(self.skill("activate", "x", "reject", self.owner)[0], 403)
+        self.assertEqual(self.skill("activate", "x", "", self.owner)[0], 403)
+        self.assertEqual(self.skill("activate", "ux-test", "low", self.lab)[0], 403)                            # a lab agent
+        self.assertEqual(self.skill("activate", "ux-test", "low", self.owner, where="server")[0], 202)          # the owner's agent
+        self.assertEqual(self.skill("deactivate", "ux-test", "low", self.owner)[0], 200)
+        kinds = [r[0] for r in self.k.db.execute("SELECT kind FROM audit WHERE kind LIKE 'skill_%'").fetchall()]
+        self.assertEqual(kinds, ["skill_activate", "skill_activate", "skill_deactivate"])
+
+
 class Honesty(Base):
     def test_an_agent_cannot_mark_a_task_completed_without_proof(self):
         code, r = self.act("create", "x", {"goal": "Deliver a tool", "criteria": ["tests pass"]}, self.owner)

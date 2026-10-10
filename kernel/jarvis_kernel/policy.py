@@ -48,6 +48,9 @@ RULES = [
     # (the dispatch itself refuses private keys and, from the private lane, needs an explicit "may be shared").
     ("task", "create|update|get|dispatch", YELLOW_AUTO),
     ("lab", "dispatch", YELLOW_AUTO),
+    # Skills (2026-10-10): a staged, checked skill; the level depends on its recorded risk and where it goes (decide below).
+    ("skill", "activate", YELLOW_AUTO),
+    ("skill", "deactivate", YELLOW_AUTO),
     ("money", "*", RED),
     ("delete", "*", RED),
     ("credential", "*", RED),
@@ -243,6 +246,15 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
             level, reason = DENY, "a lab agent may not read the owner's folders (the names would reach a public-lane model)"
         elif level < YELLOW_APPROVAL:
             level, reason = YELLOW_APPROVAL, "a lab agent acting on the owner's PC needs the owner's approval"
+    if tool == "skill" and op == "activate" and level < DENY:
+        p = a.params or {}
+        risk, where = _name(p.get("risk")), _name(p.get("where"))
+        if _name(a.lane) != "private":
+            level, reason = DENY, "only the owner's side may activate skills (a lab agent may not grant itself skills)"
+        elif risk not in ("low", "medium"):
+            level, reason = DENY, f"a skill rated '{risk or 'unrated'}' is never activated"
+        elif risk == "medium" or where != "lab":
+            level, reason = YELLOW_APPROVAL, "a medium-risk skill, or one for the owner's own agent, needs the owner's approval"
     if tool == "browser" and any(_internal_url(lf) for lf in leaves):
         level, reason = DENY, "browser pointed at an internal address"
     if protected:

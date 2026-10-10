@@ -42,6 +42,8 @@ class Provider:
     os_only: str | None = None            # "nt" or "posix": a provider that exists on one machine type only (e.g. the laptop's local model)
     priority: int = 50                    # lower is tried first, within the lane rules (a slow local fallback gets a high number)
     timeout_s: int | None = None          # per-provider request timeout (a slow CPU fallback needs longer than a cloud API)
+    max_input_tokens: int | None = None   # measured input limit; larger requests skip this provider (sizing.py)
+    max_total_tokens: int | None = None   # measured limit on input + reserved output (Groq TPM, llama.cpp n_ctx)
 
     def key_path(self):
         if not self.key_file:
