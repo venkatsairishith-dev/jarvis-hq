@@ -299,6 +299,58 @@ class Bridge:
             self.k.db.execute("INSERT OR IGNORE INTO tg_approval_notices VALUES (?)", (aid,))
             self.k.audit.append("tg_approval_notice", {"id": aid})
 
+    def task_facts(self, since: float) -> str:
+        """The kernel's own record of tasks touched during this turn, appended to the agent's reply: a claim like
+        "done" cannot hide a task that was never verified."""
+        try:
+            rows = self.k.db.execute("SELECT id, goal, state, verification FROM tasks WHERE updated >= ? ORDER BY updated", (since - 1,)).fetchall()
+        except Exception:
+            return ""
+        lines = []
+        for tid, goal, state, ver in rows:
+            v = json.loads(ver or "{}")
+            check = ("verified" if v.get("passed") is True else "NOT verified yet") if state != "failed" else "failed"
+            lines.append(f"- task {tid} ({str(goal)[:60]}): {state}, {check}")
+        return ("\n\nKernel record:\n" + "\n".join(lines)) if lines else ""
+
+    def flush_tasks(self):
+        """When lab work for a task has ended (completed or failed), JARVIS hears it in the owner's conversation, checks
+        it against the acceptance criteria and tells the owner. Without an agent the owner gets a plain notice."""
+        from .tasks import Tasks
+        T = Tasks(self.k)
+        T.expire()
+        self.k.db.execute("CREATE TABLE IF NOT EXISTS tg_task_notices(id TEXT PRIMARY KEY)")
+        rows = self.k.db.execute(
+            "SELECT id FROM tasks WHERE state IN ('completed','failed','cancelled') AND id NOT IN (SELECT id FROM tg_task_notices) "
+            "AND EXISTS (SELECT 1 FROM jobs WHERE jobs.kind='lab_run' AND jobs.params LIKE '%' || tasks.id || '%')").fetchall()
+        for (tid,) in rows:
+            if self.agent and self.agent_busy.locked():
+                return                                   # JARVIS is busy: tell it on a later loop, not a bare notice
+            t = T.get(tid)
+            self.k.db.execute("INSERT OR IGNORE INTO tg_task_notices VALUES (?)", (tid,))
+            ver = t.get("verification") or {}
+            summary = (f"Lab work for task {tid} ended: {t['state'].upper()} after {t['attempts']} attempt(s).\n"
+                       f"Goal: {t['goal']}\nResult: {t['result'] or '-'}\n"
+                       f"Verification: {json.dumps(ver, ensure_ascii=False)[:1200]}\n"
+                       f"Evidence: {'; '.join(t.get('evidence') or [])[:1200]}")
+            self.k.audit.append("tg_task_notice", {"id": tid, "state": t["state"]})
+            if self.agent and self.agent_busy.acquire(blocking=False):
+                prompt = ("[JARVIS kernel] " + summary + "\nCheck this against the task's acceptance criteria (task tool, op get), "
+                          "close the task honestly if it is still open, deliver files if needed, record any reusable lesson, "
+                          "and tell the owner the outcome in a few lines, including what remains if it failed.")
+
+                def work(prompt=prompt, summary=summary):
+                    try:
+                        self.say(self.agent(prompt).strip() or summary)
+                    except Exception as e:
+                        self.k.audit.append("tg_agent_failed", {"type": type(e).__name__})
+                        self.say(summary)
+                    finally:
+                        self.agent_busy.release()
+                self.spawn(work)
+            else:
+                self.say(summary)
+
     def models(self):
         path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "models.json")
         try:
@@ -384,10 +436,11 @@ class Bridge:
         self.say("On it.")
 
         def work():
+            t0 = time.time()
             try:
                 out = self.agent(text).strip()
                 self.k.audit.append("tg_agent_done", {"chars": len(out)})
-                self.say(out or "Done (no reply text).")
+                self.say((out or "Done (no reply text).") + self.task_facts(t0))
             except Exception as e:
                 self.k.audit.append("tg_agent_failed", {"type": type(e).__name__})
                 self.say("JARVIS could not finish that (" + str(e)[:80] + "). /ask still gets a quick model answer.")
@@ -437,6 +490,7 @@ class Bridge:
             try:
                 self.flush_jobs()
                 self.flush_approvals()
+                self.flush_tasks()
                 for u in self.api.get_updates(offset):
                     offset = u["update_id"] + 1
                     try:

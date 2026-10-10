@@ -44,6 +44,10 @@ RULES = [
     # Opening things on the laptop (2026-10-10): the owner's own agent (private lane) at once; a lab agent (public
     # lane) only with the owner's approval and never a folder listing (raised in decide below).
     ("pc", "open_app|open_folder|open_file|list_folder", YELLOW_AUTO),
+    # Outcome tasks (2026-10-10): agents record and update their own tasks; dispatching work to the lab is automatic
+    # (the dispatch itself refuses private keys and, from the private lane, needs an explicit "may be shared").
+    ("task", "create|update|get|dispatch", YELLOW_AUTO),
+    ("lab", "dispatch", YELLOW_AUTO),
     ("money", "*", RED),
     ("delete", "*", RED),
     ("credential", "*", RED),

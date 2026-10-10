@@ -23,7 +23,10 @@ KINDS = {
     "output_show": ("output", "show"),
     "ui_action": ("ui", None),
     "pc_open": ("pc", None),
+    "lab_run": ("lab", "dispatch"),        # an outcome task's work, run, verified and repaired by the lab runner
 }
+LAB_AGENTS = {"hermes", "opencode", "goose"}
+LAB_RUN_TTL = 2 * 3600                     # a lab run that never reports is failed after 2 h (task deadlines are shorter)
 
 
 class JobError(Exception):
@@ -50,6 +53,12 @@ def _check_params(kind: str, params: dict):
               and isinstance(params["target"], str) and 0 < len(params["target"].strip()) <= 80
               and isinstance(params["path"], str) and len(params["path"]) <= 200
               and not any(c in params["target"] + params["path"] for c in "\r\n\0"))
+    elif kind == "lab_run":
+        ok = (keys == {"task", "agent", "instructions", "criteria", "max_attempts", "timeout_s"} and re.match(r"^[0-9a-f]{12}$", str(params["task"]))
+              and params["agent"] in LAB_AGENTS and isinstance(params["instructions"], str) and 0 < len(params["instructions"]) <= 8000
+              and isinstance(params["criteria"], list) and 0 < len(params["criteria"]) <= 20 and all(isinstance(c, str) for c in params["criteria"])
+              and isinstance(params["max_attempts"], int) and 1 <= params["max_attempts"] <= 5
+              and isinstance(params["timeout_s"], int) and 120 <= params["timeout_s"] <= 5400)
     else:
         ok = False
     if not ok:
@@ -65,6 +74,8 @@ def action_for(kind: str, params: dict, lane: str = "private", untrusted: bool =
         return Action(tool, op, params["project"])
     if kind in ("output_save", "output_show"):
         return Action(tool, op, f"outputs/{params['agent']}/{params['name']}", {}, lane, untrusted)
+    if kind == "lab_run":                     # the instructions are not part of the action (their words must not trip path rules)
+        return Action("lab", "dispatch", params["agent"], {"task": params["task"]}, lane, untrusted)
     if kind == "pc_open":
         return Action("pc", params["op"], params["target"], {"path": params["path"]} if params["path"] else {}, lane, untrusted)
     return Action("ui", params["op"], params["target"], {"text": params["text"]} if params["text"] else {}, lane, untrusted)
@@ -132,8 +143,10 @@ class Jobs:
         """Finished (or expired) jobs the owner has not been told about yet: [(id, kind, state, params, result)]."""
         now = time.time()
         self.k.db.execute("UPDATE jobs SET state='expired' WHERE state='queued' AND expires<?", (now,))
-        stuck = self.k.db.execute("UPDATE jobs SET state='failed', result=? WHERE state='running' AND started IS NOT NULL AND started<?",
-                                  (json.dumps({"ok": False, "error": "the laptop started the job but never reported a result (it may have gone to sleep or lost power)"}), now - RUN_TTL))
+        stuck = self.k.db.execute("UPDATE jobs SET state='failed', result=? WHERE state='running' AND started IS NOT NULL AND "
+                                  "((kind!='lab_run' AND started<?) OR (kind='lab_run' AND started<?))",
+                                  (json.dumps({"ok": False, "error": "the node started the job but never reported a result (it may have gone to sleep or lost power)"}),
+                                   now - RUN_TTL, now - LAB_RUN_TTL))
         if stuck.rowcount:
             self.k.audit.append("job_stuck_failed", {"count": stuck.rowcount})
         rows = self.k.db.execute("SELECT id, kind, state, params, result FROM jobs WHERE notified=0 AND state IN ('done','failed','expired')").fetchall()

@@ -51,7 +51,8 @@ def _gitleaks_secrets(text: str):
             subprocess.run([exe, "stdin", "--no-banner", "--report-format", "json", "--report-path", rep, "--exit-code", "0"],
                            input=text, capture_output=True, text=True, encoding="utf-8", timeout=20,
                            creationflags=0x08000000 if os.name == "nt" else 0)   # no console window on Windows
-            found = json.load(open(rep, encoding="utf-8")) or []
+            with open(rep, encoding="utf-8") as fh:
+                found = json.load(fh) or []
         return [(f.get("RuleID", "gitleaks"), f.get("Secret") or f.get("Match") or "") for f in found]
     except Exception:
         return None

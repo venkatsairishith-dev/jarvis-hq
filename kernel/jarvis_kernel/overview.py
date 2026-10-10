@@ -107,6 +107,12 @@ def overview(kernel, providers, now=None) -> dict:
         s = prov.get(p.name, {})
         providers_out.append({"name": p.name, "lane": p.lane, "model": p.default_model, "available": p.available(),
                               "preferred": prefs.get(p.lane) == p.name, **{k: s.get(k) for k in ("ok", "failed", "last_ok", "last_fail", "last_error")}})
+    from .tasks import Tasks                     # the owner's own outcome tasks: request, goal, plan, criteria, state, evidence
+    T = Tasks(kernel)
+    T.expire(now)
+    task_list = [{k: t.get(k) for k in ("id", "created", "updated", "owner", "lane", "source", "request", "goal", "plan", "criteria", "state",
+                                        "step", "attempts", "max_attempts", "deadline", "result", "evidence", "verification", "events")}
+                 for t in T.recent(15)]
     tail = [{**_short(_load(payload)), "seq": seq, "ts": ts, "kind": kind}
             for seq, ts, kind, payload in db.execute("SELECT seq, ts, kind, payload FROM audit ORDER BY seq DESC LIMIT 40")]
     return {
@@ -123,6 +129,7 @@ def overview(kernel, providers, now=None) -> dict:
         "providers": providers_out,
         "nodes": nodes,
         "outputs": outputs,
+        "tasks": task_list,
         "approvals": pending,
         "jobs": jobs,
         "audit": tail,

@@ -211,6 +211,51 @@ def list_folder(folder: str, path: str = "") -> str:
     return _pc("list_folder", folder, path)
 
 
+@tool("owner")
+def task_start(goal: str, criteria: list[str], plan: list[str] | None = None, request: str = "", max_attempts: int = 3,
+               budget_minutes: int = 120) -> str:
+    """Open an outcome task for a request that needs real work (not a quick answer). goal: the outcome in one sentence.
+    criteria: 2-8 acceptance criteria anyone can CHECK (e.g. 'all pages return 200 and show no console errors'), not
+    vague wishes. plan: short steps. request: the owner's words. The owner sees the task live in Mission Control.
+    Returns the task id."""
+    _log("task_start", goal)
+    return _say(_act("task", "create", goal, {"goal": goal, "criteria": criteria, "plan": plan or [], "request": request,
+                                              "source": "jarvis", "max_attempts": max_attempts,
+                                              "budget_s": max(1, min(int(budget_minutes), 360)) * 60}))
+
+
+@tool("owner")
+def task_update(task_id: str, state: str = "", step: str = "", note: str = "", result: str = "",
+                evidence: list[str] | None = None) -> str:
+    """Record progress on your task. state (optional): running, verifying, repairing, paused, completed, failed or
+    cancelled. completed only with evidence that every criterion holds; otherwise failed with the exact blocker in result."""
+    params = {k: v for k, v in (("state", state), ("step", step), ("note", note), ("result", result)) if v}
+    if evidence:
+        params["evidence"] = evidence
+    _log("task_update", f"{task_id} {state}")
+    return _say(_act("task", "update", task_id, params))
+
+
+@tool("owner")
+def task_get(task_id: str) -> str:
+    """A task's goal, criteria, state, attempts, verification verdict, evidence and event history."""
+    return _say(_act("task", "get", task_id))
+
+
+@tool("owner")
+def lab_work(task_id: str, instructions: str, agent: str = "hermes", public_ok: bool = False) -> str:
+    """Hand a task's hands-on work to the lab: agents with a terminal, files, code, the web and their own computer.
+    The lab runner executes it, an independent verifier checks every acceptance criterion, failures are repaired up to
+    the retry budget, and you get the outcome in this conversation when it ends (minutes, not seconds; tell the owner
+    it has started). agent: hermes (general, uses sub-agents), opencode (coding) or goose. The lab runs on PUBLIC-lane
+    models: put only information that may be shared in instructions and set public_ok to true. The lab CANNOT see the
+    owner's computer: never put D:\\ or C:\\ paths in instructions and never ask it to save there. Files the owner should
+    get are delivered by the runner itself after verification, to D:\\jarvis\\outputs\\task-<task_id>\\; just include a
+    criterion like 'the files are delivered to the owner'. Call this ONCE per task."""
+    _log("lab_work", f"{task_id} {agent}")
+    return _say(_act("task", "dispatch", task_id, {"instructions": instructions, "agent": agent, "public_ok": public_ok}))
+
+
 @tool("lab", "owner")
 def models_status() -> str:
     """List the models you may use (your lane only), whether each is reachable, and which one is preferred."""

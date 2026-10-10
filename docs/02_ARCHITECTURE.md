@@ -140,6 +140,42 @@ Policy:
 - The owner's private lane runs at once.
 - A lab agent (public lane) needs the owner's approval every time and can never list the owner's folders, since the names would reach a public model.
 
+## Outcome tasks: plan, execute, verify, repair (added 2026-10-10, operator slice 1)
+The owner says WHAT they want; JARVIS works out how. It opens a task in the kernel with:
+- a goal;
+- checkable acceptance criteria;
+- a plan;
+- a budget (1-5 attempts, a time limit).
+
+Hands-on work is dispatched to the lab.
+
+**Task states** are explicit and checked: planning, waiting_approval, queued, running, verifying, repairing, paused, completed, failed, cancelled. A task past its time limit fails. Retries stop at the attempt budget. Final states stay final.
+
+**The lab runner** (`hq/lab/lab_runner.py`) runs as root in the lab box with its own runner token. That token can only fetch lab jobs and report on their task; the agents never see it. For each job:
+1. A worker agent runs as the unprivileged agent user in its own folder.
+2. A separate verifier session checks every criterion itself and writes VERIFY.json. The worker's own claim never counts.
+3. On failure, a repair attempt gets the verifier's findings.
+4. Evidence and the verdict go to the kernel.
+
+The runner follows the owner's pause and cancel. Root reads agent files only without following links.
+
+**Honesty guards:**
+- The kernel refuses "completed" from an agent unless an independent verification passed, or the evidence cites finished jobs (`job:<id>`).
+- Every Telegram reply carries the kernel's own record of the tasks touched in that turn ("planning, NOT verified yet").
+- Dispatch is refused while the task already has lab work, so there is no duplicate work.
+
+**Lanes:**
+- The lab runs on public-lane models.
+- Dispatch from the private lane needs an explicit "may be shared" flag.
+- Instructions are scrubbed, and private keys are refused.
+
+**When lab work ends,** the Telegram bridge gives the outcome to JARVIS in the owner's conversation. JARVIS checks it against the criteria and tells the owner.
+
+**First live runs (2026-10-10):**
+- Before the guards, JARVIS wrote code itself and claimed "all tests pass". Checking its files showed the tests erroring and output "212.0 None".
+- After the guards, the same request went to the lab. The verifier rejected attempt 1 (no files in the workspace), and attempt 2 repaired it.
+- Found and fixed live: a duplicate dispatch (two extra jobs were cancelled), and a runner that killed work on a network blip.
+
 ## Mission control (the hub's overview, added 2026-10-10)
 The hub's first page is now the Agent OS dashboard. It follows the owner's references: the Contentstack Agent OS dashboard, the "agentic OS dashboard" articles, and dashboard design practice. It shows:
 - **Top bar:** live KPI chips.

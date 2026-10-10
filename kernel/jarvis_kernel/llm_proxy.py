@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -28,6 +29,7 @@ PER_DAY = 2000
 # A provider's 5xx is tried once more before falling back: Ollama answers a gpt-oss tool call it cannot parse with
 # HTTP 500 "error parsing tool call" (ollama/ollama#12884), and a fresh sample usually parses.
 RETRY_SAME_PROVIDER = {500, 502, 503}
+MAX_OUTPUT_CHARS = 200_000
 # Agent actions (POST /v1/jarvis/actions): every one goes through kernel policy; jobs run on the owner's laptop node.
 OUTPUT_NODE = os.environ.get("JARVIS_OUTPUT_NODE", "laptop")
 ACTIONS_PER_HOUR = 60
@@ -51,9 +53,10 @@ class AgentTokens:
             kernel.db.execute("ALTER TABLE agent_tokens ADD COLUMN lane TEXT NOT NULL DEFAULT 'private'")
 
     def issue(self, name: str, lane: str = "private") -> str:
-        """lane "dashboard": the owner's hub reads the overview with it and can do nothing else (no model, no action)."""
-        if lane not in ("private", "public", "dashboard"):
-            raise ValueError("lane must be private, public or dashboard")
+        """lane "dashboard": the owner's hub reads the overview with it and can do nothing else (no model, no action).
+        lane "runner": the lab runner fetches lab jobs and reports task progress with it, nothing else."""
+        if lane not in ("private", "public", "dashboard", "runner"):
+            raise ValueError("lane must be private, public, dashboard or runner")
         tok = secrets.token_urlsafe(32)
         self.k.db.execute("INSERT OR REPLACE INTO agent_tokens(name, token_h, created, lane) VALUES (?,?,?,?)", (name, _h(tok), time.time(), lane))
         self.k.audit.append("agent_token_issued", {"name": name, "lane": lane})
@@ -103,6 +106,8 @@ def make_handler(kernel, providers, clock=time.time):
     from .store import Killed
     tokens = AgentTokens(kernel)
     jobs = Jobs(kernel)
+    from .tasks import Tasks, TaskError
+    tasks = Tasks(kernel)
     kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
     calls = {}   # agent -> list of timestamps
@@ -184,14 +189,117 @@ def make_handler(kernel, providers, clock=time.time):
                 kernel.db.execute("INSERT OR REPLACE INTO lane_prefs VALUES (?,?,?,?)", (lane, target, now, agent))
                 kernel.audit.append("lane_preference_set", {"lane": lane, "provider": target, "agent": agent})
                 return 200, {"status": "done", "preferred": target}
+            if tool == "task":
+                return task_action(agent, lane, op, target, p)
             if tool == "lab" and op == "task":
                 d = kernel.authorize(Action("lab", "task", target, {"chars": len(str(p.get("prompt", "")))}, lane, True))
                 return (200, {"status": "allowed"}) if d.allowed else (403, {"status": "refused", "reason": d.reason})
             return 400, {"status": "refused", "reason": "unknown action"}
         except JobError as e:
             return 403, {"status": "refused", "reason": str(e)[:200]}
+        except TaskError as e:
+            return 409, {"status": "refused", "reason": str(e)[:200]}
         except Killed:
             return 503, {"status": "refused", "reason": "kill switch is on"}
+
+    def task_action(agent, lane, op, target, p):
+        """Outcome tasks (tasks.py): create, update, get, dispatch to the lab. Each goes through policy first."""
+        if op not in ("create", "update", "get", "dispatch"):
+            return 400, {"status": "refused", "reason": "unknown task operation"}
+        tasks.expire()
+        d = kernel.authorize(Action("task", op, target, {}, lane, True))
+        if not d.allowed:
+            return 403, {"status": "refused", "reason": d.reason}
+        if op == "create":
+            tid = tasks.create(agent, lane, p.get("request", ""), p.get("goal", target), p.get("plan"), p.get("criteria"),
+                               str(p.get("source") or "agent"), int(p.get("max_attempts") or 3), int(p.get("budget_s") or 3600))
+            return 200, {"status": "done", "task": tid, "next": (
+                "Hands-on work (writing and running code, tests, browsing, files) goes to the lab now: "
+                "lab_work(task_id, instructions, public_ok=true). You cannot run or test anything yourself, and this task "
+                "can only be marked completed with independent verification or finished job ids as evidence.")}
+        if op == "get":
+            t = tasks.get(target, owner=agent)
+            return (200, {"status": "done", "task": t}) if t else (404, {"status": "refused", "reason": "no such task"})
+        if op == "update":
+            busy = kernel.db.execute("SELECT 1 FROM jobs WHERE kind='lab_run' AND state IN ('queued','running') AND params LIKE ?",
+                                     (f'%"task": "{target}"%',)).fetchone()
+            if busy and p.get("state") not in (None, "", "paused", "cancelled"):
+                return 409, {"status": "refused", "reason": "the lab owns this task's state while it works (you may pause or cancel "
+                             "it, or add a note). End your turn: you will be told the outcome."}
+            if p.get("state") == "completed":       # completion needs proof, not a claim
+                cur = tasks.get(target, owner=agent)
+                cited = [m for e in (p.get("evidence") or []) for m in re.findall(r"job:([0-9a-f]{12})", str(e))]
+                done = [j for j in cited if kernel.db.execute("SELECT 1 FROM jobs WHERE id=? AND owner=? AND state='done'", (j, agent)).fetchone()]
+                if cur and not ((cur.get("verification") or {}).get("passed") is True or done):
+                    return 409, {"status": "refused", "reason": "completed needs proof: an independent verification (lab_work) or "
+                                 "evidence citing finished jobs as job:<id>. If it cannot be verified, use state failed with the blocker."}
+            t = tasks.update(agent, target, state=p.get("state"), step=p.get("step"), plan=p.get("plan"), criteria=p.get("criteria"),
+                             note=p.get("note"), result=p.get("result"), evidence=p.get("evidence"), verification=p.get("verification"))
+            return 200, {"status": "done", "state": t["state"]}
+        # dispatch: the lab runs on public-lane models, so only what may be shared goes there (scrubbed; keys refused)
+        t = tasks.get(target, owner=agent)
+        if not t:
+            return 404, {"status": "refused", "reason": "no such task"}
+        active = kernel.db.execute("SELECT id FROM jobs WHERE kind='lab_run' AND state IN ('queued','running') AND params LIKE ?",
+                                   (f'%"task": "{target}"%',)).fetchone()
+        if active or t["state"] not in ("planning", "paused"):   # checked before anything is created: no duplicate work
+            return 409, {"status": "refused", "reason": f"the lab is already on this task (state {t['state']}); do not dispatch again. "
+                         "End your turn: you will be told in this conversation when it ends."}
+        if lane == "private" and p.get("public_ok") is not True:
+            return 400, {"status": "refused", "reason": "the lab uses public-lane models: send only what may be shared and set public_ok true"}
+        instr, _, blocked = scrub(str(p.get("instructions", ""))[:8000], deep=True)
+        crit = [scrub(str(c)[:500], deep=True)[0] for c in (p.get("criteria") or t["criteria"])[:20]]
+        if blocked or not instr.strip() or not crit:
+            return 400, {"status": "refused", "reason": "instructions and acceptance criteria are required, and no private keys"}
+        agent_kind = str(p.get("agent") or "hermes")
+        params = {"task": target, "agent": agent_kind, "instructions": instr, "criteria": crit,
+                  "max_attempts": int(t["max_attempts"]), "timeout_s": max(120, min(int(t["deadline"] - clock()), 5400))}
+        jid = jobs.create("lab", "lab_run", params, owner=agent, lane=lane)
+        tasks.update(agent, target, state="queued", step=f"dispatched to the lab ({agent_kind})", criteria=crit, note="lab job " + jid)
+        return 200, {"status": "queued", "task": target, "job": jid, "next": (
+            "Tell the owner in one or two lines that the lab has started (give the task id) and END your turn now. "
+            "Do not wait, poll or dispatch again: you will be told the verified outcome in this conversation.")}
+
+    def runner_call(path, body):
+        """The lab runner's only endpoints: next lab job, task progress, job result. Reports apply only to the task of a
+        lab job that is running, so a runner cannot rewrite other tasks."""
+        tasks.expire()
+        if path == "/v1/jarvis/runner/next":
+            j = jobs.next_for("lab")
+            return 200, {"job": j}
+        job = str(body.get("job", ""))[:40]
+        row = kernel.db.execute("SELECT params, state FROM jobs WHERE id=? AND node='lab' AND kind='lab_run'", (job,)).fetchone()
+        if not row or row[1] != "running":
+            return 404, {"status": "refused", "reason": "no running lab job"}
+        tid = json.loads(row[0])["task"]
+        if path == "/v1/jarvis/runner/status":
+            t = tasks.get(tid)
+            return 200, {"state": t["state"] if t else "failed"}
+        if path == "/v1/jarvis/runner/report":
+            t = tasks.update(None, tid, state=body.get("state"), step=body.get("step"), note=body.get("note"), result=body.get("result"),
+                             evidence=body.get("evidence"), verification=body.get("verification"), attempt=bool(body.get("attempt")))
+            return 200, {"status": "done", "state": t["state"]}
+        if path == "/v1/jarvis/runner/deliver":
+            # verified deliverables go to the owner's laptop through the normal output job, each task in its own folder
+            # (outputs\task-<id>\), so old files can never be mistaken for this task's results. Only between a passed
+            # check and completion; the content came from the public lab, so the job carries the public lane.
+            if tasks.get(tid)["state"] != "verifying":
+                return 409, {"status": "refused", "reason": "deliver only after verification, before completion"}
+            name = str(body.get("name", ""))
+            clean, found, blocked = scrub(str(body.get("content", ""))[:MAX_OUTPUT_CHARS], deep=True)
+            if blocked:
+                return 400, {"status": "refused", "reason": "the file contains a private key"}
+            out = jobs.create(OUTPUT_NODE, "output_save", {"agent": f"task-{tid}", "name": name, "content": clean},
+                              owner=f"runner-{tid}", lane="public")
+            return 200, {"status": "queued", "job": out, "redacted": sorted(set(found))}
+        if path == "/v1/jarvis/runner/delivery":
+            j = jobs.get_for(f"runner-{tid}", str(body.get("delivery", ""))[:40])
+            return (200, j) if j else (404, {"status": "refused", "reason": "no such delivery"})
+        if path == "/v1/jarvis/runner/finish":
+            res = body.get("result") if isinstance(body.get("result"), dict) else {"ok": False, "error": "no result"}
+            jobs.finish("lab", job, {k: res[k] for k in ("ok", "error", "summary", "attempts") if k in res})
+            return 200, {"status": "done"}
+        return 404, {"status": "refused", "reason": "not found"}
 
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"   # the connection closes after each response: a stream ends when the socket closes
@@ -239,6 +347,25 @@ def make_handler(kernel, providers, clock=time.time):
                 return self._json(401, {"error": {"message": "unauthorized"}})
             if lane == "dashboard":                      # the hub's read-only token: no model calls, no actions
                 return self._json(403, {"error": {"message": "read-only token"}})
+            if lane == "runner" or self.path.startswith("/v1/jarvis/runner/"):
+                try:                                     # read the body first: refusing before it confuses some clients
+                    n = int(self.headers.get("Content-Length", "0"))
+                    body = json.loads(self.rfile.read(n)) if 0 < n <= MAX_BODY else {}
+                    if not isinstance(body, dict):
+                        raise ValueError
+                except (ValueError, OSError):
+                    return self._json(400, {"status": "refused", "reason": "bad request"})
+                if lane != "runner" or not self.path.startswith("/v1/jarvis/runner/"):
+                    return self._json(403, {"error": {"message": "runner token and runner endpoints only go together"}})
+                try:
+                    code, reply = runner_call(self.path.rstrip("/"), body)
+                except TaskError as e:
+                    code, reply = 409, {"status": "refused", "reason": str(e)[:200]}
+                except JobError as e:
+                    code, reply = 403, {"status": "refused", "reason": str(e)[:200]}
+                except Killed:
+                    code, reply = 503, {"status": "refused", "reason": "kill switch is on"}
+                return self._json(code, reply)
             if self.path.rstrip("/") == "/v1/jarvis/actions":
                 try:
                     n = int(self.headers.get("Content-Length", "0"))
