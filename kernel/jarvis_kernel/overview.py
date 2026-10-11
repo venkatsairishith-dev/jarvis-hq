@@ -36,6 +36,8 @@ def overview(kernel, providers, now=None) -> dict:
     db = kernel.db
     agents, prov, actions = {}, {}, {}
     calls = failed_requests = 0
+    measured = {"prompt": 0, "completion": 0, "calls": 0}      # what providers themselves reported (not the chars/4 estimate)
+    by_provider = {}
     series = {"calls": [0] * 24, "failed": [0] * 24, "actions": [0] * 24}     # per hour, oldest first, last = this hour
 
     def hour(ts):
@@ -54,6 +56,13 @@ def overview(kernel, providers, now=None) -> dict:
                                          "last_call": None, "provider": None, "prompt_chars": 0})
             if kind == "agent_model_call":
                 calls += 1
+                u = d.get("usage") if isinstance(d.get("usage"), dict) else {}
+                if u.get("prompt_tokens") is not None or u.get("completion_tokens") is not None:
+                    measured["prompt"] += int(u.get("prompt_tokens") or 0)
+                    measured["completion"] += int(u.get("completion_tokens") or 0)
+                    measured["calls"] += 1
+                    bp = by_provider.setdefault(str(d.get("provider")), {"prompt": 0, "completion": 0, "calls": 0})
+                    bp["prompt"] += int(u.get("prompt_tokens") or 0); bp["completion"] += int(u.get("completion_tokens") or 0); bp["calls"] += 1
                 a.update(calls=a["calls"] + 1, last_call=ts, provider=d.get("provider"), lane=d.get("lane") or a["lane"])
                 a["prompt_chars"] += int(d.get("prompt_chars") or 0)
                 p = prov.setdefault(str(d.get("provider")), {"ok": 0, "failed": 0, "last_ok": None, "last_fail": None, "last_error": None})
@@ -122,7 +131,8 @@ def overview(kernel, providers, now=None) -> dict:
                  "success_rate_24h": round(100 * calls / (calls + failed_requests), 1) if calls + failed_requests else None,
                  "actions_24h": sum(actions.values()), "jobs_24h": jobs_24h,
                  "avg_job_seconds_24h": round(sum(durations) / len(durations), 1) if durations else None,
-                 "approvals_pending": len(pending), "est_tokens_in_24h": sum(a["prompt_chars"] for a in agents.values()) // 4},
+                 "approvals_pending": len(pending), "est_tokens_in_24h": sum(a["prompt_chars"] for a in agents.values()) // 4,
+                 "measured_tokens_24h": measured, "measured_by_provider_24h": by_provider},
         "series_24h": series,
         "agents": sorted(agents.values(), key=lambda a: -(a["last_call"] or 0)),
         "actions_24h": actions,

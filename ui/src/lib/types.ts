@@ -8,12 +8,19 @@ export interface Task {
   attempts: number; max_attempts: number; created: number; updated: number; deadline: number; result: string;
   criteria: string[]; plan: string[]; verification: { passed?: boolean; [k: string]: unknown }; evidence: string[]; events: TaskEvent[];
 }
-export interface Approval { id: string; level: string; action: { tool: string; op: string; target: string; lane?: string; params?: Record<string, unknown> }; seconds_left: number }
+export interface Approval {
+  id: string; level: string; action: { tool: string; op: string; target: string; lane?: string; params?: Record<string, unknown> };
+  seconds_left: number; reason: string; digest: string; truncated: boolean;
+}
+export interface ApprovalOutcome {
+  id: string; level: string; state: "approved" | "used" | "denied" | "expired"; at: number; job: string | null; reason: string;
+  action: { tool: string; op: string; target: string; lane?: string };
+}
 export interface Job { id: string; node: string; kind: string; state: string; created: number; finished: number | null; owner: string; params: string; result: string }
 export interface Command { id: string; ts: number; source: string; text: string; state: "running" | "done" | "failed" | "cancelled"; reply: string | null; error: string | null; finished: number | null }
 export interface OwnerState {
   now: number; killed: boolean; audit: { seq: number; hash: string }; pin_set: boolean; voice_command_ready: boolean; busy: boolean;
-  tasks: Task[]; approvals: Approval[]; jobs: Job[]; commands: Command[];
+  tasks: Task[]; approvals: Approval[]; approval_history: ApprovalOutcome[]; jobs: Job[]; commands: Command[];
 }
 export interface AuditEvent { seq: number; ts: number; kind: string; payload: Record<string, unknown> }
 

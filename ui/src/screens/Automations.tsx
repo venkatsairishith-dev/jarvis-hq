@@ -7,6 +7,7 @@ import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, inputCls, stateTo
 
 const TEMPLATES = {
   job: { label: "Check the jarvis-hq project (runs its tests on this laptop)", action_kind: "job", action: { kind: "project_check", params: { project: "jarvis-hq" }, node: "laptop" } },
+  windows: { label: "List the open windows on this laptop (read-only)", action_kind: "job", action: { kind: "ui_windows", params: {}, node: "laptop" } },
   lab_task: { label: "A lab task (an agent builds it, an independent check verifies it)", action_kind: "lab_task", action: { goal: "", instructions: "", criteria: [""], agent: "hermes", max_attempts: 2, budget_s: 1800 } },
   command: { label: "Ask JARVIS (your own agent) to do something", action_kind: "command", action: { text: "" } },
 } as const;
@@ -20,7 +21,7 @@ export function Automations() {
   const [name, setName] = useState("");
   const [phrase, setPhrase] = useState("every morning at 8");
   const [when, setWhen] = useState<"time" | "file">("time");
-  const [watch, setWatch] = useState("downloads");
+  const [watch, setWatch] = useState("");
   const [glob, setGlob] = useState("*");
   const [watches, setWatches] = useState<{ node: string; watch: string }[]>([]);
   const [cron, setCron] = useState("");
@@ -117,7 +118,7 @@ export function Automations() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Watched folder" hint={watches.length ? "Folders this laptop allows (config/watches.json)." : "No node has reported a watched folder yet."}>
                 <select className={inputCls} value={watch} onChange={(e) => { setWatch(e.target.value); setPreview(null); }}>
-                  {(watches.length ? watches.map((w) => w.watch) : ["downloads"]).map((w) => <option key={w}>{w}</option>)}</select></Field>
+                  <option value="">{watches.length ? "Choose a folder" : "No watched folder"}</option>{watches.map((w) => <option key={w.watch}>{w.watch}</option>)}</select></Field>
               <Field label="File name pattern" hint="* matches anything; for example *.pdf"><input className={inputCls} value={glob} onChange={(e) => { setGlob(e.target.value); setPreview(null); }} /></Field>
             </div>
           ) : (

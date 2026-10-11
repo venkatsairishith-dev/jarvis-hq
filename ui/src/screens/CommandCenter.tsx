@@ -3,7 +3,7 @@ import { api, ApiError, owner } from "../lib/api";
 import { store, useStore } from "../lib/store";
 import { voice } from "../lib/voice";
 import { ago, bytes, TERMINAL } from "../lib/format";
-import type { Approval, Command, FileRow, Task } from "../lib/types";
+import type { Approval, ApprovalOutcome, Command, FileRow, Job, Task } from "../lib/types";
 import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, inputCls, stateTone } from "../components/ui";
 import { go } from "../App";
 
@@ -39,6 +39,14 @@ function ApprovalCard({ a, pinSet, onDone }: { a: Approval; pinSet: boolean; onD
         <span className="num ml-auto text-xs text-fg3">{a.seconds_left}s left</span>
       </div>
       <p className="mt-1 break-words text-sm text-fg2">{target || "(no target)"}{a.action.lane ? ` · ${a.action.lane} lane` : ""}</p>
+      {a.action.params && Object.keys(a.action.params).length > 0 && (
+        <dl className="mt-2 space-y-1 rounded-lg bg-bg2 p-2 text-sm" aria-label="Exact arguments">
+          {Object.entries(a.action.params).map(([k, v]) => (
+            <div key={k} className="grid grid-cols-[auto_minmax(0,1fr)] gap-2"><dt className="font-mono text-xs text-fg3">{k}</dt>
+              <dd className="whitespace-pre-wrap break-words font-mono text-xs">{typeof v === "string" ? v : JSON.stringify(v)}</dd></div>))}
+        </dl>)}
+      <p className="mt-1 text-xs text-fg3">Why it asks: {a.reason || "policy requires your approval"} · digest <span className="font-mono">{a.digest}</span></p>
+      {a.truncated && <p className="mt-1 text-xs text-wait-fg">Some values are longer than can be shown here; what you approve is the full original.</p>}
       <div className="mt-2 flex flex-wrap gap-2">
         {red
           ? <p className="text-xs text-fg3">This level is approved at the kernel console only.</p>
@@ -48,13 +56,29 @@ function ApprovalCard({ a, pinSet, onDone }: { a: Approval; pinSet: boolean; onD
       {!pinSet && !red && <p className="mt-2 text-xs text-fg3">No approval PIN is set, so approving here is disabled. Set one with <code>python3 -m jarvis_kernel set-approval-pin</code> on the server.</p>}
       <Dialog open={open} onClose={() => setOpen(false)} title="Approve this action"
         footer={<><Button onClick={() => setOpen(false)}>Cancel</Button><Button kind="primary" disabled={busy || confirm !== a.id || pin.length < 6} onClick={approve}>Approve once</Button></>}>
-        <p className="mb-3 text-sm text-fg2">{a.action.tool}.{a.action.op} on <strong>{target}</strong>. Single use, expires in {a.seconds_left}s.</p>
+        <p className="mb-2 text-sm text-fg2">{a.action.tool}.{a.action.op} on <strong>{target}</strong>. Single use, expires in {a.seconds_left}s.</p>
+        {a.action.params && Object.keys(a.action.params).length > 0 && (
+          <pre className="mb-3 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg2 p-2 font-mono text-xs">{JSON.stringify(a.action.params, null, 2)}</pre>)}
+        <p className="mb-3 text-xs text-fg3">Approving this exact action only: a different action needs its own approval. Digest {a.digest}.</p>
         <div className="space-y-3">
           <Field label={`Type the approval id to confirm: ${a.id}`}><input className={inputCls} value={confirm} onChange={(e) => setConfirm(e.target.value.trim())} autoComplete="off" /></Field>
           <Field label="Approval PIN"><input className={inputCls} type="password" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="off" /></Field>
           {err && <ErrorNote>{err}</ErrorNote>}
         </div>
       </Dialog>
+    </li>
+  );
+}
+
+function Outcome({ o, jobs }: { o: ApprovalOutcome; jobs: Job[] }) {
+  const job = o.job ? jobs.find((j) => j.id === o.job) : undefined;
+  const tone = o.state === "used" ? "done" : o.state === "approved" ? "run" : o.state === "denied" ? "err" : "idle";
+  const what = { used: "approved and used once", approved: "approved, not used yet", denied: "denied: nothing ran", expired: "expired: nothing ran" }[o.state];
+  return (
+    <li className="space-y-0.5 py-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2"><Badge tone={tone}>{o.state}</Badge><span className="font-medium">{o.action.tool}.{o.action.op}</span>
+        <span className="truncate text-fg2">{o.action.target}</span><span className="num ml-auto text-xs text-fg3">{ago(o.at)}</span></div>
+      <p className="text-xs text-fg3">{what}{job ? ` · job ${job.id} ${job.state}${job.result && job.state !== "queued" ? `: ${job.result.slice(0, 90)}` : ""}` : o.job ? ` · job ${o.job}` : ""}</p>
     </li>
   );
 }
@@ -242,7 +266,10 @@ export function CommandCenter() {
                 <li key={c.id} className="space-y-1.5">
                   <div className="flex items-center gap-2 text-xs text-fg3"><Badge tone={c.source === "voice" ? "accent" : "idle"}>{c.source}</Badge><span>{ago(c.ts)}</span><Badge tone={stateTone(c.state)}>{c.state}</Badge></div>
                   <p className="rounded-lg bg-accent-bg px-3 py-2 text-sm">{c.text}</p>
-                  {c.state === "running" && <p className="px-1 text-sm text-fg3">JARVIS is working…</p>}
+                  {c.state === "running" && (
+                    <div className="flex items-center gap-3 px-1 text-sm text-fg3"><span>JARVIS is working…</span>
+                      <Button kind="ghost" onClick={() => { owner.post("command/cancel", { id: c.id }).then(() => { store.toast("info", "Stopped waiting for this command. Tasks it started keep running: use Stop all to end them."); void store.refresh(); }).catch((e: Error) => store.toast("err", e.message)); }}>Stop waiting</Button>
+                    </div>)}
                   {c.reply && <div className="rounded-lg border border-line bg-bg2 px-3 py-2"><p className="whitespace-pre-wrap text-sm">{c.reply}</p>
                     <div className="mt-2 flex gap-2"><Button kind="ghost" onClick={() => void voice.speak(c.reply!, prefs.lang)}>Speak this</Button></div></div>}
                   {c.error && <ErrorNote>{c.error}</ErrorNote>}
@@ -256,6 +283,11 @@ export function CommandCenter() {
         <Card title={`Approvals${st?.approvals.length ? ` (${st.approvals.length})` : ""}`}>
           {!st?.approvals.length ? <Empty title="Nothing is waiting on you" /> :
             <ul className="space-y-2">{st.approvals.map((a) => <ApprovalCard key={a.id} a={a} pinSet={st.pin_set} onDone={() => void store.refresh()} />)}</ul>}
+        </Card>
+
+        <Card title="Recent approval decisions">
+          {!st?.approval_history?.length ? <Empty title="No decisions yet" hint="Each approval ends as used (it ran once), denied, or expired; the kernel's record, not the agent's." /> :
+            <ul className="divide-y divide-line">{st.approval_history.slice(0, 6).map((o) => <Outcome key={o.id} o={o} jobs={st.jobs} />)}</ul>}
         </Card>
 
         <Card title={active.length ? `Current task${active.length > 1 ? ` (1 of ${active.length} open)` : ""}` : "Latest task"}>

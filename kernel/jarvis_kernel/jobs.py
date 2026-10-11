@@ -126,6 +126,8 @@ class Jobs:
         self.k.db.execute("INSERT INTO jobs(id,node,kind,params,state,created,expires,owner,notified) VALUES (?,?,?,?,?,?,?,?,?)",
                           (jid, node, kind, json.dumps(params), "queued", now, now + JOB_TTL, owner, 1 if owner else 0))
         self.k.audit.append("job_queued", {"id": jid, "kind": kind, "node": node, "owner": owner or "owner"})
+        if approval_id:
+            self.k.link_approval_job(approval_id, jid)          # so the owner can see what an approval actually did
         return jid
 
     def get_for(self, owner: str, jid: str):
@@ -170,6 +172,19 @@ class Jobs:
         if stuck:
             self.k.audit.append("job_stuck_failed", {"count": stuck})
         return {"expired": expired, "stuck_failed": stuck}
+
+    def fail_orphans(self, node: str, now=None, grace: float = 30.0) -> int:
+        """A node that says it is idle cannot be running a job the kernel still shows as running: it restarted, or the
+        worker died. Fail those at once (an honest, specific error) instead of after the 30 minute sweep. The grace period
+        covers a job just handed over."""
+        now = now or time.time()
+        n = self.k.db.execute("UPDATE jobs SET state='failed', result=?, finished=? WHERE node=? AND state='running' AND started IS NOT NULL "
+                              "AND started<? AND kind!='lab_run'",
+                              (json.dumps({"ok": False, "error": "the node restarted or lost this job before it finished; nothing was reported"}),
+                               now, node, now - grace)).rowcount
+        if n:
+            self.k.audit.append("job_orphaned_failed", {"node": node, "count": n})
+        return n
 
     def to_report(self):
         """Finished (or expired) jobs the owner has not been told about yet: [(id, kind, state, params, result)]."""

@@ -9,6 +9,7 @@
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 import urllib.error
@@ -61,6 +62,9 @@ def disabled() -> bool:
     return os.environ.get("JARVIS_TELEGRAM", "").lower() == "off" or os.path.exists(OFF_FILE)
 
 
+SESSION_FULL = re.compile(r"(conversation|session)\b.{0,80}\b(grown too large|too large to send|exceeds? the (model'?s )?context)", re.I | re.S)
+
+
 def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: str = "telegram-owner", timeout: int = 900,
                  state_path: str = None, clock=time.time):
     """The owner's own Hermes (private lane, its kernel-gated tools) through its API server on loopback. One session per
@@ -85,10 +89,9 @@ def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: st
                 fh.write(sid)
         return sid
 
-    def call(text: str) -> str:
+    def once(text: str, sid: str) -> str:
         with open(key_path, encoding="utf-8-sig") as fh:
             key = fh.read().strip()
-        sid = current()
         body = {"model": "hermes-agent", "messages": [{"role": "user", "content": text}], "stream": False}
         req = urllib.request.Request(base.rstrip("/") + "/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
                                      headers={"Content-Type": "application/json", "Authorization": "Bearer " + key,
@@ -103,7 +106,17 @@ def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: st
             fresh(sid)
             raise RuntimeError(f"agent error {type(e).__name__}; the next message starts a fresh conversation") from None
         return ((reply.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+
+    def call(text: str) -> str:
+        sid = current()
+        out = once(text, sid)
+        if SESSION_FULL.search(out[:300]):
+            # Hermes answers a full conversation with an ordinary 200 reply, so nothing above would start a new one and every
+            # later message of the day would get the same sentence. Durable facts live in memory and the kernel's task records.
+            out = once(text, fresh(sid))
+        return out
     call.session = current
+    call.reset = lambda: fresh(current())      # the next message starts a new conversation (an abandoned turn may still be running)
     return call
 
 

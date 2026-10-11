@@ -107,6 +107,31 @@ def _scrub_messages(body: dict):
     return body, found, blocked
 
 
+OWNER_REQUEST_TOKENS = 12000       # what a command from the owner costs the model before it has said anything (measured: 10.6k to 11k)
+
+
+def _usage(u) -> dict:
+    """The token counts a provider reported for a call (integers only), or {} when it reported none."""
+    if not isinstance(u, dict):
+        return {}
+    return {k: int(u[k]) for k in ("prompt_tokens", "completion_tokens", "total_tokens") if isinstance(u.get(k), (int, float))}
+
+
+def _usage_from_tail(tail: bytes) -> dict:
+    """The provider's own token count from the end of a body or stream. Real providers nest objects inside `usage`
+    (cached-token details, cost), so the value is decoded as JSON from where it starts, not matched by a pattern."""
+    text, out, dec = tail.decode("utf-8", "replace"), {}, json.JSONDecoder()
+    for m in re.finditer(r'"usage"\s*:\s*', text):
+        try:
+            obj, _ = dec.raw_decode(text, m.end())
+        except ValueError:
+            continue                                   # cut off by the start of the window, or not an object
+        u = _usage(obj)
+        if u:
+            out = u                                    # the last complete one wins (the final stream frame)
+    return out
+
+
 def _recent(times: list, now: float, window: float) -> list:
     return [t for t in times if now - t < window]
 
@@ -136,6 +161,26 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
     outage = {}                                 # provider name -> clock() until which it rests after server errors
     calls = {}   # agent -> list of timestamps
     acts, shows, prefers = {}, {}, {}   # agent -> timestamps, per action limit
+
+    def lane_wait(lane):
+        """Seconds until any provider of this lane may be asked again; 0 when one can be asked now. The owner plane uses it to say
+        "rate limited, back at HH:MM" at once, instead of letting the agent sit in its own ten-minute back-off."""
+        try:
+            chain = gateway.plan(providers, lane)
+        except gateway.RouteError:
+            return 0
+        # The owner's agent sends about 10k tokens before the owner has typed a word (its instructions and tool list), so a
+        # provider that cannot take that much is not one the command could use, and its being free proves nothing.
+        chain = [p for p in chain if sizing.fits_with_output(p, OWNER_REQUEST_TOKENS, sizing.MIN_OUTPUT)]
+        if not chain:
+            return 0
+        now = clock()
+        with lock:
+            rests = [max(cooling.get(p.name, 0), outage.get(p.name, 0)) for p in chain]
+        if not rests or any(t <= now for t in rests):
+            return 0
+        return max(1, math.ceil(min(rests) - now))
+    owner_plane.lane_wait = lane_wait
 
     def preferred(lane):
         r = kernel.db.execute("SELECT provider FROM lane_prefs WHERE lane=?", (lane,)).fetchone()
@@ -188,7 +233,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                         return 403, {"status": "refused", "level": d.name, "reason": d.reason}
                     if aid:
                         return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
-                                     "next": "the owner approves on Telegram (/approve " + aid + "); then send the same action again with approval_id"}
+                                     "next": "the owner approves " + aid + " in the JARVIS console (Command Center) or at the kernel console; then send the same action again with approval_id"}
                 jid = jobs.create(OUTPUT_NODE, "ui_action", params, approval_id=aid, owner=agent, lane=lane)
                 return 200, {"status": "queued", "job": jid}
             if tool == "ui" and op in ("list_windows", "snapshot"):
@@ -218,7 +263,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                         return 403, {"status": "refused", "level": d.name, "reason": d.reason}
                     if aid:
                         return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
-                                     "next": "the owner approves on Telegram (/approve " + aid + "); then send the same request with approval_id"}
+                                     "next": "the owner approves " + aid + " in the JARVIS console (Command Center) or at the kernel console; then send the same request with approval_id"}
                     d = kernel.authorize(a)              # no approval needed: the final gate still decides
                 if not d.allowed:
                     return 403, {"status": "refused", "level": d.name, "reason": d.reason}
@@ -234,7 +279,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                         return 403, {"status": "refused", "level": d.name, "reason": d.reason}
                     if aid:
                         return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
-                                     "next": "the owner approves on Telegram (/approve " + aid + "); then send the same action again with approval_id"}
+                                     "next": "the owner approves " + aid + " in the JARVIS console (Command Center) or at the kernel console; then send the same action again with approval_id"}
                 jid = jobs.create(OUTPUT_NODE, "pc_open", params, approval_id=aid, owner=agent, lane=lane)
                 return 200, {"status": "queued", "job": jid}
             if tool == "models" and op == "status":
@@ -712,6 +757,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                             (ch.get("message") or {}).pop(k, None)
                     self._send_reply(reply, stream)
                     kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "summary": True,
+                                                             "usage": _usage(reply.get("usage")),
                                                              "prompt_chars": prompt_chars, "est_tokens": est,
                                                              "out_chars": len(reply["choices"][0]["message"]["content"]), "ms": int((time.time() - t_call) * 1000)})
                     return
@@ -721,7 +767,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                     if stream:
                         self.send_header("Cache-Control", "no-cache")
                     self.end_headers()
-                    sent = 0
+                    sent, tail = 0, b""
                     while True:
                         chunk = resp.read1(65536) if hasattr(resp, "read1") else resp.read(65536)
                         if not chunk:
@@ -729,9 +775,11 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                         self.wfile.write(chunk)
                         self.wfile.flush()
                         sent += len(chunk)
+                        tail = (tail + chunk)[-8192:]                  # the provider's own token count sits at the end of the body/stream
                 kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "stream": stream, "bytes_out": sent,
                                                          "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
                                                          "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings,
+                                                         "usage": _usage_from_tail(tail),
                                                          "est_tokens": est, "ms": int((time.time() - t_call) * 1000)})
                 return
             kernel.audit.append("agent_model_request_failed", {"agent": agent, "lane": lane, "error": last, "classes": outcomes})
@@ -765,6 +813,8 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
 
         def _rate_limited(self, agent, lane, wait):
             kernel.audit.append("agent_model_rate_limited", {"agent": agent, "lane": lane, "retry_after_s": wait})
+            if lane == "private":                         # the owner's own agent: its command must not sit "running" through a back-off
+                owner_plane.provider_resting(wait)
             b = json.dumps({"error": {"message": f"all providers in this lane are rate limited; retry in {wait} s", "type": "rate_limit_error"}}).encode()
             self.send_response(429); self.send_header("Retry-After", str(wait)); self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
@@ -791,6 +841,23 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
             return 400, {"error": "tokens must be a number"}
         return 200, gateway.explain(providers, lane, q.get("purpose") or None, est, rest, preferred(lane))
     owner_plane.routes[("GET", "route")] = route_explain
+    probes = []                                          # timestamps: at most 10 probes an hour (each chat probe is a real, tiny request)
+
+    def probe_route(body, q):
+        name = str(body.get("provider", ""))
+        p = next((x for x in providers if x.name == name), None)
+        if p is None:
+            return 404, {"error": "no such provider"}
+        now = clock()
+        probes[:] = [t for t in probes if now - t < 3600]
+        if len(probes) >= 10:
+            return 429, {"error": "at most 10 provider probes per hour"}
+        probes.append(now)
+        res = gateway.probe(p, chat=bool(body.get("chat")))
+        kernel.audit.append("provider_probe", {"provider": p.name, "lane": p.lane, "chat": bool(body.get("chat")), "ok": res.get("ok"),
+                                               "status": res.get("status"), "usage": res.get("usage") or {}, "ms": res.get("ms")})
+        return 200, res
+    owner_plane.routes[("POST", "models/probe")] = probe_route
     from .automations import Automations
     from .agents import AgentDefs
     owner_plane.attach(Automations(kernel, tasks, jobs, owner_plane, dispatch=dispatch_to_lab, clock=clock),

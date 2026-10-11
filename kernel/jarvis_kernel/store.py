@@ -96,6 +96,11 @@ class Kernel:
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS approvals(id TEXT PRIMARY KEY, action_hash TEXT, level INT, expires REAL, state TEXT, action TEXT)"
         )
+        for col in ("reason TEXT", "decided REAL", "job TEXT", "created REAL"):   # older databases were created without these columns
+            try:
+                self.db.execute("ALTER TABLE approvals ADD COLUMN " + col)
+            except Exception:
+                pass
         self.audit = AuditLog(self.db)
         self.kill_file = self.dir / "KILL"
         self.lock = threading.RLock()
@@ -128,9 +133,10 @@ class Kernel:
         if d.needs_approval and not d.denied and not self.killed():
             aid = secrets.token_hex(8)
             with self.lock:
+                now = time.time()
                 self.db.execute(
-                    "INSERT INTO approvals VALUES (?,?,?,?,?,?)",
-                    (aid, a.digest(), d.level, time.time() + self.APPROVAL_TTL, "pending", json.dumps(a.describe(), default=str)),
+                    "INSERT INTO approvals(id, action_hash, level, expires, state, action, reason, created) VALUES (?,?,?,?,?,?,?,?)",
+                    (aid, a.digest(), d.level, now + self.APPROVAL_TTL, "pending", json.dumps(a.describe(2000), default=str), d.reason[:200], now),
                 )
         return d, aid
 
@@ -143,24 +149,60 @@ class Kernel:
     def approve(self, aid: str) -> bool:
         """Human step. The CLI only calls this after a real-console confirmation. Atomic: pending -> approved once."""
         with self.lock:
-            cur = self.db.execute("UPDATE approvals SET state='approved' WHERE id=? AND state='pending' AND expires>=?", (aid, time.time()))
+            cur = self.db.execute("UPDATE approvals SET state='approved', decided=? WHERE id=? AND state='pending' AND expires>=?",
+                                  (time.time(), aid, time.time()))
         ok = cur.rowcount == 1
         self.audit.append("approved" if ok else "approve_refused", {"id": aid})
         return ok
 
     def deny(self, aid: str) -> bool:
         """Human step: pending -> denied, once. A denied approval can never be approved or used."""
-        cur = self.db.execute("UPDATE approvals SET state='denied' WHERE id=? AND state='pending'", (aid,))
+        cur = self.db.execute("UPDATE approvals SET state='denied', decided=? WHERE id=? AND state='pending'", (time.time(), aid))
         ok = cur.rowcount == 1
         self.audit.append("denied" if ok else "deny_refused", {"id": aid})
         return ok
 
+    @staticmethod
+    def _truncated(x) -> bool:
+        if isinstance(x, str):
+            return x.endswith("...[truncated]")
+        if isinstance(x, dict):
+            return any(Kernel._truncated(v) for v in x.values())
+        if isinstance(x, list):
+            return any(Kernel._truncated(v) for v in x)
+        return False
+
     def pending_approvals(self, limit=20):
-        """Approvals waiting for the owner, newest first: id, level, the scrubbed action, seconds left."""
+        """Approvals waiting for the owner, newest first: id, level, why, the scrubbed action as it is bound, and the
+        first characters of its digest so the owner can match it to what the agent asked for."""
         now = time.time()
-        rows = self.db.execute("SELECT id, level, action, expires FROM approvals WHERE state='pending' AND expires>=? "
+        rows = self.db.execute("SELECT id, level, action, expires, reason, action_hash FROM approvals WHERE state='pending' AND expires>=? "
                                "ORDER BY expires DESC LIMIT ?", (now, limit)).fetchall()
-        return [{"id": i, "level": NAMES[lv], "action": json.loads(a), "seconds_left": round(e - now)} for i, lv, a, e in rows]
+        out = []
+        for i, lv, a, e, why, h in rows:
+            act = json.loads(a)
+            out.append({"id": i, "level": NAMES[lv], "action": act, "seconds_left": round(e - now), "reason": why or "", "digest": (h or "")[:12],
+                        "truncated": self._truncated(act)})
+        return out
+
+    def approval_history(self, limit=15):
+        """Decided approvals, newest first, with the authoritative outcome: denied, expired, approved (not yet used),
+        or used (consumed once; `job` is the job it authorized, if any)."""
+        now = time.time()
+        rows = self.db.execute("SELECT id, level, action, expires, state, decided, job, reason FROM approvals WHERE state!='pending' "
+                               "OR expires<? ORDER BY COALESCE(decided, expires) DESC LIMIT ?", (now, limit)).fetchall()
+        out = []
+        for i, lv, a, e, st, dec, job, why in rows:
+            state = st if st != "pending" else "expired"
+            if st == "approved" and e < now:
+                state = "expired"
+            act = json.loads(a)
+            out.append({"id": i, "level": NAMES[lv], "state": state, "at": dec or e, "job": job, "reason": why or "",
+                        "action": {"tool": act.get("tool"), "op": act.get("op"), "target": str(act.get("target", ""))[:120], "lane": act.get("lane")}})
+        return out
+
+    def link_approval_job(self, aid: str, job: str):
+        self.db.execute("UPDATE approvals SET job=? WHERE id=? AND state='used'", (job, aid or ""))
 
     def authorize(self, a: Action, approval_id=None, suggested=None) -> Decision:
         """Final gate before any action runs. Raises Killed; otherwise returns a Decision with .allowed set."""
@@ -175,8 +217,8 @@ class Kernel:
             # One atomic statement consumes the approval: only a single caller can ever get rowcount 1.
             with self.lock:
                 cur = self.db.execute(
-                    "UPDATE approvals SET state='used' WHERE id=? AND state='approved' AND expires>=? AND action_hash=? AND level>=?",
-                    (approval_id or "", time.time(), a.digest(), d.level),
+                    "UPDATE approvals SET state='used', decided=? WHERE id=? AND state='approved' AND expires>=? AND action_hash=? AND level>=?",
+                    (time.time(), approval_id or "", time.time(), a.digest(), d.level),
                 )
             if cur.rowcount == 1:
                 ok, reason = True, "approved, single use"

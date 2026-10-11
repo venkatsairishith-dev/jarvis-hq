@@ -10,6 +10,7 @@ Rules (all deterministic):
 import json
 import os
 import re
+import time
 import urllib.request
 from dataclasses import dataclass, field
 
@@ -136,6 +137,62 @@ def explain(providers, task_lane: str, purpose: str | None = None, est_tokens: i
             "chosen": eligible[0][0].name if eligible else None, "candidates": cands,
             "policy": {"never_crosses_lanes": True, "paid_providers_refused": True, "order": "owner preference, then priority, then local first"},
             "note": None if eligible else "no provider can serve this request; the kernel would answer with an error, not widen the lane"}
+
+
+PROBE_HEADERS = ("retry-after", "x-ratelimit-limit-requests", "x-ratelimit-remaining-requests", "x-ratelimit-limit-tokens",
+                 "x-ratelimit-remaining-tokens", "x-ratelimit-reset-requests", "x-ratelimit-reset-tokens", "x-request-id")
+
+
+def probe(p: Provider, chat: bool = False, timeout: float = 20.0) -> dict:
+    """What a provider actually is and does, measured with the real key (read here, inside the kernel, never returned):
+    its model list, whether the configured model is in it, rate-limit headers it sends, and (chat=True) one tiny real
+    request with the token counts it reports. Fixed prompt: no private data ever goes in. Errors are reported by class."""
+    out = {"provider": p.name, "lane": p.lane, "base_url_host": re.sub(r"^https?://([^/]+).*$", r"\1", p.base_url or ""),
+           "configured_model": p.default_model, "ok": False}
+    if not p.available():
+        out["why"] = "not available here (disabled, no endpoint, key file missing, or another machine's provider)"
+        return out
+    headers = {"Content-Type": "application/json", "User-Agent": "jarvis-probe/0.1"}
+    if p.key_file:
+        try:
+            headers["Authorization"] = "Bearer " + open(p.key_path(), encoding="utf-8-sig").read().strip()
+        except OSError:
+            out["why"] = "key file unreadable"
+            return out
+    base = p.base_url.rstrip("/")
+    t0 = time.time()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(base + "/models", headers=headers), timeout=timeout) as r:
+            out["status"] = r.status
+            out["headers"] = {h: r.headers.get(h) for h in PROBE_HEADERS if r.headers.get(h)}
+            data = json.loads(r.read() or b"{}")
+        ids = [m.get("id") for m in (data.get("data") or []) if isinstance(m, dict)]
+        out.update(models_count=len(ids), model_listed=p.default_model in ids, sample_models=[str(i)[:60] for i in ids[:8]], ok=True)
+    except Exception as e:
+        out["models_error"] = type(e).__name__ + (f" {getattr(e, 'code', '')}" if hasattr(e, "code") else "")
+    out["ms"] = round((time.time() - t0) * 1000)
+    if chat:
+        body = {"model": p.default_model, "max_tokens": 8, "temperature": 0,
+                "messages": [{"role": "user", "content": "Reply with the single word: ok"}]}
+        body.update(p.extra_body)
+        t1 = time.time()
+        try:
+            req = urllib.request.Request(base + "/chat/completions", data=json.dumps(body).encode(), headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=max(timeout, p.timeout_s or 0)) as r:
+                rep = json.loads(r.read())
+                hdrs = {h: r.headers.get(h) for h in PROBE_HEADERS if r.headers.get(h)}
+            u = rep.get("usage") or {}
+            out["chat"] = {"ok": True, "ms": round((time.time() - t1) * 1000), "model": str(rep.get("model", ""))[:80],
+                           "finish_reason": ((rep.get("choices") or [{}])[0]).get("finish_reason"),
+                           "usage": {k: u[k] for k in ("prompt_tokens", "completion_tokens", "total_tokens") if isinstance(u.get(k), (int, float))},
+                           "headers": hdrs}
+            out["usage"] = out["chat"]["usage"]
+            out["ok"] = True
+        except Exception as e:
+            out["chat"] = {"ok": False, "error": type(e).__name__ + (f" {getattr(e, 'code', '')}" if hasattr(e, "code") else ""),
+                           "ms": round((time.time() - t1) * 1000)}
+            out["ok"] = False
+    return out
 
 
 def call(kernel, providers, task_lane: str, prompt: str, purpose: str | None = None, model: str = "default", timeout=60, max_tokens=256):

@@ -34,7 +34,7 @@ def main():
 
     def hermes(text):
         log.append(text)
-        time.sleep(0.4)
+        time.sleep(6 if "slow" in text.lower() else 0.4)
         if "fail" in text.lower():
             raise RuntimeError("agent HTTP 500; the next message starts a fresh conversation")
         return "Done. I opened your Downloads folder. Nothing else was changed."
@@ -44,6 +44,7 @@ def main():
     ksrv = ThreadingHTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=ksrv.serve_forever, daemon=True).start()
     token = tokens.issue("console", "owner")
+    agent_token = tokens.issue("hermes", "private")          # what an agent would hold; the tests use it to ask for approvals
     tokfile = os.path.join(tmp, "owner.token")
     with open(tokfile, "w") as fh:
         fh.write(token)
@@ -75,7 +76,7 @@ def main():
                  hub_url="http://127.0.0.1:9", local_llm_url="http://127.0.0.1:9")
     srv = make_server(cfg)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    info = {"console": PORT, "kernel": ksrv.server_address[1], "tmp": tmp, "tasks": {"done": done, "running": running}}
+    info = {"console": PORT, "kernel": ksrv.server_address[1], "tmp": tmp, "tasks": {"done": done, "running": running}, "agent_token": agent_token}
     print(json.dumps(info), flush=True)
     if KERNEL_FILE:
         with open(KERNEL_FILE, "w") as fh:

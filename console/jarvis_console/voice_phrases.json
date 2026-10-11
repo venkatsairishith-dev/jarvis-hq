@@ -1,0 +1,29 @@
+{
+  "_note": "Sample phrases for the real-microphone Voice Check. Drafted by the assistant: edit them to what you would really say (this file is yours). Keep each to one short sentence.",
+  "en": [
+    "Open my downloads folder",
+    "What are you working on right now",
+    "Stop all running tasks",
+    "Take a screenshot of my screen",
+    "Remind me tomorrow at eight in the morning about the team meeting",
+    "Create a Python software engineer agent that writes code and tests it",
+    "Check the jarvis project and tell me if the tests pass",
+    "Remember that I prefer dark themes and short answers"
+  ],
+  "hi": [
+    "मेरा डाउनलोड फ़ोल्डर खोलो",
+    "नोटपैड खोलो",
+    "आज का मौसम कैसा है",
+    "सभी चल रहे काम रोक दो",
+    "मुझे याद दिलाओ कि कल सुबह आठ बजे बैठक है",
+    "एक नया एजेंट बनाओ जो कोड लिखे और टेस्ट करे"
+  ],
+  "te": [
+    "నా డౌన్‌లోడ్ ఫోల్డర్ తెరవండి",
+    "నోట్‌ప్యాడ్ తెరవండి",
+    "ఈ రోజు వాతావరణం ఎలా ఉంది",
+    "అన్ని పనులను ఆపండి",
+    "రేపు ఉదయం ఎనిమిది గంటలకు నాకు గుర్తు చేయండి",
+    "కొత్త ఏజెంట్‌ను సృష్టించండి"
+  ]
+}

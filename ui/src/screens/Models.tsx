@@ -8,7 +8,8 @@ import { Badge, Card, Empty, ErrorNote, Tabs } from "../components/ui";
 interface Models {
   providers: ProviderRow[];
   agents: { name: string; lane: string; calls: number; failed_requests: number; last_call: number | null; provider: string | null }[];
-  kpis: { model_calls_24h: number; failed_requests_24h: number; success_rate_24h: number | null; est_tokens_in_24h: number };
+  kpis: { model_calls_24h: number; failed_requests_24h: number; success_rate_24h: number | null; est_tokens_in_24h: number;
+          measured_tokens_24h?: { prompt: number; completion: number; calls: number }; measured_by_provider_24h?: Record<string, { prompt: number; completion: number; calls: number }> };
   actions_24h: Record<string, number>;
 }
 interface Skills { active: Record<string, unknown>; staged: { name: string; risk: string | null; source: string | null; license: string | null; rejected: boolean }[] }
@@ -23,6 +24,38 @@ const CODE_TEXT: Record<string, string> = {
   PURPOSE_MISMATCH: "does not serve this purpose", CONTEXT_TOO_SMALL: "the request is larger than its context limit",
   RESTING_AFTER_ERRORS: "resting after recent errors", UNKNOWN_LANE: "unknown lane", OWNER_PREFERRED: "you prefer it", LOCAL_FIRST: "local models first",
 };
+
+interface Probe { ok: boolean; provider: string; base_url_host: string; configured_model: string; why?: string; status?: number; models_count?: number;
+  model_listed?: boolean; sample_models?: string[]; models_error?: string; headers?: Record<string, string>; ms?: number;
+  chat?: { ok: boolean; ms: number; model?: string; usage?: Record<string, number>; error?: string; finish_reason?: string; headers?: Record<string, string> } }
+
+function ProbeButton({ name }: { name: string }) {
+  const [r, setR] = useState<Probe | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async (chat: boolean) => {
+    setBusy(true); setErr(null);
+    try { setR(await owner.post<Probe>("models/probe", { provider: name, chat })); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-1">
+      <div className="flex gap-1">
+        <button className="rounded-md border border-edge px-2 py-0.5 text-xs hover:bg-hover disabled:opacity-50" disabled={busy} onClick={() => void run(false)} title="Ask the provider for its model list (no tokens used)">Check</button>
+        <button className="rounded-md border border-edge px-2 py-0.5 text-xs hover:bg-hover disabled:opacity-50" disabled={busy} onClick={() => void run(true)} title="One tiny real request with a fixed prompt; reports the tokens it used">Test call</button>
+      </div>
+      {err && <p className="text-xs text-err-fg">{err}</p>}
+      {r && (
+        <div className="max-w-xs space-y-0.5 text-xs text-fg2" aria-label={`Probe of ${name}`}>
+          <p><Badge tone={r.ok ? "done" : "err"}>{r.ok ? "reachable" : "problem"}</Badge> {r.base_url_host}{r.status ? ` · HTTP ${r.status}` : ""}{r.ms ? ` · ${r.ms} ms` : ""}</p>
+          {r.why && <p>{r.why}</p>}
+          {r.models_error && <p className="text-err-fg">model list: {r.models_error}</p>}
+          {r.models_count !== undefined && <p>{r.models_count} models; configured “{r.configured_model}” {r.model_listed ? "is listed" : "is NOT in the list"}</p>}
+          {r.headers && Object.keys(r.headers).length > 0 && <p className="font-mono">{Object.entries(r.headers).map(([k, v]) => `${k}: ${v}`).join(" · ")}</p>}
+          {r.chat && <p>{r.chat.ok ? `test call ok in ${r.chat.ms} ms, model ${r.chat.model}, tokens ${JSON.stringify(r.chat.usage)}` : `test call failed: ${r.chat.error}`}</p>}
+        </div>)}
+    </div>
+  );
+}
 
 function Why() {
   const [lane, setLane] = useState("private");
@@ -74,18 +107,23 @@ export function Models() {
           <div className="grid gap-3 sm:grid-cols-3">
             <Card><p className="text-xs text-fg3">Model calls (24 h)</p><p className="num text-2xl font-semibold">{m?.kpis.model_calls_24h ?? "…"}</p></Card>
             <Card><p className="text-xs text-fg3">Success rate (24 h)</p><p className="num text-2xl font-semibold">{m?.kpis.success_rate_24h != null ? `${m.kpis.success_rate_24h}%` : "n/a"}</p></Card>
-            <Card><p className="text-xs text-fg3">Prompt tokens in (estimated from characters)</p><p className="num text-2xl font-semibold">{m ? m.kpis.est_tokens_in_24h.toLocaleString() : "…"}</p></Card>
+            <Card><p className="text-xs text-fg3">Tokens (24 h): reported by providers / estimated from characters</p>
+              <p className="num text-2xl font-semibold">{m?.kpis.measured_tokens_24h ? (m.kpis.measured_tokens_24h.prompt + m.kpis.measured_tokens_24h.completion).toLocaleString() : "0"}
+                <span className="text-sm font-normal text-fg3"> / ~{m ? m.kpis.est_tokens_in_24h.toLocaleString() : "…"} in</span></p>
+              <p className="text-xs text-fg3">{m?.kpis.measured_tokens_24h?.calls ?? 0} of {m?.kpis.model_calls_24h ?? 0} calls reported usage</p></Card>
           </div>
           <Card title="Providers the kernel may use">
             {!m ? null : m.providers.length === 0 ? <Empty title="No enabled provider" /> :
-              <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-fg3"><tr><th className="py-2 pr-3">Provider</th><th className="pr-3">Lane</th><th className="pr-3">Model</th><th className="pr-3">Status</th><th className="pr-3">ok / failed</th><th className="pr-3">Context limit</th><th>Last</th></tr></thead>
+              <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-fg3"><tr><th className="py-2 pr-3">Provider</th><th className="pr-3">Lane</th><th className="pr-3">Model</th><th className="pr-3">Status</th><th className="pr-3">ok / failed</th><th className="pr-3">Context limit</th><th className="pr-3">Last</th><th>Probe</th></tr></thead>
                 <tbody>{m.providers.map((p) => (
                   <tr key={p.name} className="border-t border-line"><td className="py-2 pr-3 font-medium">{p.name}{p.preferred && <Badge tone="accent"> preferred</Badge>}</td>
                     <td className="pr-3"><Badge tone={p.lane === "private" ? "done" : p.lane === "public" ? "wait" : "idle"}>{p.lane}</Badge></td><td className="pr-3 font-mono text-xs">{p.model}</td>
                     <td className="pr-3"><Badge tone={p.available ? "done" : "err"}>{p.available ? "available" : "unavailable"}</Badge></td>
                     <td className="num pr-3">{p.ok ?? 0} / {p.failed ?? 0}</td>
                     <td className="num pr-3">{String(p.limits?.max_total_tokens ?? p.limits?.max_input_tokens ?? "n/a")}</td>
-                    <td className="text-xs text-fg3">{p.last_ok ? `ok ${ago(p.last_ok)}` : ""}{p.last_error ? ` · ${p.last_error}` : ""}</td></tr>))}</tbody></table></div>}
+                    <td className="pr-3 text-xs text-fg3">{p.last_ok ? `ok ${ago(p.last_ok)}` : ""}{p.last_error ? ` · ${p.last_error}` : ""}
+                      {m.kpis.measured_by_provider_24h?.[p.name] && <span className="block">{(m.kpis.measured_by_provider_24h[p.name].prompt + m.kpis.measured_by_provider_24h[p.name].completion).toLocaleString()} tokens reported (24 h)</span>}</td>
+                    <td><ProbeButton name={p.name} /></td></tr>))}</tbody></table></div>}
             <p className="mt-3 text-xs text-fg3">Routing is decided by the kernel's gateway: the lane comes from each agent's token, and a request never crosses lanes. Changing a provider is a configuration change on the server (<code>config/providers.json</code>), not a button here.</p>
           </Card>
           <Why />

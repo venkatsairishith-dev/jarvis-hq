@@ -78,14 +78,19 @@ def llm_predict(url: str, model: str, text: str, timeout=20):
     return (cat if cat in CATEGORIES else None), ms, (o.get("usage") or {}).get("prompt_tokens", 0)
 
 
-def classify(text: str, llm_url: str | None = None, model: str = "qwen3") -> dict:
+DOWN_FOR = 30.0          # seconds to leave a model server alone after it failed
+_down_until = 0.0        # a refused connection to localhost costs about two seconds on Windows: pay it once, not on every call
+
+
+def classify(text: str, llm_url: str | None = None, model: str = "qwen3", clock=time.monotonic) -> dict:
     """Structured routing metadata. Always answers: the rules cover a down or confused model. `advisory` is always true."""
     text = " ".join(str(text or "").split())[:600]
     out = {"category": None, "label": None, "method": "rules", "advisory": True, "ms": 0, "also": None}
     if not text:
         return dict(out, category="clarify", label=LABELS["clarify"])
     rule = rules_predict(text)
-    if llm_url:
+    global _down_until
+    if llm_url and clock() >= _down_until:
         try:
             cat, ms, _ = llm_predict(llm_url, model, text)
             if cat:
@@ -94,5 +99,5 @@ def classify(text: str, llm_url: str | None = None, model: str = "qwen3") -> dic
                 return {"category": final, "label": LABELS[final], "method": "local-llm", "advisory": True, "ms": round(ms),
                         "also": rule if rule != final else None}
         except Exception:
-            pass                                               # server down or slow: the rules answer
+            _down_until = clock() + DOWN_FOR                   # server down or slow: the rules answer, and it is not asked again for a while
     return dict(out, category=rule, label=LABELS[rule])

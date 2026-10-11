@@ -165,7 +165,7 @@ def pc_action(op: str, target: str, text: str = "", approval_id: str = "") -> st
 
 def _pc(op, target, path="", approval_id=""):
     """Open something on the owner's laptop through the kernel (pc.<op>): the owner's own agent at once, a lab agent
-    after the owner approves on Telegram (call again with the same arguments plus approval_id)."""
+    after the owner approves in the JARVIS console (call again with the same arguments plus approval_id)."""
     _log(op, f"{target} {path}".strip() + (" (approved)" if approval_id else ""))
     r = _act("pc", op, target, {"path": path} if path else {}, approval_id)
     if r.get("status") == "queued":

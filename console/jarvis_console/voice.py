@@ -8,6 +8,7 @@ One speech model is resident at a time per direction and is unloaded after an id
 planner LLM and RAM stays small. Missing models or engines degrade to a clear status, never a crash.
 """
 import io
+import json
 import os
 import subprocess
 import tempfile
@@ -72,6 +73,7 @@ class Voice:
         self._stt = (None, None)                      # (key, recognizer)
         self._tts = None
         self._vad = None
+        self._worker = None                           # the resident Piper process (hi/te speech)
         self._last = 0.0
         self.last_error = None
         self.stats = {"stt_calls": 0, "tts_calls": 0, "last_stt_ms": None, "last_tts_ms": None}
@@ -104,15 +106,16 @@ class Voice:
                    "available": bool(have(self.tts_paths(l)) and ((sherpa_onnx and np) if l == "en" else os.path.exists(self.piper_python)))}
                for l in LANGS}
         return {"engine": "sherpa-onnx" if sherpa_onnx else None, "stt": stt, "tts": tts,
-                "vad": os.path.exists(self.p("vad", "silero_vad.onnx")), "resident_stt": self._stt[0], "resident_tts": bool(self._tts),
+                "vad": os.path.exists(self.p("vad", "silero_vad.onnx")), "resident_stt": self._stt[0], "resident_tts": bool(self._tts), "resident_piper": bool(self._worker and self._worker.poll() is None),
                 "idle_unload_s": self.idle, "threads": self.threads, "stats": self.stats, "last_error": self.last_error,
                 "audio_leaves_machine": False}
 
     # ---- lifecycle
     def unload_if_idle(self):
         with self._lock:
-            if self.idle and self.clock() - self._last > self.idle and (self._stt[1] or self._tts):
+            if self.idle and self.clock() - self._last > self.idle and (self._stt[1] or self._tts or self._worker):
                 self._stt, self._tts, self._vad = (None, None), None, None
+                self._stop_worker()
                 return True
         return False
 
@@ -149,6 +152,25 @@ class Voice:
                 r = sherpa_onnx.OfflineRecognizer.from_nemo_ctc(model=m, tokens=t, num_threads=self.threads)
             self._stt = (info["key"], r)
         return self._stt[1]
+
+    def warm(self, lang="en"):
+        """Load what this language needs now, so the first real request does not pay for it. Safe to call repeatedly."""
+        if lang not in LANGS:
+            raise VoiceError("language must be en, hi or te")
+        t0 = time.time()
+        loaded = []
+        if sherpa_onnx and np and all(os.path.exists(f) for f in self.stt_paths(lang)["files"]):
+            with self._lock:
+                rec = self._recognizer(lang)
+                st = rec.create_stream()
+                st.accept_waveform(SR, (np.random.default_rng(0).standard_normal(SR // 2) * 0.01).astype("float32"))
+                rec.decode_stream(st)
+                self._last = self.clock()
+            loaded.append("stt")
+        if all(os.path.exists(f) for f in self.tts_paths(lang)["files"]):
+            self.speak("ok", lang)
+            loaded.append("tts")
+        return {"language": lang, "loaded": loaded, "ms": round((time.time() - t0) * 1000)}
 
     # ---- speech to text
     def transcribe(self, wav: bytes, lang="en"):
@@ -235,13 +257,44 @@ class Voice:
             return wav, {"model": info["name"], "rate": rate, "ms": ms, "language": lang}
 
     def _piper(self, text, model):
-        """Piper in its own process (its runtime is GPL-3.0): text on stdin, WAV file out."""
-        with tempfile.TemporaryDirectory() as td:
-            out = os.path.join(td, "out.wav")
-            env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")    # Windows reads stdin as cp1252 otherwise
-            r = subprocess.run([self.piper_python, "-m", "piper", "-m", model, "-f", out], input=text.encode("utf-8"),
-                               capture_output=True, timeout=60, env=env)
-            if r.returncode != 0 or not os.path.exists(out):
-                raise VoiceError("the Piper voice failed: " + r.stderr.decode("utf-8", "replace")[-160:], 500)
-            with open(out, "rb") as fh:
-                return fh.read()
+        """Piper in its own resident process (its runtime is GPL-3.0): the voice stays loaded, so a sentence costs
+        its synthesis time, not a process start. A dead or confused worker is replaced once, then reported."""
+        for attempt in (1, 2):
+            try:
+                w = self._worker_proc()
+                w.stdin.write(json.dumps({"model": model, "text": text}).encode("utf-8") + b"\n")
+                w.stdin.flush()
+                head = json.loads(w.stdout.readline() or b"{}")
+                if not head.get("ok"):
+                    raise VoiceError("the Piper voice failed: " + str(head.get("error", "no answer"))[:160], 500)
+                data = w.stdout.read(int(head["bytes"]))
+                if len(data) != int(head["bytes"]):
+                    raise OSError("short read")
+                return data
+            except VoiceError:
+                raise
+            except (OSError, ValueError, KeyError):
+                self._stop_worker()
+                if attempt == 2:
+                    raise VoiceError("the Piper voice worker did not answer", 500)
+
+    def _worker_proc(self):
+        if self._worker is not None and self._worker.poll() is None:
+            return self._worker
+        env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "piper_worker.py")
+        self._worker = subprocess.Popen([self.piper_python, script], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env,
+                                        creationflags=0x08000000 if os.name == "nt" else 0)
+        ready = self._worker.stdout.readline()
+        if b"ready" not in ready:
+            self._stop_worker()
+            raise VoiceError("the Piper voice worker did not start", 503)
+        return self._worker
+
+    def _stop_worker(self):
+        w, self._worker = self._worker, None
+        if w is not None:
+            try:
+                w.kill()
+            except OSError:
+                pass

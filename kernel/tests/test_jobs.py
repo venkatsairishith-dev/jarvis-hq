@@ -64,6 +64,17 @@ class Queue(unittest.TestCase):
         self.assertFalse(self.j.finish("laptop", jid, {"ok": False}))          # no second answer
         self.assertFalse(self.j.finish("laptop", "nonexistent", GOOD))
 
+    def test_a_node_that_says_it_is_idle_fails_the_job_it_no_longer_has(self):
+        jid = self.j.create("laptop", "project_check", {"project": "jarvis-hq"}); self.j.next_for("laptop")
+        now = time.time()
+        self.assertEqual(self.j.fail_orphans("laptop", now + 5), 0)              # just handed over: within the grace period
+        self.assertEqual(self.j.fail_orphans("other-node", now + 120), 0)        # another node's idle report says nothing about this job
+        self.assertEqual(self.j.fail_orphans("laptop", now + 120), 1)
+        rep = self.j.to_report()
+        self.assertEqual([(r[0], r[2]) for r in rep], [(jid, "failed")])
+        self.assertIn("restarted or lost", json.dumps(rep[0][4]))
+        self.assertFalse(self.j.finish("laptop", jid, GOOD))                     # a late result for it is not accepted as a success
+
     def test_unstarted_job_cannot_be_finished(self):
         jid = self.j.create("laptop", "project_check", {"project": "jarvis-hq"})
         self.assertFalse(self.j.finish("laptop", jid, GOOD))                    # never handed out

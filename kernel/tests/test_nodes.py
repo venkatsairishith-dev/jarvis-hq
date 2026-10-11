@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -110,6 +111,31 @@ class T(unittest.TestCase):
             post("/pair", {"code": "x", "name": "y"})
         self.assertEqual(cm.exception.code, 403)
         srv.shutdown()
+
+    def test_a_report_that_says_busy_false_fails_the_jobs_the_node_no_longer_holds(self):
+        from jarvis_kernel.jobs import Jobs
+        H, _ = make_handler(self.k)
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        url = f"http://127.0.0.1:{srv.server_address[1]}"
+        def post(path, obj, tok=None):
+            r = urllib.request.Request(url + path, data=json.dumps(obj).encode(), method="POST")
+            if tok: r.add_header("Authorization", "Bearer " + tok)
+            return json.loads(urllib.request.urlopen(r, timeout=10).read())
+        try:
+            tok = post("/pair", {"code": self.n.new_code(), "name": "laptop"})["token"]
+            jobs = Jobs(self.k)
+            jid = jobs.create("laptop", "project_check", {"project": "jarvis-hq"})
+            self.assertEqual(post("/jobs/next", {}, tok)["job"]["id"], jid)
+            self.k.db.execute("UPDATE jobs SET started=? WHERE id=?", (time.time() - 120, jid))      # handed over two minutes ago
+            post("/report", {"state": STATE, "busy": True}, tok)                                   # still working: left alone
+            self.assertEqual(self.k.db.execute("SELECT state FROM jobs WHERE id=?", (jid,)).fetchone()[0], "running")
+            post("/report", {"state": STATE}, tok)                                                  # an older node that does not say: left alone
+            self.assertEqual(self.k.db.execute("SELECT state FROM jobs WHERE id=?", (jid,)).fetchone()[0], "running")
+            post("/report", {"state": STATE, "busy": False}, tok)                                  # idle: it cannot be running it
+            self.assertEqual(self.k.db.execute("SELECT state FROM jobs WHERE id=?", (jid,)).fetchone()[0], "failed")
+        finally:
+            srv.shutdown()
 
     def test_serve_refuses_all_interfaces(self):
         r = subprocess.run([sys.executable, "-m", "jarvis_kernel", "--data", self.tmp.name, "serve", "--bind", "0.0.0.0"],

@@ -131,6 +131,9 @@ def make_handler(kernel):
                     name = nodes.report(auth[7:] if auth.startswith("Bearer ") else "", data.get("state", {}))
                     if not name:
                         return self._json(401, {"error": "unauthorized"})
+                    if data.get("busy") is False:            # the node itself says it has no job in hand
+                        from .jobs import Jobs
+                        Jobs(kernel).fail_orphans(name)
                     return self._json(200, {"ok": True, "killed": kernel.killed()})
                 if self.path in ("/jobs/next", "/jobs/result"):
                     auth = self.headers.get("Authorization", "")

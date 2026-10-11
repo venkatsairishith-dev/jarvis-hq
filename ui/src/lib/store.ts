@@ -46,6 +46,7 @@ export const store = {
 
   setPrefs(p: Partial<Prefs>) {
     const prefs = { ...snap.prefs, ...p };
+    if (p.lang && p.lang !== snap.prefs.lang) void api.post("/api/voice/warm", { lang: p.lang }).catch(() => undefined);   // load that language's models now
     set({ prefs });
     try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* not persisted: still applied this session */ }
     document.documentElement.dataset.theme = prefs.theme;
@@ -74,6 +75,7 @@ export const store = {
     if (started) return;
     started = true;
     document.documentElement.dataset.theme = snap.prefs.theme;
+    void api.post("/api/voice/warm", { lang: snap.prefs.lang }).catch(() => undefined);      // the first spoken request should not wait for a model load
     void this.refresh(); void this.refreshHealth();
     window.setInterval(() => void this.refresh(), 3000);
     window.setInterval(() => void this.refreshHealth(), 15000);

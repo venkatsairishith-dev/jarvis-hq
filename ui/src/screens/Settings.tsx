@@ -1,10 +1,98 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { api, owner } from "../lib/api";
 import { store, useStore } from "../lib/store";
+import { voice } from "../lib/voice";
 import { Badge, Button, Card, ErrorNote } from "../components/ui";
 import type { AuditEvent } from "../lib/types";
 
 interface Cfg { kernel_url: string; hub_url: string; port: number; owner_token_file_present: boolean; outputs_dir: string; voice_dir: string; voice_threads: number; voice_idle_unload_s: number; local_llm_url: string }
+
+
+interface CheckRow { lang: "en" | "hi" | "te"; expected: string; heard: string; wer: number | null; cer: number | null; exact: boolean; ms: number | null; speech: boolean; model: string }
+interface CheckSummary { [lang: string]: { phrases: number; mean_wer: number; mean_cer: number; exact: number; median_ms: number | null; no_speech: number } }
+
+function VoiceCheck() {
+  const vs = useSyncExternalStore(voice.subscribe, voice.snapshot);
+  const [phrases, setPhrases] = useState<Record<string, string[]>>({});
+  const [history, setHistory] = useState<{ file: string; at: number; device: string; n: number; summary: CheckSummary }[]>([]);
+  const [lang, setLang] = useState<"en" | "hi" | "te">("en");
+  const [idx, setIdx] = useState(0);
+  const [rows, setRows] = useState<CheckRow[]>([]);
+  const [pending, setPending] = useState<CheckRow | null>(null);
+  const [device, setDevice] = useState("");
+  const [saved, setSaved] = useState<CheckSummary | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => { api.get<{ phrases: Record<string, string[]>; results: typeof history }>("/api/voice/check/phrases").then((r) => { setPhrases(r.phrases); setHistory(r.results); }).catch(() => undefined); }, [saved]);
+  const list = phrases[lang] ?? [];
+  const done = new Set(rows.filter((r) => r.lang === lang).map((r) => r.expected));
+
+  const record = async () => {
+    setErr(null); setPending(null);
+    if (!device) {
+      try {
+        const ds = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+        setDevice(ds[0]?.label || "default microphone");
+      } catch { /* the label is optional */ }
+    }
+    await voice.start();
+  };
+  const stop = async () => {
+    const heard = await voice.finish(lang);
+    if (heard === null) return;
+    const t = voice.snapshot().lastTranscript;
+    const expected = list[idx] ?? "";
+    try {
+      const sc = await api.post<{ wer: number | null; cer: number | null; exact: boolean }>("/api/voice/check/score", { expected, heard });
+      setPending({ lang, expected, heard, wer: sc.wer, cer: sc.cer, exact: sc.exact, ms: t?.ms ?? null, speech: t?.speech ?? true, model: t?.model ?? "" });
+    } catch (e) { setErr((e as Error).message); }
+  };
+  const accept = () => { if (pending) { setRows((r) => [...r, pending]); setPending(null); setIdx((i) => Math.min(i + 1, Math.max(0, list.length - 1))); } };
+  const save = async () => {
+    try { const r = await api.post<{ saved: string; summary: CheckSummary }>("/api/voice/check/save", { rows, device }); setSaved(r.summary); setRows([]); store.toast("ok", `Saved ${r.saved} on this computer.`); }
+    catch (e) { setErr((e as Error).message); }
+  };
+
+  return (
+    <Card title="Voice check (your real microphone)">
+      <div className="space-y-3 text-sm">
+        <p className="text-fg2">Say each phrase naturally. Everything runs on this computer; only the text and scores are saved (not the audio). The phrases are a draft: edit <span className="font-mono">console/jarvis_console/voice_phrases.json</span> to what you would really say.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <select aria-label="Language to check" className="rounded-lg border border-input bg-bg2 px-3 py-2 text-sm text-fg" value={lang} onChange={(e) => { setLang(e.target.value as "en" | "hi" | "te"); setIdx(0); setPending(null); }}>
+            <option value="en">English</option><option value="hi">Hindi</option><option value="te">Telugu</option></select>
+          <span className="text-xs text-fg3">{done.size}/{list.length} phrases this session · device: {device || "not yet detected"}</span>
+        </div>
+        {list.length === 0 ? <p className="text-fg3">No phrases for this language.</p> : (
+          <div className="space-y-2 rounded-lg border border-line p-3">
+            <p className="text-xs text-fg3">Phrase {idx + 1} of {list.length}</p>
+            <p lang={lang} className="text-lg font-medium" aria-label="Phrase to say">{list[idx]}</p>
+            <div className="flex flex-wrap gap-2">
+              {vs.mode === "recording" ? <Button kind="danger" onClick={() => void stop()}>Stop and score</Button>
+                : <Button kind="primary" disabled={vs.mode === "processing" || vs.mode === "muted"} onClick={() => void record()}>Record this phrase</Button>}
+              <Button disabled={idx === 0} onClick={() => { setIdx(idx - 1); setPending(null); }}>Previous</Button>
+              <Button disabled={idx >= list.length - 1} onClick={() => { setIdx(idx + 1); setPending(null); }}>Skip</Button>
+            </div>
+            {vs.mode === "recording" && <p className="text-xs text-err-fg">Recording… {vs.seconds.toFixed(1)}s</p>}
+            {vs.error && <ErrorNote>{vs.error}</ErrorNote>}
+            {pending && (
+              <div className="space-y-1 rounded-lg bg-bg2 p-2">
+                <p>Heard: <span lang={lang} className="font-medium">{pending.heard || "(nothing recognised)"}</span></p>
+                <p className="text-xs text-fg2">word error {pending.wer === null ? "n/a" : `${Math.round(pending.wer * 100)}%`} · character error {pending.cer === null ? "n/a" : `${Math.round(pending.cer * 100)}%`} · {pending.exact ? "exact match" : "not exact"} · {pending.ms} ms · {pending.model}</p>
+                <div className="flex gap-2"><Button onClick={accept}>Keep this result</Button><Button onClick={() => setPending(null)}>Discard and redo</Button></div>
+              </div>)}
+          </div>)}
+        {err && <ErrorNote>{err}</ErrorNote>}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button disabled={rows.length === 0} onClick={() => void save()}>Save {rows.length} result(s)</Button>
+          {saved && <span className="text-xs text-fg2">{Object.entries(saved).map(([l, s]) => `${l}: ${s.phrases} phrases, mean word error ${Math.round(s.mean_wer * 100)}%, ${s.exact} exact, median ${s.median_ms} ms`).join(" · ")}</span>}
+        </div>
+        {history.length > 0 && (
+          <details><summary className="cursor-pointer text-xs font-medium text-fg2">Saved sessions ({history.length})</summary>
+            <ul className="mt-1 space-y-1 text-xs text-fg2">{history.map((h) => <li key={h.file}><span className="font-mono">{h.file}</span> · {h.n} phrases · {h.device} · {Object.entries(h.summary || {}).map(([l, s]) => `${l} WER ${Math.round(s.mean_wer * 100)}%`).join(", ")}</li>)}</ul></details>)}
+      </div>
+    </Card>
+  );
+}
 
 export function Settings() {
   const health = useStore((s) => s.health);
@@ -65,6 +153,8 @@ export function Settings() {
             </ul>}
           </div>
         </Card>
+
+        <div className="lg:col-span-2"><VoiceCheck /></div>
 
         <Card title="Where things live (no secrets shown)">
           {!cfg ? <p className="text-sm text-fg3">Loading…</p> : <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">

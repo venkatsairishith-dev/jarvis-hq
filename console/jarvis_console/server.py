@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import files as filesmod
 from .config import Config
-from . import intent
+from . import intent, scoring
 from .kernel_client import Kernel, KernelError
 from .speech_text import speakable
 from .voice import Voice, VoiceError
@@ -29,6 +29,15 @@ UI_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inlin
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
+    # On Windows SO_REUSEADDR lets a second console bind the same port and both keep running; starting the console twice
+    # then leaves duplicates that each hold models in memory. Exclusive use makes the second one fail at once instead.
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self):
+        if os.name == "nt":
+            import socket
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
     def handle_error(self, request, client_address):
         """A browser that navigates away aborts its own polls and streams: that is normal, not a server fault."""
@@ -144,6 +153,8 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
                     return self._json(403, {"error": "cross-site request refused"})
                 if path.startswith("/api/"):
                     return self._api(method, path[5:], q)
+                if method != "GET":                              # the page is only ever fetched; a POST here is a mistake or a probe
+                    return self._json(405, {"error": "method not allowed"})
                 return self._static(path)
             except VoiceError as e:
                 return self._json(e.code, {"error": str(e)})
@@ -235,9 +246,21 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
         def _voice(self, method, name, q):
             if name == "status":
                 return self._json(200, voice.status())
+            if name == "check/phrases":
+                return self._json(200, {"phrases": voice_phrases(), "results": voice_check_history()})
             if method != "POST":
                 return self._json(405, {"error": "use POST"})
             lang = q.get("lang", "en")
+            if name == "warm":
+                d = self._jbody()
+                lang_ = str(d.get("lang") or lang)
+                threading.Thread(target=lambda: _quiet(voice.warm, lang_), daemon=True).start()
+                return self._json(202, {"warming": lang_})
+            if name == "check/save":
+                return self._json(200, voice_check_save(self._jbody()))
+            if name == "check/score":
+                d = self._jbody()
+                return self._json(200, scoring.score(str(d.get("expected", "")), str(d.get("heard", ""))))
             if name == "transcribe":
                 return self._json(200, voice.transcribe(self._body(MAX_BODY), lang))
             if name == "speak":
@@ -310,6 +333,59 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
         except OSError:
             out["disk"] = None
         return out
+
+    def _quiet(fn, *args):
+        try:
+            fn(*args)
+        except Exception:
+            pass
+
+    def voice_phrases():
+        path = os.path.join(os.path.dirname(__file__), "voice_phrases.json")
+        try:
+            with open(path, encoding="utf-8") as fh:
+                d = json.load(fh)
+        except (OSError, ValueError):
+            return {}
+        return {k: [str(x)[:200] for x in v][:20] for k, v in d.items() if k in ("en", "hi", "te") and isinstance(v, list)}
+
+    VC_DIR = os.path.join(os.path.dirname(os.path.abspath(cfg.outputs_dir)), "cache", "voice-checks")
+
+    def voice_check_history(limit=10):
+        try:
+            names = sorted(os.listdir(VC_DIR), reverse=True)[:limit]
+        except OSError:
+            return []
+        out = []
+        for n in names:
+            try:
+                with open(os.path.join(VC_DIR, n), encoding="utf-8") as fh:
+                    d = json.load(fh)
+                out.append({"file": n, "at": d.get("at"), "device": d.get("device"), "summary": d.get("summary"), "n": len(d.get("rows", []))})
+            except (OSError, ValueError):
+                continue
+        return out
+
+    def voice_check_save(d):
+        """Keep one voice-check session on this computer (the cache folder beside the outputs folder): rows of expected text, what was
+        heard, the scores and latencies, and the device label the browser reported. Nothing is sent anywhere, and the
+        audio itself is not stored."""
+        rows = []
+        for r in (d.get("rows") or [])[:60]:
+            if not isinstance(r, dict) or r.get("lang") not in ("en", "hi", "te"):
+                continue
+            sc = scoring.score(str(r.get("expected", ""))[:300], str(r.get("heard", ""))[:300])
+            rows.append({"lang": r["lang"], "expected": str(r.get("expected", ""))[:300], "heard": str(r.get("heard", ""))[:300],
+                         "wer": sc["wer"], "cer": sc["cer"], "exact": sc["exact"], "ms": r.get("ms") if isinstance(r.get("ms"), (int, float)) else None,
+                         "speech": bool(r.get("speech", True)), "model": str(r.get("model", ""))[:60]})
+        if not rows:
+            raise VoiceError("no rows to save")
+        rec = {"at": time.time(), "device": str(d.get("device", ""))[:120], "rows": rows, "summary": scoring.summarize(rows)}
+        os.makedirs(VC_DIR, exist_ok=True)
+        fn = time.strftime("check-%Y%m%d-%H%M%S.json")
+        with open(os.path.join(VC_DIR, fn), "w", encoding="utf-8") as fh:
+            json.dump(rec, fh, ensure_ascii=False, indent=1)
+        return {"saved": fn, "summary": rec["summary"]}
 
     def skills():
         """Active and staged skills with their recorded risk, from the repo (read-only)."""

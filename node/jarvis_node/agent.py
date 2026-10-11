@@ -59,25 +59,31 @@ def _watch_cycle(watcher, url, token):
         watcher.ack(delivered)
 
 
-def run(url, name, once=False, collect_every=60, beat=15):
+def run(url, name, once=False, collect_every=60, beat=15, poll=3, clock=time.time, sleep=time.sleep):
+    """Two cadences: the status report and file scan every `beat` seconds, the check for a queued job every `poll`
+    seconds. A request spoken to JARVIS used to wait up to a whole report interval before the laptop even saw it."""
     with open(TOKEN_FILE) as fh:
         token = fh.read().strip()
-    state, last_collect = {}, 0.0
+    state, last_collect, last_report, killed = {}, 0.0, None, False
     worker = None
     from .watch import Watcher, load_watches
     watcher = Watcher(load_watches(), os.path.join(os.path.dirname(__file__), "..", "..", "..", "cache", "node-watch-state.json"))
     while True:
         try:
-            if time.time() - last_collect >= collect_every or not state:
-                state, last_collect = collect(), time.time()
-                state["watches"] = watcher.names()
-            r = _post(url, "/report", {"state": state}, token)
-            if not r.get("killed"):
-                _watch_cycle(watcher, url, token)
-            if r.get("killed"):
-                state, last_collect = {}, 0.0  # kill switch on: stop collecting until it is lifted
-                print("kernel kill switch is on; paused", file=sys.stderr)
-            elif not once and (worker is None or not worker.is_alive()):
+            now = clock()
+            if once or last_report is None or now - last_report >= beat:
+                if now - last_collect >= collect_every or not state:
+                    state, last_collect = collect(), now
+                    state["watches"] = watcher.names()
+                r = _post(url, "/report", {"state": state, "busy": bool(worker is not None and worker.is_alive())}, token)
+                last_report = now
+                killed = bool(r.get("killed"))
+                if killed:
+                    state, last_collect = {}, 0.0  # kernel kill switch on: stop collecting until it is lifted
+                    print("kernel kill switch is on; paused", file=sys.stderr)
+                else:
+                    _watch_cycle(watcher, url, token)
+            if not once and not killed and (worker is None or not worker.is_alive()):
                 job = _post(url, "/jobs/next", {}, token).get("job")
                 if job:
                     worker = threading.Thread(target=_do_job, args=(url, token, job), daemon=True)
@@ -86,7 +92,7 @@ def run(url, name, once=False, collect_every=60, beat=15):
             print("report failed:", type(e).__name__, file=sys.stderr)
         if once:
             return
-        time.sleep(beat)
+        sleep(poll)
 
 
 def main():

@@ -33,7 +33,7 @@ class Collector(unittest.TestCase):
 
     def test_schema_is_the_one_the_kernel_expects(self):
         s = self.s
-        self.assertEqual(set(s), {"host", "os", "cpu", "ram", "gpu", "disks", "processes_top", "services", "ports", "tools", "env_paths", "collected_at", "collect_seconds"})
+        self.assertEqual(set(s), {"host", "os", "cpu", "ram", "gpu", "disks", "processes_top", "services", "ports", "tools", "outputs", "env_paths", "collected_at", "collect_seconds"})
         self.assertEqual(set(s["ram"]), {"total_gb", "free_gb", "used_pct"})
         self.assertTrue(s["cpu"]["name"] and s["cpu"]["threads"] >= s["cpu"]["cores"] >= 1)
         self.assertTrue(all(set(d) == {"drive", "size_gb", "free_gb", "free_pct"} for d in s["disks"]))

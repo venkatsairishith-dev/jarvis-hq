@@ -136,6 +136,8 @@ class Plane(unittest.TestCase):
         def hermes(text):
             self.release.wait(5)
             self.said.append(text)
+            if getattr(self, "during", None):
+                self.during()
             return "Opened Downloads. All done."
         H, tokens = make_handler(self.k, [], owner_hermes=hermes)
         self.plane = H.owner_plane
@@ -182,7 +184,80 @@ class Plane(unittest.TestCase):
         c = self.wait_command(r["id"])
         self.assertEqual(c["state"], "done")
         self.assertIn("Opened Downloads", c["reply"])
-        self.assertEqual(self.said, ["open my Downloads folder"])
+        self.assertEqual(len(self.said), 1)
+        self.assertTrue(self.said[0].endswith("open my Downloads folder"))                    # the command, behind the state rule
+        self.assertIn("Never answer that something is already open", self.said[0])
+
+    def test_an_action_request_with_nothing_run_says_so_and_a_plain_question_does_not(self):
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "open my Downloads folder"})
+        c = self.wait_command(r["id"])
+        self.assertIn("no action was run", c["reply"])                                          # "Opened Downloads" was not backed by any job
+        self.assertIn("Kernel record", c["reply"])
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "what do you remember about me"})
+        c = self.wait_command(r["id"])
+        self.assertNotIn("Kernel record", c["reply"])
+
+    def test_a_job_run_during_the_turn_is_listed_with_its_verified_outcome(self):
+        def during():
+            self.k.db.execute("INSERT INTO jobs(id,node,kind,params,state,created,result) VALUES (?,?,?,?,?,?,?)",
+                              ("j-test", "laptop", "pc_open", json.dumps({"agent": "hermes", "op": "open_folder", "target": "Downloads"}), "done", time.time(),
+                               json.dumps({"ok": True, "verified": "verified"})))
+        self.during = during
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "open my Downloads folder"})
+        c = self.wait_command(r["id"])
+        self.assertIn("pc_open open_folder Downloads: done, verified", c["reply"])
+        self.assertNotIn("no action was run", c["reply"])
+
+    def test_watches_on_a_kernel_where_no_node_ever_paired_is_empty_not_an_error(self):
+        code, r = self.call("GET", "/v1/jarvis/owner/watches")
+        self.assertEqual((code, r), (200, {"watches": []}))
+
+    def test_a_command_is_refused_at_once_while_every_model_provider_is_resting(self):
+        self.plane.lane_wait = lambda lane: 1800 if lane == "private" else 0
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "open my Downloads folder"})
+        self.assertEqual(code, 429)
+        self.assertIn("resting", r["error"])
+        self.assertIn("Nothing was sent", r["error"])
+        self.assertEqual(self.said, [])                                                      # the agent was never called
+        self.plane.lane_wait = lambda lane: 0
+        self.assertEqual(self.call("POST", "/v1/jarvis/owner/command", {"text": "open my Downloads folder"})[0], 202)
+
+    def test_a_running_command_fails_at_once_when_the_gateway_says_the_lane_is_resting(self):
+        self.release.clear()                                                                # the agent is in its own back-off
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "open my Downloads folder"})
+        self.assertEqual(code, 202)
+        time.sleep(0.2)
+        self.assertTrue(self.plane.provider_resting(1800))                                  # what the gateway's 429 triggers
+        c = [x for x in self.call("GET", "/v1/jarvis/owner/commands")[1]["commands"] if x["id"] == r["id"]][0]
+        self.assertEqual(c["state"], "failed")
+        self.assertIn("resting", c["error"])
+        self.assertFalse(self.plane.busy.locked())                                          # the next command is not refused as busy
+        self.assertFalse(self.plane.provider_resting(1800))                                 # nothing running: nothing to end
+        self.release.set()
+        time.sleep(0.3)                                                                     # the agent's late answer changes nothing
+        c = [x for x in self.call("GET", "/v1/jarvis/owner/commands")[1]["commands"] if x["id"] == r["id"]][0]
+        self.assertEqual(c["state"], "failed")
+
+    def test_stopping_the_wait_hands_the_gate_back_so_the_next_command_runs(self):
+        resets = []
+        self.release.clear()                                                                # the agent's call hangs
+        self.plane.hermes.reset = lambda: resets.append(1)                                   # what the real agent callable offers
+        code, r1 = self.call("POST", "/v1/jarvis/owner/command", {"text": "first, it hangs"})
+        self.assertEqual(code, 202)
+        self.assertEqual(self.call("POST", "/v1/jarvis/owner/command", {"text": "second"})[0], 409)       # still working
+        self.assertEqual(self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r1["id"]})[1]["cancelled"], True)
+        self.assertEqual(resets, [1])                                                       # the conversation was rotated
+        self.release.set()                                                                  # let the orphaned call finish
+        code, r2 = self.call("POST", "/v1/jarvis/owner/command", {"text": "second"})
+        self.assertEqual(code, 202)                                                         # not refused as busy
+        c2 = self.wait_command(r2["id"])
+        self.assertEqual(c2["state"], "done")
+        time.sleep(0.3)                                                                     # the orphan's late answer arrives and is ignored
+        c1 = [c for c in self.call("GET", "/v1/jarvis/owner/commands")[1]["commands"] if c["id"] == r1["id"]][0]
+        self.assertEqual(c1["state"], "cancelled")
+        self.assertEqual(c1["reply"] or "", "")
+        self.assertFalse(self.plane.busy.locked())                                          # no double release, no leak
+        self.assertEqual(self.call("POST", "/v1/jarvis/owner/command", {"text": "third"})[0], 202)
 
     def test_command_with_a_private_key_is_refused_and_busy_is_reported(self):
         key = "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----"

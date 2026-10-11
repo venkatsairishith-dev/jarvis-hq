@@ -364,7 +364,8 @@ class T(unittest.TestCase):
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 seen.append((self.path, self.headers.get("Authorization"), self.headers.get("X-Hermes-Session-Id"), body))
                 code = 500 if body["messages"][0]["content"] == "fail" else 200
-                out = json.dumps({"choices": [{"message": {"content": "Opened Downloads."}}]}).encode()
+                said = H.reply_override.pop(0) if getattr(H, "reply_override", None) else "Opened Downloads."
+                out = json.dumps({"choices": [{"message": {"content": said}}]}).encode()
                 self.send_response(code); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
         srv = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
         try:
@@ -384,6 +385,15 @@ class T(unittest.TestCase):
             again = hermes_agent(keyf, f"http://127.0.0.1:{srv.server_address[1]}", state_path=state, clock=lambda: now[0])
             again("after a restart"); self.assertEqual(seen[4][2], fresh)                  # kept across a bridge restart
             now[0] += 86400; call("next day"); self.assertEqual(seen[5][2], "telegram-owner-20261011")
+            # a full conversation comes back as an ordinary 200 reply: a fresh session is started and the message sent again
+            full = "This conversation (including attachments) has grown too large to send to jarvis, and Hermes couldn't compress it."
+            replies = [full, "Opened Downloads."]
+            H.reply_override = replies
+            before = len(seen)
+            self.assertEqual(call("open my downloads folder again"), "Opened Downloads.")
+            self.assertEqual(len(seen) - before, 2)
+            self.assertNotEqual(seen[before][2], seen[before + 1][2])                      # the retry used a new session
+            self.assertTrue(seen[before + 1][2].startswith("telegram-owner-20261011-"))
         finally:
             srv.shutdown()
 

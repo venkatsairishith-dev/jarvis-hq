@@ -26,14 +26,15 @@ class FakeClock:
 
 
 class RepoConfig(unittest.TestCase):
-    def test_the_shipped_allowlist_is_valid_json_and_names_downloads(self):
+    def test_the_shipped_allowlist_is_valid_json_and_watches_only_a_disposable_folder(self):
         from jarvis_node.watch import load_watches
         shipped = os.path.join(os.path.dirname(__file__), "..", "..", "config", "watches.json")
         if not os.path.exists(os.path.normpath(shipped)) and os.name != "nt":
             self.skipTest("this is the server's layout: watched folders are the laptop's config")
         w = load_watches()
-        self.assertIn("downloads", w)
-        self.assertIn("nt", w["downloads"]["path"])
+        self.assertIn("jarvis-test", w)                                       # only a disposable folder is shipped as watched
+        self.assertNotIn("downloads", w)                                      # personal folders are the owner's explicit choice
+        self.assertIn("nt", w["jarvis-test"]["path"])
 
 
 class NodeWatcher(unittest.TestCase):

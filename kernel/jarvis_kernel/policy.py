@@ -188,14 +188,15 @@ class Action:
         )
         return hashlib.sha256(blob.encode()).hexdigest()
 
-    def describe(self) -> dict:
-        """What goes into the audit log and approval prompts: strings are scrubbed for secrets and truncated."""
+    def describe(self, limit: int = 200) -> dict:
+        """What goes into the audit log (limit 200) and approval prompts (a larger limit): strings are scrubbed for
+        secrets and truncated, and a truncated value says so."""
         from .scrub import scrub
 
         def clean(x):
             if isinstance(x, str):
                 s, _, blocked = scrub(x)
-                return "[BLOCKED: private key]" if blocked else (s if len(s) <= 200 else s[:200] + "...[truncated]")
+                return "[BLOCKED: private key]" if blocked else (s if len(s) <= limit else s[:limit] + "...[truncated]")
             if isinstance(x, dict):
                 return {str(k): clean(v) for k, v in x.items()}
             if isinstance(x, (list, tuple)):

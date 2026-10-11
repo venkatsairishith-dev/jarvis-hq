@@ -145,6 +145,36 @@ class P(unittest.TestCase):
         fails = [json.loads(r[0]) for r in self.k.db.execute("SELECT payload FROM audit WHERE kind='agent_model_call_failed'")]
         self.assertEqual([(f["provider"], f["error"], f["attempt"]) for f in fails], [("refuses", "HTTP 400", 1), ("flaky", "HTTP 500", 1)])
 
+    def test_lane_wait_says_how_long_until_a_provider_of_the_lane_may_be_asked_again(self):
+        limited, limited_url = upstream("limited", self.seen, status=429, err_body=b'{"error": {"message": "limit"}}')
+        self.servers.append(limited)
+        prov = Provider("groq", "private", limited_url, self.keyf, ["any"], default_model="openai/gpt-oss-120b")
+        H, tokens = make_handler(self.k, [prov], clock=lambda: self.now[0])
+        s = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=s.serve_forever, daemon=True).start(); self.servers.append(s)
+        self.url = f"http://127.0.0.1:{s.server_address[1]}"; self.tok = tokens.issue("hermes")
+        wait = H.owner_plane.lane_wait
+        self.assertEqual(wait("private"), 0)                                  # nothing has been refused yet
+        with self.assertRaises(urllib.error.HTTPError):
+            self.call({"model": "x", "messages": [{"role": "user", "content": "hi"}]})
+        rest = wait("private")
+        self.assertGreater(rest, 0)                                           # the only provider said 429: it rests
+        self.assertEqual(wait("public"), 0)                                   # another lane is unaffected (no provider here, so nothing to wait for)
+        self.now[0] += rest + 1
+        self.assertEqual(wait("private"), 0)                                  # and it may be asked again after that
+
+    def test_a_free_provider_too_small_for_the_agents_requests_does_not_count_as_available(self):
+        limited, limited_url = upstream("limited", self.seen, status=429, err_body=b'{"error": {"message": "limit"}}')
+        self.servers.append(limited)
+        small = Provider("small", "private", self.up_url, self.keyf, ["any"], default_model="m", max_total_tokens=8000, priority=1)
+        big = Provider("big", "private", limited_url, self.keyf, ["any"], default_model="m", priority=2)
+        H, tokens = make_handler(self.k, [small, big], clock=lambda: self.now[0])
+        s = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=s.serve_forever, daemon=True).start(); self.servers.append(s)
+        self.url = f"http://127.0.0.1:{s.server_address[1]}"; self.tok = tokens.issue("hermes")
+        big_request = {"model": "x", "messages": [{"role": "user", "content": "word " * 9000}]}     # about 11k tokens: only `big` fits
+        with self.assertRaises(urllib.error.HTTPError):
+            self.call(big_request)
+        self.assertGreater(H.owner_plane.lane_wait("private"), 0)       # `small` is idle, but a 10k-token command cannot use it
+
     def test_kill_switch_and_rate_limit(self):
         self.proxy([self.good()])
         for i in range(PER_MINUTE): self.call({"messages": [{"role": "user", "content": str(i)}]})

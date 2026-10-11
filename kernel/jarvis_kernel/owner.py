@@ -16,12 +16,19 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import threading
 import time
 import urllib.parse
 
 from .scrub import scrub
+
+# What the owner asks JARVIS to do changes the computer; what it looked like a few minutes ago may not be true now.
+STATE_RULE = ("[JARVIS rule: the state of the computer changes. Never answer that something is already open, running or done from "
+              "earlier in this conversation: run the action or check it with a tool now, then report what the tool returned.]\n")
+ACTION_REQUEST = re.compile(r"\b(open|close|launch|start|run|create|make|build|delete|remove|take|save|download|stop|pause|resume|switch|focus|"
+                            r"minimi[sz]e|maximi[sz]e|type|click|press|show|list|find|play|write|install)\b", re.I)
 
 PREFIX = "/v1/jarvis/owner/"
 MAX_COMMAND = 2000
@@ -57,8 +64,12 @@ class Owner:
         self.k, self.tasks, self.jobs, self.memories, self.hermes, self.clock = kernel, tasks, jobs, memories, hermes, clock
         self.spawn = spawn or (lambda fn: threading.Thread(target=fn, daemon=True).start())
         self.busy = threading.Lock()
+        self._gate = threading.Lock()   # guards the three fields below
+        self._current = None            # id of the command whose agent call holds `busy`
+        self._released = set()          # commands the owner stopped waiting on: their gate was handed back already
         self.bad_pins = []
         self.node = "laptop"      # the node PC jobs are queued for (set from the kernel's output node)
+        self.lane_wait = None     # lane -> seconds until a model provider may be asked again (set by the gateway)
         self.routes = {}          # (method, name) -> fn(body, query) -> (code, reply); other modules register theirs here
         kernel.db.execute("CREATE TABLE IF NOT EXISTS owner_commands(id TEXT PRIMARY KEY, ts REAL, source TEXT, text TEXT, "
                           "state TEXT, reply TEXT, error TEXT, finished REAL)")
@@ -99,7 +110,8 @@ class Owner:
                          "result": scrub(result or "")[0][:300]})                              # seconds; deep (gitleaks) cost 28 s live
         return {"now": now, "killed": self.k.killed(), "audit": self.k.audit.anchor(), "pin_set": self.pin_set(),
                 "voice_command_ready": self.hermes is not None, "busy": self.busy.locked(),
-                "tasks": tasks, "approvals": self.k.pending_approvals(), "jobs": jobs, "commands": self.commands(10)["commands"]}
+                "tasks": tasks, "approvals": self.k.pending_approvals(), "approval_history": self.k.approval_history(), "jobs": jobs,
+                "commands": self.commands(10)["commands"]}
 
     def commands(self, limit=20):
         rows = self.k.db.execute("SELECT id, ts, source, text, state, reply, error, finished FROM owner_commands "
@@ -134,6 +146,11 @@ class Owner:
             raise OwnerError("refused: the command contains a private key", 400)
         if self.k.killed():
             raise OwnerError("the kill switch is on", 503)
+        wait = self.lane_wait("private") if self.lane_wait else 0
+        if wait > 0:                                             # every provider of the owner's lane is resting after a free-tier limit
+            when = time.strftime("%H:%M", time.localtime(self.clock() + wait))
+            raise OwnerError(f"JARVIS's model providers are resting after hitting their free-tier limits (about {max(1, round(wait / 60))} min; "
+                             f"back around {when}). Nothing was sent. Typing the command again after that works.", 429)
         if not self.busy.acquire(blocking=False):
             raise OwnerError("JARVIS is still working on the previous command", 409)
         cid, now = "c-" + secrets.token_hex(6), self.clock()
@@ -147,22 +164,74 @@ class Owner:
         self.spawn(lambda: self._run(cid, clean, now))
         return {"id": cid, "state": "running"}
 
-    def _facts(self, since: float) -> str:
-        """The kernel's own record of tasks touched during this turn, appended to the agent's reply: a claim like
-        "done" cannot hide a task that was never verified."""
+    def _facts(self, since: float, text: str = "") -> str:
+        """The kernel's own record of what ran during this turn, appended to the agent's reply: a claim like "done" or
+        "already open" cannot hide that nothing was run, or that a task was never verified."""
         rows = self.k.db.execute("SELECT id, goal, state, verification FROM tasks WHERE updated >= ? ORDER BY updated", (since - 1,)).fetchall()
         lines = []
         for tid, goal, state, ver in rows:
             v = json.loads(ver or "{}")
             check = ("verified" if v.get("passed") is True else "NOT verified yet") if state != "failed" else "failed"
             lines.append(f"- task {tid} ({str(goal)[:60]}): {state}, {check}")
+        jobs = self.k.db.execute("SELECT kind, state, params, result FROM jobs WHERE created >= ? ORDER BY created LIMIT 8", (since - 1,)).fetchall()
+        for kind, state, params, result in jobs:
+            try:
+                p, r = json.loads(params or "{}"), json.loads(result or "{}")
+            except ValueError:
+                p, r = {}, {}
+            what = " ".join(str(p.get(k))[:40] for k in ("op", "target", "name") if p.get(k)) or kind
+            note = r.get("verified") or ("failed: " + str(r.get("error"))[:50] if state == "failed" or r.get("ok") is False else "")
+            lines.append(f"- {kind} {what}: {state}" + (f", {note}" if note else ""))
+        if not lines and ACTION_REQUEST.search(text or ""):
+            lines.append("- no action was run on this computer or in the lab for this request: the answer above was not checked against its current state")
         return ("\n\nKernel record:\n" + "\n".join(lines)) if lines else ""
 
+    def _abandon(self, cid=None):
+        """The owner stopped waiting on a command. Its agent call cannot be aborted from here, so the gate is handed back at
+        once (the next command would otherwise be refused as 'still working' for as long as the model provider takes), the
+        call's own release is skipped, and the agent's conversation is rotated so the orphaned turn cannot interleave with
+        the next one. Durable facts live in memory and the kernel's records, not in the conversation."""
+        with self._gate:
+            cid = cid or self._current
+            if cid is None or not self.busy.locked() or self._current not in (None, cid) or cid in self._released:
+                return False
+            self._released.add(cid)
+            self._current = None
+            self.busy.release()
+        reset = getattr(self.hermes, "reset", None)
+        if reset:
+            try:
+                reset()
+            except Exception:
+                pass
+        return True
+
+    def provider_resting(self, wait: int) -> bool:
+        """The gateway has just told the owner's agent that every provider of its lane is resting. The agent would now sleep
+        through its own ten-minute back-off with the command showing "running", for nothing: say so at once, free the gate,
+        and rotate the conversation. Returns True when a running command was ended."""
+        with self._gate:
+            cid = self._current
+        if not cid:
+            return False
+        when = time.strftime("%H:%M", time.localtime(self.clock() + wait))
+        msg = (f"JARVIS's model providers are resting after hitting their free-tier limits (about {max(1, round(wait / 60))} min; "
+               f"back around {when}). Nothing more was done for this command.")
+        cur = self.k.db.execute("UPDATE owner_commands SET state='failed', error=?, finished=? WHERE id=? AND state='running'",
+                                (msg, self.clock(), cid))
+        if cur.rowcount:
+            self.k.audit.append("owner_command_provider_resting", {"id": cid, "retry_after_s": int(wait)})
+            self._abandon(cid)
+        return cur.rowcount == 1
+
     def _run(self, cid: str, text: str, started: float):
+        with self._gate:
+            if cid not in self._released:
+                self._current = cid
         try:
             try:
-                reply = (self.hermes(text) or "").strip()
-                reply = scrub(reply + self._facts(started), deep=True)[0][:MAX_REPLY]
+                reply = (self.hermes(STATE_RULE + text) or "").strip()
+                reply = scrub(reply + self._facts(started, text), deep=True)[0][:MAX_REPLY]
                 state, err = "done", None
             except Exception as e:                                   # the agent's own error text may name hosts: keep the class only
                 reply, state, err = "", "failed", f"{type(e).__name__}: {str(e)[:160]}"
@@ -171,7 +240,13 @@ class Owner:
             self.k.audit.append("owner_command_done" if cur.rowcount else "owner_command_late",
                                 {"id": cid, "state": state, "chars": len(reply)})
         finally:
-            self.busy.release()
+            with self._gate:
+                if cid in self._released:
+                    self._released.discard(cid)               # the gate was handed back when the owner stopped waiting
+                else:
+                    if self._current == cid:
+                        self._current = None
+                    self.busy.release()
 
     def cancel_command(self, cid: str):
         """The owner stopped waiting. The agent's HTTP call cannot be aborted from here, so the answer is ignored when
@@ -179,6 +254,8 @@ class Owner:
         cur = self.k.db.execute("UPDATE owner_commands SET state='cancelled', finished=? WHERE id=? AND state='running'",
                                 (self.clock(), str(cid)[:40]))
         self.k.audit.append("owner_command_cancelled", {"id": str(cid)[:40], "ok": cur.rowcount == 1})
+        if cur.rowcount == 1:
+            self._abandon(str(cid)[:40])
         return {"cancelled": cur.rowcount == 1}
 
     # ---------- approvals ----------
@@ -250,6 +327,7 @@ class Owner:
         expired = self.k.db.execute("UPDATE jobs SET state='expired' WHERE state='queued'").rowcount
         if self.busy.locked():
             self.k.db.execute("UPDATE owner_commands SET state='cancelled', finished=? WHERE state='running'", (self.clock(),))
+            self._abandon()
         self.k.audit.append("owner_stop_all", {"tasks": len(cancelled), "approvals": denied, "jobs": expired})
         return {"cancelled_tasks": cancelled, "not_cancelled": failed, "denied_approvals": denied, "expired_jobs": expired}
 
@@ -428,7 +506,11 @@ class Owner:
             R[("POST", "memory")] = guard(mem_post)
         def watches(b, q):
             out = []
-            for name, state in self.k.db.execute("SELECT name, state FROM nodes").fetchall():
+            try:
+                rows = self.k.db.execute("SELECT name, state FROM nodes").fetchall()
+            except Exception:                    # no node has ever paired on this kernel: the table does not exist yet
+                rows = []
+            for name, state in rows:
                 try:
                     names = (json.loads(state or "{}").get("watches") or [])
                 except ValueError:
