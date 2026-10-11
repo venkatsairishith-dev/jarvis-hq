@@ -44,16 +44,36 @@ def _do_job(url, token, job):
         print("could not post job result:", type(e).__name__, file=sys.stderr)
 
 
+def _watch_cycle(watcher, url, token):
+    """Report files that arrived in allow-listed folders. Acknowledged only after the kernel accepted them."""
+    reports = watcher.scan()
+    delivered = {}
+    for w, files in reports.items():
+        try:
+            for i in range(0, len(files), 50):
+                _post(url, "/event", {"watch": w, "files": files[i:i + 50]}, token)
+            delivered[w] = files
+        except Exception as e:
+            print("could not report file arrivals:", type(e).__name__, file=sys.stderr)
+    if delivered:
+        watcher.ack(delivered)
+
+
 def run(url, name, once=False, collect_every=60, beat=15):
     with open(TOKEN_FILE) as fh:
         token = fh.read().strip()
     state, last_collect = {}, 0.0
     worker = None
+    from .watch import Watcher, load_watches
+    watcher = Watcher(load_watches(), os.path.join(os.path.dirname(__file__), "..", "..", "..", "cache", "node-watch-state.json"))
     while True:
         try:
             if time.time() - last_collect >= collect_every or not state:
                 state, last_collect = collect(), time.time()
+                state["watches"] = watcher.names()
             r = _post(url, "/report", {"state": state}, token)
+            if not r.get("killed"):
+                _watch_cycle(watcher, url, token)
             if r.get("killed"):
                 state, last_collect = {}, 0.0  # kill switch on: stop collecting until it is lifted
                 print("kernel kill switch is on; paused", file=sys.stderr)

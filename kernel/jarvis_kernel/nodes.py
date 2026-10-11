@@ -6,6 +6,7 @@ Only a hash of each token and code is stored.
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -72,6 +73,35 @@ class Nodes:
         return out
 
 
+WATCH_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,40}$")
+
+
+def record_watch_events(kernel, node: str, data: dict) -> int:
+    """File arrivals the node saw in one of its own allow-listed folders. Only names, sizes and times are stored; the node
+    never sends content. The id (node, watch, name, size, mtime) makes a repeated report a no-op."""
+    import hashlib
+    watch = str(data.get("watch", ""))
+    files = data.get("files")
+    if not WATCH_NAME.match(watch) or not isinstance(files, list):
+        return 0
+    kernel.db.execute("CREATE TABLE IF NOT EXISTS watch_events(id TEXT PRIMARY KEY, node TEXT, watch TEXT, rel TEXT, size INT, "
+                      "mtime_ns INT, ts REAL, handled INT DEFAULT 0)")
+    n = 0
+    for f in files[:50]:
+        if not isinstance(f, dict):
+            continue
+        rel, size, mt = str(f.get("rel", ""))[:200], f.get("size"), f.get("mtime_ns")
+        if not rel or ".." in rel.replace("\\", "/").split("/") or not isinstance(size, int) or not isinstance(mt, int):
+            continue
+        eid = hashlib.sha256(f"{node}|{watch}|{rel}|{size}|{mt}".encode()).hexdigest()
+        cur = kernel.db.execute("INSERT OR IGNORE INTO watch_events(id,node,watch,rel,size,mtime_ns,ts) VALUES (?,?,?,?,?,?,?)",
+                                (eid, node, watch, rel, size, mt, time.time()))
+        n += cur.rowcount
+    if n:
+        kernel.audit.append("watch_events", {"node": node, "watch": watch, "files": n})
+    return n
+
+
 def make_handler(kernel):
     nodes = Nodes(kernel)
 
@@ -117,6 +147,13 @@ def make_handler(kernel):
                     res = data.get("result")
                     ok = isinstance(data.get("id"), str) and isinstance(res, dict) and jobs.finish(name, data["id"], res)
                     return self._json(200, {"accepted": bool(ok)})
+                if self.path == "/event":
+                    auth = self.headers.get("Authorization", "")
+                    name = nodes.identify(auth[7:] if auth.startswith("Bearer ") else "")
+                    if not name:
+                        kernel.audit.append("report_refused", {"path": self.path})
+                        return self._json(401, {"error": "unauthorized"})
+                    return self._json(200, {"accepted": record_watch_events(kernel, name, data)})
                 if self.path in ("/request", "/authorize"):
                     auth = self.headers.get("Authorization", "")
                     name = nodes.identify(auth[7:] if auth.startswith("Bearer ") else "")

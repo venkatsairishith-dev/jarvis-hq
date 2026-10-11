@@ -24,6 +24,10 @@ KINDS = {
     "ui_action": ("ui", None),
     "pc_open": ("pc", None),
     "lab_run": ("lab", "dispatch"),        # an outcome task's work, run, verified and repaired by the lab runner
+    # Observation of the owner's Windows desktop (2026-10-11): read-only, the node answers from its own Win32/UIA calls.
+    "ui_windows": ("ui", "list_windows"),  # visible top-level windows: title, process, size, foreground
+    "ui_snapshot": ("ui", "snapshot"),     # the accessibility tree of one window (names, types; never passwords)
+    "screenshot": ("ui", "screenshot"),    # a PNG of the desktop, written to the owner's outputs folder (never sent inline)
 }
 LAB_AGENTS = {"hermes", "opencode", "goose"}
 LAB_RUN_TTL = 2 * 3600                     # a lab run that never reports is failed after 2 h (task deadlines are shorter)
@@ -53,6 +57,12 @@ def _check_params(kind: str, params: dict):
               and isinstance(params["target"], str) and 0 < len(params["target"].strip()) <= 80
               and isinstance(params["path"], str) and len(params["path"]) <= 200
               and not any(c in params["target"] + params["path"] for c in "\r\n\0"))
+    elif kind == "ui_windows":
+        ok = keys == set()
+    elif kind == "ui_snapshot":
+        ok = keys == {"target"} and isinstance(params["target"], str) and re.match(r"^[A-Za-z0-9_.-]{0,40}$", params["target"]) is not None
+    elif kind == "screenshot":
+        ok = keys == set()
     elif kind == "lab_run":
         ok = (keys == {"task", "agent", "instructions", "criteria", "max_attempts", "timeout_s"} and re.match(r"^[0-9a-f]{12}$", str(params["task"]))
               and params["agent"] in LAB_AGENTS and isinstance(params["instructions"], str) and 0 < len(params["instructions"]) <= 8000
@@ -74,6 +84,12 @@ def action_for(kind: str, params: dict, lane: str = "private", untrusted: bool =
         return Action(tool, op, params["project"])
     if kind in ("output_save", "output_show"):
         return Action(tool, op, f"outputs/{params['agent']}/{params['name']}", {}, lane, untrusted)
+    if kind == "ui_windows":
+        return Action("ui", "list_windows", "windows", {}, lane, untrusted)
+    if kind == "ui_snapshot":
+        return Action("ui", "snapshot", params["target"] or "foreground", {}, lane, untrusted)
+    if kind == "screenshot":
+        return Action("ui", "screenshot", "desktop", {}, lane, untrusted)
     if kind == "lab_run":                     # the instructions are not part of the action (their words must not trip path rules)
         return Action("lab", "dispatch", params["agent"], {"task": params["task"]}, lane, untrusted)
     if kind == "pc_open":
@@ -92,6 +108,8 @@ class Jobs:
                 kernel.db.execute("ALTER TABLE jobs ADD COLUMN " + col)
             except Exception:
                 pass
+        kernel.db.execute("CREATE INDEX IF NOT EXISTS jobs_node_state ON jobs(node, state, created)")
+        kernel.db.execute("CREATE INDEX IF NOT EXISTS jobs_owner_kind ON jobs(owner, kind, state)")
 
     def create(self, node: str, kind: str, params: dict, approval_id: str = None, owner: str = None, lane: str = "private") -> str:
         """Authorize, then queue. owner = the agent that asked (None = the human owner). Agent jobs are untrusted
@@ -139,16 +157,23 @@ class Jobs:
         self.k.audit.append("job_finished", {"id": jid, "ok": bool(result.get("ok")), "accepted": cur.rowcount == 1})
         return cur.rowcount == 1
 
-    def to_report(self):
-        """Finished (or expired) jobs the owner has not been told about yet: [(id, kind, state, params, result)]."""
-        now = time.time()
-        self.k.db.execute("UPDATE jobs SET state='expired' WHERE state='queued' AND expires<?", (now,))
-        stuck = self.k.db.execute("UPDATE jobs SET state='failed', result=? WHERE state='running' AND started IS NOT NULL AND "
+    def sweep(self, now=None):
+        """Expire queued jobs nobody picked up and fail jobs a node started but never answered. Returns how many of
+        each. Called by the kernel's own sweeper loop (it used to run only inside the Telegram bridge, so with Telegram
+        off a stuck lab job blocked saves and re-dispatch until the task deadline)."""
+        now = now or time.time()
+        expired = self.k.db.execute("UPDATE jobs SET state='expired' WHERE state='queued' AND expires<?", (now,)).rowcount
+        stuck = self.k.db.execute("UPDATE jobs SET state='failed', result=?, finished=? WHERE state='running' AND started IS NOT NULL AND "
                                   "((kind!='lab_run' AND started<?) OR (kind='lab_run' AND started<?))",
                                   (json.dumps({"ok": False, "error": "the node started the job but never reported a result (it may have gone to sleep or lost power)"}),
-                                   now - RUN_TTL, now - LAB_RUN_TTL))
-        if stuck.rowcount:
-            self.k.audit.append("job_stuck_failed", {"count": stuck.rowcount})
+                                   now, now - RUN_TTL, now - LAB_RUN_TTL)).rowcount
+        if stuck:
+            self.k.audit.append("job_stuck_failed", {"count": stuck})
+        return {"expired": expired, "stuck_failed": stuck}
+
+    def to_report(self):
+        """Finished (or expired) jobs the owner has not been told about yet: [(id, kind, state, params, result)]."""
+        self.sweep()
         rows = self.k.db.execute("SELECT id, kind, state, params, result FROM jobs WHERE notified=0 AND state IN ('done','failed','expired')").fetchall()
         return [(i, k, s, json.loads(p), json.loads(r) if r else None) for i, k, s, p, r in rows]
 

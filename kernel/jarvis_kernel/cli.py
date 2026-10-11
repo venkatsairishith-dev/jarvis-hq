@@ -46,7 +46,8 @@ def main(argv=None):
     lp.add_argument("--bind", action="append", default=[], help="extra listen address, e.g. the Tailscale IP")
     at = sub.add_parser("agent-token", help="issue a model-endpoint token for an agent and write it to a file (never printed)")
     at.add_argument("name"); at.add_argument("--out", required=True)
-    at.add_argument("--lane", choices=["private", "public", "dashboard", "runner"], default="private")
+    at.add_argument("--lane", choices=["private", "public", "dashboard", "runner", "owner"], default="private")
+    sub.add_parser("set-approval-pin", help="set the PIN the owner's console needs to approve a YELLOW action over HTTP (console only)")
     sub.add_parser("nodes", help="list nodes (no state)")
     an = sub.add_parser("analyze", help="report on a node from its collected state"); an.add_argument("node", nargs="?")
     a = sub.add_parser("audit"); a.add_argument("what", choices=["verify", "anchor"])
@@ -131,6 +132,21 @@ def main(argv=None):
         with os.fdopen(fd, "w") as fh:
             fh.write(tok)
         print("token for", args.name, "written to", args.out)
+    elif args.cmd == "set-approval-pin":
+        import getpass
+        from .owner import Owner, OwnerError
+        from .tasks import Tasks
+        from .jobs import Jobs
+        if not sys.stdin.isatty():
+            print("refused: the PIN is typed at a real terminal", file=sys.stderr); return 3
+        a, b = getpass.getpass("New approval PIN (6-64 characters): "), getpass.getpass("Again: ")
+        if a != b:
+            print("the two entries differ", file=sys.stderr); return 1
+        try:
+            Owner(k, Tasks(k), Jobs(k)).set_pin(a)
+        except OwnerError as e:
+            print("refused:", e, file=sys.stderr); return 1
+        print("approval PIN set")
     elif args.cmd == "pair-code":
         from .nodes import Nodes
         print(Nodes(k).new_code())

@@ -124,3 +124,14 @@ Rejected with reasons: litellm (PyPI 1.82.7 and 1.82.8 were malicious on 2026-03
 **Risks still open:**
 - The private lane has no free provider with high capacity. JARVIS's median request is 85k characters. This needs the owner's decision on another free provider.
 - Hermes's summariser can still fail when only OpenRouter can take its input and the quota is used up. It now fails fast (429 with Retry-After), and the next turn starts a fresh session with the task card.
+
+## Custom code added 2026-10-11, justified against existing projects
+Full evidence: `docs/research/`. Each item below is custom only where no maintained project fits the kernel-as-authority rule.
+| Custom piece | Existing project looked at | Why not used |
+|---|---|---|
+| Owner control plane (`owner.py`) | Hermes API server, OpenHands, Hermes Desktop | They have no kernel authorization or PIN-gated approval; the console must go through the kernel |
+| Scheduler (`automations.py`) | Hermes cron, APScheduler, Celery, Temporal, croniter | Hermes cron is outside kernel audit and verification; the others add a daemon and a second store; the 60-line cron matcher is tested against croniter |
+| Windows adapter additions | UFO, Windows-MCP, Browser Use, pywinauto | Own loops and model-judged confirmations; PowerShell/Registry tools; telemetry; advisories (research/03). Patterns adapted, no code vendored |
+| Console voice glue (`voice.py`) | sherpa-onnx, whisper.cpp, Kokoro, Piper (all used as the engines) | Glue only: model residency, silence rejection, language switch |
+| UI (`ui/`) | OpenHands, Hermes Desktop, OpenJarvis frontends | Patterns taken (event grouping, noVNC take-over, push to talk); none could be embedded against the kernel owner plane |
+| Intent hint (`intent.py`) | Laya, Verdict (OpenJev), embeddings + LR | Measured worse on the held-out set; used a local chat model with rules fallback |

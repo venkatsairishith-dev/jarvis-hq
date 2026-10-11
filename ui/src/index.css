@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@font-face { font-family: "Geist"; src: url("/fonts/geist.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Geist Mono"; src: url("/fonts/geist-mono.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+
+/* Tokens are the hub's (hq/hub/index.html), so the two surfaces look like one product. */
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0f17; --bg-2: #0f1522; --surface: #161b26; --surface-hover: #1d2331; --surface-active: #252c3b;
+  --border-subtle: #232a37; --border: #313a4a; --border-input: #5b6475;
+  --text: #edeef0; --text-2: #b0b4ba; --text-3: #8b8f98; --text-off: #696e77;
+  --accent: #5b5bd6; --accent-hover: #6a6ae0; --on-accent: #fff; --accent-text: #b1a9ff; --accent-subtle: #1d1f45; --focus: #b1a9ff;
+  --idle: #777b84; --idle-fg: #b0b4ba; --idle-bg: #1d2230;
+  --run: #0090ff; --run-fg: #70b8ff; --run-bg: #0d2847;
+  --wait: #ffc53d; --wait-fg: #ffca16; --wait-bg: #302008;
+  --block: #f76b15; --block-fg: #ffa057; --block-bg: #331e0b;
+  --err: #e5484d; --err-fg: #ff9592; --err-bg: #3b1219;
+  --done: #30a46c; --done-fg: #3dd68c; --done-bg: #132d21;
+  --shadow-pop: 0 16px 48px rgb(0 0 0 / .45);
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fcfcfd; --bg-2: #f6f7f9; --surface: #fff; --surface-hover: #f0f0f3; --surface-active: #e8e8ec;
+  --border-subtle: #e3e4ea; --border: #cdced6; --border-input: #8b8d98;
+  --text: #1c2024; --text-2: #60646c; --text-3: #686c74; --text-off: #8b8d98;
+  --accent: #5b5bd6; --accent-hover: #5151cd; --on-accent: #fff; --accent-text: #5753c6; --accent-subtle: #f0f1fe; --focus: #5b5bd6;
+  --idle: #8b8d98; --idle-fg: #1c2024; --idle-bg: #f0f0f3;
+  --run: #0090ff; --run-fg: #113264; --run-bg: #e6f4fe;
+  --wait: #ab6400; --wait-fg: #4f3422; --wait-bg: #fff7c2;
+  --block: #cc4e00; --block-fg: #582d1d; --block-bg: #ffefd6;
+  --err: #e5484d; --err-fg: #641723; --err-bg: #feebec;
+  --done: #30a46c; --done-fg: #193b2d; --done-bg: #e6f6eb;
+  --shadow-pop: 0 12px 32px rgb(16 24 40 / .14);
+}
+
+@theme inline {
+  --color-bg: var(--bg); --color-bg2: var(--bg-2); --color-surface: var(--surface); --color-hover: var(--surface-hover);
+  --color-active: var(--surface-active); --color-line: var(--border-subtle); --color-edge: var(--border); --color-input: var(--border-input);
+  --color-fg: var(--text); --color-fg2: var(--text-2); --color-fg3: var(--text-3); --color-off: var(--text-off);
+  --color-accent: var(--accent); --color-accent-h: var(--accent-hover); --color-accent-fg: var(--accent-text); --color-accent-bg: var(--accent-subtle);
+  --color-run: var(--run); --color-run-fg: var(--run-fg); --color-run-bg: var(--run-bg);
+  --color-wait: var(--wait); --color-wait-fg: var(--wait-fg); --color-wait-bg: var(--wait-bg);
+  --color-err: var(--err); --color-err-fg: var(--err-fg); --color-err-bg: var(--err-bg);
+  --color-done: var(--done); --color-done-fg: var(--done-fg); --color-done-bg: var(--done-bg);
+  --color-idle: var(--idle); --color-idle-fg: var(--idle-fg); --color-idle-bg: var(--idle-bg);
+  --font-sans: "Geist", system-ui, "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+@layer base {
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/20px var(--font-sans); -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none; opacity: .9;
+  background: radial-gradient(40% 35% at 15% 10%, rgba(110,168,255,.10), transparent 70%), radial-gradient(35% 30% at 85% 85%, rgba(155,123,255,.09), transparent 70%); }
+[data-theme="light"] body::before { opacity: .45; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+::selection { background: var(--accent-subtle); color: var(--accent-text); }
+}
+
+.num { font-variant-numeric: tabular-nums; }
+.sr-only-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgb(229 72 77 / .55); } 100% { box-shadow: 0 0 0 18px rgb(229 72 77 / 0); } }
+.rec-pulse { animation: pulse-ring 1.2s ease-out infinite; }
+@keyframes speak-ring { 0% { box-shadow: 0 0 0 0 rgb(91 91 214 / .55); } 100% { box-shadow: 0 0 0 18px rgb(91 91 214 / 0); } }
+.speak-pulse { animation: speak-ring 1.4s ease-out infinite; }
+dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 0; box-shadow: var(--shadow-pop); }
+dialog::backdrop { background: rgb(0 0 0 / .55); }

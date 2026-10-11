@@ -1,0 +1,252 @@
+{
+ "dataset": {
+  "train": 114,
+  "val": 46,
+  "test": 62
+ },
+ "methods": {
+  "rules": {
+   "n": 62,
+   "accuracy": 0.79,
+   "macro_f1": 0.797,
+   "schema_valid": 1.0,
+   "blocked_missed": "1/3",
+   "benign_blocked": "0/59",
+   "per_category": {
+    "pc_control": {
+     "n": 3,
+     "recall": 1.0
+    },
+    "vm_ops": {
+     "n": 4,
+     "recall": 0.5
+    },
+    "research": {
+     "n": 4,
+     "recall": 0.75
+    },
+    "build_software": {
+     "n": 3,
+     "recall": 0.67
+    },
+    "documents": {
+     "n": 4,
+     "recall": 1.0
+    },
+    "browser_task": {
+     "n": 6,
+     "recall": 0.5
+    },
+    "agent_factory": {
+     "n": 8,
+     "recall": 0.88
+    },
+    "automation": {
+     "n": 7,
+     "recall": 0.86
+    },
+    "memory": {
+     "n": 6,
+     "recall": 0.67
+    },
+    "status_control": {
+     "n": 6,
+     "recall": 0.83
+    },
+    "smalltalk_qa": {
+     "n": 3,
+     "recall": 1.0
+    },
+    "blocked": {
+     "n": 3,
+     "recall": 0.67
+    },
+    "clarify": {
+     "n": 5,
+     "recall": 1.0
+    }
+   },
+   "confusion": {
+    "pc_control": {
+     "pc_control": 3
+    },
+    "vm_ops": {
+     "agent_factory": 2,
+     "vm_ops": 2
+    },
+    "research": {
+     "documents": 1,
+     "research": 3
+    },
+    "build_software": {
+     "smalltalk_qa": 1,
+     "build_software": 2
+    },
+    "documents": {
+     "documents": 4
+    },
+    "browser_task": {
+     "browser_task": 3,
+     "smalltalk_qa": 3
+    },
+    "agent_factory": {
+     "agent_factory": 7,
+     "smalltalk_qa": 1
+    },
+    "automation": {
+     "automation": 6,
+     "documents": 1
+    },
+    "memory": {
+     "memory": 4,
+     "smalltalk_qa": 2
+    },
+    "status_control": {
+     "status_control": 5,
+     "agent_factory": 1
+    },
+    "smalltalk_qa": {
+     "smalltalk_qa": 3
+    },
+    "blocked": {
+     "blocked": 2,
+     "vm_ops": 1
+    },
+    "clarify": {
+     "clarify": 5
+    }
+   },
+   "model_size": "0 (regex)"
+  },
+  "tfidf-knn": {
+   "n": 62,
+   "accuracy": 0.484,
+   "macro_f1": 0.42,
+   "schema_valid": 1.0,
+   "blocked_missed": "2/3",
+   "benign_blocked": "4/59",
+   "per_category": {
+    "pc_control": {
+     "n": 3,
+     "recall": 0.33
+    },
+    "vm_ops": {
+     "n": 4,
+     "recall": 0.75
+    },
+    "research": {
+     "n": 4,
+     "recall": 0.0
+    },
+    "build_software": {
+     "n": 3,
+     "recall": 0.0
+    },
+    "documents": {
+     "n": 4,
+     "recall": 0.5
+    },
+    "browser_task": {
+     "n": 6,
+     "recall": 0.67
+    },
+    "agent_factory": {
+     "n": 8,
+     "recall": 0.38
+    },
+    "automation": {
+     "n": 7,
+     "recall": 0.43
+    },
+    "memory": {
+     "n": 6,
+     "recall": 0.83
+    },
+    "status_control": {
+     "n": 6,
+     "recall": 0.5
+    },
+    "smalltalk_qa": {
+     "n": 3,
+     "recall": 0.33
+    },
+    "blocked": {
+     "n": 3,
+     "recall": 0.33
+    },
+    "clarify": {
+     "n": 5,
+     "recall": 0.8
+    }
+   },
+   "confusion": {
+    "pc_control": {
+     "clarify": 2,
+     "pc_control": 1
+    },
+    "vm_ops": {
+     "vm_ops": 3,
+     "blocked": 1
+    },
+    "research": {
+     "automation": 1,
+     "vm_ops": 1,
+     "agent_factory": 1,
+     "blocked": 1
+    },
+    "build_software": {
+     "status_control": 1,
+     "browser_task": 1,
+     "blocked": 1
+    },
+    "documents": {
+     "documents": 2,
+     "memory": 1,
+     "build_software": 1
+    },
+    "browser_task": {
+     "browser_task": 4,
+     "vm_ops": 1,
+     "memory": 1
+    },
+    "agent_factory": {
+     "documents": 2,
+     "agent_factory": 3,
+     "clarify": 1,
+     "vm_ops": 2
+    },
+    "automation": {
+     "status_control": 1,
+     "pc_control": 2,
+     "automation": 3,
+     "smalltalk_qa": 1
+    },
+    "memory": {
+     "memory": 5,
+     "research": 1
+    },
+    "status_control": {
+     "status_control": 3,
+     "pc_control": 1,
+     "vm_ops": 1,
+     "blocked": 1
+    },
+    "smalltalk_qa": {
+     "agent_factory": 1,
+     "vm_ops": 1,
+     "smalltalk_qa": 1
+    },
+    "blocked": {
+     "clarify": 1,
+     "blocked": 1,
+     "pc_control": 1
+    },
+    "clarify": {
+     "clarify": 4,
+     "browser_task": 1
+    }
+   },
+   "model_size": "0 (n-gram index)"
+  }
+ }
+}

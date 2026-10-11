@@ -114,3 +114,21 @@ Never restart while a lab job runs: a runner report sent during the restart is l
 - `hq/evals/memory_lifecycle.py`: real gateway. Runs in the disposable `jtest` profile with its own `memtest` token; the owner's memory is never touched.
 
 **Quarantine:** files a lab task planted or changed go to `/root/quarantine/<time>-<task>` in WSL, where root can review them.
+
+## JARVIS Console (added 2026-10-11)
+**Run (Windows):** `D:\jarvis\tools\jarvis-venv\Scripts\python.exe -m jarvis_console` with `PYTHONPATH=D:\jarvis\hq\console`, then open http://127.0.0.1:8799/ . Build the UI once with `npm install && npm run build` in `hq/ui` (Node 24). Voice needs `D:\jarvis\models\voice` and `D:\jarvis\tools\piper-venv`.
+
+**One-time setup on the server (kernel console, `ssh -t`):**
+1. Issue the owner token: `python3 -m jarvis_kernel agent-token console --lane owner --out /tmp/owner.token`, copy it to `D:\jarvis-secrets\kernel\owner.token` with `scp` (never print it), then delete the server copy.
+2. Set the approval PIN: `python3 -m jarvis_kernel set-approval-pin` (typed at the terminal; 6 to 64 characters). Until it is set the UI cannot approve anything.
+3. Restart only `jarvis-llm-proxy` (check no lab job is running first).
+
+**Rotate the owner token:** repeat step 1 (it replaces the row) and restart nothing else; the old token then gets 401.
+
+**Tests:**
+- Kernel: `cd hq\kernel; python -m unittest discover -s tests` (about 11 minutes; use the venv Python so the time-zone tests run).
+- Console: `cd hq\console; python -m unittest discover -s tests` with `PYTHONPATH=hq\console;hq\kernel`.
+- UI: `cd hq\ui; npm run build; npx playwright test` (starts a throwaway kernel and console from `console/tests/e2e_server.py`; uses installed Edge; needs the voice models for the voice project).
+- Intent evaluation: `python bench\run_intent_eval.py --embed=URL --qwen=URL|model --verdict=URL --laya=URL` (servers optional; results in `bench/data/intent_results.json`).
+
+**Rollback:** the kernel deploy keeps `~/jarvis/kernel.old.<ts>`; swap it back and restart `jarvis-llm-proxy` and `jarvis-kernel`. The new tables are additive; an older kernel ignores them.

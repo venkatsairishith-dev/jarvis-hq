@@ -40,6 +40,7 @@ RULES = [
     ("models", "status", GREEN),
     ("models", "prefer", YELLOW_AUTO),
     ("ui", "snapshot|list_windows", GREEN),
+    ("ui", "screenshot", YELLOW_AUTO),     # the owner's own side at once; a lab agent needs approval (raised in decide below)
     ("ui", "launch|focus|click|type|key|scroll", YELLOW_APPROVAL),
     # Opening things on the laptop (2026-10-10): the owner's own agent (private lane) at once; a lab agent (public
     # lane) only with the owner's approval and never a folder listing (raised in decide below).
@@ -54,6 +55,10 @@ RULES = [
     ("memory", "add|update|forget", YELLOW_AUTO),
     ("skill", "activate", YELLOW_AUTO),
     ("skill", "deactivate", YELLOW_AUTO),
+    # Owner console (2026-10-11): automations and agent definitions are the owner's own records; running them goes
+    # through the same job and lab policy as anything else, and nothing unattended may need an approval each time.
+    ("automation", "create|update|delete|pause|resume|run", YELLOW_AUTO),
+    ("agent_def", "create|update|delete|activate|pause|test", YELLOW_AUTO),
     ("money", "*", RED),
     ("delete", "*", RED),
     ("credential", "*", RED),
@@ -249,6 +254,8 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
             level, reason = DENY, "a lab agent may not read the owner's folders (the names would reach a public-lane model)"
         elif level < YELLOW_APPROVAL:
             level, reason = YELLOW_APPROVAL, "a lab agent acting on the owner's PC needs the owner's approval"
+    if tool == "ui" and op in ("snapshot", "list_windows", "screenshot") and _name(a.lane) == "public" and level < DENY:
+        level, reason = max(level, YELLOW_APPROVAL), "a lab agent looking at the owner's desktop needs the owner's approval (titles reach a public-lane model)"
     if tool == "skill" and op == "activate" and level < DENY:
         p = a.params or {}
         risk, where = _name(p.get("risk")), _name(p.get("where"))

@@ -4,6 +4,7 @@ Known limit: a process running as the SAME OS user can edit the files directly. 
 agents under a different OS user than the kernel (planned with the Hermes phase). Until then the kill
 file and approvals are protected by policy (the kernel data dir is a protected resource) and by audit.
 """
+import contextlib
 import json
 import os
 import secrets
@@ -42,16 +43,41 @@ class SafeDB:
     401 and an existing task 404 under concurrent requests). A transaction holds the same lock from BEGIN to
     COMMIT/ROLLBACK (see AuditLog.append), so no other thread's statement lands inside it."""
     def __init__(self, conn):
-        self._c, self.lock = conn, threading.RLock()
+        self._c, self.lock, self._depth = conn, threading.RLock(), 0
 
     def execute(self, sql, args=()):
         with self.lock:
             cur = self._c.execute(sql, args)
             return _Rows(cur, cur.fetchall())
 
+    @contextlib.contextmanager
+    def tx(self):
+        """One atomic read-check-write: BEGIN IMMEDIATE takes the database write lock (also against other processes),
+        the connection lock keeps other threads' statements out, and a nested tx() is a SAVEPOINT, so a state change
+        and its audit row commit or roll back together. An exception rolls the whole (or the nested) block back."""
+        with self.lock:
+            depth = self._depth
+            name = f"jk_sp{depth}" if depth else None
+            self._c.execute(f"SAVEPOINT {name}" if name else "BEGIN IMMEDIATE")
+            self._depth = depth + 1
+            try:
+                yield self
+            except BaseException:
+                if name:
+                    self._c.execute(f"ROLLBACK TO {name}")
+                    self._c.execute(f"RELEASE {name}")
+                else:
+                    self._c.execute("ROLLBACK")
+                raise
+            else:
+                self._c.execute(f"RELEASE {name}" if name else "COMMIT")
+            finally:
+                self._depth = depth
+
     def commit(self):
         with self.lock:
-            self._c.commit()
+            if self._depth == 0:                 # inside tx() the block's own end commits
+                self._c.commit()
 
     def close(self):
         with self.lock:
@@ -121,6 +147,20 @@ class Kernel:
         ok = cur.rowcount == 1
         self.audit.append("approved" if ok else "approve_refused", {"id": aid})
         return ok
+
+    def deny(self, aid: str) -> bool:
+        """Human step: pending -> denied, once. A denied approval can never be approved or used."""
+        cur = self.db.execute("UPDATE approvals SET state='denied' WHERE id=? AND state='pending'", (aid,))
+        ok = cur.rowcount == 1
+        self.audit.append("denied" if ok else "deny_refused", {"id": aid})
+        return ok
+
+    def pending_approvals(self, limit=20):
+        """Approvals waiting for the owner, newest first: id, level, the scrubbed action, seconds left."""
+        now = time.time()
+        rows = self.db.execute("SELECT id, level, action, expires FROM approvals WHERE state='pending' AND expires>=? "
+                               "ORDER BY expires DESC LIMIT ?", (now, limit)).fetchall()
+        return [{"id": i, "level": NAMES[lv], "action": json.loads(a), "seconds_left": round(e - now)} for i, lv, a, e in rows]
 
     def authorize(self, a: Action, approval_id=None, suggested=None) -> Decision:
         """Final gate before any action runs. Raises Killed; otherwise returns a Decision with .allowed set."""

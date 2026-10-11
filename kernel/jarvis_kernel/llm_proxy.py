@@ -17,6 +17,7 @@ import secrets
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -60,9 +61,11 @@ class AgentTokens:
 
     def issue(self, name: str, lane: str = "private") -> str:
         """lane "dashboard": the owner's hub reads the overview with it and can do nothing else (no model, no action).
-        lane "runner": the lab runner fetches lab jobs and reports task progress with it, nothing else."""
-        if lane not in ("private", "public", "dashboard", "runner"):
-            raise ValueError("lane must be private, public, dashboard or runner")
+        lane "runner": the lab runner fetches lab jobs and reports task progress with it, nothing else.
+        lane "owner": the owner's console. It reaches only /v1/jarvis/owner/* (commands, approvals, task control); no
+        agent ever holds one."""
+        if lane not in ("private", "public", "dashboard", "runner", "owner"):
+            raise ValueError("lane must be private, public, dashboard, runner or owner")
         tok = secrets.token_urlsafe(32)
         self.k.db.execute("INSERT OR REPLACE INTO agent_tokens(name, token_h, created, lane) VALUES (?,?,?,?)", (name, _h(tok), time.time(), lane))
         self.k.audit.append("agent_token_issued", {"name": name, "lane": lane})
@@ -108,7 +111,7 @@ def _recent(times: list, now: float, window: float) -> list:
     return [t for t in times if now - t < window]
 
 
-def make_handler(kernel, providers, clock=time.time):
+def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
     from .jobs import PC_OPS, UI_OPS, Jobs, JobError, action_for
     from .policy import Action
     from .store import Killed
@@ -118,6 +121,14 @@ def make_handler(kernel, providers, clock=time.time):
     from .memory import Conflict, Memories, MemoryError
     tasks = Tasks(kernel)
     memories = Memories(kernel)
+    from . import owner as owner_mod
+    if owner_hermes == "auto":                  # the owner's own Hermes, when this server has its API key
+        key = os.path.join(gateway.secrets_dir(), "hermes_api_key.txt")
+        from .telegram import hermes_agent
+        owner_hermes = (hermes_agent(key, os.environ.get("JARVIS_HERMES_API", "http://127.0.0.1:8642"), session="console-owner",
+                                     state_path=os.path.join(str(kernel.dir), "owner_session.txt")) if os.path.exists(key) else None)
+    owner_plane = owner_mod.Owner(kernel, tasks, jobs, memories, hermes=owner_hermes, clock=clock)
+    owner_plane.node = OUTPUT_NODE
     kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
     dispatch_lock = threading.Lock()            # one dispatch decision at a time (the server answers on many threads)
@@ -179,6 +190,19 @@ def make_handler(kernel, providers, clock=time.time):
                         return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
                                      "next": "the owner approves on Telegram (/approve " + aid + "); then send the same action again with approval_id"}
                 jid = jobs.create(OUTPUT_NODE, "ui_action", params, approval_id=aid, owner=agent, lane=lane)
+                return 200, {"status": "queued", "job": jid}
+            if tool == "ui" and op in ("list_windows", "snapshot"):
+                # Looking at the owner's desktop (read-only): the owner's own agent at once, a lab agent only with approval.
+                kind, params = (("ui_windows", {}) if op == "list_windows" else ("ui_snapshot", {"target": re.sub(r"[^A-Za-z0-9_.-]", "", target)[:40]}))
+                aid = str(body.get("approval_id") or "") or None
+                if not aid:
+                    d, aid = kernel.request(action_for(kind, params, lane, untrusted=True))
+                    if d.denied:
+                        return 403, {"status": "refused", "level": d.name, "reason": d.reason}
+                    if aid:
+                        return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
+                                     "next": "the owner approves in the console; then send the same action again with approval_id"}
+                jid = jobs.create(OUTPUT_NODE, kind, params, approval_id=aid, owner=agent, lane=lane)
                 return 200, {"status": "queued", "job": jid}
             if tool == "skill" and op in ("activate", "deactivate"):
                 # A staged skill becomes active (or is rolled back) only with the kernel's say-so: policy decides by the
@@ -283,6 +307,39 @@ def make_handler(kernel, providers, clock=time.time):
         except MemoryError as e:
             return 400, {"status": "refused", "reason": str(e)[:200]}
 
+    def dispatch_to_lab(agent, lane, target, p):
+        """Hand a task to the lab: the one guarded path (scrubbed instructions, no owner paths, one active dispatch per task).
+        Used by an agent's lab_work, by automations and by agent-definition test runs. Returns (http status, reply)."""
+        # dispatch: the lab runs on public-lane models, so only what may be shared goes there (scrubbed; keys refused)
+        t = tasks.get(target, owner=agent)
+        if not t:
+            return 404, {"status": "refused", "reason": "no such task"}
+        if lane == "private" and p.get("public_ok") is not True:
+            return 400, {"status": "refused", "reason": "the lab uses public-lane models: send only what may be shared and set public_ok true"}
+        instr, _, blocked = scrub(str(p.get("instructions", ""))[:8000], deep=True)
+        crit = [scrub(str(c)[:500], deep=True)[0] for c in (p.get("criteria") or t["criteria"])[:20]]
+        if blocked or not instr.strip() or not crit:
+            return 400, {"status": "refused", "reason": "instructions and acceptance criteria are required, and no private keys"}
+        if OWNER_PATH.search("\n".join([instr, *crit])):      # the lab cannot see them: such work stalls or "verifies" stale files
+            return 400, {"status": "refused", "reason": "the lab cannot see the owner's computer: remove D:\\ / C:\\ / /mnt/ paths from "
+                         "the instructions and criteria. The runner delivers verified files to D:\\jarvis\\outputs\\task-<id>\\ itself; "
+                         "use a criterion like 'the files are delivered to the owner'."}
+        agent_kind = str(p.get("agent") or "hermes")
+        with dispatch_lock:                     # check and create as one step: two requests at once must not both pass
+            t = tasks.get(target, owner=agent)
+            active = kernel.db.execute("SELECT id FROM jobs WHERE kind='lab_run' AND state IN ('queued','running') AND params LIKE ?",
+                                       (f'%"task": "{target}"%',)).fetchone()
+            if active or t["state"] not in ("planning", "paused"):
+                return 409, {"status": "refused", "reason": f"the lab is already on this task (state {t['state']}); do not dispatch again. "
+                             "End your turn: you will be told in this conversation when it ends."}
+            params = {"task": target, "agent": agent_kind, "instructions": instr, "criteria": crit,
+                      "max_attempts": int(t["max_attempts"]), "timeout_s": max(120, min(int(t["deadline"] - clock()), 5400))}
+            jid = jobs.create("lab", "lab_run", params, owner=agent, lane=lane)
+            tasks.update(agent, target, state="queued", step=f"dispatched to the lab ({agent_kind})", criteria=crit, note="lab job " + jid)
+        return 200, {"status": "queued", "task": target, "job": jid, "next": (
+            "Tell the owner in one or two lines that the lab has started (give the task id) and END your turn now. "
+            "Do not wait, poll or dispatch again: you will be told the verified outcome in this conversation.")}
+
     def task_action(agent, lane, op, target, p):
         """Outcome tasks (tasks.py): create, update, get, dispatch to the lab. Each goes through policy first."""
         if op == "checkpoint":                            # the agent's open tasks, compact, for a fresh or compacted session
@@ -322,35 +379,7 @@ def make_handler(kernel, providers, clock=time.time):
             t = tasks.update(agent, target, state=p.get("state"), step=p.get("step"), plan=p.get("plan"), criteria=p.get("criteria"),
                              note=p.get("note"), result=p.get("result"), evidence=p.get("evidence"), verification=p.get("verification"))
             return 200, {"status": "done", "state": t["state"]}
-        # dispatch: the lab runs on public-lane models, so only what may be shared goes there (scrubbed; keys refused)
-        t = tasks.get(target, owner=agent)
-        if not t:
-            return 404, {"status": "refused", "reason": "no such task"}
-        if lane == "private" and p.get("public_ok") is not True:
-            return 400, {"status": "refused", "reason": "the lab uses public-lane models: send only what may be shared and set public_ok true"}
-        instr, _, blocked = scrub(str(p.get("instructions", ""))[:8000], deep=True)
-        crit = [scrub(str(c)[:500], deep=True)[0] for c in (p.get("criteria") or t["criteria"])[:20]]
-        if blocked or not instr.strip() or not crit:
-            return 400, {"status": "refused", "reason": "instructions and acceptance criteria are required, and no private keys"}
-        if OWNER_PATH.search("\n".join([instr, *crit])):      # the lab cannot see them: such work stalls or "verifies" stale files
-            return 400, {"status": "refused", "reason": "the lab cannot see the owner's computer: remove D:\\ / C:\\ / /mnt/ paths from "
-                         "the instructions and criteria. The runner delivers verified files to D:\\jarvis\\outputs\\task-<id>\\ itself; "
-                         "use a criterion like 'the files are delivered to the owner'."}
-        agent_kind = str(p.get("agent") or "hermes")
-        with dispatch_lock:                     # check and create as one step: two requests at once must not both pass
-            t = tasks.get(target, owner=agent)
-            active = kernel.db.execute("SELECT id FROM jobs WHERE kind='lab_run' AND state IN ('queued','running') AND params LIKE ?",
-                                       (f'%"task": "{target}"%',)).fetchone()
-            if active or t["state"] not in ("planning", "paused"):
-                return 409, {"status": "refused", "reason": f"the lab is already on this task (state {t['state']}); do not dispatch again. "
-                             "End your turn: you will be told in this conversation when it ends."}
-            params = {"task": target, "agent": agent_kind, "instructions": instr, "criteria": crit,
-                      "max_attempts": int(t["max_attempts"]), "timeout_s": max(120, min(int(t["deadline"] - clock()), 5400))}
-            jid = jobs.create("lab", "lab_run", params, owner=agent, lane=lane)
-            tasks.update(agent, target, state="queued", step=f"dispatched to the lab ({agent_kind})", criteria=crit, note="lab job " + jid)
-        return 200, {"status": "queued", "task": target, "job": jid, "next": (
-            "Tell the owner in one or two lines that the lab has started (give the task id) and END your turn now. "
-            "Do not wait, poll or dispatch again: you will be told the verified outcome in this conversation.")}
+        return dispatch_to_lab(agent, lane, target, p)
 
     def runner_call(path, body):
         """The lab runner's only endpoints: next lab job, task progress, job result. Reports apply only to the task of a
@@ -411,7 +440,60 @@ def make_handler(kernel, providers, clock=time.time):
             auth = self.headers.get("Authorization", "")
             return tokens.identify(auth[7:]) if auth.startswith("Bearer ") else (None, None)
 
+        def _owner_call(self, method):
+            """Owner routes: only a token of lane 'owner' gets in, and an owner token gets nothing else."""
+            agent, lane = self._agent()
+            if not agent:
+                kernel.audit.append("owner_refused", {"why": "bad token"})
+                return self._json(401, {"error": "unauthorized"})
+            if lane != "owner":
+                kernel.audit.append("owner_refused", {"why": "wrong lane", "lane": str(lane)[:12], "agent": agent[:30]})
+                return self._json(403, {"error": "owner token only"})
+            body = {}
+            if method == "POST":
+                try:
+                    n = int(self.headers.get("Content-Length", "0"))
+                    body = json.loads(self.rfile.read(n)) if 0 < n <= MAX_BODY else {}
+                    if not isinstance(body, dict):
+                        raise ValueError
+                except (ValueError, OSError):
+                    return self._json(400, {"error": "bad request"})
+            if method == "GET" and self.path.split("?")[0].rstrip("/") == owner_mod.PREFIX + "stream":
+                return self._owner_stream()
+            code, reply = owner_plane.handle(method, self.path, body)
+            return self._json(code, reply)
+
+        def _owner_stream(self):
+            """Server-sent events: audit rows after ?since= (or Last-Event-ID), oldest first, with a heartbeat. Ends after
+            five minutes; the client reconnects with the last id, so nothing is missed or repeated."""
+            q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
+            try:
+                since = int(self.headers.get("Last-Event-ID") or q.get("since") or 0)
+            except ValueError:
+                since = 0
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream"); self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            end, beat = time.time() + 300, 0.0
+            try:
+                while time.time() < end:
+                    rows = owner_plane.events(since, 100)
+                    for r in rows:
+                        since = r["seq"]
+                        self.wfile.write(("id: %d\nevent: audit\ndata: %s\n\n" % (r["seq"], json.dumps(r))).encode())
+                    if rows or time.time() - beat > 15:
+                        if not rows:
+                            self.wfile.write(b": keepalive\n\n")
+                        self.wfile.flush(); beat = time.time()
+                    time.sleep(0.5 if rows else 1.0)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                return
+            except Exception:                            # the database went away (shutdown): end the stream, no traceback
+                return
+
         def do_GET(self):
+            if self.path.startswith(owner_mod.PREFIX):
+                return self._owner_call("GET")
             if self.path.rstrip("/") == "/v1/jarvis/overview":
                 agent, lane = self._agent()
                 if not agent:
@@ -441,12 +523,18 @@ def make_handler(kernel, providers, clock=time.time):
             self._json(404, {"error": {"message": "not found"}})
 
         def do_POST(self):
+            if self.path.startswith(owner_mod.PREFIX):
+                return self._owner_call("POST")
             agent, lane = self._agent()
             if not agent:
                 kernel.audit.append("agent_model_refused", {"why": "bad token"})
                 return self._json(401, {"error": {"message": "unauthorized"}})
-            if lane == "dashboard":                      # the hub's read-only token: no model calls, no actions
-                return self._json(403, {"error": {"message": "read-only token"}})
+            if lane in ("dashboard", "owner"):           # the hub's read-only token and the owner's console token: no model calls, no agent actions
+                try:                                     # drain the body first: answering before it is read resets the connection on Windows
+                    self.rfile.read(min(int(self.headers.get("Content-Length", "0")), MAX_BODY))
+                except (ValueError, OSError):
+                    pass
+                return self._json(403, {"error": {"message": "this token is not an agent token"}})
             if lane == "runner" or self.path.startswith("/v1/jarvis/runner/"):
                 try:                                     # read the body first: refusing before it confuses some clients
                     n = int(self.headers.get("Content-Length", "0"))
@@ -685,12 +773,31 @@ def make_handler(kernel, providers, clock=time.time):
                            f"{limit or 'fewer'}. Compress the conversation and try again.",
                 "type": "invalid_request_error", "code": "context_length_exceeded"}})
 
+    def route_explain(body, q):
+        lane = q.get("lane", "private")
+        if lane not in ("private", "public"):
+            return 400, {"error": "lane must be private or public"}
+        now = clock()
+        rest = {n: round(max(cooling.get(n, 0), outage.get(n, 0)) - now) for n in set(cooling) | set(outage)}
+        try:
+            est = int(q["tokens"]) if q.get("tokens") else None
+        except ValueError:
+            return 400, {"error": "tokens must be a number"}
+        return 200, gateway.explain(providers, lane, q.get("purpose") or None, est, rest, preferred(lane))
+    owner_plane.routes[("GET", "route")] = route_explain
+    from .automations import Automations
+    from .agents import AgentDefs
+    owner_plane.attach(Automations(kernel, tasks, jobs, owner_plane, dispatch=dispatch_to_lab, clock=clock),
+                       AgentDefs(kernel, tasks, dispatch=dispatch_to_lab, clock=clock), providers=providers)
+    H.owner_plane = owner_plane
     return H, tokens
 
 
 def serve(kernel, providers, port=8790, binds=("127.0.0.1",)):
     """Loopback always; extra binds (e.g. the Tailscale address, for agents in the laptop's WSL box) only when asked."""
     H, _ = make_handler(kernel, providers)
+    from .owner import start_ticker
+    start_ticker(H.owner_plane)                  # stuck jobs, deadlines, finished lab work: the kernel's own loop
     servers = [ThreadingHTTPServer((b, port), H) for b in binds]
     for s in servers[1:]:
         threading.Thread(target=s.serve_forever, daemon=True).start()

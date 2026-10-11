@@ -19,6 +19,8 @@ class AuditLog:
         db.execute(
             "CREATE TABLE IF NOT EXISTS audit(seq INTEGER PRIMARY KEY, ts REAL, kind TEXT, payload TEXT, prev TEXT, hash TEXT)"
         )
+        db.execute("CREATE INDEX IF NOT EXISTS audit_ts ON audit(ts)")       # the overview scans the last 24 h every 10 s
+        db.execute("CREATE INDEX IF NOT EXISTS audit_kind ON audit(kind)")
         db.commit()
 
     def head(self):
@@ -27,19 +29,26 @@ class AuditLog:
 
     def append(self, kind: str, payload: dict) -> int:
         body = json.dumps(payload, sort_keys=True, default=str)
-        with _LOCK, getattr(self.db, "lock", _LOCK):   # the connection's own lock too: no other thread's statement inside BEGIN..COMMIT
+        if hasattr(self.db, "tx"):
+            # SafeDB: its connection lock is the only lock (a second, module-level one would invert the lock order
+            # of a caller that is already inside db.tx()). Inside such a transaction this is a SAVEPOINT.
+            with self.db.tx():
+                return self._insert(kind, body)
+        with _LOCK:                      # a bare sqlite3 connection (tests, tools)
             self.db.execute("BEGIN IMMEDIATE")  # takes the write lock before reading the head: no two writers share a seq
             try:
-                seq, prev = self.head()
-                ts = time.time()
-                self.db.execute(
-                    "INSERT INTO audit(seq, ts, kind, payload, prev, hash) VALUES (?,?,?,?,?,?)",
-                    (seq + 1, ts, kind, body, prev, _h(prev, ts, kind, body)),
-                )
+                seq = self._insert(kind, body)
                 self.db.execute("COMMIT")
             except BaseException:
                 self.db.execute("ROLLBACK")
                 raise
+        return seq
+
+    def _insert(self, kind: str, body: str) -> int:
+        seq, prev = self.head()
+        ts = time.time()
+        self.db.execute("INSERT INTO audit(seq, ts, kind, payload, prev, hash) VALUES (?,?,?,?,?,?)",
+                        (seq + 1, ts, kind, body, prev, _h(prev, ts, kind, body)))
         return seq + 1
 
     def anchor(self) -> dict:

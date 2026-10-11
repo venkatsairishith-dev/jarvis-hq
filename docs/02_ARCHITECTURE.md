@@ -314,3 +314,18 @@ The Hermes plugin puts the entries (with ids) and the kernel's **task checkpoint
 - System tools come first on `PATH`.
 - The agent's toolchain, start-up files, Hermes config and staged skills are fingerprinted around every worker and verifier run. Any change is put back (new files go to `/root/quarantine`) and fails the attempt.
 - The runner reports which skills an attempt used (from Hermes's `.usage.json`) to the kernel. Traces and the analyzer link skills, latency, context failures, corrections and changes to outcomes, as recommendations only.
+
+## JARVIS Console, owner plane and Agent OS UI (added 2026-10-11)
+```
+ Edge (React UI, hq/ui)  --127.0.0.1-->  JARVIS Console (hq/console, Windows)  --owner token-->  kernel :8790 /v1/jarvis/owner/*
+   mic -> WAV, text, approvals                voice (sherpa-onnx, Piper), previews,             command -> owner's Hermes -> tools
+                                              Agent PC proxy, intent hint                       approve (YELLOW+PIN), deny, task control,
+                                                                                                stop-all, kill, automations, agents,
+                                                                                                memory, lessons, route explanation, pc jobs
+```
+- **Kernel** (`owner.py`, `automations.py`, `agents.py`): routes `state`, `events` and the SSE `stream` (the audit `seq` is the event id), `command`, `approve`, `deny`, `task`, `stop_all`, `kill`, `pc`, `job/<id>`, `automations*`, `agents*`, `memory`, `lessons*`, `models`, `route` (reason codes per provider), `watches`, `audit/verify`. Agents can never call them: the lane comes from the token.
+- **Tables added:** `owner_commands`, `owner_config` (PIN hash), `owner_notices`, `automations`, `automation_runs`, `agent_defs`, `watch_events`, `lesson_seen`; indexes on `audit(ts, kind)`, `jobs`, `tasks`.
+- **Console** (`console/jarvis_console`): `server.py` (static UI with CSP, `/api/*`), `kernel_client.py`, `voice.py`, `files.py` (inert previews, delivered vs lab workspace), `intent.py` (advisory classification), `speech_text.py` (what is worth saying aloud).
+- **UI** (`ui/`): React 19, TypeScript, Vite, Tailwind 4. Screens: Command Center, Agentic OS (Agent PC, this Windows PC, nodes), Agent Factory, Tasks, Automation Studio, Workspace, Memory and lessons, Models and skills (with the routing explanation), Settings and health. Every state shown comes from the kernel or the console; when a service is down the screen says so.
+- **Windows adapter** (`node/jarvis_node/windows.py`, `jobs.py`): window list, post-open verification (`verified` / `unconfirmed` from a window actually appearing), a UIA snapshot, a real screenshot written to `outputs\screens\` and never returned inline.
+- **Not built, stated plainly:** wake word (decided off), a persistent per-agent workspace (agent definitions run as lab tasks with the task's own folder), click/type verification beyond the existing UIA read-back, a live video stream of the Windows PC (by design), browser job kind on the laptop (Playwright library exists, unwired).

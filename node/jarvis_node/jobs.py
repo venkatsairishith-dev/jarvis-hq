@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "kernel"))
 from jarvis_kernel.scrub import scrub  # noqa: E402
@@ -151,6 +152,71 @@ def ui_action(p: dict, backend=None) -> dict:
     return {"ok": True, "done": op}
 
 
+def ui_windows(p: dict, lister=None) -> dict:
+    """The visible top-level windows right now (titles scrubbed): what is actually on screen."""
+    if lister is None:
+        from .windows import list_windows as lister
+    ws = lister()
+    return {"ok": True, "count": len(ws), "windows": [{k: w[k] for k in ("title", "process", "foreground", "minimized", "w", "h")} for w in ws[:40]]}
+
+
+SENSITIVE_PROC = re.compile(r"(?i)keepass|1password|bitwarden|lastpass|dashlane|enpass|wallet|metamask|exodus|ledger|banking|netbank|paypal")
+
+
+def ui_snapshot(p: dict, snap=None) -> dict:
+    """The accessibility tree of one window (the named process, or the foreground window): text only, scrubbed."""
+    if snap is None:
+        from .ui import snapshot as snap
+    target = str(p.get("target", ""))
+    if not re.match(r"^[A-Za-z0-9_.-]{0,40}$", target) or SENSITIVE_PROC.search(target):
+        return {"ok": False, "error": "refused: bad or sensitive process name"}
+    try:
+        s = snap(target, 60, 4, False)
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__}
+    if s.get("error"):
+        return {"ok": False, "error": str(s["error"])[:60]}
+    if SENSITIVE_PROC.search(str(s.get("process", "")) + " " + str(s.get("window", ""))):
+        return {"ok": False, "error": "refused: that window belongs to a password manager, wallet or bank"}
+    return {"ok": True, "window": s.get("window"), "process": s.get("process"), "count": len(s.get("elements") or []),
+            "truncated": s.get("truncated"), "elements": [{k: e.get(k) for k in ("depth", "type", "name", "id", "enabled")}
+                                                         for e in (s.get("elements") or [])[:60]]}
+
+
+def screenshot(p: dict, root: str = None, shooter=None) -> dict:
+    """A real picture of the desktop, written under outputs/screens/. The picture itself never goes into the result."""
+    if shooter is None:
+        from .windows import screenshot_png as shooter
+    folder = os.path.join(root or outputs_root(), "screens")
+    path = os.path.join(folder, time.strftime("screen-%Y%m%d-%H%M%S") + ".png")
+    try:
+        info = shooter(path)
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__}
+    return {"ok": True, "saved": os.path.basename(path), "folder": folder, **info}
+
+
+def _verify_open(result: dict, params: dict, lister=None, before=None, timeout=6.0) -> dict:
+    """After an open action reports success, look at the desktop: did a window for it really appear? The answer is added
+    to the result as `verified` (a window matched), `unconfirmed` (opened, but nothing matched in time) or `skipped`."""
+    if not result.get("ok") or params.get("op") == "list_folder":
+        return result
+    from . import windows
+    if lister is None:
+        if not windows.ON_WINDOWS:
+            return dict(result, verified="skipped")
+        lister = windows.list_windows
+    shown = str(result.get("opened") or "")
+    want = os.path.basename(shown.replace("\\", "/").rstrip("/")) or shown
+    if params.get("op") == "open_file":
+        want = os.path.splitext(want)[0]
+    w = windows.wait_for(lambda x: windows.titles_match(want, x["title"]) or windows.titles_match(want, x.get("process", "")),
+                         timeout=timeout, lister=lister, before=before)
+    if w:
+        return dict(result, verified="verified", window={"title": w["title"], "process": w.get("process")})
+    return dict(result, verified="unconfirmed", note=f"opened, but no window titled like '{want[:40]}' appeared within {int(timeout)} s")
+
+
 def run_job(job: dict, projects: dict = None) -> dict:
     """Run one job. Unknown kinds are refused."""
     kind, params = job.get("kind"), job.get("params") or {}
@@ -166,7 +232,20 @@ def run_job(job: dict, projects: dict = None) -> dict:
             return ui_action(params)
         if kind == "pc_open":
             from .pcopen import pc_open
-            return pc_open(params)
+            before = None
+            if params.get("op") in ("open_app", "open_folder", "open_file"):
+                try:
+                    from . import windows
+                    before = {w["hwnd"] for w in windows.list_windows()}
+                except Exception:
+                    before = None
+            return _verify_open(pc_open(params), params, before=before)
+        if kind == "ui_windows":
+            return ui_windows(params)
+        if kind == "ui_snapshot":
+            return ui_snapshot(params)
+        if kind == "screenshot":
+            return screenshot(params)
         return {"ok": False, "error": "unknown job kind"}
     except Exception as e:   # report the kind of failure only
         return {"ok": False, "error": type(e).__name__}

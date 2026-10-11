@@ -92,6 +92,52 @@ def plan(providers, task_lane: str, purpose: str | None = None, prefer_local: bo
     return ok
 
 
+def explain(providers, task_lane: str, purpose: str | None = None, est_tokens: int | None = None, rest: dict | None = None,
+            preferred: str | None = None) -> dict:
+    """Why each provider is, or is not, in the chain for a request: the same rules as plan(), with a reason code per
+    provider (and the order of the eligible ones). `rest` maps a provider name to seconds it is resting after errors.
+    Nothing here is a guess: a code is only reported when its rule actually fired."""
+    rest = rest or {}
+    cands, eligible = [], []
+    for p in providers:
+        codes = []
+        if not p.enabled:
+            codes.append("PROVIDER_DISABLED")
+        if p.paid:
+            codes.append("PAID_REFUSED")
+        if p.lane not in LANES:
+            codes.append("UNKNOWN_LANE")
+        if not p.base_url:
+            codes.append("NO_ENDPOINT")
+        if p.os_only and p.os_only != os.name:
+            codes.append("OTHER_MACHINE_ONLY")
+        kp = p.key_path()
+        if kp is not None and not os.path.isfile(kp):
+            codes.append("KEY_MISSING")
+        if not allowed(task_lane, p.lane):
+            codes.append("LANE_MISMATCH")
+        if purpose and purpose not in p.models and "any" not in p.models:
+            codes.append("PURPOSE_MISMATCH")
+        limit = p.max_input_tokens or p.max_total_tokens
+        if est_tokens and limit and est_tokens > limit:
+            codes.append("CONTEXT_TOO_SMALL")
+        if rest.get(p.name, 0) > 0:
+            codes.append("RESTING_AFTER_ERRORS")
+        row = {"provider": p.name, "lane": p.lane, "model": p.default_model, "priority": p.priority, "context_limit": limit,
+               "verdict": "excluded" if codes else "eligible", "codes": codes}
+        cands.append(row)
+        if not codes:
+            eligible.append((p, row))
+    eligible.sort(key=lambda t: (t[0].name != preferred, t[0].priority, t[0].lane != "local"))
+    for rank, (p, row) in enumerate(eligible, 1):
+        row["rank"] = rank
+        row["codes"] = (["OWNER_PREFERRED"] if p.name == preferred else []) + ["LOCAL_FIRST" if p.lane == "local" else f"PRIORITY_{p.priority}"]
+    return {"lane": task_lane, "purpose": purpose, "est_tokens": est_tokens, "chain": [p.name for p, _ in eligible],
+            "chosen": eligible[0][0].name if eligible else None, "candidates": cands,
+            "policy": {"never_crosses_lanes": True, "paid_providers_refused": True, "order": "owner preference, then priority, then local first"},
+            "note": None if eligible else "no provider can serve this request; the kernel would answer with an error, not widen the lane"}
+
+
 def call(kernel, providers, task_lane: str, prompt: str, purpose: str | None = None, model: str = "default", timeout=60, max_tokens=256):
     """Run a prompt through the first provider in the chain that works. Audited. Keys are read at call time only.
     max_tokens is a hard output budget for the call."""

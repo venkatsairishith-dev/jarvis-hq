@@ -51,6 +51,8 @@ class Tasks:
             "deadline REAL, result TEXT, evidence TEXT, verification TEXT, parent TEXT)")
         kernel.db.execute("CREATE TABLE IF NOT EXISTS task_events(id INTEGER PRIMARY KEY, task TEXT, ts REAL, state TEXT, kind TEXT, note TEXT)")
         kernel.db.execute("CREATE INDEX IF NOT EXISTS task_events_task ON task_events(task)")
+        kernel.db.execute("CREATE INDEX IF NOT EXISTS tasks_state_updated ON tasks(state, updated)")
+        kernel.db.execute("CREATE INDEX IF NOT EXISTS tasks_owner_updated ON tasks(owner, updated)")
 
     # ---- writes ----
     def create(self, owner, lane, request, goal, plan=None, criteria=None, source="agent", max_attempts=3, budget_s=3600, parent=None):
@@ -69,43 +71,54 @@ class Tasks:
 
     def update(self, owner, tid, state=None, step=None, plan=None, criteria=None, note=None, result=None, evidence=None,
                verification=None, attempt=False, force=False):
-        t = self._row(tid)
-        if not t or (owner is not None and t["owner"] != owner):
-            raise TaskError("no such task")
-        if t["state"] in FINAL and not force:
-            raise TaskError(f"task is already {t['state']}")
-        sets, vals = ["updated=?"], [time.time()]
-        if state is not None and state != t["state"]:
-            if state not in STATES or state not in NEXT.get(t["state"], set()):
-                raise TaskError(f"cannot go from {t['state']} to {state}")
-            if state == "repairing" and t["attempts"] >= t["max_attempts"]:
-                raise TaskError("retry budget used up: the task must fail or be completed")
-            sets.append("state=?"); vals.append(state)
-        if attempt:
-            if t["attempts"] >= t["max_attempts"]:
-                raise TaskError("retry budget used up")
-            sets.append("attempts=attempts+1")
-        for col, val, f in (("step", step, lambda v: _clip(v, TEXT_MAX["step"])), ("plan", plan, lambda v: json.dumps(_list(v))),
-                            ("criteria", criteria, lambda v: json.dumps(_list(v))), ("result", result, lambda v: _clip(v, TEXT_MAX["result"])),
-                            ("evidence", evidence, lambda v: json.dumps(_list(v, each=1000))),
-                            ("verification", verification, lambda v: json.dumps(v if isinstance(v, dict) else {"note": _clip(v, 1000)}, default=str)[:8000])):
-            if val is not None:
-                sets.append(f"{col}=?"); vals.append(f(val))
-        self.k.db.execute(f"UPDATE tasks SET {', '.join(sets)} WHERE id=?", (*vals, tid))
-        new = state or t["state"]
-        self._event(tid, new, "state" if state and state != t["state"] else "update", _clip(note or step or "", TEXT_MAX["note"]))
-        if state in FINAL:
-            self.k.audit.append("task_" + state, {"id": tid, "owner": t["owner"]})
+        # One transaction for read, check, write, event and audit row: the runner's report, an agent's update and the
+        # owner's cancel can no longer interleave (a final state used to be overwritable between the read and the write).
+        with self.k.db.tx():
+            t = self._row(tid)
+            if not t or (owner is not None and t["owner"] != owner):
+                raise TaskError("no such task")
+            if t["state"] in FINAL and not force:
+                raise TaskError(f"task is already {t['state']}")
+            sets, vals = ["updated=?"], [time.time()]
+            if state is not None and state != t["state"]:
+                if state not in STATES or state not in NEXT.get(t["state"], set()):
+                    raise TaskError(f"cannot go from {t['state']} to {state}")
+                if state == "repairing" and t["attempts"] >= t["max_attempts"]:
+                    raise TaskError("retry budget used up: the task must fail or be completed")
+                sets.append("state=?"); vals.append(state)
+            if attempt:
+                if t["attempts"] >= t["max_attempts"]:
+                    raise TaskError("retry budget used up")
+                sets.append("attempts=attempts+1")
+            for col, val, f in (("step", step, lambda v: _clip(v, TEXT_MAX["step"])), ("plan", plan, lambda v: json.dumps(_list(v))),
+                                ("criteria", criteria, lambda v: json.dumps(_list(v))), ("result", result, lambda v: _clip(v, TEXT_MAX["result"])),
+                                ("evidence", evidence, lambda v: json.dumps(_list(v, each=1000))),
+                                ("verification", verification, lambda v: json.dumps(v if isinstance(v, dict) else {"note": _clip(v, 1000)}, default=str)[:8000])):
+                if val is not None:
+                    sets.append(f"{col}=?"); vals.append(f(val))
+            cur = self.k.db.execute(f"UPDATE tasks SET {', '.join(sets)} WHERE id=? AND state=?", (*vals, tid, t["state"]))
+            if cur.rowcount != 1:                       # compare-and-set: another process changed it since we read it
+                raise TaskError("the task changed while updating; try again")
+            new = state or t["state"]
+            self._event(tid, new, "state" if state and state != t["state"] else "update", _clip(note or step or "", TEXT_MAX["note"]))
+            if state in FINAL:
+                self.k.audit.append("task_" + state, {"id": tid, "owner": t["owner"]})
         return self.get(tid)
 
     def expire(self, now=None):
         """Tasks past their deadline fail: no task runs forever."""
         now = now or time.time()
-        ids = [r[0] for r in self.k.db.execute(f"SELECT id FROM tasks WHERE deadline < ? AND state NOT IN ({','.join('?' * len(FINAL))})", (now, *FINAL)).fetchall()]
-        for tid in ids:
-            self.k.db.execute("UPDATE tasks SET state='failed', updated=?, result=CASE WHEN result='' THEN 'time budget used up' ELSE result END WHERE id=?", (now, tid))
-            self._event(tid, "failed", "state", "time budget used up")
-            self.k.audit.append("task_failed", {"id": tid, "why": "deadline"})
+        marks = ",".join("?" * len(FINAL))
+        cand = [r[0] for r in self.k.db.execute(f"SELECT id FROM tasks WHERE deadline < ? AND state NOT IN ({marks})", (now, *FINAL)).fetchall()]
+        ids = []
+        for tid in cand:
+            with self.k.db.tx():            # the state, its event and its audit row together; a task that just finished is left alone
+                cur = self.k.db.execute(f"UPDATE tasks SET state='failed', updated=?, result=CASE WHEN result='' THEN 'time budget used up' ELSE result END "
+                                        f"WHERE id=? AND state NOT IN ({marks})", (now, tid, *FINAL))
+                if cur.rowcount == 1:
+                    self._event(tid, "failed", "state", "time budget used up")
+                    self.k.audit.append("task_failed", {"id": tid, "why": "deadline"})
+                    ids.append(tid)
         return ids
 
     # ---- reads ----
