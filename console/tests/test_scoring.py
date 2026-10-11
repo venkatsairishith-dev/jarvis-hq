@@ -5,6 +5,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 
@@ -95,6 +96,16 @@ class Endpoints(unittest.TestCase):
         self.assertEqual(self.post_status("/v1/jarvis/actions", {"tool": "task", "op": "list"}), 405)
         self.assertEqual(self.post_status("/", {}), 405)
 
+    def test_refusals_arrive_as_status_codes_even_when_the_body_is_large_and_unread(self):
+        big = {"pad": "x" * 150_000}
+        for _ in range(12):                                                                # a reset connection is intermittent: try several times
+            self.assertEqual(self.post_status("/v1/jarvis/actions", big), 405)             # a page path
+            r = urllib.request.Request(self.base + "/api/owner/command", data=json.dumps(big).encode(), method="POST",
+                                       headers={"Origin": "http://evil.example", "Content-Type": "application/json"})
+            with self.assertRaises(urllib.error.HTTPError) as cm:                           # a foreign origin
+                urllib.request.urlopen(r, timeout=10)
+            self.assertEqual(cm.exception.code, 403)
+            self.assertEqual(self.post_status("/api/no-such-route", big), 404)             # an unknown API route
     def post_status(self, path, body):
         import urllib.error
         try:

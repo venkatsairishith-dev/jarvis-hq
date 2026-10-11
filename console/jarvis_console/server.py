@@ -23,6 +23,7 @@ from .voice import Voice, VoiceError
 
 MAX_BODY = 20 * 1024 * 1024
 JSON_BODY = 256 * 1024
+REFUSE_DRAIN = 1 << 20      # the most of a refused request's body that is read so the refusal can be delivered
 UI_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; "
           "connect-src 'self'; frame-src 'self' {hub}; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'")
 
@@ -112,7 +113,22 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
         def _json(self, code, obj):
             self._send(code, obj)
 
+        def _refuse(self, code, obj):
+            """Answer a request that is being turned away. Its body is read first (a bounded amount): closing a socket that
+            still holds unread data resets the connection on Windows, and the client then sees an abort, not the reason."""
+            try:
+                n = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                n = 0
+            if 0 < n <= REFUSE_DRAIN:
+                try:
+                    self.rfile.read(n)
+                except OSError:
+                    pass
+            self._send(code, obj)
+
         def _body(self, limit=JSON_BODY):
+            self._body_taken = True
             try:
                 n = int(self.headers.get("Content-Length", "0"))
             except ValueError:
@@ -144,17 +160,33 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
             self._route("POST")
 
         def _route(self, method):
+            self._body_taken = False
+            try:
+                self._route_inner(method)
+            finally:
+                if method == "POST" and not self._body_taken:        # whatever turned the request away left its body unread
+                    try:
+                        n = int(self.headers.get("Content-Length", "0"))
+                    except ValueError:
+                        n = 0
+                    if 0 < n <= REFUSE_DRAIN:
+                        try:
+                            self.rfile.read(n)
+                        except OSError:
+                            pass
+
+        def _route_inner(self, method):
             if not self._allowed_host():
-                return self._json(403, {"error": "this console answers only on its own loopback address"})
+                return self._refuse(403, {"error": "this console answers only on its own loopback address"})
             u = urllib.parse.urlsplit(self.path)
             path, q = u.path, dict(urllib.parse.parse_qsl(u.query))
             try:
                 if method == "POST" and not self._origin_ok():
-                    return self._json(403, {"error": "cross-site request refused"})
+                    return self._refuse(403, {"error": "cross-site request refused"})
                 if path.startswith("/api/"):
                     return self._api(method, path[5:], q)
                 if method != "GET":                              # the page is only ever fetched; a POST here is a mistake or a probe
-                    return self._json(405, {"error": "method not allowed"})
+                    return self._refuse(405, {"error": "method not allowed"})
                 return self._static(path)
             except VoiceError as e:
                 return self._json(e.code, {"error": str(e)})

@@ -132,7 +132,7 @@ Scope: do not rebuild; use the system as the owner will, fix what breaks, and sa
 ### 6.1 Automated
 | Suite | Result |
 |---|---|
-| Kernel, Windows (jarvis-venv, Python 3.12) | 396 run, 24 skipped, exit 1 on one error: a Windows temp-folder cleanup lock (WinError 32) in `test_vault`, a file not touched in this work; that module passed 3 of 3 reruns alone, and the previous full run on the tree one small change earlier was 394 run, OK, exit 0 |
+| Kernel, Windows (jarvis-venv, Python 3.12) | superseded by section 7: the first run of that day had one temp-folder cleanup error (an environment race, section 7.2); the two full runs of the third pass are 396 run, OK, 24 skipped, exit 0 each |
 | Kernel, on the server in place (Linux ARM, before any restart) | 396 run, OK, 39 skipped, exit 0 at the final sync (before its restart); every earlier sync's full run was also OK (391 to 396 tests) |
 | Console (`console/tests`) | 27 run, OK, exit 0 (scoring, Voice check endpoints, resident Piper worker, single-instance bind, POST-to-page refusal, intent circuit breaker, intent, console routes) |
 | Evals (`evals/run_evals.py`) | 23/23, exit 0 |
@@ -148,7 +148,7 @@ Scope: do not rebuild; use the system as the owner will, fix what breaks, and sa
 4. **File-arrival automation** (disposable `D:\jarvis\cache\watch-test` only, the single entry in `config/watches.json`; no personal folder watched). Through the real UI: only that folder was offered; the preview stated trigger, target, action and side effects; the definition persisted; a `.txt` written and appended 300 ms later fired exactly one run, which returned a real window list (4 windows); a non-matching file and a node restart fired nothing; a file arriving while paused did not run and was not replayed on resume; the next file after resume ran; after the scheduler's service (`jarvis-llm-proxy`) restarted the definition survived and fired; delete was read back and a later file fired nothing. Evidence: screenshots 30 and 31.
 5. **Self-correction.** A live lab task with criteria that cannot both hold ("exactly 10 bytes" and "the first 100 digits of pi"): attempt 1 was found failing by the independent verifier (100 bytes, not 10) and the finding was fed back; attempt 2 satisfied the first criterion and broke the second (a real oscillation); attempt 3's verifier wrote no verdict (classified `tool`); the retry budget ended it as `failed`. Nothing was delivered, no lesson was proposed, and the owner was told the task could not be met. Gap found: the final reason ("the verifier wrote no VERIFY.json") hides the substantive findings of attempts 1 and 2; they are in the task history, not in the headline. The repaired-and-verified path is proven with the real runner against a scripted worker (WSL test) and by an earlier natural live repair (3 attempts); the lesson gate for owner-corrected tasks has its own tests.
 6. **Memory.** Through the real UI: add; correct (version moved, a stale correction refused with 409, the old text only in history); forget (gone from the list, history erased, a later change refused); the audit chain verified (12,483 events).
-7. **Provider and tokens.** The endpoint is `inference.dahl.global` (authenticated, HTTP 200); it exposes no usage or balance endpoint; its homepage advertises 100M free tokens but its pricing page says prepaid at $0.03 per million, so the allowance is **not assumed usable**. Its terms do not promise zero retention: public-lane content only (unchanged). Measured usage was blind for streamed calls (nested `usage` objects were not parsed) and is now recorded per provider. The limit that mattered today: the private lane's free providers (OpenRouter 50 requests a day, Groq about 8k tokens per request against the agent's 10k) were exhausted by testing, and commands now say so at once.
+7. **Provider and tokens.** The endpoint is `inference.dahl.global` (authenticated, HTTP 200). *Corrected in section 7:* Dahl does document a key-balance endpoint (`GET /tokens/current`) and a 100M-token new-account gift into a pool that is allocated to keys; this pass first recorded, wrongly, that no balance endpoint existed. Its terms do not promise zero retention: public-lane content only (unchanged). Measured usage was blind for streamed calls (nested `usage` objects were not parsed) and is now recorded per provider. The limit that mattered today: the private lane's free providers (OpenRouter 50 requests a day, Groq about 8k tokens per request against the agent's 10k) were exhausted by testing, and commands now say so at once.
 8. **Reliability.** Browser reload mid-command (command and answer survive); console restarted mid-command (the kernel finished it, the page reconnected, the owner token still held); laptop node stopped (the job stayed queued) and restored (the job completed and the window list showed); "Stop waiting" (cancelled, late answer ignored, the next command not refused as busy); kernel service restarted mid-command (the command failed honestly with "the kernel restarted before JARVIS answered", nothing stuck); console boundary (no token in any response; a foreign Origin, a missing header, a rebinding Host, API-plane and path-traversal attempts all refused; a POST to a page path is now 405).
 9. **Local model recovery.** Qwen3-1.7B on Vulkan: 3 s cold start, 1.7 GB, about 230 ms per classification; killed hard, the console answers from its rules and voice is unaffected; the dead server is left alone for 30 s (a refused loopback connection costs 2 s on Windows).
 
@@ -161,3 +161,62 @@ Stale "approve on Telegram" text shown to the agent; measured token usage empty 
 - Agent PC takeover and resume, and delivery of lab artifacts, were exercised in the first pass and not repeated in this one.
 - The Project JARVIS plan document could not be updated from here (no stored link); the plan note is D16.
 - Commit: the one that contains this section (`git log -1 -- docs/research/07-integration-decisions.md`); nothing was pushed.
+
+## 7. Final verification and provider audit (2026-10-11, third pass)
+Scope: confirm the exact state, close the Windows test issue, audit the model providers from official sources, prepare the owner-only steps, re-run the regression. No application code was changed for the first two; one console defect was found and fixed in the last. Nothing was pushed, no secret was read or printed, no PIN was set, Telegram stayed off, `hermes-agent-vm-2` was never contacted, and no service was restarted while a job was running (the only restart was the laptop console, with no command running).
+
+### 7.1 State found (read-only inspection)
+- Working tree clean at `d190c3e`; three commits ahead of `origin/main` (`f6fdb3f`, `73f8a32`, `d190c3e`); nothing pushed.
+- Server and laptop kernel trees byte-identical (22 files, SHA-256); `config/providers.json` identical on both; node agent identical.
+- Server: `jarvis-llm-proxy`, `jarvis-kernel`, `jarvis-hermes-gateway` active; no queued or running job, no running owner command, no open task, no pending approval; the laptop node last seen seconds earlier; approval PIN not set; kill switch off.
+- Laptop: exactly one process listening on 127.0.0.1:8799; one node process pair; no `llama-server` or Piper worker left over; `config/telegram.off` present on both machines and no Telegram process.
+
+### 7.2 The `test_vault` temporary-folder error
+- **First failure (earlier today):** one error in a full Windows run: `PermissionError [WinError 32]` while `tempfile` removed `D:\jarvis\cache\tmp\tmp…\vault`, in `test_secrets_scrubbed_and_keys_blocked` (a different test of the same class each time it recurs). That run had `TEMP` inside the project folder.
+- **Run 1 of this pass** (`-X dev`, temp on `C:`): 396 run, OK, 24 skipped, exit 0.
+- **Isolation experiments** (`test_vault.py` alone, repeated; the same interpreter and code):
+  | Temp folder | Runs | Failures |
+  |---|---|---|
+  | `C:\Users\venkat\AppData\Local\Temp`, `-X dev`, ResourceWarning as error | 12 | 0 |
+  | `D:\jarvis\cache\tmp` (inside the IDE-watched workspace) | 25 | **6** (always on the `vault` folder, which contains empty `.git` and `.obsidian` folders; test names varied) |
+  | `D:\jarvis-apps\tmp` (same drive, outside the workspace) | 25 | 0 |
+- **Run 2 of this pass** (temp on `D:\jarvis-apps\tmp`): 396 run, OK, 24 skipped, exit 0.
+- **Conclusion:** a Windows handle race between the test's temporary folder and a process watching the workspace tree while `tempfile` deletes the folder. The holder was not identified by name; the evidence is that failures occur only inside the watched tree (6 of 25) and not outside it (0 of 25 and 0 of 12, plus two clean full runs). The vault module closes the handles it opens (it uses `with open`). It is created by where the tests put their temporary folder, not by an application defect. No test and no application file was changed for it; `docs/05_OPERATIONS.md` now says to run the Windows suite with `TEMP` outside `D:\jarvis`.
+- **Skipped tests:** all 24 skips are `test_browser` ("playwright not installed in this Python"). The same module run in the browser venv: 35 run, OK, 0 skipped, exit 0.
+
+### 7.3 One defect found by the verification run and fixed
+A new console test (a POST to a page path) failed once with `ConnectionAbortedError [WinError 10053]`. Cause: the console turned some requests away (foreign Origin, rebinding Host, POST to a page path, unknown API route) without reading the request body; closing a socket that holds unread data resets the connection on Windows, so the client saw an abort instead of the refusal. Reproduced deterministically first (150 KB body, failed on the first request), then fixed by reading a bounded amount (1 MiB) of an unread body before the response is closed. Test added; console suite 28 OK three times running; the live console was restarted (no command running) and 10 of 10 large POSTs returned 405.
+
+### 7.4 Provider audit
+Full table with sources and uncertainty: `docs/research/08-owner-handoff.md` section 3. Findings that change earlier statements:
+- **Corrected:** Dahl does publish a key-balance endpoint (`GET /tokens/current`) and documents the 100M-token gift as going to a pool that must be allocated to a key. Earlier text here and in D16 said no balance endpoint existed; that was wrong because the endpoint is not on the pricing page and the earlier probe tried other paths. One call (no model invoked) returned **6,720,752 tokens available on JARVIS's key**.
+- **Unverified:** the pool balance, the ledger and any expiry attached to the gift (they need an account sign-in); that "DHAI" in the owner's brief means Dahl (probable: it is the only owner-allocated token-pool integration with a 100M claim, and the owner wrote "do all tests using dahl", but the string "DHAI" appears nowhere in the repo, configuration or vault).
+- **Public lane only:** Dahl's privacy policy records prompts, tool definitions and outputs, runs them on independent GPU operators and disclaims zero-retention and confidentiality. The allowance cannot serve the private lane.
+- **The private lane has one usable provider:** Groq's free plan allows 8,000 tokens per minute against the owner's agent's 10,000 to 12,000-token request, so only OpenRouter's free model (50 requests a day under $10 of purchased credits, 1,000 at or above; resets 00:00 UTC) can serve it. Candidate additions and a recommendation are in the handoff.
+- **Router:** private tasks run only on private or local providers and never fall back to a public one (several named tests, listed in 7.5, plus the `lane_enforcement` eval, all passing in the runs above).
+
+### 7.5 Regression and security checks (this pass, with exit statuses)
+| Check | Evidence |
+|---|---|
+| Kernel suite, Windows | run 1 and run 2: 396 run, OK, 24 skipped, exit 0 each |
+| `test_browser` in the browser venv | 35 run, OK, exit 0 |
+| Console suite | 28 run, OK, exit 0 (3 runs) |
+| Evals | 23/23, exit 0 |
+| Browser suite | 51 passed, exit 0 (re-run after the console fix) |
+| Self-correction runner in WSL | 3 run, OK, exit 0 |
+| Kill switch (stops pending approvals, blocks approved actions, one-way over HTTP, stops the scheduler and the node loop) | 18 named tests in run 1, all ok; `kill.spec` in the browser suite |
+| Unapproved dangerous action cannot run | `test_action_without_approval_is_refused_and_backend_not_called`, `test_red_actions_are_not_approvable_over_http`, `test_approval_for_one_action_does_not_cover_another`; eval `approval` |
+| Browser cannot obtain the owner token | `test_only_an_owner_token_gets_in_and_it_gets_nothing_else`; live case E of the reliability spec (earlier today); the owner token is not in any health, state or model response |
+| Private content cannot reach the public lane by fallback | `test_fallback_stays_in_lane`, `test_private_task_never_planned_on_public`, `test_only_public_available_means_private_task_fails_closed`, `test_paid_or_bad_lane_provider_never_used` |
+| A failed or cancelled command cannot leave the gate stuck | `test_stopping_the_wait_hands_the_gate_back_so_the_next_command_runs`, `test_a_running_command_fails_at_once_when_the_gateway_says_the_lane_is_resting`; live case D and F earlier today |
+| Wake word disabled | no wake-word code path exists in the console or the UI (searched); `bench/wakeword/` is a measurement only |
+| Telegram disabled | `telegram.off` on both machines, no process; the Telegram tests use fake APIs and never contact Telegram |
+| Protected VM untouched | the kernel's protected set names it and refuses it (`test_hardening`, `test_telegram` refusal cases); no command of this pass connected to it or to its address (its name appeared only in source searches of the repository) |
+| Secret scan | see section 7.6 |
+| Oracle cost | $0.0 for the month (Cost Analysis script, 2026-10-11) |
+
+### 7.6 Commit
+The commit that contains this section (`git log -1 -- docs/research/07-integration-decisions.md`). Secret scan of the staged change: run before the commit, result recorded in that commit's message. Nothing pushed.
+
+### 7.7 Limitations that remain
+Real-microphone Hindi and Telugu accuracy; the live approve-with-PIN run; the private lane's capacity; Dahl's pool balance and expiry; the OpenRouter account's privacy toggles; the live voice-to-task spec has not been re-proven since the providers ran out of quota (earlier today it passed); agent takeover and artifact delivery were last exercised in the first pass.
