@@ -180,7 +180,7 @@ Research behind this: `docs/research/01` to `07` (each report lists its own evid
 - **Automations are kernel records** (`automations`, `automation_runs`), fired by a pure `tick(now)` with `UNIQUE(automation_id, run_key)` per slot. Hermes cron was not used for definitions: its jobs sit outside kernel authorization and audit and have no outcome verification. File-arrival triggers are detected by the laptop node on its own heartbeat from an allow-list (`config/watches.json`).
 - **Lessons are candidates until a gate and the owner accept them.** Only a task that failed, was repaired and passed independent verification yields one; the gate checks origin, secrets, authority claims and duplicates. This is an automated gate over recorded facts, not a replay of the failed scenario.
 - **Memory forget is real erasure now** (text and history overwritten; a tombstone stays), and task updates, memory writes and audit rows are transactional with compare-and-set (`SafeDB.tx()`).
-- **"DHAI" is treated as the Dahl provider, unconfirmed** (the only owner-allocated, token-pooled integration with a 100M-token allowance; no "DHAI" string exists in the repo or configuration). Public-lane content only. The owner is asked to confirm (docs/research/08, section 3.1).
+- **"DHAI" is the Dahl provider (owner-confirmed 2026-10-11, naming `dahl-credentials.txt`)**
 
 ## D16 Everyday-use hardening, found by using it live (2026-10-11)
 Each item below was a real fault or gap seen against the live system, not a theoretical one. Evidence is in `docs/research/07` section 6.

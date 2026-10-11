@@ -22,12 +22,12 @@ Written for the owner of JARVIS. It says what is done and proven, what is only p
 - Private lane capacity: behaviour when providers rest is verified; the lane itself has one usable provider with a 50 request/day cap (section 3).
 
 **Unverified**
-- That "DHAI" in your original brief means Dahl (probable, see 3.1; needs your one-word confirmation).
+- The Dahl pool balance, ledger and gift expiry (they need an account sign-in; the sign-in file was deliberately not read, see 3.1).
 - The Dahl pool balance and ledger (they need an account sign-in, not an API key); only the balance of the key JARVIS holds is known.
 - Whether your OpenRouter account's privacy toggles forbid training/logging endpoints (account setting; section 3.4).
 - Real-microphone false-activation rate of any wake word.
 
-**Owner action required** (section 4): confirm "DHAI = Dahl"; set the approval PIN and run the live approval once; speak the Voice check phrases in three languages; decide the private-lane provider.
+**Owner action required** (section 4): set the approval PIN and run the live approval once; speak the Voice check phrases in three languages; look at the Dahl account page for the pool balance and expiry; decide the private-lane provider.
 
 **Failed or skipped tests, all of them**
 - Windows kernel run 1 and run 2: no failures. 24 skipped in jarvis-venv (all `test_browser`, "playwright not installed in this Python"); the same file ran in the browser venv with 0 skipped.
@@ -45,7 +45,7 @@ The kernel is the only authority. Everything the owner or an agent does passes i
 ### 3.1 "DHAI" and Dahl
 - Your brief calls it "the existing authorized DHAI interface" with "an allowance of 100 million tokens". The string "DHAI" appears nowhere in the code, configuration or vault.
 - The only integration in the system that is owner-allocated, token-pooled and advertises a 100M-token allowance is Dahl (`inference.dahl.global`). Its own docs say a new account receives 100 million tokens into a pool, to be allocated to API keys. In this session's earlier turns you also wrote "for now do all tests using dahl".
-- Conclusion: **probable, not proven.** If "DHAI" is something else, change only the entry in `config/providers.json`. Please confirm in one word.
+- Conclusion: **confirmed by the owner on 2026-10-11**, who named `dahl-credentials.txt` as the DHAI credentials. That file is `D:\jarvis-secrets\dahl-credentials.txt` (309 bytes; it was listed by name only and never opened). The providers use a different file, `providers/dahl.key`, so the 309-byte file is presumably the account sign-in, which is what the pool balance, ledger and expiry need. Under the project rule on secrets I did not read or use it; look at https://inference.dahl.global/account yourself, or authorise a narrowly scoped read-only check in so many words.
 
 ### 3.2 What Dahl's allowance actually is (sources fetched 2026-10-11)
 | Question | Finding | Source |
@@ -86,7 +86,7 @@ The lane has two enabled providers. For the owner's agent (about 10,000 to 12,00
 `gateway.allowed()` permits a private task only on private or local providers and a public task only on public or local ones; the lane comes from the token, never from the request. Fallback never widens the lane (a private task with only public providers up fails closed). Tests: `test_fallback_stays_in_lane`, `test_private_task_never_planned_on_public`, `test_only_public_available_means_private_task_fails_closed`, `test_paid_or_bad_lane_provider_never_used`, `test_priority_orders_providers_but_never_widens_the_lane`, plus the eval `lane_enforcement`. A config test refuses a `dahl*`, `gonka*`, `kaggle*`, `colab*` or `omniroute*` provider outside the public lane.
 
 ## 4. Owner-only steps (do these locally; I never see the PIN)
-1. **Confirm the provider name.** Reply "DHAI is Dahl", or name the provider you meant.
+1. **Provider name:** confirmed (Dahl). Nothing to do. Optional: open the Dahl account page and note the pool balance and any expiry of the gift.
 2. **Set the approval PIN** (typed on your terminal, not echoed):
    `ssh -t -i D:\jarvis-secrets\ssh\jarvis_vm_ed25519 ubuntu@100.125.91.51 "cd ~/jarvis/kernel && python3 -m jarvis_kernel set-approval-pin"` then type a 6 to 64 character PIN twice. Nothing needs restarting.
 3. **Run the live approval once**, in PowerShell on the laptop, with the PIN only in this process (it is not stored, logged or in history):
