@@ -38,7 +38,7 @@ Written for the owner of JARVIS. It says what is done and proven, what is only p
 
 ## 2. What is implemented
 
-The kernel is the only authority. Everything the owner or an agent does passes its policy, audit chain and kill switch. The console (Windows, loopback only) holds the owner token and talks to the owner plane; the browser never sees it. Voice is local (Parakeet, IndicConformer, Kokoro, Piper; audio never leaves the laptop). Automations, agents, memory, the Windows adapter, the lab and the file-arrival triggers are as described in `docs/02_ARCHITECTURE.md` and D15/D16. Nothing is pushed: the repository is three commits ahead of `origin/main` (`f6fdb3f`, `73f8a32`, `d190c3e`) plus the commit that holds this handoff.
+The kernel is the only authority. Everything the owner or an agent does passes its policy, audit chain and kill switch. The console (Windows, loopback only) holds the owner token and talks to the owner plane; the browser never sees it. Voice is local (Parakeet, IndicConformer, Kokoro, Piper; audio never leaves the laptop). Automations, agents, memory, the Windows adapter, the lab and the file-arrival triggers are as described in `docs/02_ARCHITECTURE.md` and D15/D16. Nothing is pushed: the repository is 22 commits ahead of `origin/main` (this document first said three, from a truncated listing; counted again on 2026-10-11 with `git rev-list --count origin/main..HEAD`).
 
 ## 3. Provider identity and usable quota
 

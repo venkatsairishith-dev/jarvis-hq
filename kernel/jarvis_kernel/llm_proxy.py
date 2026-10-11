@@ -38,7 +38,7 @@ OUTPUT_NODE = os.environ.get("JARVIS_OUTPUT_NODE", "laptop")
 OWNER_PATH = re.compile(r"(?i)(?<![a-z0-9])[a-z]:[\\/]|/mnt/[a-z]/|\\\\[a-z0-9]")   # D:\, C:/, /mnt/d/, \\server
 ACTIONS_PER_HOUR = 60
 READS_PER_HOUR = 600           # reads (memory/checkpoint at every session start, task get) have their own budget
-READ_ACTIONS = {("memory", "list"), ("memory", "get"), ("memory", "resolve"), ("memory", "render"),
+READ_ACTIONS = {("connector", "list"), ("connector", "result"), ("memory", "list"), ("memory", "get"), ("memory", "resolve"), ("memory", "render"),
                 ("task", "get"), ("task", "checkpoint"), ("models", "status")}
 SHOWS_PER_HOUR = 12
 PREFERS_PER_DAY = 20
@@ -154,6 +154,9 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                                      state_path=os.path.join(str(kernel.dir), "owner_session.txt")) if os.path.exists(key) else None)
     owner_plane = owner_mod.Owner(kernel, tasks, jobs, memories, hermes=owner_hermes, clock=clock)
     owner_plane.node = OUTPUT_NODE
+    from .connector_service import ConnectorService
+    connectors = ConnectorService(kernel, jobs)
+    owner_plane.install_connectors(connectors)
     kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
     dispatch_lock = threading.Lock()            # one dispatch decision at a time (the server answers on many threads)
@@ -303,6 +306,19 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 kernel.db.execute("INSERT OR REPLACE INTO lane_prefs VALUES (?,?,?,?)", (lane, target, now, agent))
                 kernel.audit.append("lane_preference_set", {"lane": lane, "provider": target, "agent": agent})
                 return 200, {"status": "done", "preferred": target}
+            if tool == "connector":
+                # External services and MCP servers. The agent names a connector and a tool; policy decides from the OWNER'S
+                # classification, never from anything the server said about itself (connector_service.py).
+                if op == "list":
+                    if not kernel.authorize(Action("connector", "list", lane, {}, lane, True)).allowed:
+                        return 403, {"status": "refused"}
+                    return 200, {"status": "done", "connectors": connectors.for_agent(lane)}
+                if op == "call":
+                    name, _, tname = target.partition(".")
+                    return connectors.call_tool(agent, lane, name, tname, p.get("arguments") if "arguments" in p else {}, body.get("approval_id"))
+                if op == "result":
+                    return connectors.result_for(agent, target)
+                return 400, {"status": "refused", "reason": "unknown connector operation"}
             if tool == "task":
                 return task_action(agent, lane, op, target, p)
             if tool == "memory":

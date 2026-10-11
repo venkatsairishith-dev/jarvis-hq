@@ -28,7 +28,11 @@ KINDS = {
     "ui_windows": ("ui", "list_windows"),  # visible top-level windows: title, process, size, foreground
     "ui_snapshot": ("ui", "snapshot"),     # the accessibility tree of one window (names, types; never passwords)
     "screenshot": ("ui", "screenshot"),    # a PNG of the desktop, written to the owner's outputs folder (never sent inline)
+    # Connectors (2026-10-11): one operation on a local MCP server the owner allowed on that machine (connectors.py).
+    "connector_op": ("connector", None),
 }
+CONNECTOR_OPS = {"discover", "test", "connect", "disconnect", "call", "status"}
+RESULT_LIMITS = {"connector_op": 250_000}   # a tool list is larger than most results; every other kind keeps 60,000
 LAB_AGENTS = {"hermes", "opencode", "goose"}
 LAB_RUN_TTL = 2 * 3600                     # a lab run that never reports is failed after 2 h (task deadlines are shorter)
 
@@ -63,6 +67,16 @@ def _check_params(kind: str, params: dict):
         ok = keys == {"target"} and isinstance(params["target"], str) and re.match(r"^[A-Za-z0-9_.-]{0,40}$", params["target"]) is not None
     elif kind == "screenshot":
         ok = keys == set()
+    elif kind == "connector_op":
+        ok = (keys == {"connector", "op", "tool", "args", "risk", "public_ok", "digest", "timeout_s", "max_output"}
+              and re.match(r"^[a-z][a-z0-9_-]{1,31}$", str(params["connector"])) and params["op"] in CONNECTOR_OPS
+              and isinstance(params["tool"], str) and re.match(r"^[A-Za-z0-9_.-]{0,128}$", params["tool"])
+              and isinstance(params["args"], dict) and len(json.dumps(params["args"], default=str)) <= 16384
+              and params["risk"] in ("", "read", "write", "send") and isinstance(params["public_ok"], bool)
+              and isinstance(params["digest"], str) and len(params["digest"]) <= 64
+              and isinstance(params["timeout_s"], int) and 3 <= params["timeout_s"] <= 120
+              and isinstance(params["max_output"], int) and 500 <= params["max_output"] <= 60000
+              and (params["op"] != "call" or (params["tool"] and params["risk"])))
     elif kind == "lab_run":
         ok = (keys == {"task", "agent", "instructions", "criteria", "max_attempts", "timeout_s"} and re.match(r"^[0-9a-f]{12}$", str(params["task"]))
               and params["agent"] in LAB_AGENTS and isinstance(params["instructions"], str) and 0 < len(params["instructions"]) <= 8000
@@ -92,6 +106,12 @@ def action_for(kind: str, params: dict, lane: str = "private", untrusted: bool =
         return Action("ui", "screenshot", "desktop", {}, lane, untrusted)
     if kind == "lab_run":                     # the instructions are not part of the action (their words must not trip path rules)
         return Action("lab", "dispatch", params["agent"], {"task": params["task"]}, lane, untrusted)
+    if kind == "connector_op":
+        if params["op"] == "call":            # the arguments ARE part of the action: an approval binds to exactly them
+            return Action("connector", "call", f"{params['connector']}.{params['tool']}",
+                          {"risk": params["risk"], "public_ok": params["public_ok"], "digest": params["digest"], "args": params["args"]},
+                          lane, untrusted)
+        return Action("connector", "manage", params["connector"], {}, lane, untrusted)
     if kind == "pc_open":
         return Action("pc", params["op"], params["target"], {"path": params["path"]} if params["path"] else {}, lane, untrusted)
     return Action("ui", params["op"], params["target"], {"text": params["text"]} if params["text"] else {}, lane, untrusted)
@@ -152,11 +172,19 @@ class Jobs:
 
     def finish(self, node: str, jid: str, result: dict) -> bool:
         blob = json.dumps(result, default=str)
-        if len(blob) > 60000:
+        kind_row = self.k.db.execute("SELECT kind FROM jobs WHERE id=?", (jid,)).fetchone()
+        if len(blob) > RESULT_LIMITS.get(kind_row[0] if kind_row else "", 60000):
             result, blob = {"ok": False, "error": "result too large"}, '{"ok": false, "error": "result too large"}'
-        cur = self.k.db.execute("UPDATE jobs SET state=?, result=?, finished=? WHERE id=? AND node=? AND state='running'",
-                                ("done" if result.get("ok") else "failed", blob, time.time(), jid, node))
-        self.k.audit.append("job_finished", {"id": jid, "ok": bool(result.get("ok")), "accepted": cur.rowcount == 1})
+        with self.k.db.tx():                       # the job and the registry change together: nobody reads "done" with stale registry state
+            cur = self.k.db.execute("UPDATE jobs SET state=?, result=?, finished=? WHERE id=? AND node=? AND state='running'",
+                                    ("done" if result.get("ok") else "failed", blob, time.time(), jid, node))
+            self.k.audit.append("job_finished", {"id": jid, "ok": bool(result.get("ok")), "accepted": cur.rowcount == 1})
+            if cur.rowcount == 1 and kind_row and kind_row[0] == "connector_op":
+                try:                               # the registry learns what the node found, in whichever process received it
+                    from . import connectors
+                    connectors.on_job_finished(self.k, jid, node, result)
+                except Exception as e:
+                    self.k.audit.append("connector_hook_failed", {"id": jid, "error": type(e).__name__})
         return cur.rowcount == 1
 
     def sweep(self, now=None):

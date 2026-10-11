@@ -18,12 +18,12 @@ const api = async (page: Page, path: string, init?: { method?: string; body?: un
 };
 
 test.describe("screens and navigation", () => {
-  test("all nine screens render and navigate, with no uncaught errors or failed API calls", async ({ page }) => {
+  test("all ten screens render and navigate, with no uncaught errors or failed API calls", async ({ page }) => {
     const problems = watch(page);
     await page.goto("/");
     const screens: [string, string][] = [["Command Center", "Talk to JARVIS"], ["Agentic OS", "Agentic OS"], ["Agent Factory", "Agent Factory"],
       ["Tasks", "Tasks"], ["Automations", "Automation Studio"], ["Workspace", "Workspace and deliverables"], ["Memory", "Memory and learning"],
-      ["Models & skills", "Models, tools and skills"], ["Settings & health", "Settings and system health"]];
+      ["Models & skills", "Models, tools and skills"], ["Settings & health", "Settings and system health"], ["Connectors", "Connectors"]];
     for (const [link, heading] of screens) {
       await page.getByRole("navigation", { name: "Screens" }).getByRole("link", { name: new RegExp("^" + link) }).click();
       await expect(page.getByText(heading, { exact: true }).first()).toBeVisible();
@@ -31,6 +31,8 @@ test.describe("screens and navigation", () => {
     }
     await page.keyboard.press("Alt+4");
     await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
+    await page.keyboard.press("Alt+0");
+    await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible();
     expect(problems).toEqual([]);
   });
 

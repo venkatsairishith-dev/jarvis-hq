@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-const SCREENS = ["command", "desktop", "agents", "tasks", "automations", "workspace", "memory", "models", "settings"];
+const SCREENS = ["command", "desktop", "agents", "tasks", "automations", "workspace", "memory", "models", "settings", "connectors"];
 
 for (const theme of ["dark", "light"]) {
   for (const s of SCREENS) {

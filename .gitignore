@@ -16,3 +16,6 @@ ui/dist/
 ui/test-results/
 ui/playwright-report/
 ui/.vite/
+
+# per-machine connector allowlist (programs on this computer)
+config/connectors.local.json

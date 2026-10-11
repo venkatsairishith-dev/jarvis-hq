@@ -83,6 +83,12 @@ def run(url, name, once=False, collect_every=60, beat=15, poll=3, clock=time.tim
                     print("kernel kill switch is on; paused", file=sys.stderr)
                 else:
                     _watch_cycle(watcher, url, token)
+            if not once and (worker is None or not worker.is_alive()):
+                try:
+                    from .connectors import reap
+                    reap()                                       # stop connector servers nobody has used for ten minutes
+                except Exception:
+                    pass
             if not once and not killed and (worker is None or not worker.is_alive()):
                 job = _post(url, "/jobs/next", {}, token).get("job")
                 if job:

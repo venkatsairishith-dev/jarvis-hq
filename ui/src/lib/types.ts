@@ -65,3 +65,34 @@ export interface ProviderRow {
   last_ok: number | null; last_fail: number | null; last_error: string | null; limits: Record<string, unknown>;
 }
 export interface FileRow { path: string; name: string; group: string; bytes: number; modified: number; kind: string; area: string }
+
+// Connectors: what the kernel records (the owner's decisions per tool) and what the laptop's allowlist adds.
+export type ConnectorRisk = "unknown" | "read" | "write" | "send" | "destructive" | "credential";
+export type ConnectorStatus = "connected" | "installed" | "configured" | "degraded" | "disabled";
+export interface ConnectorTool {
+  tool: string; description: string; schema: { properties?: Record<string, { type?: string; description?: string; enum?: unknown[] }>; required?: string[] };
+  claimed: Record<string, boolean>; digest: string; suggested: ConnectorRisk; risk: ConnectorRisk; enabled: boolean;
+  approved_digest: string | null; changed: boolean; present: boolean;
+}
+export interface Connector {
+  name: string; label: string; purpose: string; transport: "stdio" | "https"; node: string; endpoint: string; secret_ref: string;
+  env_refs: Record<string, string>; lanes: string[]; enabled: boolean; max_calls_per_hour: number; timeout_s: number; max_output: number;
+  installed: number | null; era: string | null; protocol: string | null; server: { name?: string; version?: string }; reconnects: number;
+  last_ok: number | null; last_test: number | null; last_test_ok: number | null; last_test_ms: number | null;
+  last_error: string | null; last_error_class: string | null; state: string | null;
+  status: ConnectorStatus; needs_setup: boolean; tools: ConnectorTool[]; tools_enabled: number; tools_changed: number;
+}
+export interface ConnectorCall {
+  ts: number; connector: string; tool: string; risk: string | null; agent: string; lane: string; decision: string; outcome: string;
+  ms: number | null; bytes: number | null; error_class: string | null; job: string | null;
+}
+export interface ConnectorLocal {
+  command: string[]; installed: boolean; env_refs: Record<string, string>; secrets_present: Record<string, boolean>; env_static: string[]; timeout_s: number;
+}
+export interface ConnectorTemplate {
+  id: string; title: string; status: "tested" | "template"; summary: string;
+  source: { project: string; url: string; license: string; package: string };
+  transport: "stdio" | "https"; definition: Record<string, unknown>;
+  local: { command: string[]; env_refs: Record<string, string>; env_static: Record<string, string>; timeout_s: number } | null;
+  setup: string[]; risks: string[];
+}

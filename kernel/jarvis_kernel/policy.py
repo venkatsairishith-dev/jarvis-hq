@@ -59,6 +59,9 @@ RULES = [
     # through the same job and lab policy as anything else, and nothing unattended may need an approval each time.
     ("automation", "create|update|delete|pause|resume|run", YELLOW_AUTO),
     ("agent_def", "create|update|delete|activate|pause|test", YELLOW_AUTO),
+    # Connectors (2026-10-11): the OWNER'S risk class for the tool decides (decide below); a plain call is at most YELLOW_AUTO.
+    ("connector", "list|describe|manage|result", GREEN),
+    ("connector", "call", YELLOW_AUTO),
     ("money", "*", RED),
     ("delete", "*", RED),
     ("credential", "*", RED),
@@ -202,7 +205,13 @@ class Action:
             if isinstance(x, (list, tuple)):
                 return [clean(v) for v in x]
             return x
-        return {"tool": clean(self.tool), "op": clean(self.op), "target": clean(self.target), "params": clean(self.params), "lane": self.lane}
+        params = self.params
+        if _name(self.tool) == "connector" and limit <= 500 and isinstance(params, dict) and isinstance(params.get("args"), dict):
+            # The audit chain records that a connector call happened and its shape, not what was in it: the arguments are the
+            # owner's content. The approval prompt (a larger limit) still shows them in full, which is where they matter.
+            a = params["args"]
+            params = dict(params, args={"_keys": sorted(str(k)[:40] for k in a)[:20], "_chars": len(json.dumps(a, default=str))})
+        return {"tool": clean(self.tool), "op": clean(self.op), "target": clean(self.target), "params": clean(params), "lane": self.lane}
 
 
 @dataclass
@@ -266,6 +275,17 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
             level, reason = DENY, f"a skill rated '{risk or 'unrated'}' is never activated"
         elif risk == "medium" or where != "lab":
             level, reason = YELLOW_APPROVAL, "a medium-risk skill, or one for the owner's own agent, needs the owner's approval"
+    if tool == "connector" and op == "call" and level < DENY:
+        p = a.params or {}
+        risk = _name(p.get("risk"))
+        if risk == "read":
+            pass                                              # runs at once for a lane that may use the connector
+        elif risk in ("write", "send"):
+            level, reason = max(level, YELLOW_APPROVAL), f"a connector tool that changes or sends ({risk}) needs the owner's approval of exactly these arguments"
+        else:
+            level, reason = DENY, "a connector tool that is not classified as read, write or send is refused"
+        if _name(a.lane) == "public" and p.get("public_ok") is not True:
+            level, reason = DENY, "this connector is not available to the public lane"
     if tool == "browser" and any(_internal_url(lf) for lf in leaves):
         level, reason = DENY, "browser pointed at an internal address"
     if protected:

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const SCREENS = ["command", "desktop", "agents", "tasks", "automations", "workspace", "memory", "models", "settings"];
+const SCREENS = ["command", "desktop", "agents", "tasks", "automations", "workspace", "memory", "models", "settings", "connectors"];
 
 test("no screen scrolls sideways at phone width, and navigation stays reachable", async ({ page }) => {
   for (const s of SCREENS) {

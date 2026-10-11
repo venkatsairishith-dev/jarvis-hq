@@ -135,3 +135,10 @@ Full evidence: `docs/research/`. Each item below is custom only where no maintai
 | Console voice glue (`voice.py`) | sherpa-onnx, whisper.cpp, Kokoro, Piper (all used as the engines) | Glue only: model residency, silence rejection, language switch |
 | UI (`ui/`) | OpenHands, Hermes Desktop, OpenJarvis frontends | Patterns taken (event grouping, noVNC take-over, push to talk); none could be embedded against the kernel owner plane |
 | Intent hint (`intent.py`) | Laya, Verdict (OpenJev), embeddings + LR | Measured worse on the held-out set; used a local chat model with rules fallback |
+
+## Connectors: custom code against existing projects (2026-10-11)
+Custom code added: `kernel/jarvis_kernel/{connectors,connector_service,mcpwire,mcphttp}.py` (registry, policy glue, protocol helpers, remote
+client), `node/jarvis_node/{connectors,mcpclient}.py` (local server manager and stdio client), `console/jarvis_console/connectorcfg.py`
+(allowlist validation). Why not an existing project, and what was reused: see `docs/research/09-connectors.md` section 2 and `docs/03_DECISIONS.md` D17.
+Short form: the official Python SDK (MIT) is the correct client for an application but not for a standard-library-only kernel; `hoophq/mcpproxy`
+(MIT) is a gateway with its own approvals; Nango and Composio keep the owner's credentials. The servers themselves are all existing maintained projects.

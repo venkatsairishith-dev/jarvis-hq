@@ -14,6 +14,7 @@ from http.server import ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "kernel"))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "node"))
 from jarvis_console.config import Config
 from jarvis_console.server import make_server
 from jarvis_kernel.llm_proxy import make_handler
@@ -72,11 +73,37 @@ def main():
     with open(os.path.join(out, f"task-{done}", "report.html"), "w") as fh:
         fh.write("<h1>Report</h1><p>Delivered.</p><script>document.title='PWNED'</script>")
 
+    connectors_file = os.path.join(tmp, "connectors.local.json")
+    secrets_dir = os.path.join(tmp, "secrets")
+    os.makedirs(os.path.join(secrets_dir, "connectors"))
     cfg = Config(port=PORT, kernel_url=f"http://127.0.0.1:{ksrv.server_address[1]}", token_file=tokfile, outputs_dir=out, ui_dir=UI,
-                 hub_url="http://127.0.0.1:9", local_llm_url="http://127.0.0.1:9")
+                 hub_url="http://127.0.0.1:9", local_llm_url="http://127.0.0.1:9", connectors_file=connectors_file, secrets_dir=secrets_dir)
     srv = make_server(cfg)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    info = {"console": PORT, "kernel": ksrv.server_address[1], "tmp": tmp, "tasks": {"done": done, "running": running}, "agent_token": agent_token}
+
+    # A stand-in for the laptop node that runs ONLY connector jobs (other job kinds stay queued, as with an absent node). It uses
+    # the node's real connector code, the owner's real local allowlist file and a real MCP server process.
+    from jarvis_node import connectors as NC
+    from jarvis_console import connectorcfg
+    from jarvis_kernel.jobs import Jobs
+    NC.WORKROOT = os.path.join(tmp, "work")
+
+    def node_pump():
+        jobs = Jobs(k)
+        while True:
+            try:
+                row = k.db.execute("SELECT id, params FROM jobs WHERE node='laptop' AND kind='connector_op' AND state='queued' ORDER BY created LIMIT 1").fetchone()
+                if row and k.db.execute("UPDATE jobs SET state='running', started=? WHERE id=? AND state='queued'", (time.time(), row[0])).rowcount == 1:
+                    res = NC.handle(json.loads(row[1]), cfg=connectorcfg.load(connectors_file), secrets_dir=secrets_dir)
+                    jobs.finish("laptop", row[0], res)
+                    continue
+            except Exception:
+                pass
+            time.sleep(0.1)
+    threading.Thread(target=node_pump, daemon=True).start()
+    fixture = os.path.abspath(os.path.join(HERE, "..", "..", "kernel", "tests", "fixtures", "fake_mcp_server.py"))
+    info = {"console": PORT, "kernel": ksrv.server_address[1], "tmp": tmp, "tasks": {"done": done, "running": running}, "agent_token": agent_token,
+            "connectors_file": connectors_file, "secrets_dir": secrets_dir, "fixture": fixture, "python": sys.executable}
     print(json.dumps(info), flush=True)
     if KERNEL_FILE:
         with open(KERNEL_FILE, "w") as fh:

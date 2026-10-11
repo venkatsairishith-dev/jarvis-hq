@@ -238,10 +238,58 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
             if name == "classify" and method == "POST":
                 text = str(self._jbody().get("text", ""))
                 return self._json(200, intent.classify(text, cfg.intent_llm_url, cfg.intent_model))
+            if name.startswith("connectors/"):
+                return self._connectors(method, name[11:])
             if name == "skills":
                 return self._json(200, skills())
             if name == "local-models":
                 return self._json(200, local_models())
+            return self._json(404, {"error": "not found"})
+
+        def _connectors(self, method, name):
+            """The laptop's local connector allowlist (the one place a command line is accepted) and the Add and Remove
+            workflows that keep it and the kernel's registry together. Everything else about connectors goes through
+            /api/owner/connectors/* to the kernel."""
+            from . import connectorcfg as cc
+            path = getattr(cfg, "connectors_file", None) or cc.default_path()
+            secrets = getattr(cfg, "secrets_dir", None) or cc.secrets_dir()
+            if method == "GET" and name == "local":
+                return self._json(200, {"local": cc.describe(path, secrets), "file": os.path.basename(path)})
+            if method == "GET" and name == "templates":
+                with open(os.path.join(os.path.dirname(__file__), "connector_templates.json"), encoding="utf-8") as fh:
+                    return self._json(200, json.load(fh))
+            if method != "POST":
+                return self._json(404, {"error": "not found"})
+            d = self._jbody()
+            try:
+                if name == "local":
+                    return self._json(200, {"saved": cc.save(str(d.get("name", "")), d.get("spec"), path, secrets)})
+                if name == "local/remove":
+                    return self._json(200, {"removed": cc.remove(str(d.get("name", "")), path)})
+                if name == "add":
+                    definition = d.get("definition") if isinstance(d.get("definition"), dict) else {}
+                    cname = str(definition.get("name", ""))
+                    previous = cc.load(path).get(cname)
+                    if definition.get("transport") == "stdio":
+                        if not isinstance(d.get("local"), dict):
+                            return self._json(400, {"error": "a local program is needed for a stdio connector"})
+                        clean = cc.save(cname, d["local"], path, secrets)
+                        definition = dict(definition, env_refs=clean["env_refs"], timeout_s=clean["timeout_s"])
+                    code, reply = kernel.request("POST", "connectors", {"definition": definition})
+                    if code >= 400 and definition.get("transport") == "stdio":
+                        if previous is None:
+                            cc.remove(cname, path)              # the kernel refused it: leave no half-added program behind
+                        else:
+                            cc.save(cname, previous, path, secrets)
+                    return self._json(code, reply)
+                if name == "remove":
+                    cname = str(d.get("name", ""))
+                    code, reply = kernel.request("POST", "connectors/delete", {"name": cname, "confirm": str(d.get("confirm", ""))})
+                    if code < 400:
+                        cc.remove(cname, path)
+                    return self._json(code, reply)
+            except cc.ConfigError as e:
+                return self._json(400, {"error": str(e)})
             return self._json(404, {"error": "not found"})
 
         def _owner(self, method, name, q):

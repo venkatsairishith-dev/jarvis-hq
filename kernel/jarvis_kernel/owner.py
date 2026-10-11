@@ -331,6 +331,49 @@ class Owner:
         self.k.audit.append("owner_stop_all", {"tasks": len(cancelled), "approvals": denied, "jobs": expired})
         return {"cancelled_tasks": cancelled, "not_cancelled": failed, "denied_approvals": denied, "expired_jobs": expired}
 
+    def install_connectors(self, svc):
+        """Owner routes for the connector manager (connector_service.py). Every one needs the owner token (the route table's
+        own check); none returns a command line, a secret value or a credential."""
+        from .connectors import ConnectorError
+        R = self.routes
+        self.connectors = svc
+
+        def guard(fn):
+            def run(body, q):
+                try:
+                    return fn(body, q)
+                except ConnectorError as e:
+                    return e.code, {"error": str(e)}
+            return run
+
+        def name_of(b):
+            return str(b.get("name") or b.get("id") or "")[:40]
+
+        R[("GET", "connectors")] = guard(lambda b, q: (200, {"connectors": svc.list(), "calls": svc.calls(40)}))
+        R[("GET", "connectors/calls")] = guard(lambda b, q: (200, {"calls": svc.calls(min(200, int(q.get("limit", "60") or 60)))}))
+        R[("POST", "connectors")] = guard(lambda b, q: (201, svc.create(b.get("definition") or {})))
+        R[("POST", "connectors/update")] = guard(lambda b, q: (200, svc.create(b.get("definition") or {}, update=True)))
+        R[("POST", "connectors/enable")] = guard(lambda b, q: (200, svc.set_enabled(name_of(b), True)))
+        R[("POST", "connectors/disable")] = guard(lambda b, q: (200, svc.set_enabled(name_of(b), False)))
+        R[("POST", "connectors/tool")] = guard(lambda b, q: (200, svc.set_tool(name_of(b), str(b.get("tool", ""))[:128],
+                                                                              b.get("enabled") if isinstance(b.get("enabled"), bool) else None,
+                                                                              b.get("risk") if isinstance(b.get("risk"), str) else None)))
+        for op in ("test", "connect", "disconnect"):
+            R[("POST", "connectors/" + op)] = guard(lambda b, q, op=op: (200, svc.owner_op(name_of(b), op)))
+
+        def delete(b, q):
+            if str(b.get("confirm", "")) != name_of(b):
+                raise ConnectorError("type the connector name again to confirm")
+            svc.stop_in_background(name_of(b))               # best effort: removal never waits for the laptop
+            return 200, svc.delete(name_of(b))
+        R[("POST", "connectors/delete")] = guard(delete)
+
+        def try_tool(b, q):
+            code, body = svc.call_tool("owner", "private", name_of(b), str(b.get("tool", ""))[:128],
+                                       b.get("arguments") if isinstance(b.get("arguments"), dict) else {}, None, owner_try=True)
+            return code, body
+        R[("POST", "connectors/try")] = guard(try_tool)
+
     def kill(self):
         self.k.kill("owner console")
         return {"killed": True, "note": "lifting the kill switch is done at the kernel console (jarvis_kernel resume)"}

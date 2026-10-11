@@ -24,7 +24,7 @@ export default defineConfig({
     env: { E2E_CONSOLE_PORT: String(PORT), PYTHONIOENCODING: "utf-8", E2E_STATE_FILE: "D:\\jarvis\\cache\\e2e-state.json" },
   },
   projects: [
-    { name: "app", testMatch: /(app|a11y|approvals)\.spec\.ts/, use: { viewport: { width: 1360, height: 860 } } },
+    { name: "app", testMatch: /(app|a11y|approvals|connectors)\.spec\.ts/, use: { viewport: { width: 1360, height: 860 } } },
     { name: "narrow", testMatch: /responsive\.spec\.ts/, use: { viewport: { width: 390, height: 844 } } },
     { name: "nomic", testMatch: /nomic\.spec\.ts/, use: { viewport: { width: 1360, height: 860 } } },
     {

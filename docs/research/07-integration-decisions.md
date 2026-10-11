@@ -221,3 +221,80 @@ The commit that contains this section (`git log -1 -- docs/research/07-integrati
 
 ### 7.7 Limitations that remain
 Real-microphone Hindi and Telugu accuracy; the live approve-with-PIN run; the private lane's capacity; Dahl's pool balance and expiry; the OpenRouter account's privacy toggles; the live voice-to-task spec has not been re-proven since the providers ran out of quota (earlier today it passed); agent takeover and artifact delivery were last exercised in the first pass.
+
+## 8. Connector manager: verification record (2026-10-11)
+Design, trust boundaries, configuration format and setup: `09-connectors.md`. Everything below was produced by a process whose exit
+status is stated. Telegram stayed off, `hermes-agent-vm-2` was never contacted, no credential was read or printed (the one token file
+the live spec reads is the throwaway test agent's, as in the approval spec), nothing was pushed, and no paid service or provider
+account was touched. No model quota was used: connector logic was tested with fixtures; the live checks called two tool servers,
+not a language model.
+
+### 8.1 State before the work
+HEAD `a021aa7`, working tree clean, 22 commits ahead of `origin/main` (the earlier handoff said three: that was a truncated listing). No
+connector code existed. Server and laptop kernel trees identical; services healthy; no job, command or approval outstanding.
+
+### 8.2 What was built
+Kernel: registry and per-tool owner decisions (`connectors.py`), the call and owner-operation paths (`connector_service.py`), protocol helpers
+(`mcpwire.py`), remote client (`mcphttp.py`), policy rule, job kind `connector_op`, owner routes, agent dispatch. Node: stdio client
+(`mcpclient.py`) and local server manager (`connectors.py`). Console: local allowlist and add/remove workflow (`connectorcfg.py`), templates.
+Agent tool file: `connector_list`, `connector_call`, `connector_result`. UI: Connectors screen (Alt+0).
+
+### 8.3 Automated results
+| Suite | Result |
+|---|---|
+| Kernel, Windows, jarvis-venv, `TEMP` outside the project | **440 run, OK, 24 skipped, exit 0** (887 s). New: `test_connectors` 33, `test_mcphttp` 11 |
+| Kernel on the server, in place, before restart | **440 run, OK, 39 skipped, exit 0** (507 s) |
+| `test_browser` in the browser venv (the 24 skips above) | 35 run, OK, exit 0 |
+| Console | **35 run, OK, exit 0** (7 new in `test_connectors_api`) |
+| Browser suite (installed Edge) | **62 passed, exit 0**: 9 new connector workflows, the Connectors screen in both themes (axe), phone width, ten-screen navigation |
+| Evals | 23/23, exit 0 |
+| Type check and UI build | `tsc --noEmit` exit 0; `vite build` ok |
+| gitleaks on the staged change | no leaks found |
+
+What the connector tests cover (the 14 required areas): handshake and discovery in both protocol eras and a silent server; invalid
+definitions and a missing program or secret (reported as setup, never as connected); timeout with a cancellation notification, a server
+crash and automatic restart, oversized lines, connect, disconnect and reconnect, and a running server restarted when its allowlist entry
+changes; unknown, unclassified, changed, disabled and not-offered tools refused; a read call runs and its data is labelled untrusted;
+write and send need an approval bound to exact arguments, with replay, changed arguments, expiry and denial all refused and nothing sent;
+secrets redacted (a server echoing its own credential gets `[redacted]`), private keys withhold a reply, large replies truncated; the
+public lane cannot use a private connector and a write still needs approval when it can; a server cannot reach the kernel any other way
+(an agent sees no command, endpoint or secret reference; a job cannot carry a command or an unclassified call); no credential value is
+stored in any table, response or log; sampling requests refused; kill switch; hourly limit; every call logged and audited without content;
+remote endpoints: http, embedded credentials, private and rebound addresses refused, redirects not followed, credential rejection reported
+as `auth`, SSE replies, both eras. UI: add, refusal of a shell in the form, setup problem then fix, classification (destructive cannot be
+enabled), try a read tool, an agent's write waiting in the Command Center with the exact arguments and running once after approval,
+disable refusing agents, program removed shown as not found, removal needs the name typed.
+
+### 8.4 Live results (real console, real kernel on the server, real laptop node)
+| Check | Result |
+|---|---|
+| Local server: `mcp-server-time` 2026.10.10 (MIT, official), added from the Connectors API with a full-path program | Test connection 4.8 s; legacy protocol 2025-06-18; two tools found, both off and unclassified, both marked "claims read-only" by the server and suggested `read` from their names |
+| Before enabling | an agent call was refused (403) |
+| After the owner classified both as read and switched them on | owner "Try": `get_current_time` returned Asia/Kolkata time, labelled untrusted; a **public-lane lab agent** through the real kernel and node got `convert_time` 10:00 Asia/Kolkata = 04:30 UTC in 2.0 s |
+| Refusals | a tool the server does not have: 403; a wrong argument type: 400 and nothing sent |
+| Remote server: DeepWiki over https (no account) | discovery 4.3 s, legacy era; a public-lane agent was refused (the connector is private-lane only); owner "Try" `read_wiki_structure` for `modelcontextprotocol/python-sdk` returned 1,843 characters in 6.1 s; the connector was then **disabled** (left off: it sends questions to a third party) |
+| Audit chain | verified, 14,238 events; no token, bearer value or private key in the connector, state or local-allowlist responses |
+| Agent tools | `tools/list` against the deployed tool file as the agent user: `connector_list`, `connector_call`, `connector_result` present in both the owner (16 tools) and lab (19 tools) profiles; Hermes gateway restarted idle so its next session loads them |
+
+### 8.5 Defects the work found and fixed
+Connector arguments appeared (truncated) in the generic audit entry (now keys and size only); a job was marked done before the registry
+learned its result (reader could see stale state; now one transaction); deep scrubbing starts a process (about 0.9 s) and had been used
+on short metadata (now only on content); a failed call did not mark a connector degraded; a name heuristic missed `echo`; a running
+server survived a change to its allowlist entry (test and fix); removing a connector waited for a laptop that might be off (now fire and
+forget); the tool toggles in the UI changed only after the round trip.
+
+### 8.6 Deployment and rollback
+Server: 12 files, SHA-256 identical to the laptop tree, services restarted only when no job was queued or running. Previous versions are
+in `~/downloads/sync12-<ts>/` (new files are simply removed on rollback; the new tables are additive). Laptop node and console restarted
+as the components concerned, with nothing running; one console listener. `/opt/jarvis-mcp/jarvis_mcp.py` has a `.bak-<ts>`. Live state
+left behind: `time` configured, both tools enabled as read, server stopped; `deepwiki` configured and **disabled**.
+
+### 8.7 Not done or not proven
+- **GitHub, Google Workspace and Notion are templates**: not run here, each needs your account or credential (steps are in the Add form and
+  `09-connectors.md`). Their flags and variable names come from each project's README as read today.
+- **No real write or send tool was exercised live**: they were exercised against the fake server only, as the brief asked.
+- **OAuth** is not provided by the connector manager; a service that needs it stays a template until you complete it yourself.
+- The owner's own agent (Hermes) was **not asked to use a connector** in this pass: the private lane's free providers were still out of
+  quota, so no language-model call was made. The tool file it will use was verified by listing its tools.
+- A local server's process is only as contained as the Windows account it runs under (no sandbox beyond a minimal environment, a private
+  working folder, no inherited secrets and a refused-shells allowlist). Do not allowlist a program you would not run yourself.

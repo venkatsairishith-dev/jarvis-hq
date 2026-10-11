@@ -254,6 +254,9 @@ def run_job(job: dict, projects: dict = None) -> dict:
             return ui_snapshot(params)
         if kind == "screenshot":
             return screenshot(params)
+        if kind == "connector_op":               # a local MCP server the owner allowed on this machine (connectors.py)
+            from .connectors import handle
+            return handle(params)
         return {"ok": False, "error": "unknown job kind"}
     except Exception as e:   # report the kind of failure only
         return {"ok": False, "error": type(e).__name__}

@@ -12,6 +12,7 @@ import { Workspace } from "./screens/Workspace";
 import { Memory } from "./screens/Memory";
 import { Models } from "./screens/Models";
 import { Settings } from "./screens/Settings";
+import { Connectors } from "./screens/Connectors";
 
 const SCREENS = [
   { id: "command", label: "Command Center", key: "1", el: <CommandCenter /> },
@@ -23,6 +24,7 @@ const SCREENS = [
   { id: "memory", label: "Memory", key: "7", el: <Memory /> },
   { id: "models", label: "Models & skills", key: "8", el: <Models /> },
   { id: "settings", label: "Settings & health", key: "9", el: <Settings /> },
+  { id: "connectors", label: "Connectors", key: "0", el: <Connectors /> },
 ] as const;
 
 function useRoute(): string {
@@ -66,7 +68,7 @@ export default function App() {
       const t = e.target as HTMLElement;
       const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable;
       if (e.key === "Escape") { void voice.cancel(); voice.stopSpeaking(); }
-      if (e.altKey && /^[1-9]$/.test(e.key)) { go(SCREENS[Number(e.key) - 1].id); e.preventDefault(); }
+      if (e.altKey && /^[0-9]$/.test(e.key)) { go(SCREENS[e.key === "0" ? SCREENS.length - 1 : Number(e.key) - 1].id); e.preventDefault(); }
       if (e.key === "/" && !typing) { go("command"); window.setTimeout(() => document.getElementById("command-input")?.focus(), 50); e.preventDefault(); }
     };
     window.addEventListener("keydown", onKey);
