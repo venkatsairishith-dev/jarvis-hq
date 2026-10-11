@@ -19,7 +19,11 @@ def load_watches(path=None) -> dict:
     try:
         with open(path, encoding="utf-8-sig") as fh:
             return json.load(fh).get("watches", {})
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:                # a broken allowlist must be loud, not "no watches"
+        import sys
+        print(f"watches.json is not valid ({type(e).__name__}): no folder is watched", file=sys.stderr)
         return {}
 
 

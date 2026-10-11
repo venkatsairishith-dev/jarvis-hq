@@ -43,7 +43,10 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
     kernel = kernel or Kernel(cfg)
     voice = voice or Voice(cfg.voice_dir, cfg.piper_python, cfg.voice_threads, cfg.voice_idle_unload_s)
     started = time.time()
-    hub = cfg.hub_url
+    hub = cfg.hub_url                                    # what the BROWSER uses (Edge resolves *.localhost to loopback)
+    _hu = urllib.parse.urlsplit(hub)
+    hub_local = f"{_hu.scheme}://127.0.0.1:{_hu.port or 80}"   # what THIS process uses: Python's resolver does not know *.localhost,
+    hub_host = _hu.netloc                                      # so connect to loopback and name the site in the Host header
 
     def probe(url, headers=None, timeout=2.0):
         t0 = time.time()
@@ -271,8 +274,8 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
             """The Agent PC (Linux, in the WSL box) through the hub's control socket: take control, continue, screen."""
             if name not in ("state", "take", "continue", "screen.jpg"):
                 return self._json(404, {"error": "not found"})
-            url = f"{hub}/control/{name}"
-            hdr = {"X-Jarvis-Hub": "1"}
+            url = f"{hub_local}/control/{name}"
+            hdr = {"X-Jarvis-Hub": "1", "Host": hub_host}
             try:
                 if method == "POST":
                     req = urllib.request.Request(url, data=b"{}", method="POST", headers=dict(hdr, **{"Content-Type": "application/json"}))
@@ -299,7 +302,7 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
         out["voice"] = voice.status()
         p = probe(cfg.local_llm_url + "/health")
         out["local_llm"] = {"ok": p["ok"], "ms": p["ms"], "url": cfg.local_llm_url, "error": p.get("error")}
-        p = probe(hub + "/control/state", {"X-Jarvis-Hub": "1"})
+        p = probe(hub_local + "/control/state", {"X-Jarvis-Hub": "1", "Host": hub_host})
         out["hub"] = {"ok": p["ok"], "ms": p["ms"], "url": hub, "error": p.get("error")}
         try:
             du = shutil.disk_usage(os.path.splitdrive(cfg.outputs_dir)[0] + "\\" if os.name == "nt" else "/")

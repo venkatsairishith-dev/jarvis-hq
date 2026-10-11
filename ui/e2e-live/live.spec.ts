@@ -24,7 +24,7 @@ test("scenario 1: speak a request, see the transcript, JARVIS opens the folder a
   await page.getByRole("button", { name: "Talk" }).click();
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
   await shot(page, "02-recording");
-  await page.waitForTimeout(4500);
+  await page.waitForTimeout(2300);                                     // the fake mic file loops: stop after one pass
   await page.getByRole("button", { name: "Stop", exact: true }).click();
   const box = page.locator("#command-input");
   await expect(box).toHaveValue(/downloads folder/i, { timeout: 90_000 });
@@ -33,6 +33,7 @@ test("scenario 1: speak a request, see the transcript, JARVIS opens the folder a
   console.log("TRANSCRIPT", typed);
   await page.getByRole("button", { name: "Send", exact: true }).click();
   const mine = async () => (await getJson(page, "/api/owner/commands")).commands.find((c: { text: string }) => c.text === typed);
+  await expect.poll(async () => (await mine())?.state, { timeout: 30_000 }).toBeTruthy();       // recorded by the kernel
   await expect.poll(async () => (await mine())?.state, { timeout: 8 * 60_000, intervals: [3000] }).not.toBe("running");
   const cmd = await mine();
   console.log("COMMAND", JSON.stringify({ state: cmd.state, source: cmd.source, reply: (cmd.reply ?? "").slice(0, 400), error: cmd.error }));

@@ -1,6 +1,6 @@
 {
   "_note": "Folders this laptop's node may watch for new files (names, sizes and times only are reported; never content). A watch name is what an automation refers to.",
   "watches": {
-    "downloads": {"path": {"nt": "%USERPROFILE%\Downloads"}, "ignore": [".crdownload", ".tmp", ".part", ".partial"], "depth": 1}
+    "downloads": {"path": {"nt": "%USERPROFILE%\\Downloads"}, "ignore": [".crdownload", ".tmp", ".part", ".partial"], "depth": 1}
   }
 }

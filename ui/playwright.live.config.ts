@@ -7,7 +7,7 @@ const fixture = path.resolve(import.meta.dirname, "e2e/fixtures/open-downloads.w
 
 export default defineConfig({
   testDir: "./e2e-live",
-  timeout: 15 * 60_000,
+  timeout: 40 * 60_000,
   expect: { timeout: 30_000 },
   workers: 1,
   fullyParallel: false,

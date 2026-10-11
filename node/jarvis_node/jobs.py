@@ -210,10 +210,18 @@ def _verify_open(result: dict, params: dict, lister=None, before=None, timeout=6
     want = os.path.basename(shown.replace("\\", "/").rstrip("/")) or shown
     if params.get("op") == "open_file":
         want = os.path.splitext(want)[0]
-    w = windows.wait_for(lambda x: windows.titles_match(want, x["title"]) or windows.titles_match(want, x.get("process", "")),
-                         timeout=timeout, lister=lister, before=before)
+    before = before or set()
+
+    def match(x):
+        named = windows.titles_match(want, x["title"]) or windows.titles_match(want, x.get("process", ""))
+        # a window that was already open counts only if it is in front now: Explorer re-uses and raises an open folder
+        return named and (x["hwnd"] not in before or bool(x.get("foreground")))
+    w = windows.wait_for(match, timeout=timeout, lister=lister)
     if w:
-        return dict(result, verified="verified", window={"title": w["title"], "process": w.get("process")})
+        out = dict(result, verified="verified", window={"title": w["title"], "process": w.get("process")})
+        if w["hwnd"] in before:
+            out["note"] = "the window was already open and is now in front"
+        return out
     return dict(result, verified="unconfirmed", note=f"opened, but no window titled like '{want[:40]}' appeared within {int(timeout)} s")
 
 

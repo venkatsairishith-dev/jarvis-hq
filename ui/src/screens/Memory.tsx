@@ -95,7 +95,7 @@ export function Memory() {
               {l.last_check && !l.last_check.ok && <ErrorNote>Not activated: {l.last_check.checks.filter((c) => !c.ok).map((c) => c.what).join("; ")}</ErrorNote>}
               <div className="flex gap-2"><Button kind="primary" disabled={busy} onClick={() => void decide(l, "activate")}>Run checks and activate</Button><Button disabled={busy} onClick={() => void decide(l, "reject")}>Reject</Button></div>
             </li>))}</ul>}
-        <p className="mt-3 text-xs text-fg3">The checks: it comes from a verified, repaired task; it contains no secret; it does not grant permission or tell the agent to skip a check; it does not repeat an existing entry.</p>
+        <p className="mt-3 text-xs text-fg3">The checks: it comes from a verified, repaired task that your own check never corrected afterwards; it contains no secret; it does not grant permission or tell the agent to skip a check; it does not repeat an existing entry.</p>
       </Card>
 
       <Dialog open={!!edit || adding} onClose={() => { setEdit(null); setAdding(false); }} title={edit ? "Correct this entry" : "Add a preference"}

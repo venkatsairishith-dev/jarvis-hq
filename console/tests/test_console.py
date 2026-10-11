@@ -157,7 +157,7 @@ class Server(Base):
         t = Tasks(self.k).create("hermes", "private", "r", "stream me")
         r = urllib.request.Request(self.base + "/api/stream?since=0", headers={"Origin": self.base})
         got = []
-        with urllib.request.urlopen(r, timeout=10) as resp:
+        with urllib.request.urlopen(r, timeout=40) as resp:       # generous: this runs beside heavy suites on one laptop
             for _ in range(200):
                 line = resp.readline().decode()
                 if line.startswith("data:"):

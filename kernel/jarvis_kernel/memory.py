@@ -180,6 +180,8 @@ class Memories:
             ("origin", bool(task) and task.get("state") == "completed" and (v.get("passed") is True or cites),
              "comes from a task that completed with independent verification or finished-job evidence"),
             ("repaired", bool(task) and int(task.get("attempts") or 0) >= 2, "the task needed a repair attempt (there is something to learn)"),
+            ("not_corrected", not any(e.get("kind") == "correction" for e in (task or {}).get("events") or []),
+             "the owner's own check did not later correct this task's verification (a corrected task is not a reliable teacher)"),
             ("no_secret", not (lambda r: r[1] or r[2])(scrub(text, deep=True)), "contains nothing that looks like a secret"),
             ("no_authority", not self.AUTHORITY.search(text), "does not grant permission, skip checks or tell the agent to bypass approval"),
             ("fits", len(text) <= MAX_TEXT, "fits the memory entry size"),

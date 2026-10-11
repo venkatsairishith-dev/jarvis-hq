@@ -84,10 +84,14 @@ class NodeSide(unittest.TestCase):
         ok = nodejobs._verify_open({"ok": True, "opened": "Downloads"}, {"op": "open_folder"}, lister=lambda: self.WINS, before=before, timeout=0.5)
         self.assertEqual(ok["verified"], "verified")
         self.assertEqual(ok["window"]["title"], "Downloads")
-        # a window that was already open does not count as the new one
-        old = nodejobs._verify_open({"ok": True, "opened": "Downloads"}, {"op": "open_folder"}, lister=lambda: self.WINS, before={1}, timeout=0.5)
+        # a window that was already open counts only when it is in front now
+        behind = [dict(self.WINS[0], foreground=False), self.WINS[1]]
+        old = nodejobs._verify_open({"ok": True, "opened": "Downloads"}, {"op": "open_folder"}, lister=lambda: behind, before={1}, timeout=0.5)
         self.assertEqual(old["verified"], "unconfirmed")
         self.assertIn("no window titled like", old["note"])
+        raised = nodejobs._verify_open({"ok": True, "opened": "Downloads"}, {"op": "open_folder"}, lister=lambda: self.WINS, before={1}, timeout=0.5)
+        self.assertEqual(raised["verified"], "verified")
+        self.assertIn("already open", raised["note"])
         # nested folder: the window is named after the last component
         nested = nodejobs._verify_open({"ok": True, "opened": "Downloads\\main.py"}, {"op": "open_folder"}, lister=lambda: self.WINS, timeout=0.5)
         self.assertEqual(nested["verified"], "verified")

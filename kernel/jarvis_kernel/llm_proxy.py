@@ -354,6 +354,12 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
         if not d.allowed:
             return 403, {"status": "refused", "reason": d.reason}
         if op == "create":
+            req = " ".join(str(p.get("request", "")).lower().split())
+            dup = kernel.db.execute("SELECT id, state FROM tasks WHERE owner=? AND state NOT IN ('completed','failed','cancelled') AND created>? "
+                                    "AND lower(request)=? LIMIT 1", (agent, clock() - 7200, req)).fetchone() if len(req) >= 12 else None
+            if dup:                      # found live: the same request became two tasks and the lab queued both
+                return 409, {"status": "refused", "task": dup[0], "reason": f"this request already has an open task ({dup[0]}, {dup[1]}): "
+                             "use that one (task get) instead of creating another; the lab works on one task at a time and will tell you the outcome"}
             tid = tasks.create(agent, lane, p.get("request", ""), p.get("goal", target), p.get("plan"), p.get("criteria"),
                                str(p.get("source") or "agent"), int(p.get("max_attempts") or 3), int(p.get("budget_s") or 3600))
             return 200, {"status": "done", "task": tid, "next": (

@@ -244,6 +244,44 @@ class Plane(unittest.TestCase):
         self.assertIn("task_created", [e["kind"] for e in ev["events"]])
         self.assertEqual(ev["head"], self.k.audit.anchor()["seq"])
 
+    def test_the_same_request_does_not_become_two_open_tasks(self):
+        def act(body):
+            r = urllib.request.Request(self.url + "/v1/jarvis/actions", data=json.dumps(body).encode(), method="POST",
+                                       headers={"Authorization": "Bearer " + self.agent, "Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(r, timeout=10) as resp:
+                    return resp.status, json.loads(resp.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+        body = {"tool": "task", "op": "create", "target": "t", "params": {"request": "Please build vowelcount.py with tests and deliver it", "goal": "Build vowelcount"}}
+        code, first = act(body)
+        self.assertEqual((code, first["status"]), (200, "done"))
+        code, second = act(body)
+        self.assertEqual((code, second["status"], second["task"]), (409, "refused", first["task"]))
+        self.T.update("hermes", first["task"], state="cancelled")
+        code, third = act(body)                                           # once it is closed, the request may be tried again
+        self.assertEqual(code, 200)
+
+    def test_state_never_runs_the_deep_scrubber_per_row(self):
+        """Live regression: state() is polled every few seconds; the deep scrubber shells out to gitleaks and made one call take 28 s."""
+        import jarvis_kernel.owner as om
+        real, calls = om.scrub, []
+
+        def spy(text, deep=False):
+            calls.append(deep)
+            return real(text, deep)
+        om.scrub = spy
+        try:
+            for i in range(30):
+                self.k.db.execute("INSERT INTO jobs(id,node,kind,params,state,created,expires,owner,notified) VALUES (?,?,?,?,?,?,?,?,1)",
+                                  (f"j{i}", "laptop", "pc_open", json.dumps({"op": "open_folder", "target": "Downloads"}), "done", time.time() + i, time.time() + 99, "hermes"))
+            t0 = time.time()
+            self.assertEqual(self.call("GET", "/v1/jarvis/owner/state")[0], 200)
+            self.assertLess(time.time() - t0, 3)
+        finally:
+            om.scrub = real
+        self.assertNotIn(True, calls)
+
     def test_kill_over_http_is_one_way(self):
         self.assertEqual(self.call("POST", "/v1/jarvis/owner/kill", {})[0], 200)
         self.assertTrue(self.k.killed())
@@ -381,6 +419,15 @@ class Studio(Plane):
         r2 = self.call("POST", "/v1/jarvis/owner/lessons/activate", {"id": mid2, "owner": "hermes"})[1]
         self.assertIn("origin", [c["check"] for c in r2["checks"] if not c["ok"]])
         self.assertEqual(self.call("POST", "/v1/jarvis/owner/lessons/reject", {"id": mid2, "owner": "hermes"})[1]["state"], "rejected")
+
+    def test_a_task_the_owner_later_corrected_cannot_teach_a_lesson(self):
+        from jarvis_kernel.memory import Memories
+        tid = self._repaired_task(goal="Convert temperatures")
+        self.T._event(tid, "completed", "correction", "Owner-side check: the files were never delivered")      # recorded after "verified"
+        mid = Memories(self.k).add_candidate("hermes", "Lesson: check the output folder before saving.", tid)
+        r = self.call("POST", "/v1/jarvis/owner/lessons/activate", {"id": mid, "owner": "hermes"})[1]
+        self.assertEqual(r["state"], "candidate")
+        self.assertEqual([c["check"] for c in r["checks"] if not c["ok"]], ["not_corrected"])
 
     def test_models_and_audit_verify(self):
         self.assertIn("providers", self.call("GET", "/v1/jarvis/owner/models")[1])

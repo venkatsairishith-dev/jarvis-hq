@@ -95,8 +95,8 @@ class Owner:
         for jid, node, kind, state, created, finished, owner, params, result in self.k.db.execute(
                 "SELECT id, node, kind, state, created, finished, owner, params, result FROM jobs ORDER BY created DESC LIMIT 25").fetchall():
             jobs.append({"id": jid, "node": node, "kind": kind, "state": state, "created": created, "finished": finished,
-                         "owner": owner or "owner", "params": scrub(params or "", deep=True)[0][:300],
-                         "result": scrub(result or "", deep=True)[0][:300]})
+                         "owner": owner or "owner", "params": scrub(params or "")[0][:300],     # light scrub: state() is polled every few
+                         "result": scrub(result or "")[0][:300]})                              # seconds; deep (gitleaks) cost 28 s live
         return {"now": now, "killed": self.k.killed(), "audit": self.k.audit.anchor(), "pin_set": self.pin_set(),
                 "voice_command_ready": self.hermes is not None, "busy": self.busy.locked(),
                 "tasks": tasks, "approvals": self.k.pending_approvals(), "jobs": jobs, "commands": self.commands(10)["commands"]}

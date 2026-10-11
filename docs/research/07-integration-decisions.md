@@ -87,3 +87,37 @@ OpenHands enterprise directories (PolyForm Free Trial).
   rebinding and cross-site POST).
 - **Microphone:** audio is captured only while the button is held (or toggled) with a visible recording state, processed
   locally, and not stored unless the owner enables it.
+
+## 5. Verification record (2026-10-11)
+Every number below was produced by a process that exited with the status shown; counts are from the final tree.
+
+**Automated**
+| Suite | Result | Notes |
+|---|---|---|
+| Kernel (`kernel/tests`, Windows, 11 min) | 359 run, OK, 30 skipped, exit 0 | skips are Linux-only and Telegram-off cases. Baseline before this work: 278 |
+| Kernel on the server, in place (Linux ARM) | OK, 0 failures | 349 run on the first deploy (38 skipped); after two follow-up syncs the full discovery was run again (39 skipped) before any restart |
+| Evals (`evals/run_evals.py`) | 23/23, no regressions | |
+| Console (`console/tests`) | 17 OK | one intermittent error was seen once while other suites ran; 3 clean reruns; the stream test's timeout was raised |
+| Browser suite (Playwright on installed Edge) | 45 passed | 9 screens x 2 themes accessibility (axe, WCAG 2.1 AA, no serious/critical), keyboard, phone width, no-microphone, real voice path with a fake microphone, kill switch |
+| Intent evaluation (62 held-out items) | see `bench/data/intent_results.json` | Qwen3-4B 0.85, rules 0.79 (optimistic), embeddings+LR 0.65, TF-IDF 0.48, Laya 0.39, Verdict 0.19 |
+| gitleaks on the repo | no finding in anything added | two pre-existing randomly generated test strings in `bench/scrub_probe.py` (not touched) |
+
+**Live, against the real system** (real console, real kernel on the server, real Hermes, real laptop node, real lab with Dahl models, public lane only)
+1. *Voice-controlled computer operation.* A recorded request played through the browser's microphone path was transcribed locally (Parakeet, model load 4.2 s cold), shown in the box, sent, JARVIS answered "Opened Downloads", and the laptop node's own check found the Explorer window "Downloads" (`verified`). One earlier run reported `unconfirmed` because the folder window was already open; the check now accepts an existing window that is in front, with a note.
+2. *File creation.* "Build vowelcount.py with tests and a README, verify it, deliver it" became a lab task, was independently verified on attempt 1 and delivered 4 files to `outputs\task-<id>\`. I ran the delivered tests from a clean folder myself: 14 tests OK, and the tool counted vowels correctly. Hermes created the same task three times for one request; the first one completed. A kernel guard now refuses a second open task with the same request (deployed, tested).
+3. *Agent creation.* A sentence became a reviewable definition (criteria, limits, what the kernel enforces and what it does not), was activated and ran a bounded test through the lab: completed on attempt 1.
+4. *Automation.* A one-minute automation was previewed (next runs and side effects), created, run now, fired by the scheduler on its own slot (both runs `done`, the node answered), then paused and deleted; the delete was read back.
+5. *Speech response.* The reply is shown in writing and spoken by the local TTS, with Stop speaking and mute. The browser suite plays it with an audio element; the live run confirmed the TTS call counter, not what a human heard.
+6. *Self-correction.* The kernel proposed one lesson from real history (task `5079247275a1`, completed after 3 attempts). It is a poor lesson (it copies the verifier's noise) from a task the owner's own check later corrected, which exposed a real gap: the gate now refuses origins that carry a `correction` event. The recovery attempts themselves (fail, repair, verify) are the lab runner's existing behaviour and were seen in that task's history; no new failure was injected today.
+7. *Operator control.* While an agent's test task ran, "Take control" switched the Agent PC to owner mode and froze one task (its step and update time did not change for 20 s); "Continue" handed it back and the task completed.
+
+**Defects the live run found, all fixed and redeployed:** `state` took 28 s on the server because of the deep scrubber (now 35 to 60 ms); `config/watches.json` had an invalid escape and was silently ignored (now valid, and loud); the console could not resolve `hub.localhost` from Python; PC buttons stayed disabled while a job waited for an offline node; the announcer would have asked JARVIS about every historical task on its first tick (now only tasks that end after start); duplicate tasks (above); verification of an already-open window (above).
+
+**Not done or not proven, stated plainly**
+- Wake word: decided, not built (weights are non-commercial).
+- Hindi and Telugu speech were tested on synthetic speech only (TTS to STT round trip); real microphone accuracy is unmeasured.
+- Browser approvals need a PIN that only the owner can set at the kernel console; the approval path is tested end to end against a throwaway kernel, not live.
+- File-arrival triggers: the watcher and kernel side are tested; no live arrival was exercised.
+- Laya was not fine-tuned (reasons in D15). No second run of the lab scenarios with a deliberately failing task.
+- Reddit was unreachable from the tools; no Reddit evidence is claimed.
+- The local small LLM server is not running on the laptop at present, so the intent hint uses its rules fallback.
