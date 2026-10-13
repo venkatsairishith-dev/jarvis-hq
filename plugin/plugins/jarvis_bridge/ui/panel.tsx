@@ -51,15 +51,19 @@ export default function Panel(props: PluginSurfaceProps<State>) {
         </Card>
 
         <Card title={t("panel.recent", { defaultValue: "Recent tasks from N.E.K.O" })}>
-          <DataTable
-            data={state.recent || []}
-            rowKey="id"
-            columns={[
-              { key: "when", label: t("panel.when", { defaultValue: "Time" }) },
-              { key: "state", label: t("panel.state", { defaultValue: "State" }) },
-              { key: "task", label: t("panel.task", { defaultValue: "Task" }) },
-            ]}
-          />
+          {(state.recent || []).length ? (
+            <DataTable
+              data={state.recent || []}
+              rowKey="id"
+              columns={[
+                { key: "when", label: t("panel.when", { defaultValue: "Time" }) },
+                { key: "state", label: t("panel.state", { defaultValue: "State" }) },
+                { key: "task", label: t("panel.task", { defaultValue: "Task" }) },
+              ]}
+            />
+          ) : (
+            <Text>{t("panel.noRecent", { defaultValue: "No task has been handed over from N.E.K.O yet." })}</Text>
+          )}
           <Text>
             {t("panel.approvals", {
               defaultValue: "Results, approvals and the audit trail are in the JARVIS console:",

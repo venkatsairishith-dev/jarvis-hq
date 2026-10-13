@@ -95,4 +95,4 @@ Open (each its own phase, test then report): cutover of the live JARVIS services
 Not tested: any real model call through `main_agent` (no agent key yet), browser/desktop sub-agents live, voice end to end.
 ## Status update 2026-10-14 (usage like N.E.K.O)
 Done: JARVIS and Main Agent panels inside N.E.K.O's Plugin Manager (Hosted TSX, project checker passes, live context verified against the real console); one start script for N.E.K.O plus the JARVIS console; usage documented in operations. 58 plugin tests pass.
-Open: the owner's first run and a real spoken task; a browser-level look at the panels (not rendered here); approvals shown inside N.E.K.O as read-only notices (design needed, approval itself must stay in JARVIS).
+Panels were opened in Edge in the real plugin manager and render (status, task form, recent tasks, steps). Open: the owner's first run and a real spoken task; approvals shown inside N.E.K.O as read-only notices (design needed, approval itself must stay in JARVIS).

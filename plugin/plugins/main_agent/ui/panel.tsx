@@ -54,14 +54,18 @@ export default function Panel(props: PluginSurfaceProps<State>) {
         </Card>
 
         <Card title={t("panel.history", { defaultValue: "Earlier tasks" })}>
-          <DataTable
-            data={state.history || []}
-            rowKey="id"
-            columns={[
-              { key: "state", label: t("panel.state", { defaultValue: "State" }) },
-              { key: "summary", label: t("panel.summary", { defaultValue: "Summary" }) },
-            ]}
-          />
+          {(state.history || []).length ? (
+            <DataTable
+              data={state.history || []}
+              rowKey="id"
+              columns={[
+                { key: "state", label: t("panel.state", { defaultValue: "State" }) },
+                { key: "summary", label: t("panel.summary", { defaultValue: "Summary" }) },
+              ]}
+            />
+          ) : (
+            <Text>{t("panel.noHistory", { defaultValue: "No earlier tasks." })}</Text>
+          )}
         </Card>
       </Stack>
     </Page>
