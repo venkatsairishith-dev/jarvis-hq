@@ -1,0 +1,22 @@
+[plugin]
+id = "main_agent"
+name = "Main Agent"
+description = "Takes one task given by voice or text, plans it, picks the sub-agents that fit (reasoning, installed plugins, the web browser, JARVIS and its lab agents), runs independent steps in parallel and reports one combined result."
+short_description = "Plan a multi-step task and run it with the right sub-agents."
+keywords = [
+    "task", "plan", "multi-step", "research", "then", "and then", "organize", "build", "write up", "look up and",
+    "compare", "summarize", "automate", "get it done", "agent", "sub-agent", "delegate", "workflow",
+    "任务", "计划", "多步骤", "研究", "然后", "整理", "总结", "完成", "自动", "智能体", "子任务"
+]
+version = "0.1.0"
+type = "plugin"
+entry = "plugin.plugins.main_agent:MainAgentPlugin"
+
+[plugin.sdk]
+recommended = ">=0.1.0,<0.2.0"
+supported = ">=0.1.0,<0.3.0"
+
+[plugin_runtime]
+enabled = true
+auto_start = true
+timeout = 120
