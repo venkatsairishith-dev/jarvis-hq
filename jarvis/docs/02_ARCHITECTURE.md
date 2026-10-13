@@ -356,3 +356,7 @@ voice/text -> N.E.K.O (48911 UI, 48912 memory, 48915 agent server, 48916 plugin 
 - **Trust.** The plan is fixed before any tool output is read, so a page or file cannot add steps. A plan may name only sub-agents in the live catalogue, with arguments checked against each entry's schema. `main_agent` and `jarvis_bridge` are never offered as plain plugin sub-agents (no recursion).
 - **Privacy.** Planning and reasoning use N.E.K.O's own "agent" model, chosen by the owner; JARVIS private results are not returned to it by default.
 - **Language.** English is forced by `NEKO_LANGUAGE=en` in the start script.
+### N.E.K.O is the front end (added 2026-10-14)
+- **One entry point:** the N.E.K.O web UI (48911) and her voice. `jarvis/scripts/neko-start.ps1` starts everything; the JARVIS console (8799) is the approvals and audit surface, not a second place to give orders.
+- **Hosted panels** (N.E.K.O Plugin Manager, Hosted TSX, checked with the project's own checker): `jarvis_bridge` *JARVIS* and `main_agent` *Main Agent*. Each panel reads a `@ui.context` (state only) and calls exposed `@ui.action` entries. The bridge's context never carries reply text.
+- **Authority unchanged:** nothing in these panels can approve, deny or bypass the kernel; a risky action raised by a JARVIS step appears in the JARVIS console for the owner.

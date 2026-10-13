@@ -47,8 +47,28 @@ if (Listening 48916) {
     $plugins = $states -join ", "
   } catch { $plugins = "error: " + $_.Exception.Message.Split("`n")[0] }
 }
+# JARVIS itself: one command starts everything. The console (127.0.0.1:8799) is started only if nothing listens there, so a
+# console that is already running (from any folder) is left alone. The laptop node is a scheduled task: reported, never touched.
+$jarvis = "console not started"
+if (-not (Listening 8799)) {
+  $consoleScript = Join-Path $PSScriptRoot 'start-console.ps1'
+  if (Test-Path $consoleScript) {
+    try { & powershell -NoProfile -ExecutionPolicy Bypass -File $consoleScript | Out-Null } catch { }
+    foreach ($i in 1..15) { if (Listening 8799) { break }; Start-Sleep 1 }
+  }
+}
+if (Listening 8799) {
+  try {
+    $h = Invoke-RestMethod http://127.0.0.1:8799/api/health -TimeoutSec 10
+    $jarvis = "console up, kernel " + $(if ($h.kernel.reachable -and $h.kernel.authorized) { "reachable and authorized" } else { "NOT reachable/authorized" })
+  } catch { $jarvis = "console listening but not answering" }
+}
+$node = try { (Get-ScheduledTask JarvisNode -ErrorAction Stop).State } catch { "task not found" }
+
 "repo   : $repo"
 "memory 48912: " + (Listening 48912)
 "main   48911: " + (Listening 48911) + "   ->  http://127.0.0.1:48911/"
 "agent  48915: " + (Listening 48915) + "   plugins 48916: " + (Listening 48916)
 "plugins: $plugins"
+"jarvis : $jarvis | laptop node task: $node"
+"open   : http://127.0.0.1:48911/  (talk to her here; tasks go to the main agent and JARVIS; approvals are in the JARVIS console http://127.0.0.1:8799/)"
