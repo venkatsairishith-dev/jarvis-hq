@@ -66,8 +66,9 @@ def run(url, name, once=False, collect_every=60, beat=15, poll=3, clock=time.tim
         token = fh.read().strip()
     state, last_collect, last_report, killed = {}, 0.0, None, False
     worker = None
+    from .paths import jarvis_home
     from .watch import Watcher, load_watches
-    watcher = Watcher(load_watches(), os.path.join(os.path.dirname(__file__), "..", "..", "..", "cache", "node-watch-state.json"))
+    watcher = Watcher(load_watches(), os.path.join(jarvis_home(), "cache", "node-watch-state.json"))
     while True:
         try:
             now = clock()

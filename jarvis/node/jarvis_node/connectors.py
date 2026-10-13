@@ -15,12 +15,13 @@ import threading
 import time
 
 from .mcpclient import McpError, StdioSession
+from .paths import jarvis_home
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "kernel"))
 from jarvis_kernel import mcpwire as W  # noqa: E402
 
 SECRETS = r"D:\jarvis-secrets"
-WORKROOT = os.path.join(os.path.dirname(__file__), "..", "..", "..", "cache", "connectors")
+WORKROOT = os.path.join(jarvis_home(), "cache", "connectors")
 CONFIG = os.path.join(os.path.dirname(__file__), "..", "..", "config", "connectors.local.json")
 ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]{0,63}$")
 BASE_ENV_WINDOWS = ("SystemRoot", "SystemDrive", "windir", "PATHEXT", "ComSpec", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS")

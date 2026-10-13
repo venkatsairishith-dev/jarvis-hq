@@ -13,6 +13,7 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "kernel"))
 from jarvis_kernel.scrub import scrub  # noqa: E402
+from .paths import jarvis_home  # noqa: E402
 
 NOWIN = 0x08000000 if os.name == "nt" else 0       # no console window for helper programs
 SECRET_ENV = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH", re.I)
@@ -93,7 +94,7 @@ TEXT_VIEWER = {".md", ".txt", ".json", ".csv", ".log", ".py"}
 
 def outputs_root() -> str:
     """D:\\jarvis\\outputs on the laptop (JARVIS_OUTPUTS overrides, e.g. in tests)."""
-    return os.path.realpath(os.environ.get("JARVIS_OUTPUTS") or os.path.join(os.path.dirname(__file__), "..", "..", "..", "outputs"))
+    return os.path.realpath(os.environ.get("JARVIS_OUTPUTS") or os.path.join(jarvis_home(), "outputs"))
 
 
 def _output_path(agent: str, name: str, root: str = None):
