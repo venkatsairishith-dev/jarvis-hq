@@ -20,3 +20,13 @@ supported = ">=0.1.0,<0.3.0"
 enabled = true
 auto_start = true
 timeout = 30
+
+[plugin.ui]
+enabled = true
+
+[[plugin.ui.panel]]
+id = "main"
+title = "JARVIS"
+entry = "ui/panel.tsx"
+context = "dashboard"
+permissions = ["state:read", "action:call"]

@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr
+from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr, ui
 
 from .executor import StepFailed, StepResult, final_text, run_plan
 from .planner import Capability, Plan, PlanError, Step, build_catalogue, parse_plan, planner_messages
@@ -64,6 +64,19 @@ class MainAgentPlugin(NekoPluginBase):
     @lifecycle(id="startup")
     async def startup(self, **_):
         return Ok({"status": "ready"})
+
+    @ui.context(id="dashboard")
+    async def dashboard(self):
+        """What the Main Agent panel shows: the run in progress (or the last one) and a short history."""
+        def view(run_id: str, run: dict[str, Any]) -> dict[str, Any]:
+            return {"id": run_id, "state": run.get("state", ""), "summary": run.get("summary", ""), "task": run.get("task", ""),
+                    "steps": [{"id": sid, "agent": s.get("agent", ""), "goal": s.get("goal", ""), "state": s.get("state", ""),
+                               "error": s.get("error", "")} for sid, s in (run.get("steps") or {}).items()]}
+        ids = list(self._runs)
+        current = view(ids[-1], self._runs[ids[-1]]) if ids else None
+        return {"active": self._active is not None, "current": current,
+                "history": [{"id": i, "state": self._runs[i].get("state", ""), "summary": self._runs[i].get("summary", "")}
+                            for i in reversed(ids[:-1][-5:])]}
 
     @lifecycle(id="shutdown")
     async def shutdown(self, **_):
@@ -206,6 +219,7 @@ class MainAgentPlugin(NekoPluginBase):
             return Err(SdkError(str(exc)))
         return Ok({"summary": plan.summary, "steps": [{"id": s.id, "agent": s.ref or s.kind, "goal": s.goal, "depends_on": s.depends_on} for s in plan.steps]})
 
+    @ui.action(id="run_task", label=tr("actions.run_task.label", default="Run task"), tone="primary", refresh_context=True)
     @plugin_entry(
         id="run_task",
         name=tr("entry.run_task.name", default="Do a task with the right helpers"),
@@ -289,6 +303,8 @@ class MainAgentPlugin(NekoPluginBase):
             return Err(SdkError("The main agent has not run a task yet."))
         return Ok({"run_id": rid, "state": run["state"], "summary": run["summary"], "steps": run["steps"]})
 
+    @ui.action(id="stop_task", label=tr("actions.stop_task.label", default="Stop"), tone="danger", refresh_context=True,
+               confirm=tr("actions.stop_task.confirm", default="Stop the current task after the step in progress?"))
     @plugin_entry(
         id="stop_task",
         name=tr("entry.stop_task.name", default="Stop the current task"),

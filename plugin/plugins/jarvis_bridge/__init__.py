@@ -7,9 +7,10 @@ kernel's approvals and audit. This plugin is only the door between the two; it a
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
-from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr
+from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr, ui
 
 from .client import BridgeError, JarvisClient, SOURCE, speak_full_reply
 
@@ -31,6 +32,30 @@ class JarvisBridgePlugin(NekoPluginBase):
     async def shutdown(self, **_):
         return Ok({"status": "stopped"})
 
+    @ui.context(id="dashboard")
+    async def dashboard(self):
+        """What the JARVIS panel in N.E.K.O's plugin manager shows. State only: reply text stays in the JARVIS console."""
+        client = JarvisClient()
+        out: dict[str, Any] = {"console_url": client.base, "ready": False, "busy": None, "kill_switch_on": False,
+                               "message": "", "recent": []}
+        try:
+            status = await client.status()
+            rows = await client.commands(20)
+        except BridgeError as exc:
+            out["message"] = exc.message
+            return out
+        out.update(ready=status["kernel_reachable"] and status["kernel_authorized"] and not status["kill_switch_on"],
+                   busy=status["busy"], kill_switch_on=status["kill_switch_on"])
+        out["message"] = ("The kill switch is on." if status["kill_switch_on"] else "JARVIS is ready." if out["ready"]
+                          else "The console is running but the kernel is not reachable or not authorized.")
+        out["recent"] = [
+            {"id": str(r.get("id") or ""), "state": str(r.get("state") or ""),
+             "when": time.strftime("%H:%M:%S", time.localtime(float(r.get("ts") or 0))),
+             "task": " ".join(str(r.get("text") or "").split())[:100]}
+            for r in rows if r.get("source") == SOURCE][:8]
+        return out
+
+    @ui.action(id="delegate_task", label=tr("actions.delegate_task.label", default="Hand to JARVIS"), tone="primary", refresh_context=True)
     @plugin_entry(
         id="delegate_task",
         name=tr("entry.delegate_task.name", default="Hand a task to JARVIS"),
@@ -111,6 +136,7 @@ class JarvisBridgePlugin(NekoPluginBase):
             out["message"] = f"The task is {state}."
         return Ok(out)
 
+    @ui.action(id="jarvis_status", label=tr("actions.jarvis_status.label", default="Check JARVIS"), tone="default", refresh_context=True)
     @plugin_entry(
         id="jarvis_status",
         name=tr("entry.jarvis_status.name", default="Is JARVIS ready?"),
