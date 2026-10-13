@@ -1,0 +1,19 @@
+[Unit]
+Description=JARVIS local model on the VM (Qwen3-4B, CPU, localhost only): private-lane fallback and nightly regression target
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/jarvis
+ExecStart=/home/ubuntu/jarvis/tools/llama.cpp/llama-b11461/llama-server -m /home/ubuntu/jarvis/models/Qwen3-4B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 4096 -np 1 -t 2 --jinja --chat-template-kwargs '{"enable_thinking":false}'
+Restart=on-failure
+RestartSec=10
+Nice=10
+MemoryMax=6G
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

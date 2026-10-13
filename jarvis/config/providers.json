@@ -1,0 +1,36 @@
+{
+  "_note": "No secrets here. key_file is relative to the machine's secrets folder ($JARVIS_SECRETS, D:\\jarvis-secrets on Windows, ~/.jarvis/secrets on Linux). A provider stays enabled=false until its key file exists AND a live call has worked. paid must stay false. Lanes: local, private, public. Base URLs verified against provider docs on 2026-10-07 (groq, openrouter); the others are still null.",
+  "providers": [
+    {"name": "local-llama-vulkan", "lane": "local", "base_url": "http://127.0.0.1:8080/v1", "key_file": null, "models": ["any"], "paid": false, "enabled": true, "os_only": "nt", "priority": 10},
+    {"name": "vm-llama-cpu", "lane": "local", "base_url": "http://127.0.0.1:8080/v1", "key_file": null, "models": ["any"], "paid": false, "enabled": true, "os_only": "posix", "priority": 90, "timeout_s": 180, "max_total_tokens": 4096},
+    {"name": "groq", "lane": "private", "base_url": "https://api.groq.com/openai/v1", "key_file": "providers/groq.key", "models": ["any", "extract", "route"], "paid": false, "enabled": true,
+     "priority": 20, "default_model": "openai/gpt-oss-120b", "model_pattern": "^(openai/gpt-oss-(120b|20b)|qwen/qwen3\\.8-27b)$", "extra_body": {"reasoning_effort": "low"}, "max_total_tokens": 8000},
+    {"name": "openrouter-private", "lane": "private", "base_url": "https://openrouter.ai/api/v1", "key_file": "providers/openrouter.key", "models": ["any"], "paid": false, "enabled": true,
+     "priority": 30, "default_model": "apodex/apodex-1.1-mini:free", "model_pattern": ":free$", "extra_body": {"provider": {"data_collection": "deny"}}, "max_input_tokens": 56000},
+    {"name": "zai-glm", "lane": "private", "base_url": null, "key_file": "providers/zai.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "cloudflare-workers-ai", "lane": "private", "base_url": null, "key_file": "providers/cloudflare.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "ollama-cloud", "lane": "private", "base_url": null, "key_file": "providers/ollama_cloud.key", "models": ["any"], "paid": false, "enabled": false},
+    {"name": "gemini", "lane": "public", "base_url": null, "key_file": "providers/gemini.key", "models": ["research"], "paid": false, "enabled": false},
+    {"name": "kilo", "lane": "public", "base_url": null, "key_file": "providers/kilo.key", "models": ["research"], "paid": false, "enabled": false},
+    {"name": "dahl-deepseek", "lane": "public", "base_url": "https://inference.dahl.global/v1", "key_file": "providers/dahl.key", "models": ["any", "research"], "paid": false, "enabled": false,
+     "os_only": "posix", "priority": 15, "timeout_s": 300, "default_model": "deepseek-ai/DeepSeek-V4-Flash-0731", "model_pattern": "^deepseek-ai/DeepSeek-V4-Flash-0731$",
+     "_note": "OFF: measured 2026-10-10 its text replies loop ('pongpongpong response...' until max_tokens), wasting the token pool; tool calls were fine. Retest before enabling. Owner decision 2026-10-10: Dahl (FROMZERO OU, Estonia; terms allow agents and API automation) for the lab lane, one entry per model so a busy model (429 model_concurrency) falls back to the next and agents can switch_model. OpenAI-compatible API on the Gonka network: requests run on independent GPU operators who may see the content, so PUBLIC LANE ONLY, never private data. Prepaid promotional pool on the owner's one account (no card billing; never top up); the key holds an allocation from that pool, which caps a leak. HTTP 402 = allocation used up. Model IDs rotate: check GET /v1/models."},
+    {"name": "dahl-glm", "lane": "public", "base_url": "https://inference.dahl.global/v1", "key_file": "providers/dahl.key", "models": ["any", "research"], "paid": false, "enabled": true,
+     "os_only": "posix", "priority": 13, "timeout_s": 300, "default_model": "zai-org/GLM-5.3-Flash", "model_pattern": "^zai-org/GLM-5\\.3-Flash$",
+     "_note": "Dahl, second choice for the lab lane (see dahl-deepseek). Measured 2026-10-10: correct tool calls; plain replies a little sloppy. Public lane only."},
+    {"name": "dahl-minimax", "lane": "public", "base_url": "https://inference.dahl.global/v1", "key_file": "providers/dahl.key", "models": ["any", "research"], "paid": false, "enabled": true,
+     "os_only": "posix", "priority": 11, "timeout_s": 300, "default_model": "MiniMaxAI/MiniMax-M2.7", "model_pattern": "^MiniMaxAI/MiniMax-M2\\.7$",
+     "_note": "Dahl, the lab lane's first choice (see dahl-deepseek). Measured 2026-10-10: correct answers and tool calls. Replies start with reasoning in <think> tags, kept on purpose: MiniMax says removing it from the history hurts its agent work. Public lane only."},
+    {"name": "kaggle-ollama", "lane": "public", "base_url": "https://letdown-campsite-ecology.ngrok-free.dev/v1", "key_file": null, "models": ["any", "research"], "paid": false, "enabled": false,
+     "os_only": "posix", "priority": 12, "timeout_s": 300, "default_model": "gpt-oss:20b", "model_pattern": "^(gpt-oss:20b|qwen3:8b)$", "extra_body": {"reasoning_effort": "low"},
+     "_note": "Parked 2026-10-10: serving a model from a Kaggle/Colab notebook through a tunnel breaks their rules (account risk). Was: owner's free Kaggle GPUs (Ollama) through ngrok on the owner's fixed dev domain, ngrok refusing every caller except the VM's address."},    {"name": "colab-ollama", "lane": "public", "base_url": "https://2de2-34-143-149-50.ngrok-free.app/v1", "key_file": null, "models": ["any", "research"], "paid": false, "enabled": false,
+     "os_only": "posix", "priority": 15, "timeout_s": 300, "default_model": "gpt-oss-16k", "model_pattern": "^(gpt-oss-16k|gpt-oss:20b|qwen3:8b)$", "extra_body": {"reasoning_effort": "low"},
+     "_note": "Owner's free Colab T4 through ngrok (2026-10-09). Public lane: traffic passes ngrok. ngrok refuses every caller except the VM's address. The URL changes when the Colab runtime restarts: update base_url. gpt-oss-16k = gpt-oss:20b with a 16,384-token context, created through the Ollama API."},
+    {"name": "puter", "lane": "public", "base_url": "https://api.puter.com/puterai/openai/v1", "key_file": "providers/puter.key", "models": ["any", "research"], "paid": false, "enabled": false,
+     "priority": 15, "timeout_s": 180, "default_model": "gpt-5.4-nano", "model_pattern": "^(gpt-5\\.4-nano|gemini-3\\.5-flash-lite)$",
+     "_note": "Owner decision 2026-10-09: Puter for the lab lane (Kaggle parked). Cloud models (Puter, then OpenAI or Google): public lane only, never private data. The key is the owner's Puter account token (whole-account scope): keep it in secrets only. Free allowance is undocumented; cheap models only. Measured 2026-10-09: every model returns HTTP 402 subscription_required (the free credits cover Puter apps in the browser, not the API), so it stays off: no paid plans."},
+    {"name": "openrouter-public", "lane": "public", "base_url": "https://openrouter.ai/api/v1", "key_file": "providers/openrouter.key", "models": ["research"], "paid": false, "enabled": false,
+     "default_model": "apodex/apodex-1.1-mini:free", "model_pattern": ":free$"}
+  ]
+}
+

@@ -1,0 +1,18 @@
+[Unit]
+Description=JARVIS nightly decision-layer regression (uses the VM's local model and embedding services)
+After=jarvis-llm.service jarvis-embed.service network-online.target
+Wants=jarvis-llm.service jarvis-embed.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/jarvis/scripts
+Environment=JARVIS_SECRETS=/home/ubuntu/.jarvis/secrets
+ExecStart=/usr/bin/python3 /home/ubuntu/jarvis/scripts/nightly.py
+TimeoutStartSec=4h
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/.jarvis-kernel /home/ubuntu/jarvis/bench-results /home/ubuntu/jarvis/bench/data
+PrivateTmp=true

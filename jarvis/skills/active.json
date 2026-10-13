@@ -1,0 +1,56 @@
+{
+ "lab": {
+  "adversarial-ux-test": {
+   "sha256": "44500250584e6bb4226377fb014c43e085b77309cbe8fbca6185b56675019f2d",
+   "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
+   "risk": "low",
+   "activated": "2026-10-10T22:53:01",
+   "backup": "/home/agent/.hermes/skills/jarvis-staged/adversarial-ux-test.bak-1791652981"
+  },
+  "decision-questionnaire": {
+   "sha256": "c672fdec5da6446e4b0c96bca7178ad797f7481f79801743d258a7946e257e11",
+   "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
+   "risk": "low",
+   "activated": "2026-10-11T00:20:32",
+   "backup": "/home/agent/.hermes/skills/jarvis-staged/decision-questionnaire.bak-1791658232"
+  }
+ },
+ "log": [
+  {
+   "at": "2026-10-10T22:45:48",
+   "op": "activate",
+   "skill": "adversarial-ux-test",
+   "kernel": "YELLOW_AUTO"
+  },
+  {
+   "at": "2026-10-10T22:47:51",
+   "op": "deactivate",
+   "skill": "adversarial-ux-test",
+   "restored_previous": true
+  },
+  {
+   "at": "2026-10-10T22:48:06",
+   "op": "activate",
+   "skill": "adversarial-ux-test",
+   "kernel": "YELLOW_AUTO"
+  },
+  {
+   "at": "2026-10-10T22:51:12",
+   "op": "deactivate",
+   "skill": "adversarial-ux-test",
+   "restored_previous": true
+  },
+  {
+   "at": "2026-10-10T22:53:01",
+   "op": "activate",
+   "skill": "adversarial-ux-test",
+   "kernel": "YELLOW_AUTO"
+  },
+  {
+   "at": "2026-10-11T00:20:32",
+   "op": "activate",
+   "skill": "decision-questionnaire",
+   "kernel": "YELLOW_AUTO"
+  }
+ ]
+}

@@ -1,0 +1,6 @@
+{
+  "_note": "Folders this laptop's node may watch for new files (names, sizes and times only are reported; never content). A watch name is what an automation refers to. Personal folders are NOT listed: add one here only if you decide to, e.g. \"downloads\": {\"path\": {\"nt\": \"%USERPROFILE%\\\\Downloads\"}, \"ignore\": [\".crdownload\", \".tmp\"], \"depth\": 1}",
+  "watches": {
+    "jarvis-test": {"path": {"nt": "D:\\jarvis\\cache\\watch-test"}, "ignore": [".crdownload", ".tmp", ".part", ".partial"], "depth": 1}
+  }
+}

@@ -1,0 +1,93 @@
+# JARVIS hub: every dashboard gets its own *.localhost name on port 8088 (loopback inside the WSL box, forwarded to this
+# laptop only). Same-site names let the hub show each dashboard in a panel, logins included. Runs as the WSL user "hub".
+{
+	admin off
+	auto_https off
+	http_port 8088
+	persist_config off
+}
+
+http://hub.localhost:8088 {
+	bind 127.0.0.1
+	handle /status-check* {
+		reverse_proxy 127.0.0.1:4000
+	}
+	# Agent PC take control / continue task (lab_control.py, root, Unix socket only Caddy's group may open)
+	handle /control/* {
+		reverse_proxy unix//run/jarvis-lab/control.sock
+	}
+	# The Agent PC screen (noVNC) on the hub's own address, so the hub can switch it between watching and control
+	# without reconnecting (no password prompt on every switch)
+	handle_path /pc/* {
+		reverse_proxy 127.0.0.1:6080
+	}
+	# The kernel's read-only overview for the dashboard. The dashboard-lane token is added here (from
+	# /home/hub/.hub.env) and never reaches the browser; that token cannot call a model or act.
+	handle /api/kernel/overview {
+		rewrite * /v1/jarvis/overview
+		reverse_proxy 100.125.91.51:8790 {
+			header_up Host 100.125.91.51:8790
+			header_up Authorization "Bearer {$HUB_KERNEL_TOKEN}"
+		}
+	}
+	handle {
+		root * /opt/jarvis-hub/site
+		file_server
+		header Cache-Control "no-cache"
+	}
+}
+
+# What agents delivered to the laptop (D:\jarvis\outputs, mounted read-only for the hub user only). Its own origin
+# and a sandbox CSP: an agent-written HTML file can never run script with the hub's powers (take control, overview).
+http://outputs.localhost:8088 {
+	bind 127.0.0.1
+	root * /mnt/jarvis-outputs
+	header {
+		Content-Security-Policy "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'"
+		X-Content-Type-Options nosniff
+		Access-Control-Allow-Origin http://hub.localhost:8088
+		Cache-Control no-cache
+	}
+	file_server browse
+}
+
+http://pc.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 127.0.0.1:6080
+}
+
+http://muse.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 127.0.0.1:8081
+}
+
+http://lab.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 127.0.0.1:9121
+}
+
+http://code.localhost:8088 {
+	bind 127.0.0.1
+	# Caddy supplies OpenCode's login (from /home/hub/.hub.env, 600) so the hub panel has no password pop-up;
+	# the WSL agent user is blocked from this port by its firewall.
+	reverse_proxy 127.0.0.1:4096 {
+		header_up Authorization "Basic {$OPENCODE_BASIC}"
+	}
+}
+
+http://hermes.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 100.125.91.51:9119 {
+		header_up Host 100.125.91.51:9119
+	}
+}
+
+http://router.localhost:8088 {
+	bind 127.0.0.1
+	reverse_proxy 100.125.91.51:20128 {
+		header_up Host 100.125.91.51:20128
+		# OmniRoute forbids framing everywhere; allow it only inside the hub's own page
+		header_down -X-Frame-Options
+		header_down Content-Security-Policy "frame-ancestors 'none'" "frame-ancestors http://hub.localhost:8088"
+	}
+}

@@ -1,0 +1,16 @@
+# WSL lab box (JarvisLab): runs outcome tasks JARVIS dispatched to the lab (work -> independent verify -> repair).
+# Root only to start agent sessions as the unprivileged agent user and to keep its token (/etc/jarvis-lab/runner.token,
+# 600) away from the agents. Install: hq/lab/lab_runner.py -> /opt/jarvis-hub/lab_runner.py (root 644).
+[Unit]
+Description=JARVIS lab runner (execute, verify, repair dispatched tasks)
+After=network-online.target jarvis-lab-fw.service
+
+[Service]
+ExecStart=/usr/bin/python3 -u /opt/jarvis-hub/lab_runner.py
+Restart=always
+RestartSec=10
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

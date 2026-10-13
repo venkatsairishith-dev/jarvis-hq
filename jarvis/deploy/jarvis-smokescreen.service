@@ -1,0 +1,17 @@
+[Unit]
+Description=JARVIS egress checkpoint: Stripe Smokescreen SSRF-safe proxy (Tailscale address only)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+ExecStart=/home/ubuntu/jarvis/tools/smokescreen/bin/smokescreen_v0.1.0_linux_arm64/smokescreen --listen-ip 100.125.91.51 --listen-port 4750 --deny-range 100.64.0.0/10 --deny-range 169.254.0.0/16 --deny-range 10.0.0.0/8 --deny-range 172.16.0.0/12 --deny-range 192.168.0.0/16 --deny-range 127.0.0.0/8 --deny-range 0.0.0.0/8 --deny-range ::1/128 --deny-range fc00::/7 --deny-range fe80::/10
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

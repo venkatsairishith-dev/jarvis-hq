@@ -1,0 +1,24 @@
+[Unit]
+Description=OmniRoute 3.8.51 model router (loopback only, API key required; dedicated user jarvis-router)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=jarvis-router
+Group=jarvis-router
+WorkingDirectory=/home/jarvis-router
+Environment=HOME=/home/jarvis-router
+Environment=PATH=/opt/node24/bin:/usr/bin:/bin
+EnvironmentFile=/home/jarvis-router/.omniroute/.env
+ExecStart=/home/jarvis-router/app/node_modules/.bin/omniroute serve
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=tmpfs
+BindPaths=/home/jarvis-router
+PrivateTmp=true
+MemoryMax=1500M
+
+[Install]
+WantedBy=multi-user.target

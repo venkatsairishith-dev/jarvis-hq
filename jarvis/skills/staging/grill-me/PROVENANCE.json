@@ -1,0 +1,60 @@
+{
+ "name": "grill-me",
+ "staged_at": "2026-10-10T22:24:47",
+ "source": {
+  "repo": "https://github.com/NousResearch/hermes-agent",
+  "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
+  "path": "optional-skills/software-development/grill-me",
+  "license": "MIT",
+  "license_source": "frontmatter"
+ },
+ "description": "Adversarial plan interview before implementation.",
+ "version": "2.0.0",
+ "author": "Rafael Zendron (rafaumeu) + Matt Pocock (mattpocock/skills, grilling) + Hermes Agent",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 4689,
+   "sha256": "6e3b3b81c1ad3a0b3ba3d36ec725e376d225e7867bfbf23a5129cf245e94bb0c",
+   "git_blob": "18d9d06ac992045a6ee10fd78a1840a2f5d08580"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "delegate_task": "lab-native (its own sandbox computer)",
+  "read_file": "lab-native (its own sandbox computer)",
+  "search_files": "lab-native (its own sandbox computer)",
+  "terminal": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "medium",
+  "reasons": [
+   "drives a browser or starts sub-agents"
+  ],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "code_review",
+  "data_sensitivity": "none",
+  "permissions": [
+   "agents",
+   "files",
+   "shell"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed",
+  "hermes_skills_guard": {
+   "verdict": "safe",
+   "allowed": true,
+   "reason": "Allowed (community source, safe verdict)",
+   "findings": [],
+   "lint": []
+  },
+  "guard": "passed"
+ },
+ "manifest_sha256": "f6588ddf23ceabe9b7046c475e2649e31e9d66c048174a1d703f16b01db1a641"
+}

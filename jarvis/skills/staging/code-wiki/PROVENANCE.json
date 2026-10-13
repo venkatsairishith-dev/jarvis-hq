@@ -1,0 +1,112 @@
+{
+ "name": "code-wiki",
+ "staged_at": "2026-10-10T22:24:47",
+ "source": {
+  "repo": "https://github.com/NousResearch/hermes-agent",
+  "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
+  "path": "optional-skills/software-development/code-wiki",
+  "license": "MIT",
+  "license_source": "frontmatter"
+ },
+ "description": "Generate wiki docs + Mermaid diagrams for any codebase.",
+ "version": "0.1.0",
+ "author": "Teknium (teknium1), Hermes Agent",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 14115,
+   "sha256": "5d3e5b93dfd188483f45e75f00a7d4f16d044681f41c36b785aae900c7397576",
+   "git_blob": "3dc69fbb5a4d343fa0483907049ceca8df888b30"
+  },
+  {
+   "path": "templates/README.md",
+   "bytes": 667,
+   "sha256": "0c38fb312fbe6f6f1c8169b93648966275e28f0ae5f312c7195023f6b91bc240",
+   "git_blob": "2fe65cea2e2aa437c54c91390b359dba34af0d81"
+  },
+  {
+   "path": "templates/architecture.md",
+   "bytes": 654,
+   "sha256": "91f4c340c29460d777ba1317ec0d46da677f2768d848e74ee3ac90d1699bbc60",
+   "git_blob": "e737b2c9814ea96844e26504f6cd1bb601259c22"
+  },
+  {
+   "path": "templates/getting-started.md",
+   "bytes": 658,
+   "sha256": "190b3e93cfa8872de69f846a86b7250a154ce3ed3c50d3127eeae8c0a02c1f36",
+   "git_blob": "bbc66dbbe0bfca7be34d2637dd2be3d85ddb7c54"
+  },
+  {
+   "path": "templates/module.md",
+   "bytes": 634,
+   "sha256": "5a5f02b93dc45712a444c279e4b993a01937436082a0c8a9e64e2fa7f597a8d7",
+   "git_blob": "8494438f5b44374c40b07742dccca964ca3faee3"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "process": "lab-native (its own sandbox computer)",
+  "read_file": "lab-native (its own sandbox computer)",
+  "search_files": "lab-native (its own sandbox computer)",
+  "terminal": "lab-native (its own sandbox computer)",
+  "write_file": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [
+  "CodeWiki",
+  "GitHub",
+  "StorageA",
+  "ExternalAPI",
+  "TerminalTool",
+  "WebTool",
+  "HermesCLI",
+  "OpenAPI"
+ ],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "medium",
+  "reasons": [
+   "Hermes skills_guard findings (medium) raise the rating to medium"
+  ],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "documentation",
+  "data_sensitivity": "none",
+  "permissions": [
+   "files",
+   "shell"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed",
+  "hermes_skills_guard": {
+   "verdict": "safe",
+   "allowed": true,
+   "reason": "Allowed (community source, safe verdict)",
+   "findings": [
+    {
+     "pattern_id": "git_clone",
+     "severity": "medium",
+     "category": "supply_chain",
+     "file": "SKILL.md",
+     "line": "47",
+     "description": "clones a git repository at runtime"
+    },
+    {
+     "pattern_id": "git_clone",
+     "severity": "medium",
+     "category": "supply_chain",
+     "file": "SKILL.md",
+     "line": "68",
+     "description": "clones a git repository at runtime"
+    }
+   ],
+   "lint": [
+    "LintFinding(severity='warning', rule='shell-utility-reference', message=\"prose references `ls`; name the native tool `search_files (target='files')` instead.\")"
+   ]
+  },
+  "guard": "passed"
+ },
+ "manifest_sha256": "d7731bf7a7bc21cf7c65aac8339cb19afe2baf4933a06862af0bd40c257355c3"
+}

@@ -1,0 +1,17 @@
+{
+  "_note": "Model registry (spec section 12). Only measured facts: nothing here is an estimate. Benchmarks: hybrid cascade tests in docs/03_DECISIONS.md. Updated 2026-10-08.",
+  "models": [
+    {"id": "qwen3-4b-q4km-laptop", "purpose": "local classifier and answers, private lane", "base": "Qwen3-4B (Alibaba, Apache-2.0)", "runtime": "llama.cpp b11461 Vulkan, Radeon Pro 5500M", "where": "laptop (Windows, when booted)",
+     "tokens_per_s": 35, "accuracy_independent_88": "93%", "risk_fresh_156_exact": "81% alone; hybrid 88%, 0/85 high-risk let through", "status": "production", "fallback": "qwen3-1.7b-q4km-laptop", "notes": "-fa off is required on this driver (flash attention gives garbage output)"},
+    {"id": "qwen3-1.7b-q4km-laptop", "purpose": "fast local fallback", "base": "Qwen3-1.7B (Apache-2.0)", "runtime": "llama.cpp b11461 Vulkan", "where": "laptop (Windows, when booted)",
+     "tokens_per_s": 75, "accuracy_independent_88": "84%", "status": "fallback", "fallback": "groq-gpt-oss-120b", "notes": "weaker on independent wording; do not use in the risk path alone"},
+    {"id": "qwen3-4b-q4km-vm", "purpose": "last-resort private-lane fallback and nightly regression target", "base": "Qwen3-4B", "runtime": "llama.cpp b11461 Ubuntu ARM64, 2 CPU threads", "where": "Oracle VM (always on)",
+     "tokens_per_s": 5.6, "accuracy_independent_88": "same model as the laptop; nightly hybrid 91%", "status": "production (fallback)", "fallback": null, "notes": "slow prompt processing; 180 s provider timeout"},
+    {"id": "bge-small-en-v1.5-q8", "purpose": "embeddings for the nearest-neighbour router", "base": "BAAI bge-small-en-v1.5 (MIT)", "runtime": "llama.cpp, CPU", "where": "laptop and VM",
+     "latency_ms": "10 to 22 per text", "status": "production", "fallback": null},
+    {"id": "groq-gpt-oss-120b", "purpose": "default cloud answers, private lane", "base": "gpt-oss-120b (OpenAI, Apache-2.0) served by Groq", "runtime": "Groq API, free tier, key without card", "where": "cloud",
+     "latency": "0.5 to 2.5 s per short reply", "status": "production", "fallback": "openrouter-apodex-mini-free"},
+    {"id": "openrouter-apodex-mini-free", "purpose": "cloud fallback with data collection denied", "base": "apodex-1.1-mini:free via OpenRouter", "runtime": "OpenRouter free tier, data_collection deny", "where": "cloud",
+     "latency": "1 to 2 s", "status": "fallback", "fallback": "qwen3-4b-q4km-vm", "notes": "only 4 of 16 free models work with data collection denied"}
+  ]
+}

@@ -1,0 +1,6 @@
+Telegram is switched off by the owner (2026-10-10: "no need of Telegram totally for now").
+While this file exists: the bridge (jarvis-telegram) does not run, monit alerts go to the kernel audit log and
+~/jarvis/alerts.log, and the nightly report is not sent. Approvals are given at the kernel console
+(python3 -m jarvis_kernel approve <id>); task outcomes show in Mission Control.
+To switch Telegram back on: delete this file, re-enable the service (sudo systemctl enable --now jarvis-telegram)
+and restore the jarvis_telegram check in monit (deploy/monit-jarvis.conf).

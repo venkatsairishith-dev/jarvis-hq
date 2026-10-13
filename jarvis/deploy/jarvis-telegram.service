@@ -1,0 +1,20 @@
+[Unit]
+Description=JARVIS Telegram bridge (deterministic handler, owner chat only)
+After=network-online.target jarvis-kernel.service
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/jarvis/kernel
+Environment=JARVIS_SECRETS=/home/ubuntu/.jarvis/secrets
+ExecStart=/usr/bin/python3 -m jarvis_kernel telegram
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/.jarvis-kernel
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

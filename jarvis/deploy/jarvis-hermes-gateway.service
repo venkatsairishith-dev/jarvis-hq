@@ -1,0 +1,26 @@
+[Unit]
+Description=Hermes Agent gateway and API server (sandboxed user jarvis-agent; API on 127.0.0.1:8642)
+After=network-online.target jarvis-llm-proxy.service jarvis-smokescreen.service
+Wants=network-online.target
+
+[Service]
+User=jarvis-agent
+Group=jarvis-agent
+WorkingDirectory=/home/jarvis-agent
+Environment=HOME=/home/jarvis-agent
+Environment=HERMES_HOME=/home/jarvis-agent/.hermes
+Environment=HTTPS_PROXY=http://100.125.91.51:4750
+Environment=HTTP_PROXY=http://100.125.91.51:4750
+Environment=NO_PROXY=127.0.0.1,localhost
+EnvironmentFile=/home/jarvis-agent/.hermes/.env
+ExecStart=/home/jarvis-agent/venv314/bin/hermes gateway run
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/jarvis-agent
+PrivateTmp=true
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

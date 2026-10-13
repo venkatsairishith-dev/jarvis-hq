@@ -1,0 +1,21 @@
+﻿__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+KILL
+.env
+*.key
+*.pem
+node_token*
+
+evals/results/
+
+ui/node_modules/
+ui/dist/
+ui/test-results/
+ui/playwright-report/
+ui/.vite/
+
+# per-machine connector allowlist (programs on this computer)
+config/connectors.local.json

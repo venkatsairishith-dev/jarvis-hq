@@ -1,0 +1,88 @@
+{
+  "_note": "Starting points for the Add connector form. 'tested' means it was connected and exercised on this system; 'template' means it has NOT been run here and needs the owner's account or credential. Facts were read from each project's repository and README on 2026-10-11; check the README for the current flags.",
+  "templates": [
+    {
+      "id": "time",
+      "title": "Time and time zones (official reference server)",
+      "status": "tested",
+      "summary": "Current time in any time zone and conversion between zones. Needs no account, no credential and no network: the safest first connector.",
+      "source": {"project": "modelcontextprotocol/servers (mcp-server-time)", "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/time", "license": "MIT", "package": "mcp-server-time on PyPI"},
+      "transport": "stdio",
+      "definition": {"name": "time", "label": "Time and time zones", "purpose": "Current time and time-zone conversion (read only).", "transport": "stdio", "node": "laptop", "env_refs": {}, "lanes": ["private", "public"], "max_calls_per_hour": 60, "timeout_s": 20, "max_output": 4000},
+      "local": {"command": ["D:\\jarvis\\tools\\mcp-venv\\Scripts\\mcp-server-time.exe"], "env_refs": {}, "env_static": {}, "timeout_s": 20},
+      "setup": [
+        "Install it into its own folder (not the kernel's Python): python -m venv D:\\jarvis\\tools\\mcp-venv, then D:\\jarvis\\tools\\mcp-venv\\Scripts\\python.exe -m pip install mcp-server-time.",
+        "Press Add connector, then Test connection: its two tools appear switched off.",
+        "Classify get_current_time and convert_time as read and switch them on."
+      ],
+      "risks": ["Only reads the clock. Neither tool changes anything or reaches the network."]
+    },
+    {
+      "id": "deepwiki",
+      "title": "DeepWiki (documentation about public GitHub repositories)",
+      "status": "tested",
+      "summary": "Ask questions about, and read generated documentation of, public repositories. A remote server over HTTPS; no account or key for public repositories.",
+      "source": {"project": "DeepWiki MCP (Cognition)", "url": "https://mcp.deepwiki.com/", "license": "hosted service (see its terms)", "package": "none: remote endpoint"},
+      "transport": "https",
+      "definition": {"name": "deepwiki", "label": "DeepWiki", "purpose": "Documentation and answers about public GitHub repositories (read only).", "transport": "https", "endpoint": "https://mcp.deepwiki.com/mcp", "secret_ref": "", "lanes": ["private"], "max_calls_per_hour": 30, "timeout_s": 60, "max_output": 8000},
+      "local": null,
+      "setup": [
+        "Press Add connector, then Test connection (the kernel contacts the endpoint; nothing from your computer is sent).",
+        "Classify read_wiki_structure, read_wiki_contents and ask_wiki_question as read and switch them on."
+      ],
+      "risks": ["The repository name and your question go to a third-party service. Only use it for public repositories and public questions; do not put private text in a question.", "It is a hosted service: JARVIS cannot see how it handles what it receives."]
+    },
+    {
+      "id": "github",
+      "title": "GitHub (official MCP server, read-only to start)",
+      "status": "template",
+      "summary": "Repositories, issues and pull requests. Started with --read-only so write tools do not exist for it at all; remove that flag only after deciding to allow changes (each one still needs your approval).",
+      "source": {"project": "github/github-mcp-server", "url": "https://github.com/github/github-mcp-server", "license": "MIT", "package": "release binary (Windows x86_64 and arm64, Linux x86_64 and arm64)"},
+      "transport": "stdio",
+      "definition": {"name": "github", "label": "GitHub", "purpose": "Repositories, issues and pull requests (read only to start).", "transport": "stdio", "node": "laptop", "env_refs": {"GITHUB_PERSONAL_ACCESS_TOKEN": "connectors/github.token"}, "lanes": ["private"], "max_calls_per_hour": 60, "timeout_s": 30, "max_output": 12000},
+      "local": {"command": ["D:\\jarvis\\tools\\github-mcp-server\\github-mcp-server.exe", "stdio", "--read-only", "--toolsets", "repos,issues,pull_requests,users"], "env_refs": {"GITHUB_PERSONAL_ACCESS_TOKEN": "connectors/github.token"}, "env_static": {}, "timeout_s": 30},
+      "setup": [
+        "Download the Windows release of github-mcp-server from its GitHub releases page and unpack it to D:\\jarvis\\tools\\github-mcp-server\\.",
+        "Create a fine-grained personal access token on GitHub limited to the repositories you want and read-only permissions. The project's own README names repo, read:packages and read:org as its minimum for classic tokens: grant less if you can.",
+        "Save the token as the file D:\\jarvis-secrets\\connectors\\github.token (the token only, one line). Do not paste it anywhere else, including this app.",
+        "Add the connector, Test connection, then classify and switch on only the read tools you want."
+      ],
+      "risks": ["The token's own permissions are the real limit: JARVIS cannot make a token weaker than it is.", "With --read-only removed, tools that create issues, comment or merge exist; JARVIS would still ask you before each one, showing the exact arguments."]
+    },
+    {
+      "id": "google-workspace",
+      "title": "Google Workspace: Gmail, Calendar, Drive (community MCP server)",
+      "status": "template",
+      "summary": "Mail, calendar and files. Needs a Google OAuth client you create in your own Google Cloud project and a one-time browser consent on this computer. Not run here: it needs your Google account.",
+      "source": {"project": "taylorwilsdon/google_workspace_mcp", "url": "https://github.com/taylorwilsdon/google_workspace_mcp", "license": "MIT", "package": "workspace-mcp (run with uvx)"},
+      "transport": "stdio",
+      "definition": {"name": "google", "label": "Google Workspace", "purpose": "Gmail, Calendar and Drive (read only to start).", "transport": "stdio", "node": "laptop", "env_refs": {"GOOGLE_OAUTH_CLIENT_ID": "connectors/google-client-id.txt", "GOOGLE_OAUTH_CLIENT_SECRET": "connectors/google-client-secret.txt"}, "lanes": ["private"], "max_calls_per_hour": 60, "timeout_s": 60, "max_output": 12000},
+      "local": {"command": ["D:\\jarvis\\tools\\uv\\uvx.exe", "workspace-mcp", "--tool-tier", "core", "--read-only", "--tools", "calendar", "gmail"], "env_refs": {"GOOGLE_OAUTH_CLIENT_ID": "connectors/google-client-id.txt", "GOOGLE_OAUTH_CLIENT_SECRET": "connectors/google-client-secret.txt"}, "env_static": {}, "timeout_s": 60},
+      "setup": [
+        "Install uv (a Python tool runner) and note the full path of uvx.exe; this template assumes D:\\jarvis\\tools\\uv\\uvx.exe.",
+        "In your own Google Cloud project create an OAuth client (desktop application) and enable the Gmail and Calendar APIs. That is an account action only you can do.",
+        "Save the client id and the client secret as the two files named above under D:\\jarvis-secrets\\connectors\\.",
+        "The first start opens a Google consent page in your browser. Approve only the read scopes. The server keeps its own token cache on this computer.",
+        "Review the tool list carefully: mail and calendar tools include ones that send and delete. Only classify as read what only reads."
+      ],
+      "risks": ["Mail and calendar contain other people's data and instructions that may try to steer an assistant. JARVIS marks everything read as untrusted and never lets it change a permission, but you should still keep this connector private-lane only.", "The server stores its own OAuth tokens outside JARVIS's control."]
+    },
+    {
+      "id": "notion",
+      "title": "Notion (official self-hosted MCP server)",
+      "status": "template",
+      "summary": "Pages and databases shared with an integration you create. Upstream notes this self-hosted server is no longer actively maintained and points to Notion's hosted MCP, which needs OAuth that this connector manager does not provide.",
+      "source": {"project": "makenotion/notion-mcp-server", "url": "https://github.com/makenotion/notion-mcp-server", "license": "MIT", "package": "@notionhq/notion-mcp-server (npm, needs Node.js)"},
+      "transport": "stdio",
+      "definition": {"name": "notion", "label": "Notion", "purpose": "Notion pages and databases shared with the integration.", "transport": "stdio", "node": "laptop", "env_refs": {"NOTION_TOKEN": "connectors/notion.token"}, "lanes": ["private"], "max_calls_per_hour": 60, "timeout_s": 30, "max_output": 12000},
+      "local": {"command": ["C:\\Program Files\\nodejs\\node.exe", "D:\\jarvis\\tools\\notion-mcp\\node_modules\\@notionhq\\notion-mcp-server\\bin\\cli.mjs"], "env_refs": {"NOTION_TOKEN": "connectors/notion.token"}, "env_static": {}, "timeout_s": 30},
+      "setup": [
+        "Install Node.js, then in D:\\jarvis\\tools\\notion-mcp run: npm install @notionhq/notion-mcp-server. (npx is not used: a connector must be one real program.)",
+        "In Notion create an internal integration, give it only the 'Read content' capability, and share just the pages it should see.",
+        "Save the integration token as D:\\jarvis-secrets\\connectors\\notion.token (token only).",
+        "Check the server's README for the current entry-file path, then add the connector and test it."
+      ],
+      "risks": ["Upstream marks this package as not actively maintained.", "The integration token reaches only what you share with it: share narrowly."]
+    }
+  ]
+}

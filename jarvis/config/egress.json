@@ -1,0 +1,4 @@
+{
+  "_note": "Egress checkpoint for the agent browser: Stripe Smokescreen (MIT) running on the Oracle VM, reachable only over Tailscale. The browser refuses to run if this proxy is unreachable or fails its self-test. No secrets here.",
+  "proxy": "http://100.125.91.51:4750"
+}
