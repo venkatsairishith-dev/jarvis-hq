@@ -337,3 +337,22 @@ External services and MCP servers are reached only through the kernel. Full desi
 - **Execution.** A local program is started by the laptop node (`node/jarvis_node/connectors.py`, `mcpclient.py`) from this computer's own allowlist `config/connectors.local.json`, which only the console writes. A remote endpoint is called by the kernel (`mcphttp.py`, https only, SSRF-checked, address-pinned). Both speak the 2026-07-28 and the earlier `initialize` era of MCP.
 - **Agent access.** `connector_list`, `connector_call`, `connector_result` in the agent tool file (`lab/jarvis_mcp.py`), dispatched by the same `/v1/jarvis/actions` path as every other action; there is no other route to a connector.
 - **Owner access.** `/v1/jarvis/owner/connectors*` (catalogue, definition, per-tool classification and switch, test, connect, disconnect, try a read tool, calls) and the Connectors screen (Alt+0).
+
+## Repository base: N.E.K.O (added 2026-10-14)
+```
+repo root          N.E.K.O (upstream, unmodified): app/, brain/, main_logic/, memory/, plugin/, frontend/, static/ ...
+  plugin/plugins/main_agent     plan a task, run it with the sub-agents that fit (added)
+  plugin/plugins/jarvis_bridge  door from N.E.K.O to JARVIS's owner plane (added)
+  jarvis/                       the JARVIS subsystem, byte-for-byte (kernel, node, console, ui, lab, hermes, hub, deploy, docs)
+```
+```
+voice/text -> N.E.K.O (48911 UI, 48912 memory, 48915 agent server, 48916 plugin runtime)
+           -> main_agent.run_task: planner (N.E.K.O "agent" model) -> validated plan -> waves of steps
+                think | plugin entry | browser | computer (opt-in) | jarvis
+           -> jarvis step: jarvis_bridge -> JARVIS console 127.0.0.1:8799 -> kernel -> Hermes -> lab agents
+                (kernel policy, approvals, lanes and audit decide; the bridge has no credential)
+           -> one combined message pushed back (push_message, ai_behavior=respond)
+```
+- **Trust.** The plan is fixed before any tool output is read, so a page or file cannot add steps. A plan may name only sub-agents in the live catalogue, with arguments checked against each entry's schema. `main_agent` and `jarvis_bridge` are never offered as plain plugin sub-agents (no recursion).
+- **Privacy.** Planning and reasoning use N.E.K.O's own "agent" model, chosen by the owner; JARVIS private results are not returned to it by default.
+- **Language.** English is forced by `NEKO_LANGUAGE=en` in the start script.

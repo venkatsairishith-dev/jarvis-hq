@@ -142,3 +142,11 @@ client), `node/jarvis_node/{connectors,mcpclient}.py` (local server manager and 
 (allowlist validation). Why not an existing project, and what was reused: see `docs/research/09-connectors.md` section 2 and `docs/03_DECISIONS.md` D17.
 Short form: the official Python SDK (MIT) is the correct client for an application but not for a standard-library-only kernel; `hoophq/mcpproxy`
 (MIT) is a gateway with its own approvals; Nango and Composio keep the owner's credentials. The servers themselves are all existing maintained projects.
+
+## N.E.K.O as the base; custom code against existing projects (2026-10-14)
+Adopted rather than rebuilt: N.E.K.O (Apache-2.0) for the companion front end, memory, plugin runtime and agent server. Verified in its source and docs: its live executor is a single-channel router (`docs/architecture/agent-system.md`: the Planner / Processor / Analyzer pipeline no longer exists), "OpenClaw" is a compatibility name for an external QwenPaw service that N.E.K.O does not ship, and plugins are its supported extension point.
+| Custom code | Existing projects considered | Why custom |
+|---|---|---|
+| `plugin/plugins/main_agent` (about 600 lines plus tests) | N.E.K.O's channel router; QwenPaw (external, not shipped); Hermes delegation inside JARVIS | N.E.K.O has no multi-step orchestration; QwenPaw is a separate service; Hermes' delegation sits behind the kernel and cannot drive N.E.K.O's own plugins and browser. The plugin only plans and sequences; every step is an existing N.E.K.O or JARVIS capability |
+| `plugin/plugins/jarvis_bridge` (about 240 lines plus tests) | JARVIS console API, N.E.K.O's OpenClaw adapter | The adapter speaks QwenPaw's API, not JARVIS's; the console's `/api/owner/command` already is the kernel-gated entry, so the bridge is a thin client |
+Not evaluated in this pass: general multi-agent frameworks (AutoGen, CrewAI, LangGraph and similar). They would add a second runtime and a second authority next to the kernel; if a later phase needs more than plan-then-run, evaluate them then and record the result here.
