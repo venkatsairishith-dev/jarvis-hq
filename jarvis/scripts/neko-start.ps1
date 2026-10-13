@@ -71,4 +71,6 @@ $node = try { (Get-ScheduledTask JarvisNode -ErrorAction Stop).State } catch { "
 "agent  48915: " + (Listening 48915) + "   plugins 48916: " + (Listening 48916)
 "plugins: $plugins"
 "jarvis : $jarvis | laptop node task: $node"
+$assets = (Test-Path (Join-Path $repo "static\yui-origin\yui-origin.moc3")) -and (Test-Path (Join-Path $repo "static\react\neko-chat\neko-chat-window.es.js"))
+if (-not $assets) { "WARNING: built frontend assets are missing (avatar models, chat bundle). Run build_frontend.bat in $repo, or copy static\ from a built checkout." }
 "open   : http://127.0.0.1:48911/  (talk to her here; tasks go to the main agent and JARVIS; approvals are in the JARVIS console http://127.0.0.1:8799/)"
