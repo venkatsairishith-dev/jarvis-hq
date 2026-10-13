@@ -1,8 +1,8 @@
-"""Where the laptop's JARVIS workspace folder is (the one that holds `cache\` and `outputs\`).
+r"""Where the laptop's JARVIS workspace folder is (the one that holds the cache and outputs folders).
 
-It used to be "three levels above this package" (`<workspace>\\hq\\node\\jarvis_node`). Since the repository root became
-N.E.K.O and JARVIS moved to `<repo>\\jarvis`, that count is one too short, and a silent mistake here would move the folder
-delivered files are written to. This resolves the workspace the same way in both layouts, and `JARVIS_HOME` overrides it.
+It used to be "three levels above this package" (<workspace>\hq\node\jarvis_node). Since the repository root became
+N.E.K.O and JARVIS moved to <repo>\jarvis, that count is one too short, and a silent mistake here would move the folder
+delivered files are written to. This resolves the workspace the same way in both layouts, and JARVIS_HOME overrides it.
 """
 
 from __future__ import annotations
