@@ -1,4 +1,4 @@
-# Move the live JARVIS services on this laptop from D:\jarvis\hq (branch main) to this repository's jarvis\ folder. Windows.
+# Move the live JARVIS services on this laptop from D:\jarvis\hq (branch jarvis-hq-legacy) to this repository's jarvis\ folder. Windows.
 #
 #   powershell -File cutover-to-neko-base.ps1            dry run: checks everything, changes nothing
 #   powershell -File cutover-to-neko-base.ps1 -Apply     does it

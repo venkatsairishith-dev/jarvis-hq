@@ -1,4 +1,4 @@
-# Put the live JARVIS services back on D:\jarvis\hq (branch main) from a backup made by cutover-to-neko-base.ps1. Windows.
+# Put the live JARVIS services back on D:\jarvis\hq (branch jarvis-hq-legacy) from a backup made by cutover-to-neko-base.ps1. Windows.
 #   powershell -File rollback-from-neko-base.ps1 -BackupDir D:\jarvis-apps\backups\tasks-pre-neko-<timestamp>
 param([Parameter(Mandatory = $true)][string]$BackupDir)
 $ErrorActionPreference = 'Stop'
