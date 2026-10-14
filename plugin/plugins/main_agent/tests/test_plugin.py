@@ -10,13 +10,21 @@ import types
 import pytest
 
 from plugin.plugins import main_agent as ma
-from plugin.plugins.main_agent.planner import Capability
+from plugin.plugins.main_agent.executor import StepResult
+from plugin.plugins.main_agent.planner import Capability, Plan, Step
+from plugin.plugins.main_agent.store import RunStore, plan_to_dict, result_to_dict
 
 PLAN = {"summary": "Look up then summarise", "steps": [
     {"id": "s1", "agent": "plugin", "plugin": "web_search:search", "goal": "find", "args": {"query": "cats"}},
     {"id": "s2", "agent": "think", "goal": "summarise", "depends_on": ["s1"]}]}
+WRITE_PLAN = {"summary": "Think then save", "steps": [
+    {"id": "s1", "agent": "think", "goal": "write exercises"},
+    {"id": "s2", "agent": "plugin", "plugin": "learn_vault:save_note", "goal": "save",
+     "args": {"path": "exercises/a.md", "content": "{{s1}}"}, "depends_on": ["s1"]}]}
 CAPS = [Capability("think", "think", "t"),
-        Capability("plugin", "web_search:search", "s", {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]})]
+        Capability("plugin", "web_search:search", "s", {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}),
+        Capability("plugin", "learn_vault:save_note", "save", {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+                                                               "required": ["path", "content"]})]
 
 
 class Ok:
@@ -29,9 +37,10 @@ class Err:
         self.error = error
 
 
-def make(monkeypatch, llm_reply=None, plugin_result=None):
+def make(monkeypatch, tmp_path, plan=PLAN, llm_reply=None, entry_result=None, json_entries=None):
     p = object.__new__(ma.MainAgentPlugin)
     p._runs, p._active, p._cancel = {}, None, None
+    p._store = RunStore(tmp_path / "runs")
     p.logger = logging.getLogger("test")
     p.pushed = []
     p.push_message = lambda **kw: p.pushed.append(kw)
@@ -40,19 +49,23 @@ def make(monkeypatch, llm_reply=None, plugin_result=None):
         return CAPS
 
     async def llm(messages, **kw):
-        is_planner = "planner" in messages[0]["content"]
-        if is_planner:
-            return json.dumps(PLAN) if llm_reply is None else llm_reply
-        return "SUMMARY OF CATS"
+        if "planner" in messages[0]["content"]:
+            return json.dumps(plan) if llm_reply is None else llm_reply
+        return "SUMMARY TEXT"
 
     p._catalogue, p._llm = catalogue, llm
     calls = []
 
     async def call_entry(ref, params=None, timeout=10.0):
         calls.append((ref, params))
-        return plugin_result if plugin_result is not None else Ok({"summary": "cats are animals"})
+        return entry_result if entry_result is not None else Ok({"summary": "cats are animals"})
 
-    monkeypatch.setattr(ma.MainAgentPlugin, "plugins", types.SimpleNamespace(call_entry=call_entry), raising=False)
+    async def call_entry_json(ref, params=None, timeout=10.0):
+        calls.append((ref, params))
+        fn = (json_entries or {}).get(ref)
+        return fn(params) if fn else Ok({"data": {}})
+
+    monkeypatch.setattr(ma.MainAgentPlugin, "plugins", types.SimpleNamespace(call_entry=call_entry, call_entry_json=call_entry_json), raising=False)
     monkeypatch.setattr(ma, "Err", Err)
     p.calls = calls
     return p
@@ -61,8 +74,7 @@ def make(monkeypatch, llm_reply=None, plugin_result=None):
 def drive(p, coro):
     async def go():
         r = await coro
-        # let the background run finish
-        for _ in range(100):
+        for _ in range(300):
             if p._active is None:
                 break
             await asyncio.sleep(0.02)
@@ -70,59 +82,160 @@ def drive(p, coro):
     return asyncio.run(go())
 
 
-def test_run_task_plans_runs_the_steps_and_speaks_one_combined_answer(monkeypatch):
-    p = make(monkeypatch)
+def stored(p, run_id):
+    return p._store.load(run_id)
+
+
+def test_run_task_plans_runs_the_steps_checkpoints_and_speaks_one_combined_answer(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path)
     res = drive(p, p.run_task(task="look up cats and summarise"))
-    assert getattr(res, "value", None) is not None
-    assert p.calls == [("web_search:search", {"query": "cats"})]            # the plugin step called through N.E.K.O, with validated args
+    rid = res.value["run_id"]
+    assert ("web_search:search", {"query": "cats"}) in p.calls
     assert len(p.pushed) == 1
     msg = p.pushed[0]
-    assert msg["ai_behavior"] == "respond" and msg["parts"][0]["text"] == "SUMMARY OF CATS" and msg["metadata"]["state"] == "done"
+    assert msg["ai_behavior"] == "respond" and msg["parts"][0]["text"] == "SUMMARY TEXT" and msg["metadata"]["state"] == "done"
+    rec = stored(p, rid)                                               # the checkpoint on disk
+    assert rec["state"] == "done" and rec["running"] == [] and rec["results"]["s2"]["outcome"] == "success"
     assert p._active is None and p._cancel is None
 
 
-def test_a_failing_step_is_reported_honestly_and_releases_the_lock(monkeypatch):
-    p = make(monkeypatch, plugin_result=Err("backend down"))
+def test_a_failing_read_only_step_is_reported_honestly_and_releases_the_lock(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path, entry_result=Err("backend down"))
     drive(p, p.run_task(task="look up cats"))
     text = p.pushed[0]["parts"][0]["text"]
     assert "could not finish" in text and p._active is None
     assert list(p._runs.values())[0]["state"] in ("failed", "partial")
 
 
-def test_a_bad_plan_is_refused_and_nothing_runs(monkeypatch):
-    p = make(monkeypatch, llm_reply='{"summary": "x", "steps": [{"id": "s1", "agent": "plugin", "plugin": "evil:run", "goal": "g", "args": {}}]}')
+def test_a_bad_plan_is_refused_and_nothing_runs(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path, llm_reply='{"summary": "x", "steps": [{"id": "s1", "agent": "plugin", "plugin": "evil:run", "goal": "g", "args": {}}]}')
     res = asyncio.run(p.run_task(task="do it"))
-    assert type(res).__name__ == "Err" and p.calls == [] and p.pushed == [] and p._active is None
+    assert type(res).__name__ == "Err" and p.calls == [] and p.pushed == [] and p._active is None and p._store.ids() == []
 
 
-def test_only_one_run_at_a_time(monkeypatch):
-    p = make(monkeypatch)
+def test_only_one_run_at_a_time_and_empty_or_unknown_input_is_refused(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path)
     p._active = "busy"
-    res = asyncio.run(p.run_task(task="another"))
-    assert type(res).__name__ == "Err" and p.calls == []
-
-
-def test_empty_task_is_refused(monkeypatch):
-    p = make(monkeypatch)
+    assert type(asyncio.run(p.run_task(task="another"))).__name__ == "Err" and p.calls == []
+    p._active = None
     assert type(asyncio.run(p.run_task(task="  "))).__name__ == "Err"
     assert type(asyncio.run(p.plan_task(task=""))).__name__ == "Err"
+    assert type(asyncio.run(p.run_task(task="x", mode="root"))).__name__ == "Err"
 
 
-def test_plan_task_previews_without_running_anything(monkeypatch):
-    p = make(monkeypatch)
-    res = asyncio.run(p.plan_task(task="look up cats"))
-    assert [s["id"] for s in res.value["steps"]] == ["s1", "s2"] and p.calls == [] and p.pushed == []
+def test_plan_task_previews_with_side_effect_classes_and_runs_nothing(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path, plan=WRITE_PLAN)
+    res = asyncio.run(p.plan_task(task="explain and save"))
+    effects = {s["id"]: s["effect"] for s in res.value["steps"]}
+    assert effects == {"s1": "none", "s2": "non_idempotent"} and p.calls == [] and p.pushed == []
 
 
-def test_stop_task_sets_the_cancel_flag_only_when_something_runs(monkeypatch):
-    p = make(monkeypatch)
+def test_stop_task_sets_the_cancel_flag_only_when_something_runs(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path)
     assert asyncio.run(p.stop_task()).value["stopped"] is False
     p._active, p._cancel = "r", asyncio.Event()
     assert asyncio.run(p.stop_task()).value["stopped"] is True and p._cancel.is_set()
 
 
-def test_a_provider_error_becomes_a_clean_message_without_provider_text(monkeypatch):
-    """The real _llm: a 401 from the provider must not surface its body (which can echo request details)."""
+def test_a_refused_plan_gets_one_corrective_retry_and_a_second_refusal_is_final(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path)
+    replies = ['{"summary": "x", "steps": [{"id": "s1", "agent": "browser", "goal": "g"}]}', json.dumps(PLAN)]
+    seen = []
+
+    async def llm(messages, **kw):
+        seen.append(messages)
+        return replies.pop(0)
+
+    p._llm = llm
+    res = asyncio.run(p.plan_task(task="look it up"))
+    assert len(seen) == 2 and "refused" in seen[1][-1]["content"] and "web_search:search" in seen[1][-1]["content"]
+    assert [s["id"] for s in res.value["steps"]] == ["s1", "s2"]
+    calls = []
+
+    async def bad(messages, **kw):
+        calls.append(1)
+        return '{"summary": "x", "steps": [{"id": "s1", "agent": "browser", "goal": "g"}]}'
+
+    p._llm = bad
+    res = asyncio.run(p.plan_task(task="look it up"))
+    assert type(res).__name__ == "Err" and len(calls) == 2
+
+
+def test_a_dependent_plugin_step_receives_the_earlier_result_in_its_content(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path)
+    step = Step("s2", "plugin", "save", ref="learn_vault:save_note", args={"path": "exercises/a.md", "content": "# Exercises\n{{s1}}"}, depends_on=["s1"])
+    asyncio.run(p._dispatch(step, {"s1": "1. What is chlorophyll?"}))
+    assert p.calls[-1] == ("learn_vault:save_note", {"path": "exercises/a.md", "content": "# Exercises\n1. What is chlorophyll?"})
+
+
+def test_a_write_that_times_out_is_held_not_retried_and_resume_needs_the_user_to_choose_it(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path, plan=WRITE_PLAN, entry_result=Err("plugin call timed out"))
+    res = drive(p, p.run_task(task="explain and save", mode="learn"))
+    rid = res.value["run_id"]
+    assert sum(1 for c in p.calls if c[0] == "learn_vault:save_note") == 1          # exactly one attempt: never blindly repeated
+    assert stored(p, rid)["state"] == "held" and stored(p, rid)["results"]["s2"]["held"] is True
+    assert "Needs your attention" in p.pushed[-1]["parts"][0]["text"] and "did not retry" in p.pushed[-1]["parts"][0]["text"]
+    v = asyncio.run(p.run_status(run_id=rid)).value
+    assert v["held"] == ["s2"] and v["resumable"] is True and v["steps"]["s2"]["state"] == "unknown"
+    # resuming without choosing the held step runs nothing
+    before = len(p.calls)
+    r = drive(p, p.resume_run(run_id=rid))
+    assert "already finished or held" in r.value["message"] and len(p.calls) == before
+    # choosing it runs exactly that step again (now the entry works)
+    monkeypatch.setattr(ma.MainAgentPlugin, "plugins", types.SimpleNamespace(
+        call_entry=lambda ref, params=None, timeout=10.0: _ok(p, ref, params), call_entry_json=None), raising=False)
+    r = drive(p, p.resume_run(run_id=rid, rerun=["s2"]))
+    assert stored(p, rid)["state"] == "done" and stored(p, rid)["results"]["s1"]["text"] == "SUMMARY TEXT"
+
+
+async def _ok(p, ref, params):
+    p.calls.append((ref, params))
+    return Ok({"saved": True})
+
+
+def test_after_a_crash_the_run_is_interrupted_finished_steps_are_kept_and_nothing_re_runs_by_itself(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path, plan=WRITE_PLAN)
+    plan = Plan("Think then save", [Step("s1", "think", "write exercises"),
+                                    Step("s2", "plugin", "save", ref="learn_vault:save_note", args={"path": "a.md", "content": "{{s1}}"},
+                                         depends_on=["s1"], effect="non_idempotent")])
+    p._store.save({"run_id": "crashed", "task": "t", "mode": "learn", "summary": "Think then save", "state": "running",
+                   "plan": plan_to_dict(plan), "running": ["s2"],
+                   "results": {"s1": result_to_dict(StepResult("s1", "success", "the exercises"))}})
+    res = asyncio.run(p.startup())
+    assert res.value["interrupted_runs"] == ["crashed"]
+    assert p.calls == [] and p._active is None                                       # recovered, not re-run
+    v = asyncio.run(p.run_status(run_id="crashed")).value
+    assert v["state"] == "interrupted" and v["steps"]["s1"]["state"] == "success" and v["steps"]["s2"]["state"] == "unknown" and v["held"] == ["s2"]
+    d = asyncio.run(ma.MainAgentPlugin.dashboard(p))
+    assert d["current"]["id"] == "crashed" and d["current"]["resumable"] is True
+
+
+def test_the_waiting_clock_credits_time_spent_waiting_for_an_approval(monkeypatch, tmp_path):
+    real_sleep = asyncio.sleep
+
+    async def fast(d, *a, **k):
+        await real_sleep(0 if d == 5.0 else d)
+
+    monkeypatch.setattr(asyncio, "sleep", fast)
+    states = iter(["running", "running", "done"])
+    plan = {"summary": "Open it", "steps": [{"id": "s1", "agent": "jarvis", "goal": "open the downloads folder"}]}
+    p = make(monkeypatch, tmp_path, plan=plan, json_entries={
+        "jarvis_bridge:delegate_task": lambda a: Ok({"data": {"command_id": "c-1"}}),
+        "jarvis_bridge:task_result": lambda a: Ok({"data": {"state": next(states), "message": "JARVIS finished."}}),
+        "jarvis_bridge:pending_approvals": lambda a: Ok({"data": {"count": 1}}),
+        "jarvis_bridge:jarvis_status": lambda a: Ok({"data": {"ready": True}}),
+    })
+    p._catalogue = lambda mode="work": _caps_async([Capability("think", "think", "t"), Capability("jarvis", "jarvis", "j")])
+    res = drive(p, p.run_task(task="open my downloads folder", mode="code"))
+    rec = stored(p, res.value["run_id"])
+    assert rec["state"] == "done" and rec["results"]["s1"]["waited"] > 0          # time waiting for the owner was credited
+
+
+async def _caps_async(caps):
+    return caps
+
+
+def test_an_llm_provider_error_becomes_a_clean_message_without_provider_text(monkeypatch):
     import utils.config_manager as cm
     import utils.llm_client as lc
 
@@ -160,36 +273,18 @@ def test_an_unconfigured_model_is_reported_before_any_call(monkeypatch):
         asyncio.run(p._llm([{"role": "user", "content": "hi"}]))
     assert "not set up" in str(e.value)
 
-
-def test_a_refused_plan_gets_one_corrective_retry_and_a_second_refusal_is_final(monkeypatch):
-    p = make(monkeypatch)
-    replies = ['{"summary": "x", "steps": [{"id": "s1", "agent": "browser", "goal": "g"}]}', json.dumps(PLAN)]
-    seen = []
-
-    async def llm(messages, **kw):
-        seen.append(messages)
-        return replies.pop(0)
-
-    p._llm = llm
-    res = asyncio.run(p.plan_task(task="look it up"))
-    assert len(seen) == 2 and "refused" in seen[1][-1]["content"] and "web_search:search" in seen[1][-1]["content"]
-    assert [s["id"] for s in res.value["steps"]] == ["s1", "s2"]
-
-    always_bad = '{"summary": "x", "steps": [{"id": "s1", "agent": "browser", "goal": "g"}]}'
-    calls = []
-
-    async def bad_llm(messages, **kw):
-        calls.append(1)
-        return always_bad
-
-    p._llm = bad_llm
-    res = asyncio.run(p.plan_task(task="look it up"))
-    assert type(res).__name__ == "Err" and len(calls) == 2            # exactly one retry, never a loop
-
-
-def test_a_dependent_plugin_step_receives_the_earlier_result_in_its_content(monkeypatch):
-    from plugin.plugins.main_agent.planner import Step
-    p = make(monkeypatch)
-    step = Step("s2", "plugin", "save", ref="learn_vault:save_note", args={"path": "exercises/a.md", "content": "# Exercises\n{{s1}}"}, depends_on=["s1"])
-    asyncio.run(p._dispatch(step, {"s1": "1. What is chlorophyll?"}))
-    assert p.calls[-1] == ("learn_vault:save_note", {"path": "exercises/a.md", "content": "# Exercises\n1. What is chlorophyll?"})
+def test_resume_reruns_unknown_read_only_steps_by_itself_but_never_a_step_with_side_effects(monkeypatch, tmp_path):
+    p = make(monkeypatch, tmp_path, plan=WRITE_PLAN)
+    plan = Plan("Think then save", [Step("s1", "think", "write exercises"),
+                                    Step("s2", "plugin", "save", ref="learn_vault:save_note", args={"path": "a.md", "content": "{{s1}}"},
+                                         depends_on=["s1"], effect="non_idempotent")])
+    p._store.save({"run_id": "crashed", "task": "t", "mode": "learn", "summary": "s", "state": "running", "plan": plan_to_dict(plan), "running": ["s1"],
+                   "results": {}})
+    asyncio.run(p.startup())                                          # s1 (reasoning) is now unknown, not held
+    assert stored(p, "crashed")["results"]["s1"]["held"] is False
+    monkeypatch.setattr(ma.MainAgentPlugin, "plugins", types.SimpleNamespace(
+        call_entry=lambda ref, params=None, timeout=10.0: _ok(p, ref, params), call_entry_json=None), raising=False)
+    r = drive(p, p.resume_run(run_id="crashed"))                      # no rerun list: the reasoning step is re-run on its own
+    rec = stored(p, "crashed")
+    assert rec["state"] == "done" and rec["results"]["s1"]["outcome"] == "success" and rec["results"]["s2"]["outcome"] == "success"
+    assert [c for c in p.calls if c[0] == "learn_vault:save_note"] == [("learn_vault:save_note", {"path": "a.md", "content": "SUMMARY TEXT"})]

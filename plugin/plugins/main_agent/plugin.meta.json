@@ -68,8 +68,58 @@
     {
       "auto_start": false,
       "description": {
+        "$i18n": "entry.resume_run.description",
+        "default": "Continue a task that was interrupted (the app stopped) or held back. Finished steps are kept. A step whose result is unknown is NOT run again unless its id is listed in rerun, which the user must confirm."
+      },
+      "event_key": "main_agent.resume_run",
+      "event_type": "plugin_entry",
+      "id": "resume_run",
+      "input_schema": {
+        "properties": {
+          "rerun": {
+            "description": "Step ids to run again, only after the user confirms they did not happen.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "run_id": {
+            "description": "The run to resume (latest resumable if empty).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "run_id",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "run_id": {}
+        },
+        "required": [
+          "run_id",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.resume_run.name",
+        "default": "Resume an interrupted task"
+      },
+      "return_message": "",
+      "timeout": 60
+    },
+    {
+      "auto_start": false,
+      "description": {
         "$i18n": "entry.run_status.description",
-        "default": "Show what the main agent is doing or did last: each step and its state."
+        "default": "Show what the main agent is doing or did last: each step, its outcome and whether it can be resumed."
       },
       "event_key": "main_agent.run_status",
       "event_type": "plugin_entry",
@@ -213,6 +263,7 @@
   "entries_config_sha256": "",
   "entry_methods": {
     "plan_task": "plan_task",
+    "resume_run": "resume_run",
     "run_status": "run_status",
     "run_task": "run_task",
     "stop_task": "stop_task"
@@ -285,11 +336,68 @@
       },
       "timeout": 300
     },
+    "main_agent.resume_run": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.resume_run.description",
+        "default": "Continue a task that was interrupted (the app stopped) or held back. Finished steps are kept. A step whose result is unknown is NOT run again unless its id is listed in rerun, which the user must confirm."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "resume_run",
+      "input_schema": {
+        "properties": {
+          "rerun": {
+            "description": "Step ids to run again, only after the user confirms they did not happen.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "run_id": {
+            "description": "The run to resume (latest resumable if empty).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "run_id",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "run_id": {}
+        },
+        "required": [
+          "run_id",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.resume_run.name",
+        "default": "Resume an interrupted task"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
     "main_agent.run_status": {
       "auto_start": false,
       "description": {
         "$i18n": "entry.run_status.description",
-        "default": "Show what the main agent is doing or did last: each step and its state."
+        "default": "Show what the main agent is doing or did last: each step, its outcome and whether it can be resumed."
       },
       "dynamic": false,
       "enabled": true,
@@ -569,11 +677,68 @@
       },
       "timeout": 300
     },
+    "main_agent:plugin_entry:resume_run": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.resume_run.description",
+        "default": "Continue a task that was interrupted (the app stopped) or held back. Finished steps are kept. A step whose result is unknown is NOT run again unless its id is listed in rerun, which the user must confirm."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "resume_run",
+      "input_schema": {
+        "properties": {
+          "rerun": {
+            "description": "Step ids to run again, only after the user confirms they did not happen.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "run_id": {
+            "description": "The run to resume (latest resumable if empty).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "run_id",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "run_id": {}
+        },
+        "required": [
+          "run_id",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.resume_run.name",
+        "default": "Resume an interrupted task"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
     "main_agent:plugin_entry:run_status": {
       "auto_start": false,
       "description": {
         "$i18n": "entry.run_status.description",
-        "default": "Show what the main agent is doing or did last: each step and its state."
+        "default": "Show what the main agent is doing or did last: each step, its outcome and whether it can be resumed."
       },
       "dynamic": false,
       "enabled": true,
@@ -737,7 +902,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 74041,
+  "source_bytes": 109090,
   "source_files": [
     ".gitignore",
     ".vscode/settings.json",
@@ -751,12 +916,14 @@
     "plugin.toml",
     "pyproject.toml",
     "ruff.toml",
+    "store.py",
     "tests/test_dashboard.py",
     "tests/test_executor.py",
     "tests/test_planner.py",
     "tests/test_plugin.py",
     "tests/test_smoke.py",
+    "tests/test_store.py",
     "ui/panel.tsx"
   ],
-  "source_sha256": "40a544820f815458975f6d34f92f91b9bfabb1cf2e3d6272b29383652466cd5b"
+  "source_sha256": "94889210eaecbeb0049e9d6d7aa55952c7601435a8b74f2625881505ee2390df"
 }

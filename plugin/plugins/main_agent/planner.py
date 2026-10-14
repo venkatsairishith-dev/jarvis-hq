@@ -72,12 +72,28 @@ class Step:
     ref: str = ""
     args: dict[str, Any] = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)
+    effect: str = "none"           # "none" (reads, reasoning) or "non_idempotent" (may change something; never blindly retried)
 
 
 @dataclass
 class Plan:
     summary: str
     steps: list[Step]
+
+
+_WRITE_VERB = re.compile(
+    r"(^|_)(write|save|create|send|post|delete|remove|update|set|add|append|launch|open|start|stop|play|push|upload|download|"
+    r"install|run|exec|execute|click|type|record|submit|book|pay|buy|order|clear|reset|move|rename|copy|enable|disable|schedule)(_|$)")
+
+
+def effect_of(kind: str, ref: str = "") -> str:
+    """Whether running a step twice could do something twice. Decided from what the step is, never from the model."""
+    if kind == "think":
+        return "none"
+    if kind in ("browser", "computer", "jarvis"):
+        return "non_idempotent"
+    entry = str(ref).split(":", 1)[-1].lower()
+    return "non_idempotent" if _WRITE_VERB.search(entry) else "none"
 
 
 def _clip(text: Any, n: int) -> str:
@@ -254,5 +270,5 @@ def parse_plan(text: str, caps: list[Capability], max_steps: int) -> Plan:
         else:
             raise PlanError(f"Step {sid} uses a helper ('{kind}') that is not available right now.")
         seen.append(sid)
-        steps.append(Step(sid, kind, goal, ref, args, list(deps)))
+        steps.append(Step(sid, kind, goal, ref, args, list(deps), effect_of(kind, ref)))
     return Plan(_clip(data.get("summary"), 200) or "Plan", steps)

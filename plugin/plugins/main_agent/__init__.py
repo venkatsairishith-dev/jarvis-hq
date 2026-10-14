@@ -5,7 +5,9 @@ sub-agents for the task (a reasoning step, an installed plugin, the browser, JAR
 desktop), independent steps run in parallel, and one combined answer is spoken back.
 
 Everything it can do is something N.E.K.O or JARVIS already exposes; it holds no credentials of its own and cannot reach
-anything that is not in the live catalogue. Planner and executor logic is in planner.py / executor.py (tested without a model).
+anything that is not in the live catalogue. Planner, executor and run store are in planner.py / executor.py / store.py (tested
+without a model). Runs are checkpointed to disk after every step; after a crash an interrupted run is shown as such and
+nothing is re-run without the user's say-so.
 """
 
 from __future__ import annotations
@@ -21,15 +23,17 @@ import httpx
 
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr, ui
 
-from .executor import StepFailed, StepResult, final_text, run_plan
+from .executor import StepContext, StepFailed, StepResult, StepUnknown, final_text, run_plan, run_state
 from .planner import (DEFAULT_MODE, MODE_RULES, MODES, Capability, Plan, PlanError, Step, build_catalogue, fill_args, normalize_mode,
                       parse_plan, planner_messages)
+from .store import RunStore, plan_from_dict, plan_to_dict, result_from_dict, result_to_dict
 
 AGENT_PORT = os.environ.get("TOOL_SERVER_PORT", "48915")
 PLUGIN_PORT = os.environ.get("USER_PLUGIN_SERVER_PORT", "48916")
 AGENT_URL = f"http://127.0.0.1:{AGENT_PORT}"
 PLUGIN_URL = f"http://127.0.0.1:{PLUGIN_PORT}"
 THINK_INPUT_CHARS = 6000
+RESUMABLE = ("interrupted", "held", "partial", "failed")
 
 
 def _int_env(name: str, default: int, low: int, high: int) -> int:
@@ -52,38 +56,82 @@ def _text_of(value: Any, limit: int = 4000) -> str:
         return str(value)[:limit]
 
 
+def _looks_like_timeout(message: str) -> bool:
+    low = message.lower()
+    return "timeout" in low or "timed out" in low
+
+
+def _steps_view(plan: Plan, results: dict[str, dict[str, Any]], running: list[str]) -> dict[str, dict[str, Any]]:
+    """What the panel and run_status show per step: its outcome, or waiting / running."""
+    out: dict[str, dict[str, Any]] = {}
+    for s in plan.steps:
+        r = results.get(s.id)
+        state = r.get("outcome") if r else ("running" if s.id in running else "waiting")
+        entry = {"agent": s.ref or s.kind, "goal": s.goal, "state": state, "effect": s.effect}
+        if r:
+            entry.update(error=r.get("error", ""), attempts=r.get("attempts", 1), held=bool(r.get("held")), waited=round(float(r.get("waited", 0.0)), 1))
+        out[s.id] = entry
+    return out
+
+
 @neko_plugin
 class MainAgentPlugin(NekoPluginBase):
     def __init__(self, ctx: Any):
         super().__init__(ctx)
         self.file_logger = self.enable_file_logging(log_level="INFO")
         self.logger = self.file_logger
-        self._runs: dict[str, dict[str, Any]] = {}
+        self._runs: dict[str, dict[str, Any]] = {}      # run_id -> record (same shape as the stored file)
         self._active: str | None = None
         self._cancel: asyncio.Event | None = None
+        self._store = RunStore()
 
+    # ---------- lifecycle and persistence ----------
     @lifecycle(id="startup")
     async def startup(self, **_):
-        return Ok({"status": "ready"})
-
-    @ui.context(id="dashboard")
-    async def dashboard(self):
-        """What the Main Agent panel shows: the run in progress (or the last one) and a short history."""
-        def view(run_id: str, run: dict[str, Any]) -> dict[str, Any]:
-            return {"id": run_id, "state": run.get("state", ""), "mode": run.get("mode", ""), "summary": run.get("summary", ""), "task": run.get("task", ""),
-                    "steps": [{"id": sid, "agent": s.get("agent", ""), "goal": s.get("goal", ""), "state": s.get("state", ""),
-                               "error": s.get("error", "")} for sid, s in (run.get("steps") or {}).items()]}
-        ids = list(self._runs)
-        current = view(ids[-1], self._runs[ids[-1]]) if ids else None
-        return {"active": self._active is not None, "current": current,
-                "history": [{"id": i, "state": self._runs[i].get("state", ""), "summary": self._runs[i].get("summary", "")}
-                            for i in reversed(ids[:-1][-5:])]}
+        interrupted = []
+        try:
+            interrupted = self._store.recover()
+            for rid in self._store.ids()[-10:]:
+                rec = self._store.load(rid)
+                if rec:
+                    self._runs[rid] = rec
+        except Exception as exc:           # a damaged store must not stop the plugin from starting
+            self.logger.warning("main_agent could not read its saved runs: {}", type(exc).__name__)
+        return Ok({"status": "ready", "interrupted_runs": interrupted})
 
     @lifecycle(id="shutdown")
     async def shutdown(self, **_):
         if self._cancel is not None:
             self._cancel.set()
         return Ok({"status": "stopped"})
+
+    def _persist(self, run: dict[str, Any]) -> None:
+        try:
+            self._store.save(run)
+        except Exception as exc:           # losing a checkpoint must never stop the work
+            self.logger.warning("main_agent could not save a checkpoint: {}", type(exc).__name__)
+
+    def _record_view(self, rid: str, run: dict[str, Any]) -> dict[str, Any]:
+        plan = plan_from_dict(run.get("plan") or {})
+        steps = _steps_view(plan, run.get("results") or {}, run.get("running") or [])
+        waited = sum(float(r.get("waited", 0.0)) for r in (run.get("results") or {}).values())
+        held = [sid for sid, s in steps.items() if s.get("held")]
+        return {"id": rid, "state": run.get("state", ""), "mode": run.get("mode", ""), "summary": run.get("summary", ""),
+                "task": run.get("task", ""), "steps": steps, "waited_s": round(waited, 1), "held": held,
+                "resumable": run.get("state") in RESUMABLE}
+
+    @ui.context(id="dashboard")
+    async def dashboard(self):
+        """What the Main Agent panel shows: the run in progress (or the last one) and a short history."""
+        ids = list(self._runs)
+        current = None
+        if ids:
+            v = self._record_view(ids[-1], self._runs[ids[-1]])
+            v["steps"] = [dict(id=sid, **s) for sid, s in v["steps"].items()]
+            current = v
+        return {"active": self._active is not None, "current": current,
+                "history": [{"id": i, "state": self._runs[i].get("state", ""), "summary": self._runs[i].get("summary", "")}
+                            for i in reversed(ids[:-1][-5:])]}
 
     # ---------- what is available right now ----------
     async def _get_json(self, url: str, timeout: float = 8.0) -> Any:
@@ -175,7 +223,19 @@ class MainAgentPlugin(NekoPluginBase):
             return parse_plan(text, caps, max_steps)
 
     # ---------- sub-agents ----------
-    async def _dispatch(self, step: Step, inputs: dict[str, str]) -> str:
+    async def _approvals_waiting(self) -> int:
+        """How many approvals are waiting for the owner in JARVIS (0 when unknown). Read only."""
+        res = await self.plugins.call_entry_json("jarvis_bridge:pending_approvals", {}, timeout=10.0)
+        if isinstance(res, Err) or not isinstance(getattr(res, "value", None), dict):
+            return 0
+        data = res.value.get("data", res.value)
+        try:
+            return int(data.get("count", 0)) if isinstance(data, dict) else 0
+        except (TypeError, ValueError):
+            return 0
+
+    async def _dispatch(self, step: Step, inputs: dict[str, str], ctx: StepContext | None = None) -> str:
+        ctx = ctx or StepContext()
         timeout = float(_int_env("MAIN_AGENT_STEP_TIMEOUT", 240, 10, 1800))
         if step.kind == "think":
             data = "\n\n".join(f"[result of {k}]\n{v}" for k, v in inputs.items())[:THINK_INPUT_CHARS]
@@ -187,7 +247,10 @@ class MainAgentPlugin(NekoPluginBase):
         if step.kind == "plugin":
             res = await self.plugins.call_entry(step.ref, fill_args(step.args, inputs), timeout=min(timeout, 300.0))
             if isinstance(res, Err):
-                raise StepFailed(f"{step.ref} failed: {str(getattr(res, 'error', res))[:200]}")
+                message = str(getattr(res, "error", res))[:200]
+                if _looks_like_timeout(message):                    # sent, but no answer: it may have been done
+                    raise StepUnknown(f"{step.ref} did not answer in time; whether it ran is not known")
+                raise StepFailed(f"{step.ref} failed: {message}")
             return _text_of(res.value)
         if step.kind in ("browser", "computer"):
             path = "/browser_use/run" if step.kind == "browser" else "/computer_use/run"
@@ -195,8 +258,10 @@ class MainAgentPlugin(NekoPluginBase):
                 async with httpx.AsyncClient(timeout=timeout, trust_env=False, follow_redirects=False) as client:
                     resp = await client.post(AGENT_URL + path, json={"instruction": step.goal})
                 data = resp.json()
-            except (httpx.HTTPError, ValueError) as exc:
-                raise StepFailed(f"the {step.kind} helper did not answer ({type(exc).__name__})")
+            except httpx.ConnectError:
+                raise StepFailed(f"the {step.kind} helper is not reachable")       # nothing was sent: definitely not done
+            except (httpx.HTTPError, ValueError) as exc:                          # sent, answer lost: may have been done
+                raise StepUnknown(f"the {step.kind} helper did not give an answer ({type(exc).__name__}); it may have acted")
             if resp.status_code >= 400 or not isinstance(data, dict):
                 raise StepFailed(f"the {step.kind} helper refused: HTTP {resp.status_code}")
             if not data.get("success"):
@@ -205,22 +270,27 @@ class MainAgentPlugin(NekoPluginBase):
         if step.kind == "jarvis":
             sent = await self.plugins.call_entry_json("jarvis_bridge:delegate_task", {"task": step.goal}, timeout=30.0)
             if isinstance(sent, Err):
-                raise StepFailed(f"JARVIS did not take the task: {str(getattr(sent, 'error', sent))[:200]}")
+                message = str(getattr(sent, "error", sent))[:200]
+                if _looks_like_timeout(message):
+                    raise StepUnknown("JARVIS did not confirm that it took the task")
+                raise StepFailed(f"JARVIS did not take the task: {message}")
             payload = sent.value.get("data", sent.value) if isinstance(sent.value, dict) else {}
             cid = str(payload.get("command_id") or "")
-            end = time.monotonic() + timeout
-            while time.monotonic() < end:
+            began = time.monotonic()
+            while time.monotonic() < began + timeout + ctx.waited:
                 await asyncio.sleep(5.0)
                 got = await self.plugins.call_entry_json("jarvis_bridge:task_result", {"command_id": cid}, timeout=20.0)
-                if isinstance(got, Err):
-                    continue
-                d = got.value.get("data", got.value) if isinstance(got.value, dict) else {}
-                state = str(d.get("state") or "")
-                if state == "done":
-                    return str(d.get("reply") or d.get("message") or "JARVIS finished.")
-                if state in ("failed", "cancelled"):
-                    raise StepFailed(str(d.get("message") or f"JARVIS reported {state}.")[:300])
-            raise StepFailed("JARVIS is still working; check its console for the result.")
+                if not isinstance(got, Err):
+                    d = got.value.get("data", got.value) if isinstance(got.value, dict) else {}
+                    state = str(d.get("state") or "")
+                    if state == "done":
+                        return str(d.get("reply") or d.get("message") or "JARVIS finished.")
+                    if state in ("failed", "cancelled"):
+                        raise StepFailed(str(d.get("message") or f"JARVIS reported {state}.")[:300])
+                # Two clocks: while JARVIS waits for the owner to approve something, that time is not working time.
+                if await self._approvals_waiting() > 0:
+                    ctx.add_waiting(5.0)
+            raise StepUnknown("JARVIS is still working; check its console for the result")
         raise StepFailed(f"unknown helper '{step.kind}'")
 
     # ---------- entries ----------
@@ -247,7 +317,18 @@ class MainAgentPlugin(NekoPluginBase):
         except (PlanError, StepFailed) as exc:
             return Err(SdkError(str(exc)))
         return Ok({"mode": mode, "summary": plan.summary,
-                   "steps": [{"id": s.id, "agent": s.ref or s.kind, "goal": s.goal, "depends_on": s.depends_on} for s in plan.steps]})
+                   "steps": [{"id": s.id, "agent": s.ref or s.kind, "goal": s.goal, "depends_on": s.depends_on,
+                              "effect": s.effect} for s in plan.steps]})
+
+    def _start(self, run: dict[str, Any], plan: Plan, prior: dict[str, StepResult] | None = None) -> None:
+        run["state"] = "running"
+        run["running"] = []
+        self._cancel = asyncio.Event()
+        self._active = run["run_id"]
+        self._runs[run["run_id"]] = run
+        self._runs = dict(list(self._runs.items())[-10:])
+        self._persist(run)
+        asyncio.get_running_loop().create_task(self._execute(run, plan, prior))
 
     @ui.action(id="run_task", label=tr("actions.run_task.label", default="Run task"), tone="primary", refresh_context=True)
     @plugin_entry(
@@ -282,50 +363,105 @@ class MainAgentPlugin(NekoPluginBase):
             plan = await self._make_plan(task, await self._catalogue(mode), mode)
         except (PlanError, StepFailed) as exc:
             return Err(SdkError(str(exc)))
-        run_id = uuid.uuid4().hex[:10]
-        self._cancel = asyncio.Event()
-        self._active = run_id
-        self._runs[run_id] = {"task": task[:300], "mode": mode, "summary": plan.summary, "state": "running", "started": time.time(),
-                              "steps": {s.id: {"agent": s.ref or s.kind, "goal": s.goal, "state": "waiting"} for s in plan.steps}}
-        self._runs = dict(list(self._runs.items())[-10:])
-        asyncio.get_running_loop().create_task(self._execute(run_id, plan))
-        return Ok({"run_id": run_id, "message": f"On it: {plan.summary}",
-                   "steps": [{"id": s.id, "agent": s.ref or s.kind} for s in plan.steps]})
+        run = {"run_id": uuid.uuid4().hex[:10], "task": task[:2000], "mode": mode, "summary": plan.summary,
+               "started": time.time(), "plan": plan_to_dict(plan), "results": {}, "running": [], "state": "running"}
+        self._start(run, plan)
+        return Ok({"run_id": run["run_id"], "mode": mode, "message": f"On it: {plan.summary}",
+                   "steps": [{"id": s.id, "agent": s.ref or s.kind, "effect": s.effect} for s in plan.steps]})
 
-    async def _execute(self, run_id: str, plan: Plan) -> None:
-        run = self._runs[run_id]
+    @plugin_entry(
+        id="resume_run",
+        name=tr("entry.resume_run.name", default="Resume an interrupted task"),
+        description=tr("entry.resume_run.description", default=(
+            "Continue a task that was interrupted (the app stopped) or held back. Finished steps are kept. A step whose "
+            "result is unknown is NOT run again unless its id is listed in rerun, which the user must confirm.")),
+        input_schema={"type": "object", "properties": {
+            "run_id": {"type": "string", "description": "The run to resume (latest resumable if empty)."},
+            "rerun": {"type": "array", "items": {"type": "string"}, "description": "Step ids to run again, only after the user confirms they did not happen."}}},
+        timeout=60,
+        llm_result_fields=["run_id", "message"],
+    )
+    async def resume_run(self, run_id: str = "", rerun: list | None = None, **_):
+        if self._active is not None:
+            return Err(SdkError("The main agent is still working on another task."))
+        rid = str(run_id or "").strip()
+        if not rid:
+            candidates = [r for r in reversed(list(self._runs)) if self._runs[r].get("state") in RESUMABLE]
+            rid = candidates[0] if candidates else ""
+        run = self._runs.get(rid) or (self._store.load(rid) if rid else None)
+        if not run:
+            return Err(SdkError("There is no task to resume."))
+        if run.get("state") not in RESUMABLE:
+            return Err(SdkError(f"That task is {run.get('state')}; only interrupted, held, partial or failed tasks can be resumed."))
+        plan = plan_from_dict(run.get("plan") or {})
+        ids = {s.id for s in plan.steps}
+        wanted = {str(x) for x in (rerun or [])}
+        unknown_ids = sorted(wanted - ids)
+        if unknown_ids:
+            return Err(SdkError(f"No such step(s): {', '.join(unknown_ids)}."))
+        effects = {s.id: s.effect for s in plan.steps}
+        prior: dict[str, StepResult] = {}
+        for sid, rd in (run.get("results") or {}).items():
+            r = result_from_dict({"id": sid, **rd})
+            if sid in wanted or r.outcome == "not_executed":
+                continue                                   # chosen to re-run, or never ran: runs now
+            if r.outcome in ("unknown", "failure") and effects.get(sid, "none") == "none":
+                continue                                   # reading or reasoning cannot do anything twice: just run it again
+            prior[sid] = r
+        pending = [s for s in plan.steps if s.id not in prior]
+        if not pending:
+            return Ok({"run_id": rid, "message": "Every step is already finished or held; list the step ids to run again in rerun."})
+        for sid in wanted:
+            (run.get("results") or {}).pop(sid, None)
+        for sid in [k for k, v in (run.get("results") or {}).items() if v.get("outcome") == "not_executed"]:
+            run["results"].pop(sid, None)
+        self._start(run, plan, prior)
+        return Ok({"run_id": rid, "message": f"Resuming: {len(pending)} step(s) to run, {len(prior)} kept as they are."})
 
-        def progress(step: Step, res: StepResult) -> None:
-            run["steps"][step.id]["state"] = "done" if res.ok else ("skipped" if res.skipped else "failed")
-            if res.error:
-                run["steps"][step.id]["error"] = res.error
+    async def _execute(self, run: dict[str, Any], plan: Plan, prior: dict[str, StepResult] | None = None) -> None:
+        rid = run["run_id"]
 
+        def on_start(step: Step) -> None:
+            if step.id not in run["running"]:
+                run["running"].append(step.id)
+            self._persist(run)
+
+        def on_progress(step: Step, res: StepResult) -> None:
+            run["results"][step.id] = result_to_dict(res)
+            if step.id in run["running"]:
+                run["running"].remove(step.id)
+            self._persist(run)
+
+        results: list[StepResult] = []
+        cancelled = False
         try:
             results = await run_plan(
                 plan, self._dispatch, parallel=_int_env("MAIN_AGENT_PARALLEL", 3, 1, 6),
                 step_timeout=float(_int_env("MAIN_AGENT_STEP_TIMEOUT", 240, 10, 1800)),
                 total_timeout=float(_int_env("MAIN_AGENT_TOTAL_TIMEOUT", 600, 30, 3600)),
-                cancel=self._cancel, on_progress=progress)
+                cancel=self._cancel, on_progress=on_progress, on_start=on_start, prior=prior)
             cancelled = bool(self._cancel and self._cancel.is_set())
-            run["state"] = "cancelled" if cancelled else ("done" if all(r.ok for r in results) else "partial")
+            run["state"] = run_state(plan, results, cancelled)
             body = "Stopped as you asked." if cancelled else final_text(plan, results)
         except Exception as exc:               # never leave the run "running" or the lock held
             run["state"] = "failed"
             body = f"The main agent hit a problem and stopped ({type(exc).__name__})."
-            self.logger.warning("main_agent run {} failed: {}", run_id, type(exc).__name__)
+            self.logger.warning("main_agent run {} failed: {}", rid, type(exc).__name__)
         finally:
+            run["running"] = []
             self._active = None
             self._cancel = None
+            self._persist(run)
         try:
             self.push_message(source="main_agent", visibility=["chat"], ai_behavior="respond",
-                              parts=[{"type": "text", "text": body}], priority=6, metadata={"run_id": run_id, "state": run["state"]})
+                              parts=[{"type": "text", "text": body}], priority=6, metadata={"run_id": rid, "state": run["state"]})
         except Exception as exc:
             self.logger.warning("main_agent could not deliver the result: {}", type(exc).__name__)
 
     @plugin_entry(
         id="run_status",
         name=tr("entry.run_status.name", default="Main agent status"),
-        description=tr("entry.run_status.description", default="Show what the main agent is doing or did last: each step and its state."),
+        description=tr("entry.run_status.description", default="Show what the main agent is doing or did last: each step, its outcome and whether it can be resumed."),
         input_schema={"type": "object", "properties": {"run_id": {"type": "string", "description": "Optional run id; latest if empty."}}},
         timeout=10,
         llm_result_fields=["run_id", "state", "steps"],
@@ -335,7 +471,9 @@ class MainAgentPlugin(NekoPluginBase):
         run = self._runs.get(rid)
         if run is None:
             return Err(SdkError("The main agent has not run a task yet."))
-        return Ok({"run_id": rid, "state": run["state"], "summary": run["summary"], "steps": run["steps"]})
+        v = self._record_view(rid, run)
+        return Ok({"run_id": rid, "state": v["state"], "mode": v["mode"], "summary": v["summary"], "steps": v["steps"],
+                   "waited_s": v["waited_s"], "held": v["held"], "resumable": v["resumable"]})
 
     @ui.action(id="stop_task", label=tr("actions.stop_task.label", default="Stop"), tone="danger", refresh_context=True,
                confirm=tr("actions.stop_task.confirm", default="Stop the current task after the step in progress?"))
