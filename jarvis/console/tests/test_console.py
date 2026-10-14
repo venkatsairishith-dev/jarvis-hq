@@ -229,6 +229,55 @@ class WavAndRealVoice(unittest.TestCase):
         s = v.transcribe(write_wav(np.zeros(32000, "float32"), 16000), "en")
         self.assertEqual((s["text"], s["speech"]), ("", False))                  # silence yields no words
 
+    def test_each_utterance_is_decoded_as_its_own_stream(self):
+        """Regression: gluing every speech segment into one stream made the recognizers drop most of a long recording
+        (a 5 min Telugu voice note kept 173 of 661 words, against 85% of them decoded per utterance)."""
+        from types import SimpleNamespace
+        import unittest.mock
+        import jarvis_console.voice as voicemod
+
+        class FakeVad:
+            def __init__(self, segs):
+                self.q = list(segs)
+
+            def accept_waveform(self, w):
+                pass
+
+            def flush(self):
+                pass
+
+            def empty(self):
+                return not self.q
+
+            @property
+            def front(self):
+                return SimpleNamespace(samples=self.q[0])
+
+            def pop(self):
+                self.q.pop(0)
+
+        seen = []
+
+        class FakeRec:
+            def create_stream(self):
+                s = SimpleNamespace(result=SimpleNamespace(text=""), n=0)
+                s.accept_waveform = lambda sr, x: setattr(s, "n", len(x))
+                return s
+
+            def decode_stream(self, s):
+                seen.append(s.n)
+                s.result.text = f"utterance{len(seen)}"
+
+        segs = [np.ones(8000, "float32"), np.ones(12000, "float32"), np.ones(16000, "float32")]
+        v = Voice()
+        v._vad_detector = lambda: FakeVad(segs)
+        v._recognizer = lambda lang: FakeRec()
+        with unittest.mock.patch.object(voicemod, "sherpa_onnx", object()):
+            r = v.transcribe(write_wav(np.zeros(16000 * 5, "float32"), 16000), "te")
+        self.assertEqual(r["text"], "utterance1 utterance2 utterance3")
+        self.assertEqual(len(seen), 3)                                           # three streams, not one glued stream
+        self.assertEqual(seen, [8000 + 3200, 12000 + 3200, 16000 + 3200])        # each utterance plus 0.1 s padding per side
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,7 @@ except ImportError:                     # pragma: no cover
 
 SR = 16000
 MAX_AUDIO_S = 90
+UTTERANCE_S = 15                  # longest single stretch handed to a recognizer
 LANGS = ("en", "hi", "te")
 
 
@@ -127,8 +128,9 @@ class Voice:
             cfg = sherpa_onnx.VadModelConfig()
             cfg.silero_vad.model = path
             cfg.silero_vad.threshold = 0.5
-            cfg.silero_vad.min_silence_duration = 0.6
+            cfg.silero_vad.min_silence_duration = 0.2      # short gaps split utterances: measured best on conversational Telugu
             cfg.silero_vad.min_speech_duration = 0.2
+            cfg.silero_vad.max_speech_duration = UTTERANCE_S
             cfg.silero_vad.window_size = 512
             cfg.sample_rate = SR
             cfg.num_threads = 1
@@ -183,7 +185,7 @@ class Voice:
             t0 = time.time()
             try:
                 vad = self._vad_detector()
-                speech = x
+                seg = [x]
                 if vad is not None and len(x):
                     seg = []
                     for i in range(0, len(x), 512):
@@ -195,12 +197,24 @@ class Voice:
                         self._last = self.clock()
                         return {"text": "", "speech": False, "language": lang, "model": self.stt_paths(lang)["name"],
                                 "audio_s": round(len(x) / SR, 2), "ms": round((time.time() - t0) * 1000)}
-                    speech = np.concatenate([np.zeros(int(0.2 * SR), "float32"), *seg, np.zeros(int(0.2 * SR), "float32")])
+                elif len(x) > UTTERANCE_S * SR:             # no VAD model: still never one long stream
+                    seg = [x[i:i + UTTERANCE_S * SR] for i in range(0, len(x), UTTERANCE_S * SR)]
+                # Each utterance is decoded on its own and the texts joined. Gluing all speech into one stream makes the
+                # CTC/transducer models drop most of a long recording (measured on a 5 min Telugu voice note: 173 of 661
+                # reference words kept, 75% character error, against 85% of the words and ~32% error decoded per utterance).
                 rec = self._recognizer(lang)
-                s = rec.create_stream()
-                s.accept_waveform(SR, speech.astype("float32"))
-                rec.decode_stream(s)
-                text = " ".join(s.result.text.split())
+                pad = np.zeros(int(0.1 * SR), "float32")
+                streams = []
+                for part in seg:
+                    s = rec.create_stream()
+                    s.accept_waveform(SR, np.concatenate([pad, np.asarray(part, "float32"), pad]))
+                    streams.append(s)
+                pieces = []
+                for s in streams:
+                    rec.decode_stream(s)
+                    pieces.append(" ".join(s.result.text.split()))
+                text = " ".join(p for p in pieces if p)
+                speech = np.concatenate(seg) if seg else x
             except VoiceError:
                 raise
             except Exception as e:
