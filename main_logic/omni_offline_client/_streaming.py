@@ -1301,10 +1301,10 @@ class _StreamingMixin:
                         # stripper, so their streaming stays byte-for-byte untouched.
                         # Gate on the SAME condition as _focus_stream_overrides
                         # (just ``thinking_on`` — vision turns now reason too).
-                        from config.providers import leaks_thinking_in_content
+                        from config.providers import always_inlines_thinking, leaks_thinking_in_content
                         think_stripper = (
                             ThinkingStreamStripper()
-                            if thinking_on and leaks_thinking_in_content(self.model)
+                            if (thinking_on and leaks_thinking_in_content(self.model)) or always_inlines_thinking(self.model)
                             else None
                         )
                         # 工具图上总线时带上本轮的 turn_id，和这一轮的用户帧

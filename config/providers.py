@@ -363,6 +363,18 @@ def leaks_thinking_in_content(model: str) -> bool:
     return any(tag in m for tag in ("qwen3.5", "qwen3.6", "qwen3.7"))
 
 
+def always_inlines_thinking(model: str) -> bool:
+    """True for models that put their reasoning in ``content`` inside paired ``<think>...</think>`` tags on EVERY reply,
+    whether or not the turn asked for thinking (the MiniMax M2 family, checked 2026-10-14 against an OpenAI-compatible
+    endpoint: the whole reasoning arrives in ``content``, no ``reasoning_content`` field, and the request-side switches
+    for disabling thinking were ignored).
+
+    Unlike ``leaks_thinking_in_content`` this does not depend on the turn being thinking-on, because the model reasons
+    regardless. It gates the same ``ThinkingStreamStripper`` onto the streaming path so the reasoning is never shown or
+    spoken."""
+    return "minimax-m2" in (model or "").lower()
+
+
 # ────────────────────────────────────────────────────────────────
 # Cache Provider 配置（原 tests/test_cco_capacity.py PROVIDER_CACHE_CONFIG）
 # ────────────────────────────────────────────────────────────────
