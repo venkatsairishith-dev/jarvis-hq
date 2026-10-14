@@ -1698,6 +1698,11 @@ class CoreConfigMixin:
         if isinstance(config.get('AGENT_MODEL_URL'), str):
             config['AGENT_MODEL_URL'] = self._normalize_agent_url(config['AGENT_MODEL_URL'])
 
+        # API keys may be stored as `file:<path>` references (see secret_refs.py). Resolve them for this runtime
+        # view only: core_config.json and the settings page keep the reference, never the secret.
+        from utils.config_manager.secret_refs import resolve_config_secrets
+        resolve_config_secrets(config)
+
         # Keep a raw, independent image slot: no chat fallback or implicit generation.
         config["IMAGE_GENERATION_CONFIG"] = {
             key: core_cfg.get(key, "")

@@ -17,6 +17,7 @@ if (-not (Test-Path $py)) { throw "Python environment not found: $py (see the se
 New-Item -ItemType Directory $logs -Force | Out-Null
 $env:NEKO_STORAGE_SELECTED_ROOT = $Data
 $env:NEKO_LANGUAGE = "en"        # force English regardless of region/system detection
+$env:NEKO_SECRET_REF_ROOTS = "D:\jarvis-secrets"   # lets a stored API key be a "file:<path>" reference into this folder
 $env:PYTHONUTF8 = "1"
 
 function Listening($port) { [bool](Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) }
