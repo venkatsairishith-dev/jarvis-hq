@@ -39,12 +39,20 @@ import asyncio
 import concurrent.futures
 import functools
 import importlib
+import io
+import json
 import logging
 import os
 import queue
 import threading
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+import wave
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any, Protocol
 
 import numpy as np
@@ -81,6 +89,10 @@ PROVIDER_KEY = "faster_whisper"
 _MODEL_ENV = "NEKO_WHISPER_MODEL"
 _DEVICE_ENV = "NEKO_WHISPER_DEVICE"
 _COMPUTE_ENV = "NEKO_WHISPER_COMPUTE"
+# Optional: an OpenAI-compatible ``/v1/audio/transcriptions`` URL on this machine. When set, utterances are recognised
+# there instead of by a Whisper model loaded in this process (e.g. a local int8 recognizer with better Hindi/Telugu).
+_ENDPOINT_ENV = "NEKO_WHISPER_ENDPOINT"
+_ENDPOINT_TIMEOUT_SECONDS = 60.0
 
 # CPU stays light so decoding keeps up with speech; CUDA can afford a model
 # that is noticeably more accurate on Mandarin and other non-English speech.
@@ -291,6 +303,66 @@ def _fetch_model_weights(
         ) from exc
 
 
+class _EndpointModel:
+    """Recognise through a local OpenAI-compatible transcription endpoint; blocking.
+
+    Quacks like the ``WhisperModel`` the worker expects: ``transcribe(audio, language=...)`` returns
+    ``(segments, info)``. Only loopback URLs are accepted, so audio never leaves the machine through this setting.
+    """
+
+    _LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+
+    def __init__(self, url: str) -> None:
+        parts = urllib.parse.urlsplit(url)
+        if parts.scheme != "http" or (parts.hostname or "").lower() not in self._LOOPBACK:
+            raise _LocalAsrFailure(
+                "ASR_LOCAL_ENDPOINT_NOT_LOCAL",
+                f"{_ENDPOINT_ENV} must be an http URL on 127.0.0.1 or localhost",
+            )
+        self._url = url
+
+    def transcribe(self, audio: Any, **kwargs: Any) -> tuple[Iterable[Any], Any]:
+        samples = np.clip(np.asarray(audio, dtype=np.float32), -1.0, 1.0)
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(PCM16_SAMPLE_WIDTH_BYTES)
+            wav.setframerate(16_000)
+            wav.writeframes((samples * 32767.0).astype("<i2").tobytes())
+        boundary = "neko" + uuid.uuid4().hex
+        fields = {"model": "local", "response_format": "json"}
+        language = kwargs.get("language")
+        if language:
+            fields["language"] = str(language)
+        crlf = chr(13) + chr(10)
+        lines: list[str] = []
+        for name, value in fields.items():
+            lines += [f"--{boundary}", f'Content-Disposition: form-data; name="{name}"', "", str(value)]
+        lines += [
+            f"--{boundary}",
+            'Content-Disposition: form-data; name="file"; filename="utterance.wav"',
+            "Content-Type: audio/wav",
+            "",
+            "",
+        ]
+        body = crlf.join(lines).encode("utf-8") + buffer.getvalue() + (crlf + f"--{boundary}--" + crlf).encode("utf-8")
+        request = urllib.request.Request(
+            self._url,
+            data=body,
+            method="POST",
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=_ENDPOINT_TIMEOUT_SECONDS) as response:  # noqa: S310 loopback only
+                payload = json.loads(response.read().decode("utf-8", "replace"))
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            raise _LocalAsrFailure(
+                "ASR_LOCAL_ENDPOINT_FAILED", "the local recognition endpoint did not answer"
+            ) from exc
+        text = str((payload or {}).get("text") or "")
+        return [SimpleNamespace(text=text, no_speech_prob=None, avg_logprob=None)], None
+
+
 def _load_whisper_model(spec: _ModelSpec) -> _TranscribeModel:
     """Load one model, falling back from CUDA to CPU; blocking.
 
@@ -300,6 +372,11 @@ def _load_whisper_model(spec: _ModelSpec) -> _TranscribeModel:
     CUDA model could not be fetched).
     """
 
+    endpoint = str(os.getenv(_ENDPOINT_ENV, "") or "").strip()
+    if endpoint:
+        model = _EndpointModel(endpoint)
+        logger.info("local ASR endpoint ready url=%s", endpoint)
+        return model
     module = _import_faster_whisper()
     whisper_model_cls = module.WhisperModel
     last_error: BaseException | None = None

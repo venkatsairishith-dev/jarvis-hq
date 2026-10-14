@@ -175,19 +175,29 @@ def speech(do_asr: bool):
         check(f"local TTS: {lang} text is spoken with the voice chosen by script", c2 == 200 and 0.8 < s2 < 20, f"{s2:.1f}s")
     if code != 200 or not do_asr:
         return
+    # Speech in: N.E.K.O's own recognizer backend (NEKO_WHISPER_ENDPOINT -> the local int8 recognizers), round trip per language.
     try:
         import numpy as np
-        from faster_whisper import WhisperModel
-        pcm = np.frombuffer(raw, dtype="<i2").astype("float32") / 32768.0
-        n = int(len(pcm) * 16000 / 24000)
-        audio = np.interp(np.linspace(0, len(pcm) - 1, n), np.arange(len(pcm)), pcm).astype("float32")
-        os.environ.setdefault("HF_HOME", r"D:\jarvis\cache\hf")
-        model = WhisperModel("base", device="cpu", compute_type="int8")
-        segs, _ = model.transcribe(audio, language="en", beam_size=1)
-        got = " ".join(s.text.strip() for s in segs)
-        check("local ASR: the spoken sentence is transcribed back", "paris" in got.lower() and "france" in got.lower(), got[:80])
+        repo = Path(__file__).resolve().parents[2]
+        sys.path.insert(0, str(repo))
+        from main_logic.asr_client.workers import faster_whisper as fw
+        model = fw._EndpointModel("http://127.0.0.1:48930/v1/audio/transcriptions")
+        rounds = (("en", text, ("paris", "france")),
+                  ("hi", hindi, ("नमस्ते", "कैसे")),
+                  ("te", telugu, ("నమస్కారం", "ఎలా")))
+        for lang, sample, needles in rounds:
+            c3, r3 = http("http://127.0.0.1:48930/v1/audio/speech", method="POST",
+                          body={"model": "jarvis-local", "input": sample, "voice": lang, "response_format": "pcm"}, timeout=180)
+            pcm = np.frombuffer(r3, dtype="<i2").astype("float32") / 32768.0
+            n = int(len(pcm) * 16000 / 24000)
+            a16 = np.interp(np.linspace(0, len(pcm) - 1, n), np.arange(len(pcm)), pcm).astype("float32")
+            t0 = time.time()
+            got = fw._transcribe_pcm16(model, (a16 * 32767).astype("<i2").tobytes(), lang)
+            took = time.time() - t0
+            check(f"local ASR ({lang}, int8 via N.E.K.O's recognizer): the spoken sentence is transcribed back",
+                  c3 == 200 and all(x in got.lower() for x in needles), f"{took:.1f}s for {len(a16) / 16000:.1f}s of audio -> {got[:50]}")
     except Exception as exc:                                    # report, do not crash the whole run
-        check("local ASR: the spoken sentence is transcribed back", False, type(exc).__name__)
+        check("local ASR: the spoken sentence is transcribed back", False, f"{type(exc).__name__}: {str(exc)[:100]}")
 
 
 def model_path():

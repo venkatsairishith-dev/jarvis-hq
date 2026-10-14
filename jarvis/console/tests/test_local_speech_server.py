@@ -27,8 +27,8 @@ def tone_wav(rate=22050, seconds=0.5):
 
 
 class Server:
-    def __init__(self, synth):
-        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), lss.make_handler(synth))
+    def __init__(self, synth, transcribe=None):
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), lss.make_handler(synth, transcribe))
         self.port = self.srv.server_address[1]
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
 
@@ -119,6 +119,77 @@ class SpeechServer(unittest.TestCase):
     def test_resampling_keeps_the_rate_when_it_already_matches(self):
         wav = tone_wav(lss.OUT_RATE, 0.25)
         self.assertEqual(len(lss.wav_to_pcm16(wav)), int(lss.OUT_RATE * 0.25) * 2)
+
+
+def multipart(fields, file_bytes=None, boundary="----testboundary7"):
+    out = b""
+    for name, value in fields.items():
+        out += f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode()
+    if file_bytes is not None:
+        out += (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.wav"\r\n'
+                f'Content-Type: audio/wav\r\n\r\n').encode() + file_bytes + b"\r\n"
+    out += f"--{boundary}--\r\n".encode()
+    return out, {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+
+
+class Transcription(unittest.TestCase):
+    def setUp(self):
+        self.heard = []
+
+        def transcribe(wav, lang):
+            self.heard.append((len(wav), lang))
+            if len(wav) < 100:
+                raise ValueError("not a readable WAV file")
+            if wav.startswith(b"BOOM"):
+                raise RuntimeError("engine exploded in D:\\secret")
+            return f"heard {lang}"
+
+        self.s = Server(lambda text, lang: tone_wav(), transcribe)
+        self.wav = tone_wav(16000, 0.5)
+
+    def tearDown(self):
+        self.s.close()
+
+    def test_openai_multipart_request_returns_json_text_in_the_chosen_language(self):
+        for sent, want in (("hi", "hi"), ("Telugu", "te"), ("en", "en"), ("", "en"), ("zh", "en")):
+            body, headers = multipart({"model": "whisper-1", "language": sent}, self.wav)
+            code, ctype, out = self.s.request("POST", "/v1/audio/transcriptions", body, headers)
+            self.assertEqual((code, ctype), (200, "application/json"), sent)
+            self.assertEqual(json.loads(out), {"text": f"heard {want}"}, sent)
+        self.assertEqual(self.heard[0][0], len(self.wav))                    # the file part arrives byte for byte
+
+    def test_raw_wav_body_with_query_language_and_text_format(self):
+        code, ctype, out = self.s.request("POST", "/v1/audio/transcriptions?language=hi&response_format=text", self.wav,
+                                          {"Content-Type": "audio/wav"})
+        self.assertEqual((code, out), (200, b"heard hi"))
+        self.assertTrue(ctype.startswith("text/plain"))
+
+    def test_bad_requests_and_engine_errors_are_clean(self):
+        body, headers = multipart({"language": "en"})                         # no file part
+        self.assertEqual(self.s.request("POST", "/v1/audio/transcriptions", body, headers)[0], 400)
+        body, headers = multipart({"language": "en"}, b"tiny")                # engine says unreadable
+        code, _, out = self.s.request("POST", "/v1/audio/transcriptions", body, headers)
+        self.assertEqual(code, 400)
+        self.assertIn(b"readable", out)
+        body, headers = multipart({"language": "en"}, b"BOOM" + b"x" * 200)
+        code, _, out = self.s.request("POST", "/v1/audio/transcriptions", body, headers)
+        self.assertEqual(code, 500)
+        self.assertNotIn(b"secret", out)
+        body, headers = multipart({"response_format": "srt"}, self.wav)
+        self.assertEqual(self.s.request("POST", "/v1/audio/transcriptions", body, headers)[0], 400)
+        self.assertEqual(self.s.request("POST", "/v1/audio/transcriptions", b"x" * (lss.MAX_AUDIO_BODY + 1),
+                                        {"Content-Type": "audio/wav"})[0], 413)
+
+    def test_loopback_only_and_not_available_without_an_engine(self):
+        body, headers = multipart({}, self.wav)
+        headers["Host"] = "evil.example"
+        self.assertEqual(self.s.request("POST", "/v1/audio/transcriptions", body, headers)[0], 403)
+        bare = Server(lambda text, lang: tone_wav())
+        try:
+            body, headers = multipart({}, self.wav)
+            self.assertEqual(bare.request("POST", "/v1/audio/transcriptions", body, headers)[0], 501)
+        finally:
+            bare.close()
 
 
 if __name__ == "__main__":

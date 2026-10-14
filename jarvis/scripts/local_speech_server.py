@@ -6,10 +6,12 @@ between the two: no engine code, no model download, no cloud.
 
   POST /v1/audio/speech   {"model": "...", "input": "...", "voice": "en|hi|te", "response_format": "pcm|wav"}
                           -> raw PCM16 mono at 24 kHz (what N.E.K.O expects) or a WAV file
+  POST /v1/audio/transcriptions   multipart (file, language) or a raw audio/wav body -> {"text": "..."}
+                          int8 speech recognition: Parakeet for English, IndicConformer for Hindi and Telugu
   GET  /v1/models, GET /health
 
 Loopback only (Host header must be 127.0.0.1 or localhost, so a web page cannot reach it by DNS rebinding), no credentials,
-at most 1,500 characters per request, one synthesis at a time.
+at most 1,500 characters per synthesis request and 12 MB of audio per recognition request, one job at a time.
 
 Run with the JARVIS console's Python:  D:\\jarvis\\tools\\jarvis-venv\\Scripts\\python.exe local_speech_server.py [--port 48930]
 """
@@ -20,15 +22,18 @@ import argparse
 import io
 import json
 import os
+import re
 import sys
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "console"))
 
 OUT_RATE = 24000                 # the PCM rate N.E.K.O's OpenAI-compatible TTS worker plays
 MAX_BODY = 64 * 1024
+MAX_AUDIO_BODY = 12 * 1024 * 1024
 LANG_ALIASES = {"en": "en", "english": "en", "hi": "hi", "hindi": "hi", "te": "te", "telugu": "te"}
 
 
@@ -71,20 +76,56 @@ def wav_to_pcm16(wav_bytes: bytes, out_rate: int = OUT_RATE) -> bytes:
     return np.clip(samples, -32768, 32767).astype("<i2").tobytes()
 
 
-def make_handler(synthesize):
-    """`synthesize(text, lang) -> wav_bytes`; raises ValueError for unusable input (message is safe to return)."""
+def parse_multipart(body: bytes, content_type: str) -> dict:
+    """The named parts of a multipart/form-data body, as bytes (enough for the OpenAI transcription request)."""
+    m = re.search(r'boundary="?([^";]+)"?', content_type or "")
+    if not m:
+        raise ValueError("multipart body without a boundary")
+    boundary = b"--" + m.group(1).encode()
+    parts = {}
+    for chunk in body.split(boundary)[1:]:
+        if chunk.startswith(b"--"):
+            break
+        head, _, data = chunk.lstrip(b"\r\n").partition(b"\r\n\r\n")
+        if data.endswith(b"\r\n"):
+            data = data[:-2]
+        name = re.search(rb'name="([^"]*)"', head)
+        if name:
+            parts[name.group(1).decode("utf-8", "replace")] = data
+    return parts
+
+
+def make_handler(synthesize, transcribe=None):
+    """`synthesize(text, lang) -> wav_bytes` and `transcribe(wav_bytes, lang) -> text`; both raise ValueError for unusable
+    input (the message is safe to return). Without `transcribe` the recognition endpoint answers 501."""
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "jarvis-local-speech"
+        _unread = 0                      # bytes of the request body the handler has not consumed yet
 
         def log_message(self, *a):
             pass
+
+        def _drain(self):
+            """Read and drop an unread request body (bounded), so a refusal is not cut off by a connection reset."""
+            left = min(self._unread, 2 * MAX_AUDIO_BODY)
+            self._unread = 0
+            try:
+                while left > 0:
+                    chunk = self.rfile.read(min(65536, left))
+                    if not chunk:
+                        break
+                    left -= len(chunk)
+            except OSError:
+                pass
 
         def _host_ok(self) -> bool:
             host = (self.headers.get("Host") or "").lower().rsplit(":", 1)[0].strip("[]")
             return host in ("127.0.0.1", "localhost", "::1")
 
         def _send(self, code, body=b"", ctype="application/json"):
+            if self._unread:
+                self._drain()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
@@ -104,10 +145,51 @@ def make_handler(synthesize):
                 return self._json(200, {"object": "list", "data": [{"id": "jarvis-local", "object": "model", "owned_by": "local"}]})
             return self._json(404, {"error": {"message": "not found"}})
 
+        def _transcribe(self):
+            if transcribe is None:
+                return self._json(501, {"error": {"message": "speech recognition is not available"}})
+            try:
+                n = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                n = 0
+            if n <= 0 or n > MAX_AUDIO_BODY:
+                return self._json(413 if n > MAX_AUDIO_BODY else 400, {"error": {"message": "audio missing or too large"}})
+            body = self.rfile.read(n)
+            self._unread = 0
+            ctype = self.headers.get("Content-Type", "")
+            try:
+                if ctype.lower().startswith("multipart/"):
+                    parts = parse_multipart(body, ctype)
+                    wav = parts.get("file") or b""
+                    language = parts.get("language", b"").decode("utf-8", "replace")
+                    fmt = parts.get("response_format", b"json").decode("utf-8", "replace").lower() or "json"
+                else:                                                   # a raw WAV body, language in the query string
+                    query = parse_qs(urlsplit(self.path).query)
+                    wav, language, fmt = body, (query.get("language") or [""])[0], (query.get("response_format") or ["json"])[0]
+                if not wav:
+                    return self._json(400, {"error": {"message": "no audio file in the request"}})
+                if fmt not in ("json", "text"):
+                    return self._json(400, {"error": {"message": "response_format must be json or text"}})
+                text = transcribe(wav, LANG_ALIASES.get(language.strip().lower(), "en"))
+                if fmt == "text":
+                    return self._send(200, text.encode("utf-8"), "text/plain; charset=utf-8")
+                return self._json(200, {"text": text})
+            except ValueError as exc:
+                return self._json(400, {"error": {"message": str(exc)[:200]}})
+            except Exception as exc:                                    # never a traceback to the caller
+                return self._json(500, {"error": {"message": "recognition failed: " + type(exc).__name__}})
+
         def do_POST(self):
+            try:
+                self._unread = max(int(self.headers.get("Content-Length", "0")), 0)
+            except ValueError:
+                self._unread = 0
             if not self._host_ok():
                 return self._json(403, {"error": {"message": "loopback only"}})
-            if self.path.rstrip("/") not in ("/v1/audio/speech", "/audio/speech"):
+            route = urlsplit(self.path).path.rstrip("/")
+            if route in ("/v1/audio/transcriptions", "/audio/transcriptions"):
+                return self._transcribe()
+            if route not in ("/v1/audio/speech", "/audio/speech"):
                 return self._json(404, {"error": {"message": "not found"}})
             try:
                 n = int(self.headers.get("Content-Length", "0"))
@@ -116,7 +198,9 @@ def make_handler(synthesize):
             if n <= 0 or n > MAX_BODY:
                 return self._json(413 if n > MAX_BODY else 400, {"error": {"message": "request body missing or too large"}})
             try:
-                req = json.loads(self.rfile.read(n).decode("utf-8"))
+                raw = self.rfile.read(n)
+                self._unread = 0
+                req = json.loads(raw.decode("utf-8"))
                 if not isinstance(req, dict):
                     raise ValueError
             except (ValueError, UnicodeDecodeError):
@@ -140,7 +224,7 @@ def make_handler(synthesize):
     return Handler
 
 
-def build_synthesizer():
+def build_engines():
     from jarvis_console.voice import Voice, VoiceError
 
     voice = Voice()
@@ -152,14 +236,21 @@ def build_synthesizer():
         except VoiceError as exc:                          # includes "too long" and "voice not installed"
             raise ValueError(str(exc))
 
-    return synthesize
+    def transcribe(wav: bytes, lang: str) -> str:
+        try:
+            return str(voice.transcribe(wav, lang=lang).get("text") or "")
+        except VoiceError as exc:                          # includes "not a readable WAV file" and "too long"
+            raise ValueError(str(exc))
+
+    return synthesize, transcribe
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=48930)
     args = ap.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(build_synthesizer()))
+    synthesize, transcribe = build_engines()
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(synthesize, transcribe))
     print(f"jarvis-local-speech listening on http://127.0.0.1:{args.port}/v1", flush=True)
     try:
         server.serve_forever()

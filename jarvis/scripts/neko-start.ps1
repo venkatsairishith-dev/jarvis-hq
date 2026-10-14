@@ -20,6 +20,9 @@ $env:NEKO_LANGUAGE = "en"        # force English regardless of region/system det
 $env:NEKO_SECRET_REF_ROOTS = "D:\jarvis-secrets"   # lets a stored API key be a "file:<path>" reference into this folder
 $env:PYTHONUTF8 = "1"
 $env:HF_HOME = "D:\jarvis\cache\hf"          # local speech-recognition model weights stay on D:
+# Speech recognition for N.E.K.O goes to JARVIS's int8 recognizers (Parakeet; IndicConformer for Hindi and Telugu) through the
+# local speech server instead of loading Whisper in-process. Loopback only. Remove this line to go back to Whisper base.
+$env:NEKO_WHISPER_ENDPOINT = "http://127.0.0.1:48930/v1/audio/transcriptions"
 $env:HF_HUB_DISABLE_TELEMETRY = "1"
 
 function Listening($port) { [bool](Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) }
