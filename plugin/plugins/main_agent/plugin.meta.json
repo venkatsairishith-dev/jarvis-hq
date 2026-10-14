@@ -1,0 +1,678 @@
+{
+  "build_env": {
+    "arch": "AMD64",
+    "os": "win32",
+    "python": "3.11"
+  },
+  "entries": [
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.plan_task.description",
+        "default": "Show how the main agent would split a task across its helpers, without running anything."
+      },
+      "event_key": "main_agent.plan_task",
+      "event_type": "plugin_entry",
+      "id": "plan_task",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "description": "The task, in the user's words.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "steps"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "steps": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.plan_task.name",
+        "default": "Plan a task (preview)"
+      },
+      "return_message": "",
+      "timeout": 90
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_status.description",
+        "default": "Show what the main agent is doing or did last: each step and its state."
+      },
+      "event_key": "main_agent.run_status",
+      "event_type": "plugin_entry",
+      "id": "run_status",
+      "input_schema": {
+        "properties": {
+          "run_id": {
+            "description": "Optional run id; latest if empty.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "run_id",
+        "state",
+        "steps"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "run_id": {},
+          "state": {},
+          "steps": {}
+        },
+        "required": [
+          "run_id",
+          "state",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_status.name",
+        "default": "Main agent status"
+      },
+      "return_message": "",
+      "timeout": 10
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_task.description",
+        "default": "Do a real task that needs several steps or different kinds of help: research then write something up, look something up on the web and act on it, work with files or code on the PC, or combine tools. The main agent plans it, picks the helpers that fit (reasoning, installed plugins, the web browser, JARVIS and its sub-agents), runs independent steps in parallel and reports back. Use this instead of a single tool when more than one step or tool is involved. Not for chit-chat or one quick question."
+      },
+      "event_key": "main_agent.run_task",
+      "event_type": "plugin_entry",
+      "id": "run_task",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "description": "The task, in the user's own words with their details.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "run_id",
+        "message",
+        "steps"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "run_id": {},
+          "steps": {}
+        },
+        "required": [
+          "run_id",
+          "message",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_task.name",
+        "default": "Do a task with the right helpers"
+      },
+      "return_message": "",
+      "timeout": 60
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_task.description",
+        "default": "Stop the task the main agent is running. Steps already finished stay finished."
+      },
+      "event_key": "main_agent.stop_task",
+      "event_type": "plugin_entry",
+      "id": "stop_task",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stopped"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "stopped": {}
+        },
+        "required": [
+          "stopped"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_task.name",
+        "default": "Stop the current task"
+      },
+      "return_message": "",
+      "timeout": 10
+    }
+  ],
+  "entries_config_sha256": "",
+  "entry_methods": {
+    "plan_task": "plan_task",
+    "run_status": "run_status",
+    "run_task": "run_task",
+    "stop_task": "stop_task"
+  },
+  "handlers": {
+    "main_agent.plan_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.plan_task.description",
+        "default": "Show how the main agent would split a task across its helpers, without running anything."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "plan_task",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "description": "The task, in the user's words.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "steps"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "steps": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.plan_task.name",
+        "default": "Plan a task (preview)"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 90
+    },
+    "main_agent.run_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_status.description",
+        "default": "Show what the main agent is doing or did last: each step and its state."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_status",
+      "input_schema": {
+        "properties": {
+          "run_id": {
+            "description": "Optional run id; latest if empty.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "run_id",
+        "state",
+        "steps"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "run_id": {},
+          "state": {},
+          "steps": {}
+        },
+        "required": [
+          "run_id",
+          "state",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_status.name",
+        "default": "Main agent status"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
+    "main_agent.run_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_task.description",
+        "default": "Do a real task that needs several steps or different kinds of help: research then write something up, look something up on the web and act on it, work with files or code on the PC, or combine tools. The main agent plans it, picks the helpers that fit (reasoning, installed plugins, the web browser, JARVIS and its sub-agents), runs independent steps in parallel and reports back. Use this instead of a single tool when more than one step or tool is involved. Not for chit-chat or one quick question."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_task",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "description": "The task, in the user's own words with their details.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "run_id",
+        "message",
+        "steps"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "run_id": {},
+          "steps": {}
+        },
+        "required": [
+          "run_id",
+          "message",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_task.name",
+        "default": "Do a task with the right helpers"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "main_agent.stop_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_task.description",
+        "default": "Stop the task the main agent is running. Steps already finished stay finished."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "stop_task",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stopped"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "stopped": {}
+        },
+        "required": [
+          "stopped"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_task.name",
+        "default": "Stop the current task"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
+    "main_agent:lifecycle:shutdown": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "shutdown",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "shutdown",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "main_agent:lifecycle:startup": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "startup",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "startup",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "main_agent:plugin_entry:plan_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.plan_task.description",
+        "default": "Show how the main agent would split a task across its helpers, without running anything."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "plan_task",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "description": "The task, in the user's words.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "steps"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "steps": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.plan_task.name",
+        "default": "Plan a task (preview)"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 90
+    },
+    "main_agent:plugin_entry:run_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_status.description",
+        "default": "Show what the main agent is doing or did last: each step and its state."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_status",
+      "input_schema": {
+        "properties": {
+          "run_id": {
+            "description": "Optional run id; latest if empty.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "run_id",
+        "state",
+        "steps"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "run_id": {},
+          "state": {},
+          "steps": {}
+        },
+        "required": [
+          "run_id",
+          "state",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_status.name",
+        "default": "Main agent status"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
+    "main_agent:plugin_entry:run_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_task.description",
+        "default": "Do a real task that needs several steps or different kinds of help: research then write something up, look something up on the web and act on it, work with files or code on the PC, or combine tools. The main agent plans it, picks the helpers that fit (reasoning, installed plugins, the web browser, JARVIS and its sub-agents), runs independent steps in parallel and reports back. Use this instead of a single tool when more than one step or tool is involved. Not for chit-chat or one quick question."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_task",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "description": "The task, in the user's own words with their details.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "run_id",
+        "message",
+        "steps"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "run_id": {},
+          "steps": {}
+        },
+        "required": [
+          "run_id",
+          "message",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_task.name",
+        "default": "Do a task with the right helpers"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "main_agent:plugin_entry:stop_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_task.description",
+        "default": "Stop the task the main agent is running. Steps already finished stay finished."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "stop_task",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stopped"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "stopped": {}
+        },
+        "required": [
+          "stopped"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_task.name",
+        "default": "Stop the current task"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    }
+  },
+  "schema_version": 4,
+  "sdk_version": "0.1.0",
+  "source_bytes": 59854,
+  "source_files": [
+    ".gitignore",
+    ".vscode/settings.json",
+    ".vscode/tasks.json",
+    "README.md",
+    "__init__.py",
+    "config.example.toml",
+    "config.schema.json",
+    "executor.py",
+    "planner.py",
+    "plugin.toml",
+    "pyproject.toml",
+    "ruff.toml",
+    "tests/test_dashboard.py",
+    "tests/test_executor.py",
+    "tests/test_planner.py",
+    "tests/test_plugin.py",
+    "tests/test_smoke.py",
+    "ui/panel.tsx"
+  ],
+  "source_sha256": "a8c1e720ab8163d01cd1d6ce139cc6185bdbbd46355b6680d8a7e0477fc8eb29"
+}

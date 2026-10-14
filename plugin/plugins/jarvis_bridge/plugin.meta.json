@@ -1,0 +1,558 @@
+{
+  "build_env": {
+    "arch": "AMD64",
+    "os": "win32",
+    "python": "3.11"
+  },
+  "entries": [
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.delegate_task.description",
+        "default": "Hand a real task to JARVIS, the owner's main agent. Use it for work that needs planning, several steps or specialist helpers: research, writing or fixing code, working with files, using apps or the browser, or anything the user asks to 'get done'. JARVIS plans it, picks the right sub-agents and tools, asks the user for approval where needed and verifies the result. Do not use it for small talk or simple questions."
+      },
+      "event_key": "jarvis_bridge.delegate_task",
+      "event_type": "plugin_entry",
+      "id": "delegate_task",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "description": {
+              "$i18n": "entry.delegate_task.param.task",
+              "default": "The task, in the user's own words, with any details they gave (at most 2000 characters)."
+            },
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "command_id",
+        "state",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "command_id": {},
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "command_id",
+          "state",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.delegate_task.name",
+        "default": "Hand a task to JARVIS"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.jarvis_status.description",
+        "default": "Check that the JARVIS console and kernel are reachable and not busy or switched off."
+      },
+      "event_key": "jarvis_bridge.jarvis_status",
+      "event_type": "plugin_entry",
+      "id": "jarvis_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ready",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "ready": {}
+        },
+        "required": [
+          "ready",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.jarvis_status.name",
+        "default": "Is JARVIS ready?"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.task_result.description",
+        "default": "Check whether a task handed to JARVIS is still running, finished or failed. Leave command_id empty for the latest one."
+      },
+      "event_key": "jarvis_bridge.task_result",
+      "event_type": "plugin_entry",
+      "id": "task_result",
+      "input_schema": {
+        "properties": {
+          "command_id": {
+            "description": {
+              "$i18n": "entry.task_result.param.command_id",
+              "default": "The command_id returned by delegate_task (optional)."
+            },
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "command_id",
+        "state",
+        "message",
+        "reply"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "command_id": {},
+          "message": {},
+          "reply": {},
+          "state": {}
+        },
+        "required": [
+          "command_id",
+          "state",
+          "message",
+          "reply"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.task_result.name",
+        "default": "Check a JARVIS task"
+      },
+      "return_message": "",
+      "timeout": 20
+    }
+  ],
+  "entries_config_sha256": "",
+  "entry_methods": {
+    "delegate_task": "delegate_task",
+    "jarvis_status": "jarvis_status",
+    "task_result": "task_result"
+  },
+  "handlers": {
+    "jarvis_bridge.delegate_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.delegate_task.description",
+        "default": "Hand a real task to JARVIS, the owner's main agent. Use it for work that needs planning, several steps or specialist helpers: research, writing or fixing code, working with files, using apps or the browser, or anything the user asks to 'get done'. JARVIS plans it, picks the right sub-agents and tools, asks the user for approval where needed and verifies the result. Do not use it for small talk or simple questions."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "delegate_task",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "description": {
+              "$i18n": "entry.delegate_task.param.task",
+              "default": "The task, in the user's own words, with any details they gave (at most 2000 characters)."
+            },
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "command_id",
+        "state",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "command_id": {},
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "command_id",
+          "state",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.delegate_task.name",
+        "default": "Hand a task to JARVIS"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "jarvis_bridge.jarvis_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.jarvis_status.description",
+        "default": "Check that the JARVIS console and kernel are reachable and not busy or switched off."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "jarvis_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ready",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "ready": {}
+        },
+        "required": [
+          "ready",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.jarvis_status.name",
+        "default": "Is JARVIS ready?"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "jarvis_bridge.task_result": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.task_result.description",
+        "default": "Check whether a task handed to JARVIS is still running, finished or failed. Leave command_id empty for the latest one."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "task_result",
+      "input_schema": {
+        "properties": {
+          "command_id": {
+            "description": {
+              "$i18n": "entry.task_result.param.command_id",
+              "default": "The command_id returned by delegate_task (optional)."
+            },
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "command_id",
+        "state",
+        "message",
+        "reply"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "command_id": {},
+          "message": {},
+          "reply": {},
+          "state": {}
+        },
+        "required": [
+          "command_id",
+          "state",
+          "message",
+          "reply"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.task_result.name",
+        "default": "Check a JARVIS task"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "jarvis_bridge:lifecycle:shutdown": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "shutdown",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "shutdown",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "jarvis_bridge:lifecycle:startup": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "startup",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "startup",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "jarvis_bridge:plugin_entry:delegate_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.delegate_task.description",
+        "default": "Hand a real task to JARVIS, the owner's main agent. Use it for work that needs planning, several steps or specialist helpers: research, writing or fixing code, working with files, using apps or the browser, or anything the user asks to 'get done'. JARVIS plans it, picks the right sub-agents and tools, asks the user for approval where needed and verifies the result. Do not use it for small talk or simple questions."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "delegate_task",
+      "input_schema": {
+        "properties": {
+          "task": {
+            "description": {
+              "$i18n": "entry.delegate_task.param.task",
+              "default": "The task, in the user's own words, with any details they gave (at most 2000 characters)."
+            },
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "command_id",
+        "state",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "command_id": {},
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "command_id",
+          "state",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.delegate_task.name",
+        "default": "Hand a task to JARVIS"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "jarvis_bridge:plugin_entry:jarvis_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.jarvis_status.description",
+        "default": "Check that the JARVIS console and kernel are reachable and not busy or switched off."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "jarvis_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ready",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "ready": {}
+        },
+        "required": [
+          "ready",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.jarvis_status.name",
+        "default": "Is JARVIS ready?"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "jarvis_bridge:plugin_entry:task_result": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.task_result.description",
+        "default": "Check whether a task handed to JARVIS is still running, finished or failed. Leave command_id empty for the latest one."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "task_result",
+      "input_schema": {
+        "properties": {
+          "command_id": {
+            "description": {
+              "$i18n": "entry.task_result.param.command_id",
+              "default": "The command_id returned by delegate_task (optional)."
+            },
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "command_id",
+        "state",
+        "message",
+        "reply"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "command_id": {},
+          "message": {},
+          "reply": {},
+          "state": {}
+        },
+        "required": [
+          "command_id",
+          "state",
+          "message",
+          "reply"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.task_result.name",
+        "default": "Check a JARVIS task"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    }
+  },
+  "schema_version": 4,
+  "sdk_version": "0.1.0",
+  "source_bytes": 34889,
+  "source_files": [
+    ".gitignore",
+    ".vscode/settings.json",
+    ".vscode/tasks.json",
+    "README.md",
+    "__init__.py",
+    "client.py",
+    "config.example.toml",
+    "config.schema.json",
+    "plugin.toml",
+    "pyproject.toml",
+    "ruff.toml",
+    "tests/test_client.py",
+    "tests/test_dashboard.py",
+    "tests/test_smoke.py",
+    "ui/panel.tsx"
+  ],
+  "source_sha256": "ab72755a2204c3ad1e52609820d6fcb1be2f93da65196c4f1e7dbf5afe52427d"
+}

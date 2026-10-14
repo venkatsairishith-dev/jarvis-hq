@@ -83,6 +83,9 @@ _EXCLUDED_PATH_FRAGMENTS = (
     ("frontend",),  # 顶层 JS/Vue 项目，连字符是其命名惯例
     ("docs",),  # 顶层纯文档站
     (".github",),  # CI yaml 等
+    # The JARVIS subsystem (kernel, node, console, lab) is a separate project kept under this root. It is not part of
+    # N.E.K.O's Nuitka bundle, so the packaging hazard this lint guards against does not apply to it.
+    ("jarvis",),
 )
 
 

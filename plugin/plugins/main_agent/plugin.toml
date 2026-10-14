@@ -19,8 +19,6 @@ supported = ">=0.1.0,<0.3.0"
 [plugin_runtime]
 enabled = true
 auto_start = true
-timeout = 120
-
 [plugin.ui]
 enabled = true
 
