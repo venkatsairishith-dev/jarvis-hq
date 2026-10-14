@@ -81,10 +81,15 @@ class SpeechServer(unittest.TestCase):
         self.assertEqual((code, ctype), (200, "audio/wav"))
         self.assertEqual(body[:4], b"RIFF")
 
-    def test_voice_selects_the_language_and_unknown_voices_speak_english(self):
-        for voice, lang in (("hi", "hi"), ("Telugu", "te"), ("en", "en"), ("marin", "en"), ("", "en")):
+    def test_an_explicit_voice_wins_and_otherwise_the_script_of_the_text_decides(self):
+        for voice, lang in (("hi", "hi"), ("Telugu", "te"), ("en", "en"), ("marin", "en"), ("", "en"), ("auto", "en")):
             self.s.request("POST", "/v1/audio/speech", {"input": "hello", "voice": voice})
             self.assertEqual(self.calls[-1][1], lang, voice)
+        hindi, telugu = "\u0928\u092e\u0938\u094d\u0924\u0947, \u0906\u092a \u0915\u0948\u0938\u0947 \u0939\u0948\u0902?", "\u0c28\u0c2e\u0c38\u0c4d\u0c15\u0c3e\u0c30\u0c02, \u0c2e\u0c40\u0c30\u0c41 \u0c0e\u0c32\u0c3e \u0c09\u0c28\u0c4d\u0c28\u0c3e\u0c30\u0c41?"
+        for text, voice, lang in ((hindi, "auto", "hi"), (telugu, "auto", "te"), (hindi, "marin", "hi"), (telugu, "", "te"),
+                                  (hindi, "en", "en"), ("Meet me at \u0928\u092e\u0938\u094d\u0924\u0947 cafe near the station today", "auto", "en")):
+            self.s.request("POST", "/v1/audio/speech", {"input": text, "voice": voice})
+            self.assertEqual(self.calls[-1][1], lang, (text[:12], voice))
 
     def test_bad_requests_are_refused_before_synthesis(self):
         before = len(self.calls)

@@ -32,8 +32,26 @@ MAX_BODY = 64 * 1024
 LANG_ALIASES = {"en": "en", "english": "en", "hi": "hi", "hindi": "hi", "te": "te", "telugu": "te"}
 
 
-def pick_language(voice: str) -> str:
-    return LANG_ALIASES.get(str(voice or "").strip().lower(), "en")
+def detect_language(text: str) -> str:
+    """Hindi for Devanagari, Telugu for Telugu script, otherwise English: the majority script of the letters wins."""
+    hi = te = other = 0
+    for ch in str(text or ""):
+        o = ord(ch)
+        if 0x0900 <= o <= 0x097F:
+            hi += 1
+        elif 0x0C00 <= o <= 0x0C7F:
+            te += 1
+        elif ch.isalpha():
+            other += 1
+    if max(hi, te) == 0 or max(hi, te) < other / 4:          # a few native letters inside English text stay English
+        return "en"
+    return "hi" if hi >= te else "te"
+
+
+def pick_language(voice: str, text: str = "") -> str:
+    """An explicit voice (en, hi, te or the language name) wins; anything else, including "auto" or an OpenAI voice name,
+    follows the script of the text."""
+    return LANG_ALIASES.get(str(voice or "").strip().lower()) or detect_language(text)
 
 
 def wav_to_pcm16(wav_bytes: bytes, out_rate: int = OUT_RATE) -> bytes:
@@ -110,7 +128,7 @@ def make_handler(synthesize):
             if fmt not in ("pcm", "wav"):
                 return self._json(400, {"error": {"message": "response_format must be pcm or wav"}})
             try:
-                wav = synthesize(text, pick_language(req.get("voice")))
+                wav = synthesize(text, pick_language(req.get("voice"), text))
                 if fmt == "wav":
                     return self._send(200, wav, "audio/wav")
                 return self._send(200, wav_to_pcm16(wav), "audio/pcm")

@@ -86,8 +86,8 @@ def servers():
 
 
 EXPECTED = {
-    "jarvis_bridge": {"delegate_task", "task_result", "jarvis_status"},
-    "main_agent": {"plan_task", "run_task", "run_status", "stop_task"},
+    "jarvis_bridge": {"delegate_task", "task_result", "jarvis_status", "pending_approvals", "connector_overview"},
+    "main_agent": {"plan_task", "run_task", "resume_run", "run_status", "stop_task"},
     "doc_tools": {"read_document", "write_document", "list_outputs"},
     "learn_vault": {"vault_status", "list_notes", "read_note", "search_notes", "save_note", "record_progress", "get_progress"},
 }
@@ -166,6 +166,13 @@ def speech(do_asr: bool):
                      body={"model": "jarvis-local", "input": text, "voice": "en", "response_format": "pcm"}, timeout=180)
     secs = len(raw) / 2 / 24000 if code == 200 else 0
     check("local TTS: spoken audio returned", code == 200 and 1.0 < secs < 20, f"{secs:.1f}s of 24 kHz audio")
+    hindi = "नमस्ते, आप कैसे हैं?"
+    telugu = "నమస్కారం, మీరు ఎలా ఉన్నారు?"
+    for lang, sample in (("Hindi", hindi), ("Telugu", telugu)):
+        c2, r2 = http("http://127.0.0.1:48930/v1/audio/speech", method="POST",
+                      body={"model": "jarvis-local", "input": sample, "voice": "auto", "response_format": "pcm"}, timeout=180)
+        s2 = len(r2) / 2 / 24000 if c2 == 200 else 0
+        check(f"local TTS: {lang} text is spoken with the voice chosen by script", c2 == 200 and 0.8 < s2 < 20, f"{s2:.1f}s")
     if code != 200 or not do_asr:
         return
     try:
@@ -192,6 +199,27 @@ def model_path():
     check("main agent: an unknown mode is refused", bad["status"] == "failed", "refused")
 
 
+def robustness():
+    """Checkpoint/resume surface, without a model call or any side effect."""
+    r = run_entry("main_agent", "resume_run", {"run_id": "run-that-does-not-exist"}, 45)
+    check("main agent: resuming an unknown run is refused", r["status"] == "failed" and "no task to resume" in str(r.get("error")).lower(),
+          str(r.get("error"))[:80])
+    s = run_entry("main_agent", "run_status", {}, 45)
+    check("main agent: run_status answers (state or 'not run yet')", s["status"] in ("succeeded", "failed"), str(s.get("status")))
+    repo = Path(__file__).resolve().parents[2]
+    probe = chr(10).join([
+        "import sys; sys.path.insert(0, '.')",
+        "from config.providers import always_inlines_thinking as a",
+        "from utils.llm_client import ThinkingStreamStripper as S",
+        "s = S(); out = ''.join(s.feed(c) for c in ['<th', 'ink>reasoning</', 'think>', 'Paris.']) + s.flush()",
+        "print('RESULT', a('MiniMaxAI/MiniMax-M2.7'), a('gpt-4o'), repr(out))",
+    ])
+    p = subprocess.run([sys.executable, "-I", "-c", probe], cwd=str(repo), capture_output=True, text=True, timeout=120,
+                       env=dict(os.environ, PYTHONUTF8="1", NEKO_STORAGE_SELECTED_ROOT=str(DATA)))
+    line = next((l for l in p.stdout.splitlines() if l.startswith("RESULT")), p.stderr[-120:])
+    check("inline-reasoning models: predicate and stream stripper behave", line == "RESULT True False 'Paris.'", line)
+
+
 def jarvis():
     code, h = jget("http://127.0.0.1:8799/api/health")
     k = (h or {}).get("kernel", {})
@@ -208,6 +236,15 @@ def jarvis():
     check("JARVIS: laptop node online", bool(n.get("online")) and float(n.get("seconds_since_report", 999)) < 120, str(n))
     r = run_entry("jarvis_bridge", "jarvis_status", {}, 45)
     check("bridge: N.E.K.O reaches JARVIS (ready)", r["status"] == "succeeded" and (r.get("data") or {}).get("ready") is True, str(r.get("data")))
+    a = run_entry("jarvis_bridge", "pending_approvals", {}, 45)
+    ad = a.get("data") or {}
+    check("bridge: pending approvals are readable (read-only)", a["status"] == "succeeded" and isinstance(ad.get("count"), int),
+          f"count={ad.get('count')}")
+    k = run_entry("jarvis_bridge", "connector_overview", {}, 45)
+    kd = k.get("data") or {}
+    leaked = any(x in json.dumps(kd) for x in ("secret_ref", "env_refs", "endpoint"))
+    check("bridge: connector overview readable and free of references", k["status"] == "succeeded" and "connectors" in kd and not leaked,
+          f"{len(kd.get('connectors', []))} connector(s)")
     _, c = jget("http://127.0.0.1:8799/api/owner/connectors", timeout=30)
     check("JARVIS: connector registry readable", bool(c) and "connectors" in c, f"{len((c or {}).get('connectors', []))} connector(s)")
 
@@ -229,7 +266,7 @@ def browser():
         lang = page.evaluate("document.documentElement.lang")
         check("N.E.K.O web UI loads in English without failed requests or script errors",
               lang == "en" and not bad and not errors, f"lang={lang} failed={bad[:3]} errors={errors[:2]}")
-        for pid, needles in (("jarvis_bridge", ("Give JARVIS a task", "Status")), ("main_agent", ("New task", "Current task"))):
+        for pid, needles in (("jarvis_bridge", ("Give JARVIS a task", "Status", "Waiting for your approval", "Connected services")), ("main_agent", ("New task", "Current task"))):
             page.goto(f"{PLUGIN_URL}/ui/plugins/{pid}", wait_until="networkidle", timeout=60000)
             page.wait_for_timeout(3000)
             text = ""
@@ -262,6 +299,7 @@ def main() -> int:
     guard("speech", speech, not a.no_asr)
     if not a.no_model:
         guard("model path", model_path)
+    guard("robustness", robustness)
     guard("JARVIS", jarvis)
     if not a.no_browser:
         guard("browser", browser)
