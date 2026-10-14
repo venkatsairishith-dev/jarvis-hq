@@ -96,3 +96,6 @@ Not tested: any real model call through `main_agent` (no agent key yet), browser
 ## Status update 2026-10-14 (usage like N.E.K.O)
 Done: JARVIS and Main Agent panels inside N.E.K.O's Plugin Manager (Hosted TSX, project checker passes, live context verified against the real console); one start script for N.E.K.O plus the JARVIS console; usage documented in operations. 58 plugin tests pass.
 Panels were opened in Edge in the real plugin manager and render (status, task form, recent tasks, steps). Open: the owner's first run and a real spoken task; approvals shown inside N.E.K.O as read-only notices (design needed, approval itself must stay in JARVIS).
+## Status update 2026-10-14 (everything of N.E.K.O should work)
+Done: upstream's CI gates run against this tree (see the verification record in 05_OPERATIONS): about 45,000 Python and 950 frontend tests pass, every failure traced to its cause (environment, a test-only dependency, or history-dependent audits), and the two real gaps were fixed (this repo's plugins lacked config schemas and metadata; the hyphen lint saw `jarvis/`). Optional extras installed (local ASR, OCR fork). Frontend assets copied and verified served.
+Open: needs the owner's model key and a real conversation to exercise voice and model-backed features; Developer Mode for the two symlink tests (optional); Playwright e2e suites (optional).

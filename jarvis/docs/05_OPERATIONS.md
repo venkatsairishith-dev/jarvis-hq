@@ -168,3 +168,22 @@ Never restart while a lab job runs: a runner report sent during the restart is l
 **Same commands as N.E.K.O:** developing is the project's own workflow (`uv sync`, `uv run python -m app.main_server`); JARVIS is not a second app with its own launcher to learn.
 **Checks:** `neko-plugin check main_agent`, `neko-plugin check jarvis_bridge`, and `npm run check-hosted-tsx -- plugin/plugins/<id>` in `frontend/plugin-manager`.
 **Built frontend assets are not in git.** The avatar models (`static\yui-origin`, `static\yui-lolita`, `static\pngtuber`), the chat bundle (`static\react`) and the plugin manager (`frontend\plugin-manager\dist`) are produced by N.E.K.O's `build_frontend.bat` (or copied from a built checkout). A fresh checkout without them logs "frontend assets not built" and the UI is degraded; `neko-start.ps1` warns when they are missing. At 2026-10-14 they were copied byte-for-byte (file counts and sizes equal) from the old clone `D:\jarvis\N.E.K.O` into `D:\jarvis\hq-neko`, together with JARVIS's ignored `evals\results` and `ui\test-results`; `ui\dist` and `config\connectors.local.json` had already been rebuilt and copied.
+## N.E.K.O verification record, 2026-10-14 (this tree: upstream 3ffcf7b9 plus jarvis/ and two plugins)
+Commands are upstream's own CI gates, run on this Windows laptop with the `neko-venv` environment (`uv sync --frozen --all-extras --group galgame` plus `kaldi-native-fbank==1.22.3`, the test-only oracle).
+| Gate | Result |
+|---|---|
+| `tests/unit` (upstream's marker expression, 8 workers) | 38,892 passed, 215 skipped, 15 failed (explained below) |
+| shard `unit_fast` | 889 passed, 1 failed (a differential audit that runs two specific historical upstream commits via `git show`; product code is identical to upstream) |
+| shard `runtime` | 1,741 passed |
+| shard `integration_serial` | exit 0 |
+| shard `frontend_contract` | 85 passed |
+| `plugin/tests` | 4,256 passed, 28 skipped, 9 failed: 8 were this repo's two plugins missing `config.schema.json` and packaged metadata (fixed, 235 convention and metadata tests now pass); 1 load-sensitive test that passes alone (76 of 76) |
+| process-model tests | 74 passed, 16 skipped |
+| React chat | typecheck exit 0; 891 unit tests passed (plus 57 Node tests) |
+| plugin manager | unit suite exit 0 |
+| click-guide, seven-day tutorial, VRM emotion | pass |
+| live | memory 48912, main 48911, agent 48915, plugin runtime 48916 answer `/health` 200; 14 plugins register with their entries; both JARVIS panels render in Edge |
+**The 15 `tests/unit` failures, explained.** 9 voice-overwrite crash tests launch `uv run`, so `uv` must be on PATH (they pass with `D:\jarvis\tools\uv` on PATH). 2 avatar-tool tests create symlinks, which needs Windows Developer Mode or an elevated shell (not set here, so they fail). 1 card-maker test matches Node's TAP line `# tests 6`; Node 24 prints `ℹ tests 6` (the 6 checks pass). 2 visit-runtime tests are timing-sensitive under 8 workers (90 of 90 pass run serially, twice). 1 ASR artifact test passes on re-run.
+**Test environment rules learned.** Do not set `NEKO_LANGUAGE` when running tests: forcing English made 36 locale tests fail (170 of 170 pass without it); the runtime still sets it. Put `D:\jarvis\tools\uv` on PATH. Use `TEMP` outside the repo and a throwaway `NEKO_STORAGE_SELECTED_ROOT`, and stop the N.E.K.O servers first so tests cannot collide with ports 48911 to 48916.
+**One lint changed:** `tests/unit/test_no_hyphen_python_packages.py` now also excludes the `jarvis/` subtree (its only offender is `jarvis/kaggle/model-server`, outside N.E.K.O's Nuitka bundle).
+**Not run:** plugin-manager boot and hosted e2e (Playwright Chromium), the wake-word native runtime build (needs a C++ toolchain; JARVIS keeps wake word off), and the desktop packaging builds (Nuitka, Electron). Not exercised live: model calls, voice, and the other 12 bundled plugins started (starting one persists an autostart preference), because there is no model key yet.
