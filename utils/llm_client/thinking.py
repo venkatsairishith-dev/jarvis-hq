@@ -26,6 +26,11 @@ _THINK_DANGLING_CLOSE_RE = re.compile(r"^.*?</think(?:ing)?\s*>", re.IGNORECASE 
 
 _THINK_ANY_CLOSE_RE = re.compile(r"</think(?:ing)?\s*>", re.IGNORECASE)
 
+_THINK_OPEN_RE = re.compile(r"\s*<think(?:ing)?\s*>", re.IGNORECASE)
+
+# Where a stripped closing tag used to sit: the reasoning ends, a blank gap of three or more newlines follows, then the answer.
+_THINK_GAP_RE = re.compile(r"\n{3,}")
+
 def strip_thinking_segments(text: str | None) -> str:
     """Remove leaked chain-of-thought from a *non-streaming* model reply.
 
@@ -47,6 +52,13 @@ def strip_thinking_segments(text: str | None) -> str:
     # 2) any close tag still present is unmatched → preceding text is thinking
     if _THINK_ANY_CLOSE_RE.search(s):
         s = _THINK_DANGLING_CLOSE_RE.sub("", s, count=1)
+    # 3) an opening tag whose close was dropped by the endpoint (seen with tools in the request): the reasoning ends at
+    #    the blank gap the tag left. Without such a gap the text is left alone.
+    opened = _THINK_OPEN_RE.match(s)
+    if opened:
+        gap = _THINK_GAP_RE.search(s, opened.end())
+        if gap:
+            s = s[gap.end():]
     return s.strip()
 
 class ThinkingStreamStripper:
@@ -71,9 +83,14 @@ class ThinkingStreamStripper:
     Split tags across chunks are safe — the buffer accumulates until matched.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, open_tag_only: bool = False) -> None:
+        """``open_tag_only`` is for models that ALWAYS open with ``<think>`` (MiniMax M2 family) and whose endpoint can
+        drop the closing ``</think>`` when tools are in the request: the reasoning then ends at the first run of three or
+        more newlines. A reply that does not start with ``<think>`` is passed through at once, and a reply that is only
+        an unclosed reasoning block yields nothing (it is never spoken or shown)."""
         self._buf = ""
         self._passthrough = False
+        self._open_tag_only = open_tag_only
 
     def feed(self, text: str) -> str:
         """Return the emittable slice of ``text`` (``""`` while still buffering)."""
@@ -92,6 +109,20 @@ class ThinkingStreamStripper:
             self._buf = ""
             self._passthrough = True
             return tail
+        if self._open_tag_only:
+            opened = _THINK_OPEN_RE.match(self._buf)
+            if opened is None:
+                probe = self._buf.lstrip().lower()
+                if len(probe) >= len("<thinking>") or (probe and not "<thinking>".startswith(probe)):
+                    out, self._buf, self._passthrough = self._buf, "", True      # not a reasoning reply: stream it
+                    return out
+                return ""                                                       # could still turn into an opening tag
+            gap = _THINK_GAP_RE.search(self._buf, opened.end())
+            if gap:
+                tail = self._buf[gap.end():]
+                self._buf = ""
+                self._passthrough = True
+                return tail
         return ""
 
     def flush(self) -> str:
@@ -100,6 +131,8 @@ class ThinkingStreamStripper:
             return ""
         residual = self._buf
         self._buf = ""
+        if self._open_tag_only and _THINK_OPEN_RE.match(residual):
+            return ""                                    # an unclosed reasoning block with no answer after it
         return residual
 
     def reset(self) -> None:

@@ -1302,11 +1302,14 @@ class _StreamingMixin:
                         # Gate on the SAME condition as _focus_stream_overrides
                         # (just ``thinking_on`` — vision turns now reason too).
                         from config.providers import always_inlines_thinking, leaks_thinking_in_content
-                        think_stripper = (
-                            ThinkingStreamStripper()
-                            if (thinking_on and leaks_thinking_in_content(self.model)) or always_inlines_thinking(self.model)
-                            else None
-                        )
+                        # Models that always open with <think> (MiniMax M2): the endpoint may drop the closing tag when
+                        # tools are in the request, so the stripper also ends the reasoning at the blank gap it leaves.
+                        if always_inlines_thinking(self.model):
+                            think_stripper = ThinkingStreamStripper(open_tag_only=True)
+                        elif thinking_on and leaks_thinking_in_content(self.model):
+                            think_stripper = ThinkingStreamStripper()
+                        else:
+                            think_stripper = None
                         # 工具图上总线时带上本轮的 turn_id，和这一轮的用户帧
                         # 归到同一个回合下；普通文本轮没有 turn_id，那里就是 None。
                         _focus_overrides["_tool_frames_turn_id"] = turn_id

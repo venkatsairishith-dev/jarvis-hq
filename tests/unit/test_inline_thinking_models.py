@@ -38,3 +38,41 @@ def test_a_reply_without_thinking_passes_through_untouched():
 
 def test_non_streaming_replies_are_cleaned_too():
     assert strip_thinking_segments("<think>reasoning here</think>Paris.") == "Paris."
+
+def _open_only(chunks):
+    s = ThinkingStreamStripper(open_tag_only=True)
+    out = "".join(s.feed(c) for c in chunks)
+    return out + s.flush()
+
+
+def test_unclosed_think_block_ends_at_the_blank_gap_the_endpoint_leaves():
+    """Seen live on Dahl with tools in the request: <think> stays, </think> is dropped, three newlines remain."""
+    raw = "<think>The user asks the capital. No tools needed.\n\n\nThe capital of France is Paris."
+    for size in (1, 4, 9, 1000):
+        chunks = [raw[i:i + size] for i in range(0, len(raw), size)]
+        assert _open_only(chunks).strip() == "The capital of France is Paris.", size
+
+
+def test_closed_block_still_works_in_open_tag_only_mode():
+    assert _open_only(["<think>reason</think>\n\nParis."]).strip() == "Paris."
+
+
+def test_reply_without_think_streams_through_immediately():
+    s = ThinkingStreamStripper(open_tag_only=True)
+    assert s.feed("Hello there, this is a plain reply") == "Hello there, this is a plain reply"
+    assert s.feed(" and more.") == " and more."
+
+
+def test_reasoning_only_reply_with_no_answer_yields_nothing():
+    assert _open_only(["<think>I should call a tool now.\n"]) == ""
+
+
+def test_a_reasoning_paragraph_break_is_not_the_end():
+    raw = "<think>Step one.\n\nStep two.\n\n\nAnswer: Paris."
+    assert _open_only([raw]).strip() == "Answer: Paris."
+
+
+def test_non_streaming_cleaner_handles_an_unclosed_think_block():
+    assert strip_thinking_segments("<think>reasoning\n\n\nParis.") == "Paris."
+    assert strip_thinking_segments("<think>reasoning only, no gap") == "<think>reasoning only, no gap"
+    assert strip_thinking_segments("Plain reply.") == "Plain reply."
