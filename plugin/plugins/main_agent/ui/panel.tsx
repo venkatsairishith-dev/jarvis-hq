@@ -2,7 +2,7 @@ import { ActionButton, ActionForm, Alert, Card, DataTable, Inline, Page, Stack, 
 import type { HostedAction, PluginSurfaceProps } from "@neko/plugin-ui"
 
 type Step = { id: string; agent: string; goal: string; state: string; error?: string }
-type Run = { id: string; state: string; summary: string; task: string; steps: Step[] }
+type Run = { id: string; state: string; summary: string; task: string; mode?: string; steps: Step[] }
 type State = { active?: boolean; current?: Run | null; history?: { id: string; state: string; summary: string }[] }
 
 const tone = (s: string) =>
@@ -33,6 +33,7 @@ export default function Panel(props: PluginSurfaceProps<State>) {
             <Stack>
               <Inline>
                 <StatusBadge tone={tone(cur.state)} label={cur.state} />
+                {cur.mode ? <StatusBadge tone="info" label={cur.mode} /> : null}
                 <Text>{cur.summary}</Text>
               </Inline>
               <DataTable

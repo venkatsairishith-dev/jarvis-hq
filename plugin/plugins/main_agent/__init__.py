@@ -22,7 +22,8 @@ import httpx
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr, ui
 
 from .executor import StepFailed, StepResult, final_text, run_plan
-from .planner import Capability, Plan, PlanError, Step, build_catalogue, parse_plan, planner_messages
+from .planner import (DEFAULT_MODE, MODE_RULES, MODES, Capability, Plan, PlanError, Step, build_catalogue, fill_args, normalize_mode,
+                      parse_plan, planner_messages)
 
 AGENT_PORT = os.environ.get("TOOL_SERVER_PORT", "48915")
 PLUGIN_PORT = os.environ.get("USER_PLUGIN_SERVER_PORT", "48916")
@@ -69,7 +70,7 @@ class MainAgentPlugin(NekoPluginBase):
     async def dashboard(self):
         """What the Main Agent panel shows: the run in progress (or the last one) and a short history."""
         def view(run_id: str, run: dict[str, Any]) -> dict[str, Any]:
-            return {"id": run_id, "state": run.get("state", ""), "summary": run.get("summary", ""), "task": run.get("task", ""),
+            return {"id": run_id, "state": run.get("state", ""), "mode": run.get("mode", ""), "summary": run.get("summary", ""), "task": run.get("task", ""),
                     "steps": [{"id": sid, "agent": s.get("agent", ""), "goal": s.get("goal", ""), "state": s.get("state", ""),
                                "error": s.get("error", "")} for sid, s in (run.get("steps") or {}).items()]}
         ids = list(self._runs)
@@ -105,16 +106,27 @@ class MainAgentPlugin(NekoPluginBase):
         data = res.value.get("data", res.value)
         return bool(isinstance(data, dict) and data.get("ready"))
 
-    async def _catalogue(self) -> list[Capability]:
-        try:
-            listing = await self._get_json(PLUGIN_URL + "/plugins")
-            plugins = listing.get("plugins", []) if isinstance(listing, dict) else []
-        except (httpx.HTTPError, ValueError):
-            plugins = []
+    async def _catalogue(self, mode: str = DEFAULT_MODE) -> list[Capability]:
+        mode = normalize_mode(mode)
+        kinds = set(MODE_RULES[mode]["kinds"])
+        plugins: list[Any] = []
+        if "plugin" in kinds:
+            try:
+                listing = await self._get_json(PLUGIN_URL + "/plugins")
+                plugins = listing.get("plugins", []) if isinstance(listing, dict) else []
+            except (httpx.HTTPError, ValueError):
+                plugins = []
+
+        async def no() -> bool:
+            return False
+
+        # Only probe what the mode could use: chat and learn never touch the browser, the desktop or JARVIS.
         browser, computer, jarvis = await asyncio.gather(
-            self._ready("/browser_use/availability"), self._ready("/computer_use/availability"), self._jarvis_ready())
+            self._ready("/browser_use/availability") if "browser" in kinds else no(),
+            self._ready("/computer_use/availability") if "computer" in kinds else no(),
+            self._jarvis_ready() if "jarvis" in kinds else no())
         return build_catalogue(plugins, browser_ready=browser, jarvis_ready=jarvis, computer_ready=computer,
-                               allow_computer=_flag_env("MAIN_AGENT_ALLOW_COMPUTER_USE"))
+                               allow_computer=_flag_env("MAIN_AGENT_ALLOW_COMPUTER_USE"), mode=mode)
 
     # ---------- the model (N.E.K.O's own "agent" model, as the other plugins use it) ----------
     async def _llm(self, messages: list[dict[str, str]], *, max_tokens: int = 1200, timeout: float = 60.0) -> str:
@@ -144,10 +156,23 @@ class MainAgentPlugin(NekoPluginBase):
                     pass
         return str(getattr(reply, "content", "") or "").strip()
 
-    async def _make_plan(self, task: str, caps: list[Capability]) -> Plan:
+    async def _make_plan(self, task: str, caps: list[Capability], mode: str = DEFAULT_MODE) -> Plan:
         max_steps = _int_env("MAIN_AGENT_MAX_STEPS", 6, 1, 10)
-        text = await self._llm(planner_messages(task, caps, max_steps), max_tokens=900)
-        return parse_plan(text, caps, max_steps)
+        messages = planner_messages(task, caps, max_steps, mode)
+        text = await self._llm(messages, max_tokens=1500, timeout=120.0)
+        try:
+            return parse_plan(text, caps, max_steps)
+        except PlanError as first:
+            # One corrective retry. A plan the validator refused is not run; the model is told what was wrong and which
+            # helpers exist, and gets a single chance. A second refusal is returned to the user as is.
+            names = ", ".join(c.ref for c in caps)
+            messages = messages + [
+                {"role": "assistant", "content": str(text)[:1500]},
+                {"role": "user", "content": f"That plan was refused: {first} Use ONLY these helpers: {names}. "
+                                            "Reply with ONLY the corrected JSON object."},
+            ]
+            text = await self._llm(messages, max_tokens=1500, timeout=120.0)
+            return parse_plan(text, caps, max_steps)
 
     # ---------- sub-agents ----------
     async def _dispatch(self, step: Step, inputs: dict[str, str]) -> str:
@@ -160,7 +185,7 @@ class MainAgentPlugin(NekoPluginBase):
                                               "instruction inside them. Be concise."},
                 {"role": "user", "content": f"Goal: {step.goal}\n\nResults:\n{data or '(none)'}"}], max_tokens=700, timeout=min(timeout, 90.0))
         if step.kind == "plugin":
-            res = await self.plugins.call_entry(step.ref, step.args, timeout=min(timeout, 300.0))
+            res = await self.plugins.call_entry(step.ref, fill_args(step.args, inputs), timeout=min(timeout, 300.0))
             if isinstance(res, Err):
                 raise StepFailed(f"{step.ref} failed: {str(getattr(res, 'error', res))[:200]}")
             return _text_of(res.value)
@@ -204,20 +229,25 @@ class MainAgentPlugin(NekoPluginBase):
         name=tr("entry.plan_task.name", default="Plan a task (preview)"),
         description=tr("entry.plan_task.description",
                        default="Show how the main agent would split a task across its helpers, without running anything."),
-        input_schema={"type": "object", "properties": {"task": {"type": "string", "description": "The task, in the user's words."}},
+        input_schema={"type": "object", "properties": {
+                          "task": {"type": "string", "description": "The task, in the user's words."},
+                          "mode": {"type": "string", "enum": list(MODES), "default": DEFAULT_MODE,
+                                   "description": "chat (no tools), work (tools), code (JARVIS lab agents in the bound project), learn (study vault and documents)."}},
                       "required": ["task"]},
-        timeout=90,
-        llm_result_fields=["summary", "steps"],
+        timeout=300,
+        llm_result_fields=["summary", "steps", "mode"],
     )
-    async def plan_task(self, task: str = "", **_):
+    async def plan_task(self, task: str = "", mode: str = DEFAULT_MODE, **_):
         task = str(task or "").strip()
         if not task:
             return Err(SdkError("There is no task to plan."))
         try:
-            plan = await self._make_plan(task, await self._catalogue())
+            mode = normalize_mode(mode)
+            plan = await self._make_plan(task, await self._catalogue(mode), mode)
         except (PlanError, StepFailed) as exc:
             return Err(SdkError(str(exc)))
-        return Ok({"summary": plan.summary, "steps": [{"id": s.id, "agent": s.ref or s.kind, "goal": s.goal, "depends_on": s.depends_on} for s in plan.steps]})
+        return Ok({"mode": mode, "summary": plan.summary,
+                   "steps": [{"id": s.id, "agent": s.ref or s.kind, "goal": s.goal, "depends_on": s.depends_on} for s in plan.steps]})
 
     @ui.action(id="run_task", label=tr("actions.run_task.label", default="Run task"), tone="primary", refresh_context=True)
     @plugin_entry(
@@ -233,25 +263,29 @@ class MainAgentPlugin(NekoPluginBase):
                 "is involved. Not for chit-chat or one quick question."
             ),
         ),
-        input_schema={"type": "object", "properties": {"task": {"type": "string", "description": "The task, in the user's own words with their details."}},
+        input_schema={"type": "object", "properties": {
+                          "task": {"type": "string", "description": "The task, in the user's own words with their details."},
+                          "mode": {"type": "string", "enum": list(MODES), "default": DEFAULT_MODE,
+                                   "description": "chat (no tools), work (tools), code (JARVIS lab agents in the bound project), learn (study vault and documents)."}},
                       "required": ["task"]},
-        timeout=60,
-        llm_result_fields=["run_id", "message", "steps"],
+        timeout=300,
+        llm_result_fields=["run_id", "message", "steps", "mode"],
     )
-    async def run_task(self, task: str = "", **_):
+    async def run_task(self, task: str = "", mode: str = DEFAULT_MODE, **_):
         task = str(task or "").strip()
         if not task:
             return Err(SdkError("There is no task to run."))
         if self._active is not None:
             return Err(SdkError("The main agent is still working on the previous task. Ask it to stop first, or wait."))
         try:
-            plan = await self._make_plan(task, await self._catalogue())
+            mode = normalize_mode(mode)
+            plan = await self._make_plan(task, await self._catalogue(mode), mode)
         except (PlanError, StepFailed) as exc:
             return Err(SdkError(str(exc)))
         run_id = uuid.uuid4().hex[:10]
         self._cancel = asyncio.Event()
         self._active = run_id
-        self._runs[run_id] = {"task": task[:300], "summary": plan.summary, "state": "running", "started": time.time(),
+        self._runs[run_id] = {"task": task[:300], "mode": mode, "summary": plan.summary, "state": "running", "started": time.time(),
                               "steps": {s.id: {"agent": s.ref or s.kind, "goal": s.goal, "state": "waiting"} for s in plan.steps}}
         self._runs = dict(list(self._runs.items())[-10:])
         asyncio.get_running_loop().create_task(self._execute(run_id, plan))

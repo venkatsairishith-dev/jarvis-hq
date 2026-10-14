@@ -36,7 +36,7 @@ def make(monkeypatch, llm_reply=None, plugin_result=None):
     p.pushed = []
     p.push_message = lambda **kw: p.pushed.append(kw)
 
-    async def catalogue():
+    async def catalogue(mode="work"):
         return CAPS
 
     async def llm(messages, **kw):
@@ -159,3 +159,37 @@ def test_an_unconfigured_model_is_reported_before_any_call(monkeypatch):
     with pytest.raises(StepFailed) as e:
         asyncio.run(p._llm([{"role": "user", "content": "hi"}]))
     assert "not set up" in str(e.value)
+
+
+def test_a_refused_plan_gets_one_corrective_retry_and_a_second_refusal_is_final(monkeypatch):
+    p = make(monkeypatch)
+    replies = ['{"summary": "x", "steps": [{"id": "s1", "agent": "browser", "goal": "g"}]}', json.dumps(PLAN)]
+    seen = []
+
+    async def llm(messages, **kw):
+        seen.append(messages)
+        return replies.pop(0)
+
+    p._llm = llm
+    res = asyncio.run(p.plan_task(task="look it up"))
+    assert len(seen) == 2 and "refused" in seen[1][-1]["content"] and "web_search:search" in seen[1][-1]["content"]
+    assert [s["id"] for s in res.value["steps"]] == ["s1", "s2"]
+
+    always_bad = '{"summary": "x", "steps": [{"id": "s1", "agent": "browser", "goal": "g"}]}'
+    calls = []
+
+    async def bad_llm(messages, **kw):
+        calls.append(1)
+        return always_bad
+
+    p._llm = bad_llm
+    res = asyncio.run(p.plan_task(task="look it up"))
+    assert type(res).__name__ == "Err" and len(calls) == 2            # exactly one retry, never a loop
+
+
+def test_a_dependent_plugin_step_receives_the_earlier_result_in_its_content(monkeypatch):
+    from plugin.plugins.main_agent.planner import Step
+    p = make(monkeypatch)
+    step = Step("s2", "plugin", "save", ref="learn_vault:save_note", args={"path": "exercises/a.md", "content": "# Exercises\n{{s1}}"}, depends_on=["s1"])
+    asyncio.run(p._dispatch(step, {"s1": "1. What is chlorophyll?"}))
+    assert p.calls[-1] == ("learn_vault:save_note", {"path": "exercises/a.md", "content": "# Exercises\n1. What is chlorophyll?"})

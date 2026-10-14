@@ -88,3 +88,120 @@ def test_unsafe_or_malformed_plans_are_refused(mutate, needle):
 def test_non_plans_are_refused(text):
     with pytest.raises(PlanError):
         parse_plan(text, caps(), 6)
+
+
+# ---------- conversation modes narrow the closed catalogue ----------
+from plugin.plugins.main_agent.planner import MODES, normalize_mode  # noqa: E402
+
+
+def mode_plugins():
+    return plugins() + [
+        {"id": "learn_vault", "status": "running", "entries": [{"id": "save_note", "description": "Save a note", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}}]},
+        {"id": "doc_tools", "status": "running", "entries": [{"id": "read_document", "description": "Read a document", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}]},
+    ]
+
+
+def caps_for(mode, **kw):
+    base = dict(browser_ready=True, jarvis_ready=True, computer_ready=True, allow_computer=True)
+    base.update(kw)
+    return build_catalogue(mode_plugins(), mode=mode, **base)
+
+
+def test_chat_mode_exposes_no_tools():
+    assert refs(caps_for("chat")) == {"think"}
+
+
+def test_work_mode_has_the_tools_but_not_the_study_vault():
+    r = refs(caps_for("work"))
+    assert {"think", "browser", "jarvis", "computer", "web_search:search", "doc_tools:read_document"} <= r
+    assert not any(x.startswith("learn_vault:") for x in r)
+
+
+def test_code_mode_is_jarvis_only_so_every_action_goes_through_the_kernel():
+    assert refs(caps_for("code")) == {"think", "jarvis"}
+    assert refs(caps_for("code", jarvis_ready=False)) == {"think"}          # never falls back to anything else
+
+
+def test_learn_mode_is_the_vault_and_documents_only():
+    assert refs(caps_for("learn")) == {"think", "learn_vault:save_note", "doc_tools:read_document"}
+
+
+def test_a_mode_never_adds_what_is_not_running_or_ready():
+    p = [dict(x, status="stopped") if x["id"] == "learn_vault" else x for x in mode_plugins()]
+    assert "learn_vault:save_note" not in refs(build_catalogue(p, browser_ready=False, jarvis_ready=False, computer_ready=False,
+                                                              allow_computer=False, mode="learn"))
+
+
+def test_plans_cannot_use_a_helper_the_mode_removed():
+    work_plan = {"summary": "s", "steps": [{"id": "s1", "agent": "browser", "goal": "look it up"}]}
+    parse_plan(json.dumps(work_plan), caps_for("work"), 6)                  # fine in work mode
+    with pytest.raises(PlanError):
+        parse_plan(json.dumps(work_plan), caps_for("code"), 6)              # the same plan is refused in code mode
+    vault_plan = {"summary": "s", "steps": [{"id": "s1", "agent": "plugin", "plugin": "learn_vault:save_note", "goal": "save",
+                                             "args": {"path": "notes/a.md", "content": "x"}}]}
+    parse_plan(json.dumps(vault_plan), caps_for("learn"), 6)
+    with pytest.raises(PlanError):
+        parse_plan(json.dumps(vault_plan), caps_for("work"), 6)
+
+
+def test_unknown_modes_are_refused_and_the_default_is_work():
+    assert normalize_mode(None) == "work" and normalize_mode(" LEARN ") == "learn"
+    with pytest.raises(PlanError):
+        normalize_mode("root")
+    assert set(MODES) == {"chat", "work", "code", "learn"}
+
+
+def test_the_prompt_states_the_mode():
+    for mode in MODES:
+        m = planner_messages("task", caps_for(mode), 4, mode)
+        assert f"Mode: {mode}." in m[0]["content"]
+
+
+# ---------- reasoning text from a reasoning model ----------
+from plugin.plugins.main_agent.planner import strip_reasoning  # noqa: E402
+
+
+def test_reasoning_blocks_are_removed_before_parsing():
+    good = json.dumps(GOOD)
+    noisy = "<think>Let me plan {this} carefully, maybe {\"a\": 1} first.</think>\n" + good
+    assert parse_plan(noisy, caps(), 6).steps
+    assert strip_reasoning("<think>never closed {\"steps\": []}").strip() == ""
+    assert strip_reasoning("plain") == "plain"
+    assert parse_plan("<THINKING>x</THINKING>" + good, caps(), 6).steps
+
+
+# ---------- passing an earlier result into a later plugin step ----------
+from plugin.plugins.main_agent.planner import fill_args  # noqa: E402
+
+
+def _save_caps():
+    return [Capability("think", "think", "t"),
+            Capability("plugin", "learn_vault:save_note", "save",
+                       {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]})]
+
+
+def _plan(args, deps=("s1",)):
+    return json.dumps({"summary": "s", "steps": [
+        {"id": "s1", "agent": "think", "goal": "write exercises"},
+        {"id": "s2", "agent": "plugin", "plugin": "learn_vault:save_note", "goal": "save", "args": args, "depends_on": list(deps)}]})
+
+
+def test_a_result_may_fill_a_content_argument_of_a_dependent_step():
+    plan = parse_plan(_plan({"path": "exercises/a.md", "content": "# Exercises\n\n{{s1}}"}), _save_caps(), 6)
+    assert plan.steps[1].args["content"].endswith("{{s1}}")
+
+
+def test_a_result_cannot_steer_other_arguments_or_a_step_it_does_not_depend_on():
+    with pytest.raises(PlanError) as e:
+        parse_plan(_plan({"path": "{{s1}}", "content": "x"}), _save_caps(), 6)         # the path must not come from data
+    assert "may take one" in str(e.value)
+    with pytest.raises(PlanError):
+        parse_plan(_plan({"path": "a.md", "content": "{{s1}}"}, deps=()), _save_caps(), 6)
+
+
+def test_fill_args_substitutes_truncates_and_leaves_other_values_alone():
+    out = fill_args({"path": "a.md", "content": "Intro\n{{s1}}\nEnd {{ s2 }} {{nope}}", "n": 3},
+                    {"s1": "X" * 50000, "s2": "two"})
+    assert out["path"] == "a.md" and out["n"] == 3
+    assert out["content"].startswith("Intro\n") and out["content"].count("X") == 20000 and out["content"].endswith("End two ")
+    assert "{{" not in out["content"]

@@ -16,6 +16,17 @@
       "id": "plan_task",
       "input_schema": {
         "properties": {
+          "mode": {
+            "default": "work",
+            "description": "chat (no tools), work (tools), code (JARVIS lab agents in the bound project), learn (study vault and documents).",
+            "enum": [
+              "chat",
+              "work",
+              "code",
+              "learn"
+            ],
+            "type": "string"
+          },
           "task": {
             "description": "The task, in the user's words.",
             "type": "string"
@@ -29,16 +40,19 @@
       "kind": "action",
       "llm_result_fields": [
         "summary",
-        "steps"
+        "steps",
+        "mode"
       ],
       "llm_result_schema": {
         "properties": {
+          "mode": {},
           "steps": {},
           "summary": {}
         },
         "required": [
           "summary",
-          "steps"
+          "steps",
+          "mode"
         ],
         "type": "object"
       },
@@ -49,7 +63,7 @@
         "default": "Plan a task (preview)"
       },
       "return_message": "",
-      "timeout": 90
+      "timeout": 300
     },
     {
       "auto_start": false,
@@ -108,6 +122,17 @@
       "id": "run_task",
       "input_schema": {
         "properties": {
+          "mode": {
+            "default": "work",
+            "description": "chat (no tools), work (tools), code (JARVIS lab agents in the bound project), learn (study vault and documents).",
+            "enum": [
+              "chat",
+              "work",
+              "code",
+              "learn"
+            ],
+            "type": "string"
+          },
           "task": {
             "description": "The task, in the user's own words with their details.",
             "type": "string"
@@ -122,18 +147,21 @@
       "llm_result_fields": [
         "run_id",
         "message",
-        "steps"
+        "steps",
+        "mode"
       ],
       "llm_result_schema": {
         "properties": {
           "message": {},
+          "mode": {},
           "run_id": {},
           "steps": {}
         },
         "required": [
           "run_id",
           "message",
-          "steps"
+          "steps",
+          "mode"
         ],
         "type": "object"
       },
@@ -144,7 +172,7 @@
         "default": "Do a task with the right helpers"
       },
       "return_message": "",
-      "timeout": 60
+      "timeout": 300
     },
     {
       "auto_start": false,
@@ -203,6 +231,17 @@
       "id": "plan_task",
       "input_schema": {
         "properties": {
+          "mode": {
+            "default": "work",
+            "description": "chat (no tools), work (tools), code (JARVIS lab agents in the bound project), learn (study vault and documents).",
+            "enum": [
+              "chat",
+              "work",
+              "code",
+              "learn"
+            ],
+            "type": "string"
+          },
           "task": {
             "description": "The task, in the user's words.",
             "type": "string"
@@ -216,16 +255,19 @@
       "kind": "action",
       "llm_result_fields": [
         "summary",
-        "steps"
+        "steps",
+        "mode"
       ],
       "llm_result_schema": {
         "properties": {
+          "mode": {},
           "steps": {},
           "summary": {}
         },
         "required": [
           "summary",
-          "steps"
+          "steps",
+          "mode"
         ],
         "type": "object"
       },
@@ -241,7 +283,7 @@
         "icon": null,
         "priority": 0
       },
-      "timeout": 90
+      "timeout": 300
     },
     "main_agent.run_status": {
       "auto_start": false,
@@ -309,6 +351,17 @@
       "id": "run_task",
       "input_schema": {
         "properties": {
+          "mode": {
+            "default": "work",
+            "description": "chat (no tools), work (tools), code (JARVIS lab agents in the bound project), learn (study vault and documents).",
+            "enum": [
+              "chat",
+              "work",
+              "code",
+              "learn"
+            ],
+            "type": "string"
+          },
           "task": {
             "description": "The task, in the user's own words with their details.",
             "type": "string"
@@ -323,18 +376,21 @@
       "llm_result_fields": [
         "run_id",
         "message",
-        "steps"
+        "steps",
+        "mode"
       ],
       "llm_result_schema": {
         "properties": {
           "message": {},
+          "mode": {},
           "run_id": {},
           "steps": {}
         },
         "required": [
           "run_id",
           "message",
-          "steps"
+          "steps",
+          "mode"
         ],
         "type": "object"
       },
@@ -350,7 +406,7 @@
         "icon": null,
         "priority": 0
       },
-      "timeout": 60
+      "timeout": 300
     },
     "main_agent.stop_task": {
       "auto_start": false,
@@ -459,6 +515,17 @@
       "id": "plan_task",
       "input_schema": {
         "properties": {
+          "mode": {
+            "default": "work",
+            "description": "chat (no tools), work (tools), code (JARVIS lab agents in the bound project), learn (study vault and documents).",
+            "enum": [
+              "chat",
+              "work",
+              "code",
+              "learn"
+            ],
+            "type": "string"
+          },
           "task": {
             "description": "The task, in the user's words.",
             "type": "string"
@@ -472,16 +539,19 @@
       "kind": "action",
       "llm_result_fields": [
         "summary",
-        "steps"
+        "steps",
+        "mode"
       ],
       "llm_result_schema": {
         "properties": {
+          "mode": {},
           "steps": {},
           "summary": {}
         },
         "required": [
           "summary",
-          "steps"
+          "steps",
+          "mode"
         ],
         "type": "object"
       },
@@ -497,7 +567,7 @@
         "icon": null,
         "priority": 0
       },
-      "timeout": 90
+      "timeout": 300
     },
     "main_agent:plugin_entry:run_status": {
       "auto_start": false,
@@ -565,6 +635,17 @@
       "id": "run_task",
       "input_schema": {
         "properties": {
+          "mode": {
+            "default": "work",
+            "description": "chat (no tools), work (tools), code (JARVIS lab agents in the bound project), learn (study vault and documents).",
+            "enum": [
+              "chat",
+              "work",
+              "code",
+              "learn"
+            ],
+            "type": "string"
+          },
           "task": {
             "description": "The task, in the user's own words with their details.",
             "type": "string"
@@ -579,18 +660,21 @@
       "llm_result_fields": [
         "run_id",
         "message",
-        "steps"
+        "steps",
+        "mode"
       ],
       "llm_result_schema": {
         "properties": {
           "message": {},
+          "mode": {},
           "run_id": {},
           "steps": {}
         },
         "required": [
           "run_id",
           "message",
-          "steps"
+          "steps",
+          "mode"
         ],
         "type": "object"
       },
@@ -606,7 +690,7 @@
         "icon": null,
         "priority": 0
       },
-      "timeout": 60
+      "timeout": 300
     },
     "main_agent:plugin_entry:stop_task": {
       "auto_start": false,
@@ -653,7 +737,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 59854,
+  "source_bytes": 74041,
   "source_files": [
     ".gitignore",
     ".vscode/settings.json",
@@ -674,5 +758,5 @@
     "tests/test_smoke.py",
     "ui/panel.tsx"
   ],
-  "source_sha256": "a8c1e720ab8163d01cd1d6ce139cc6185bdbbd46355b6680d8a7e0477fc8eb29"
+  "source_sha256": "40a544820f815458975f6d34f92f91b9bfabb1cf2e3d6272b29383652466cd5b"
 }
