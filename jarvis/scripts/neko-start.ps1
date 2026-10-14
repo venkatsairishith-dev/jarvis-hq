@@ -19,6 +19,8 @@ $env:NEKO_STORAGE_SELECTED_ROOT = $Data
 $env:NEKO_LANGUAGE = "en"        # force English regardless of region/system detection
 $env:NEKO_SECRET_REF_ROOTS = "D:\jarvis-secrets"   # lets a stored API key be a "file:<path>" reference into this folder
 $env:PYTHONUTF8 = "1"
+$env:HF_HOME = "D:\jarvis\cache\hf"          # local speech-recognition model weights stay on D:
+$env:HF_HUB_DISABLE_TELEMETRY = "1"
 
 function Listening($port) { [bool](Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) }
 function Launch($module, $name) {
@@ -28,6 +30,13 @@ function Launch($module, $name) {
 
 if (-not (Listening 48912)) { Launch 'app.memory_server' 'memory'; foreach ($i in 1..20) { if (Listening 48912) { break }; Start-Sleep 1 } }
 if (-not (Listening 48911)) { Launch 'app.main_server' 'main';     foreach ($i in 1..40) { if (Listening 48911) { break }; Start-Sleep 1 } }
+# Local speech output: an OpenAI-compatible endpoint over JARVIS's own voice models (Kokoro, Piper), loopback only.
+$speechPy = "D:\jarvis\tools\jarvis-venv\Scripts\python.exe"
+if (-not (Listening 48930) -and (Test-Path $speechPy)) {
+  Start-Process $speechPy -ArgumentList (Join-Path $PSScriptRoot "local_speech_server.py"), "--port", "48930" -WindowStyle Hidden `
+    -RedirectStandardOutput "$logs\speech.out.log" -RedirectStandardError "$logs\speech.err.log" | Out-Null
+  foreach ($i in 1..20) { if (Listening 48930) { break }; Start-Sleep 1 }
+}
 # The agent server hosts the plugin runtime (48916) and routes tasks; the JARVIS plugins live there.
 if (-not (Listening 48915)) { Launch 'app.agent_server' 'agent';   foreach ($i in 1..40) { if ((Listening 48915) -and (Listening 48916)) { break }; Start-Sleep 1 } }
 
@@ -69,6 +78,7 @@ $node = try { (Get-ScheduledTask JarvisNode -ErrorAction Stop).State } catch { "
 "repo   : $repo"
 "memory 48912: " + (Listening 48912)
 "main   48911: " + (Listening 48911) + "   ->  http://127.0.0.1:48911/"
+"speech 48930: " + (Listening 48930) + "   (local text-to-speech)"
 "agent  48915: " + (Listening 48915) + "   plugins 48916: " + (Listening 48916)
 "plugins: $plugins"
 "jarvis : $jarvis | laptop node task: $node"

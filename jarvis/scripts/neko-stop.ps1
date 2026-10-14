@@ -10,4 +10,6 @@ $procs = Get-CimInstance Win32_Process | Where-Object {
   $inVenv -and $isNeko
 }
 foreach ($p in $procs) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; "stopped pid " + $p.ProcessId } catch { "could not stop pid " + $p.ProcessId } }
-if (-not $procs) { "no N.E.K.O server processes running" }
+$speech = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*local_speech_server.py*" }
+foreach ($p in $speech) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; "stopped speech server pid " + $p.ProcessId } catch { } }
+if (-not $procs -and -not $speech) { "no N.E.K.O server processes running" }

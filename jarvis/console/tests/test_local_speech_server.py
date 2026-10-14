@@ -1,0 +1,120 @@
+"""The local OpenAI-compatible speech endpoint: wire format, limits and safety, with a fake synthesizer (no models)."""
+import http.client
+import importlib.util
+import io
+import json
+import os
+import threading
+import unittest
+import wave
+from http.server import ThreadingHTTPServer
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SCRIPT = os.path.join(HERE, "..", "..", "scripts", "local_speech_server.py")
+spec = importlib.util.spec_from_file_location("local_speech_server", SCRIPT)
+lss = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lss)
+
+
+def tone_wav(rate=22050, seconds=0.5):
+    import math
+    n = int(rate * seconds)
+    pcm = b"".join(int(8000 * math.sin(2 * math.pi * 440 * i / rate)).to_bytes(2, "little", signed=True) for i in range(n))
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate); w.writeframes(pcm)
+    return buf.getvalue()
+
+
+class Server:
+    def __init__(self, synth):
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), lss.make_handler(synth))
+        self.port = self.srv.server_address[1]
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def request(self, method, path, body=None, headers=None):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        h = dict(headers or {})
+        data = None
+        if body is not None:
+            data = json.dumps(body).encode() if not isinstance(body, bytes) else body
+            h.setdefault("Content-Type", "application/json")
+        c.request(method, path, body=data, headers=h)
+        r = c.getresponse()
+        out = (r.status, r.getheader("Content-Type"), r.read())
+        c.close()
+        return out
+
+    def close(self):
+        self.srv.shutdown(); self.srv.server_close()
+
+
+class SpeechServer(unittest.TestCase):
+    def setUp(self):
+        self.calls = []
+
+        def synth(text, lang):
+            self.calls.append((text, lang))
+            if text == "boom":
+                raise RuntimeError("engine exploded with secret-path D:\\x")
+            if text == "toolong":
+                raise ValueError("text is too long to speak (1500 characters)")
+            return tone_wav(22050, 0.5)
+
+        self.s = Server(synth)
+
+    def tearDown(self):
+        self.s.close()
+
+    def test_pcm_is_24khz_mono_16bit_and_the_right_length(self):
+        code, ctype, body = self.s.request("POST", "/v1/audio/speech", {"model": "m", "input": "hello", "voice": "en", "response_format": "pcm"})
+        self.assertEqual(code, 200)
+        self.assertEqual(ctype, "audio/pcm")
+        self.assertEqual(len(body) % 2, 0)
+        self.assertAlmostEqual(len(body) / 2 / lss.OUT_RATE, 0.5, delta=0.01)        # 0.5 s from a 22.05 kHz source
+        self.assertTrue(any(body))                                                      # not silence
+
+    def test_default_format_is_pcm_and_wav_is_available(self):
+        code, ctype, body = self.s.request("POST", "/v1/audio/speech", {"input": "hello", "voice": "x"})
+        self.assertEqual((code, ctype), (200, "audio/pcm"))
+        code, ctype, body = self.s.request("POST", "/audio/speech", {"input": "hello", "response_format": "wav"})
+        self.assertEqual((code, ctype), (200, "audio/wav"))
+        self.assertEqual(body[:4], b"RIFF")
+
+    def test_voice_selects_the_language_and_unknown_voices_speak_english(self):
+        for voice, lang in (("hi", "hi"), ("Telugu", "te"), ("en", "en"), ("marin", "en"), ("", "en")):
+            self.s.request("POST", "/v1/audio/speech", {"input": "hello", "voice": voice})
+            self.assertEqual(self.calls[-1][1], lang, voice)
+
+    def test_bad_requests_are_refused_before_synthesis(self):
+        before = len(self.calls)
+        self.assertEqual(self.s.request("POST", "/v1/audio/speech", {"input": "  "})[0], 400)
+        self.assertEqual(self.s.request("POST", "/v1/audio/speech", b"not json")[0], 400)
+        self.assertEqual(self.s.request("POST", "/v1/audio/speech", {"input": "x", "response_format": "mp3"})[0], 400)
+        self.assertEqual(self.s.request("POST", "/v1/audio/speech", b"x" * (lss.MAX_BODY + 1))[0], 413)
+        self.assertEqual(self.s.request("POST", "/v1/other", {"input": "x"})[0], 404)
+        self.assertEqual(len(self.calls), before)
+
+    def test_engine_errors_do_not_leak_details(self):
+        code, _, body = self.s.request("POST", "/v1/audio/speech", {"input": "boom"})
+        self.assertEqual(code, 500)
+        self.assertNotIn(b"secret-path", body)
+        code, _, body = self.s.request("POST", "/v1/audio/speech", {"input": "toolong"})
+        self.assertEqual(code, 400)
+        self.assertIn(b"too long", body)
+
+    def test_only_loopback_host_names_are_served(self):
+        code, _, _ = self.s.request("POST", "/v1/audio/speech", {"input": "hi"}, headers={"Host": "evil.example"})
+        self.assertEqual(code, 403)
+        code, _, _ = self.s.request("GET", "/health", headers={"Host": "evil.example:48930"})
+        self.assertEqual(code, 403)
+        self.assertEqual(self.s.request("GET", "/health")[0], 200)
+        self.assertEqual(self.s.request("GET", "/v1/models")[0], 200)
+
+    def test_resampling_keeps_the_rate_when_it_already_matches(self):
+        wav = tone_wav(lss.OUT_RATE, 0.25)
+        self.assertEqual(len(lss.wav_to_pcm16(wav)), int(lss.OUT_RATE * 0.25) * 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
