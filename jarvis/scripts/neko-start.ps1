@@ -1,4 +1,4 @@
-# Start N.E.K.O from this repository (memory 48912, main + web UI 48911, agent + plugin runtime 48915/48916).
+# Start N.E.K.O from this repository with upstream's launcher.py (memory 48912, main + web UI 48911, agent + plugin runtime 48915/48916).
 # Windows. Runs from the repo root two levels above this script. Data and the Python environment stay on D:.
 # Safe to run twice: a server that already listens is left alone. Stop with neko-stop.ps1.
 #
@@ -23,13 +23,14 @@ $env:HF_HOME = "D:\jarvis\cache\hf"          # local speech-recognition model we
 $env:HF_HUB_DISABLE_TELEMETRY = "1"
 
 function Listening($port) { [bool](Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) }
-function Launch($module, $name) {
-  Start-Process $py -ArgumentList '-m', $module -WorkingDirectory $repo -WindowStyle Hidden `
-    -RedirectStandardOutput (Join-Path $logs "$name.out.log") -RedirectStandardError (Join-Path $logs "$name.err.log") | Out-Null
-}
 
-if (-not (Listening 48912)) { Launch 'app.memory_server' 'memory'; foreach ($i in 1..20) { if (Listening 48912) { break }; Start-Sleep 1 } }
-if (-not (Listening 48911)) { Launch 'app.main_server' 'main';     foreach ($i in 1..40) { if (Listening 48911) { break }; Start-Sleep 1 } }
+# The three N.E.K.O servers (memory 48912, main 48911, agent 48915 with the plugin runtime 48916) are started and watched by
+# upstream's own launcher.py, exactly as upstream intends from source. A server that already listens is reused by the launcher.
+if (-not ((Listening 48912) -and (Listening 48911) -and (Listening 48915))) {
+  Start-Process $py -ArgumentList 'launcher.py' -WorkingDirectory $repo -WindowStyle Hidden `
+    -RedirectStandardOutput (Join-Path $logs "launcher.out.log") -RedirectStandardError (Join-Path $logs "launcher.err.log") | Out-Null
+  foreach ($i in 1..240) { if ((Listening 48912) -and (Listening 48911) -and (Listening 48915) -and (Listening 48916)) { break }; Start-Sleep 1 }
+}
 # Local speech output: an OpenAI-compatible endpoint over JARVIS's own voice models (Kokoro, Piper), loopback only.
 $speechPy = "D:\jarvis\tools\jarvis-venv\Scripts\python.exe"
 if (-not (Listening 48930) -and (Test-Path $speechPy)) {
@@ -37,8 +38,7 @@ if (-not (Listening 48930) -and (Test-Path $speechPy)) {
     -RedirectStandardOutput "$logs\speech.out.log" -RedirectStandardError "$logs\speech.err.log" | Out-Null
   foreach ($i in 1..20) { if (Listening 48930) { break }; Start-Sleep 1 }
 }
-# The agent server hosts the plugin runtime (48916) and routes tasks; the JARVIS plugins live there.
-if (-not (Listening 48915)) { Launch 'app.agent_server' 'agent';   foreach ($i in 1..40) { if ((Listening 48915) -and (Listening 48916)) { break }; Start-Sleep 1 } }
+# The agent server (started by the launcher above) hosts the plugin runtime (48916) and routes tasks; the JARVIS plugins live there.
 
 # The startup scan can come up empty, so ask for a rescan and make sure both plugins are running (idempotent).
 $plugins = "not started"
