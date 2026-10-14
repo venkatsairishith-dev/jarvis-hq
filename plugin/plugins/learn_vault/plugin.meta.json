@@ -1,0 +1,1174 @@
+{
+  "build_env": {
+    "arch": "AMD64",
+    "os": "win32",
+    "python": "3.11"
+  },
+  "entries": [
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.get_progress.description",
+        "default": "Show the latest status of every topic the user is learning."
+      },
+      "event_key": "learn_vault.get_progress",
+      "event_type": "plugin_entry",
+      "id": "get_progress",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "topics"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "topics": {}
+        },
+        "required": [
+          "topics"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.get_progress.name",
+        "default": "Show learning progress"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_notes.description",
+        "default": "List the Markdown notes in the study vault, optionally inside one folder."
+      },
+      "event_key": "learn_vault.list_notes",
+      "event_type": "plugin_entry",
+      "id": "list_notes",
+      "input_schema": {
+        "properties": {
+          "folder": {
+            "description": "Folder inside the vault (optional).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "notes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "notes": {}
+        },
+        "required": [
+          "notes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_notes.name",
+        "default": "List study notes"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.read_note.description",
+        "default": "Read one note from the study vault by its path, for example notes/photosynthesis.md."
+      },
+      "event_key": "learn_vault.read_note",
+      "event_type": "plugin_entry",
+      "id": "read_note",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "description": "Path inside the vault.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "path",
+        "text"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "path": {},
+          "text": {}
+        },
+        "required": [
+          "path",
+          "text"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.read_note.name",
+        "default": "Read a study note"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.record_progress.description",
+        "default": "Record the user's progress on a topic: not_started, learning, review or mastered."
+      },
+      "event_key": "learn_vault.record_progress",
+      "event_type": "plugin_entry",
+      "id": "record_progress",
+      "input_schema": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "not_started",
+              "learning",
+              "review",
+              "mastered"
+            ],
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "status"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "topic",
+        "status"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "status": {},
+          "topic": {}
+        },
+        "required": [
+          "topic",
+          "status"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.record_progress.name",
+        "default": "Record learning progress"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.save_note.description",
+        "default": "Save Markdown text as a note in the study vault (summaries, explanations, exercises). Creates a new note; mode=append adds to an existing one. Never overwrites. Use folders such as notes/, summaries/ or exercises/."
+      },
+      "event_key": "learn_vault.save_note",
+      "event_type": "plugin_entry",
+      "id": "save_note",
+      "input_schema": {
+        "properties": {
+          "content": {
+            "description": "Markdown text.",
+            "type": "string"
+          },
+          "mode": {
+            "default": "create",
+            "enum": [
+              "create",
+              "append"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "description": "Path inside the vault, e.g. exercises/cell-biology.md",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "path",
+        "mode",
+        "bytes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "bytes": {},
+          "mode": {},
+          "path": {}
+        },
+        "required": [
+          "path",
+          "mode",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.save_note.name",
+        "default": "Save a study note"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.search_notes.description",
+        "default": "Search the study vault for a few words; returns the best matching notes with a snippet."
+      },
+      "event_key": "learn_vault.search_notes",
+      "event_type": "plugin_entry",
+      "id": "search_notes",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 10,
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "hits"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "hits": {}
+        },
+        "required": [
+          "hits"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.search_notes.name",
+        "default": "Search study notes"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.vault_status.description",
+        "default": "Show whether the study vault exists, how many notes and topics it has."
+      },
+      "event_key": "learn_vault.vault_status",
+      "event_type": "plugin_entry",
+      "id": "vault_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "exists",
+        "notes",
+        "topics"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "exists": {},
+          "notes": {},
+          "topics": {}
+        },
+        "required": [
+          "exists",
+          "notes",
+          "topics"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.vault_status.name",
+        "default": "Study vault status"
+      },
+      "return_message": "",
+      "timeout": 20
+    }
+  ],
+  "entries_config_sha256": "",
+  "entry_methods": {
+    "get_progress": "get_progress",
+    "list_notes": "list_notes",
+    "read_note": "read_note",
+    "record_progress": "record_progress",
+    "save_note": "save_note",
+    "search_notes": "search_notes",
+    "vault_status": "vault_status"
+  },
+  "handlers": {
+    "learn_vault.get_progress": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.get_progress.description",
+        "default": "Show the latest status of every topic the user is learning."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "get_progress",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "topics"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "topics": {}
+        },
+        "required": [
+          "topics"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.get_progress.name",
+        "default": "Show learning progress"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "learn_vault.list_notes": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_notes.description",
+        "default": "List the Markdown notes in the study vault, optionally inside one folder."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "list_notes",
+      "input_schema": {
+        "properties": {
+          "folder": {
+            "description": "Folder inside the vault (optional).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "notes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "notes": {}
+        },
+        "required": [
+          "notes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_notes.name",
+        "default": "List study notes"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "learn_vault.read_note": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.read_note.description",
+        "default": "Read one note from the study vault by its path, for example notes/photosynthesis.md."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "read_note",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "description": "Path inside the vault.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "path",
+        "text"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "path": {},
+          "text": {}
+        },
+        "required": [
+          "path",
+          "text"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.read_note.name",
+        "default": "Read a study note"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "learn_vault.record_progress": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.record_progress.description",
+        "default": "Record the user's progress on a topic: not_started, learning, review or mastered."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "record_progress",
+      "input_schema": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "not_started",
+              "learning",
+              "review",
+              "mastered"
+            ],
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "status"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "topic",
+        "status"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "status": {},
+          "topic": {}
+        },
+        "required": [
+          "topic",
+          "status"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.record_progress.name",
+        "default": "Record learning progress"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "learn_vault.save_note": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.save_note.description",
+        "default": "Save Markdown text as a note in the study vault (summaries, explanations, exercises). Creates a new note; mode=append adds to an existing one. Never overwrites. Use folders such as notes/, summaries/ or exercises/."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "save_note",
+      "input_schema": {
+        "properties": {
+          "content": {
+            "description": "Markdown text.",
+            "type": "string"
+          },
+          "mode": {
+            "default": "create",
+            "enum": [
+              "create",
+              "append"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "description": "Path inside the vault, e.g. exercises/cell-biology.md",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "path",
+        "mode",
+        "bytes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "bytes": {},
+          "mode": {},
+          "path": {}
+        },
+        "required": [
+          "path",
+          "mode",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.save_note.name",
+        "default": "Save a study note"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "learn_vault.search_notes": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.search_notes.description",
+        "default": "Search the study vault for a few words; returns the best matching notes with a snippet."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "search_notes",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 10,
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "hits"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "hits": {}
+        },
+        "required": [
+          "hits"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.search_notes.name",
+        "default": "Search study notes"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "learn_vault.vault_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.vault_status.description",
+        "default": "Show whether the study vault exists, how many notes and topics it has."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "vault_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "exists",
+        "notes",
+        "topics"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "exists": {},
+          "notes": {},
+          "topics": {}
+        },
+        "required": [
+          "exists",
+          "notes",
+          "topics"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.vault_status.name",
+        "default": "Study vault status"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "learn_vault:lifecycle:shutdown": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "shutdown",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "shutdown",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "learn_vault:lifecycle:startup": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "startup",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "startup",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "learn_vault:plugin_entry:get_progress": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.get_progress.description",
+        "default": "Show the latest status of every topic the user is learning."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "get_progress",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "topics"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "topics": {}
+        },
+        "required": [
+          "topics"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.get_progress.name",
+        "default": "Show learning progress"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "learn_vault:plugin_entry:list_notes": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_notes.description",
+        "default": "List the Markdown notes in the study vault, optionally inside one folder."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "list_notes",
+      "input_schema": {
+        "properties": {
+          "folder": {
+            "description": "Folder inside the vault (optional).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "notes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "notes": {}
+        },
+        "required": [
+          "notes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_notes.name",
+        "default": "List study notes"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "learn_vault:plugin_entry:read_note": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.read_note.description",
+        "default": "Read one note from the study vault by its path, for example notes/photosynthesis.md."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "read_note",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "description": "Path inside the vault.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "path",
+        "text"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "path": {},
+          "text": {}
+        },
+        "required": [
+          "path",
+          "text"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.read_note.name",
+        "default": "Read a study note"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "learn_vault:plugin_entry:record_progress": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.record_progress.description",
+        "default": "Record the user's progress on a topic: not_started, learning, review or mastered."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "record_progress",
+      "input_schema": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "not_started",
+              "learning",
+              "review",
+              "mastered"
+            ],
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "status"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "topic",
+        "status"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "status": {},
+          "topic": {}
+        },
+        "required": [
+          "topic",
+          "status"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.record_progress.name",
+        "default": "Record learning progress"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "learn_vault:plugin_entry:save_note": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.save_note.description",
+        "default": "Save Markdown text as a note in the study vault (summaries, explanations, exercises). Creates a new note; mode=append adds to an existing one. Never overwrites. Use folders such as notes/, summaries/ or exercises/."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "save_note",
+      "input_schema": {
+        "properties": {
+          "content": {
+            "description": "Markdown text.",
+            "type": "string"
+          },
+          "mode": {
+            "default": "create",
+            "enum": [
+              "create",
+              "append"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "description": "Path inside the vault, e.g. exercises/cell-biology.md",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "path",
+        "mode",
+        "bytes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "bytes": {},
+          "mode": {},
+          "path": {}
+        },
+        "required": [
+          "path",
+          "mode",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.save_note.name",
+        "default": "Save a study note"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "learn_vault:plugin_entry:search_notes": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.search_notes.description",
+        "default": "Search the study vault for a few words; returns the best matching notes with a snippet."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "search_notes",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 10,
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "hits"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "hits": {}
+        },
+        "required": [
+          "hits"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.search_notes.name",
+        "default": "Search study notes"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "learn_vault:plugin_entry:vault_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.vault_status.description",
+        "default": "Show whether the study vault exists, how many notes and topics it has."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "vault_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "exists",
+        "notes",
+        "topics"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "exists": {},
+          "notes": {},
+          "topics": {}
+        },
+        "required": [
+          "exists",
+          "notes",
+          "topics"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.vault_status.name",
+        "default": "Study vault status"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    }
+  },
+  "schema_version": 4,
+  "sdk_version": "0.1.0",
+  "source_bytes": 27753,
+  "source_files": [
+    ".gitignore",
+    ".vscode/settings.json",
+    ".vscode/tasks.json",
+    "README.md",
+    "__init__.py",
+    "config.example.toml",
+    "config.schema.json",
+    "core.py",
+    "plugin.toml",
+    "pyproject.toml",
+    "ruff.toml",
+    "tests/test_core.py",
+    "tests/test_smoke.py"
+  ],
+  "source_sha256": "4771f3e663c4f6c3abf034c226bea6a1048646dc85f7588fd2daeed20fa6f556"
+}
