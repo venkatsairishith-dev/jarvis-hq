@@ -31,7 +31,13 @@ class Console:
                 elif self.path == "/api/health":
                     body, code = health, 200
                 elif self.path == "/api/owner/state":
-                    body, code = {"busy": True}, 200
+                    body, code = {"busy": True, "approvals": [
+                        {"id": "a-1", "level": "YELLOW", "seconds_left": 240, "reason": "write a file",
+                         "action": {"tool": "pc", "op": "launch", "target": "notepad", "params": {"private": "SECRET PARAM TEXT"}}}]}, 200
+                elif self.path == "/api/owner/connectors":
+                    body, code = {"connectors": [
+                        {"name": "time", "label": "Time", "status": "connected", "enabled": True, "transport": "stdio", "lanes": ["private", "public"],
+                         "tools_enabled": 2, "endpoint": "https://hidden.example/mcp", "secret_ref": "connectors/token.txt", "env_refs": {"K": "x"}}]}, 200
                 else:
                     body, code = {"error": "nope"}, 404
                 data = json.dumps(body).encode()
@@ -68,6 +74,34 @@ def test_dashboard_shows_state_and_only_tasks_from_neko_never_reply_text(monkeyp
     assert len(d["recent"][1]["task"]) == 100                                       # long text is cut
     assert "PRIVATE REPLY TEXT" not in json.dumps(d)                                # replies stay in the JARVIS console
     assert d["console_url"] == c.url
+
+
+def test_dashboard_shows_waiting_approvals_and_connectors_read_only_without_parameters_or_references(monkeypatch):
+    c = Console()
+    try:
+        d = dash(monkeypatch, c.url)
+    finally:
+        c.close()
+    assert d["approvals"] == [{"id": "a-1", "level": "YELLOW", "what": "pc launch notepad", "seconds_left": 240, "reason": "write a file"}]
+    assert d["connectors"] == [{"name": "time", "label": "Time", "status": "connected", "enabled": True, "transport": "stdio",
+                                "lanes": ["private", "public"], "tools_enabled": 2}]
+    blob = json.dumps(d)
+    for leak in ("SECRET PARAM TEXT", "hidden.example", "token.txt", "env_refs"):
+        assert leak not in blob
+
+
+def test_the_bridge_entries_for_approvals_and_connectors_are_read_only_views(monkeypatch):
+    c = Console()
+    monkeypatch.setenv("JARVIS_CONSOLE_URL", c.url)
+    try:
+        plugin = object.__new__(JarvisBridgePlugin)
+        a = asyncio.run(JarvisBridgePlugin.pending_approvals(plugin))
+        k = asyncio.run(JarvisBridgePlugin.connector_overview(plugin))
+    finally:
+        c.close()
+    av = getattr(a, "value", None)
+    assert av["count"] == 1 and av["approvals"][0]["what"] == "pc launch notepad"
+    assert getattr(k, "value", None)["connectors"][0]["name"] == "time"
 
 
 def test_dashboard_reports_the_kill_switch(monkeypatch):

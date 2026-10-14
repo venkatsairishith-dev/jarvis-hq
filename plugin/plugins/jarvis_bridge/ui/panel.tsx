@@ -2,6 +2,8 @@ import { ActionButton, ActionForm, Alert, Card, DataTable, Inline, Page, Stack, 
 import type { HostedAction, PluginSurfaceProps } from "@neko/plugin-ui"
 
 type Recent = { id: string; state: string; when: string; task: string }
+type Approval = { id: string; level: string; what: string; seconds_left: number; reason: string }
+type Connector = { name: string; label: string; status: string; enabled: boolean; transport: string; tools_enabled: number }
 type State = {
   console_url?: string
   ready?: boolean
@@ -9,9 +11,9 @@ type State = {
   kill_switch_on?: boolean
   message?: string
   recent?: Recent[]
+  approvals?: Approval[]
+  connectors?: Connector[]
 }
-
-const stateTone = (s: string) => (s === "done" ? "success" : s === "failed" ? "danger" : s === "running" ? "info" : "default")
 
 export default function Panel(props: PluginSurfaceProps<State>) {
   const { actions, state, t } = props
@@ -25,6 +27,9 @@ export default function Panel(props: PluginSurfaceProps<State>) {
         ? t("panel.busy", { defaultValue: "Ready, busy" })
         : t("panel.ready", { defaultValue: "Ready" })
       : t("panel.notReady", { defaultValue: "Not ready" })
+  const approvals = state.approvals || []
+  const connectors = state.connectors || []
+  const console_url = state.console_url || "http://127.0.0.1:8799"
 
   return (
     <Page
@@ -39,6 +44,32 @@ export default function Panel(props: PluginSurfaceProps<State>) {
               <Text>{state.message || ""}</Text>
             </Inline>
             {check ? <ActionButton action={check} /> : null}
+          </Stack>
+        </Card>
+
+        <Card title={t("panel.approvals", { defaultValue: "Waiting for your approval" })}>
+          <Stack>
+            {approvals.length ? (
+              <>
+                <Alert
+                  tone="warning"
+                  message={t("panel.approvalsAlert", { defaultValue: "JARVIS is waiting for you. Approve or deny in the JARVIS console (it needs your PIN):" }) + " " + console_url}
+                />
+                <DataTable
+                  data={approvals}
+                  rowKey="id"
+                  columns={[
+                    { key: "level", label: t("panel.level", { defaultValue: "Risk" }) },
+                    { key: "what", label: t("panel.what", { defaultValue: "Action" }) },
+                    { key: "seconds_left", label: t("panel.secondsLeft", { defaultValue: "Seconds left" }) },
+                    { key: "reason", label: t("panel.reason", { defaultValue: "Why" }) },
+                  ]}
+                />
+              </>
+            ) : (
+              <Text>{t("panel.noApprovals", { defaultValue: "Nothing is waiting for your approval." })}</Text>
+            )}
+            <Text>{t("panel.readOnly", { defaultValue: "This view is read only: N.E.K.O cannot approve or deny anything." })}</Text>
           </Stack>
         </Card>
 
@@ -64,11 +95,25 @@ export default function Panel(props: PluginSurfaceProps<State>) {
           ) : (
             <Text>{t("panel.noRecent", { defaultValue: "No task has been handed over from N.E.K.O yet." })}</Text>
           )}
+        </Card>
+
+        <Card title={t("panel.connectors", { defaultValue: "Connected services" })}>
+          {connectors.length ? (
+            <DataTable
+              data={connectors}
+              rowKey="name"
+              columns={[
+                { key: "label", label: t("panel.connector", { defaultValue: "Service" }) },
+                { key: "status", label: t("panel.state", { defaultValue: "State" }) },
+                { key: "transport", label: t("panel.transport", { defaultValue: "Kind" }) },
+                { key: "tools_enabled", label: t("panel.toolsOn", { defaultValue: "Tools on" }) },
+              ]}
+            />
+          ) : (
+            <Text>{t("panel.noConnectors", { defaultValue: "No connectors are set up." })}</Text>
+          )}
           <Text>
-            {t("panel.approvals", {
-              defaultValue: "Results, approvals and the audit trail are in the JARVIS console:",
-            })}{" "}
-            {state.console_url || "http://127.0.0.1:8799"}
+            {t("panel.manage", { defaultValue: "Add, test or switch tools on in the JARVIS console (Connectors screen):" })} {console_url}
           </Text>
         </Card>
       </Stack>

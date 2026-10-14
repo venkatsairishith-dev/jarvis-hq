@@ -8,6 +8,41 @@
     {
       "auto_start": false,
       "description": {
+        "$i18n": "entry.connector_overview.description",
+        "default": "Read-only: the external services JARVIS is connected to and whether each is working. No endpoints or credentials are shown."
+      },
+      "event_key": "jarvis_bridge.connector_overview",
+      "event_type": "plugin_entry",
+      "id": "connector_overview",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "connectors"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "connectors": {}
+        },
+        "required": [
+          "connectors"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.connector_overview.name",
+        "default": "JARVIS connectors"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
         "$i18n": "entry.delegate_task.description",
         "default": "Hand a real task to JARVIS, the owner's main agent. Use it for work that needs planning, several steps or specialist helpers: research, writing or fixing code, working with files, using apps or the browser, or anything the user asks to 'get done'. JARVIS plans it, picks the right sub-agents and tools, asks the user for approval where needed and verifies the result. Do not use it for small talk or simple questions."
       },
@@ -98,6 +133,44 @@
     {
       "auto_start": false,
       "description": {
+        "$i18n": "entry.pending_approvals.description",
+        "default": "Read-only: how many actions JARVIS is waiting for the owner to approve, and what they are. Approving or denying is done in the JARVIS console with the owner's PIN, never from here."
+      },
+      "event_key": "jarvis_bridge.pending_approvals",
+      "event_type": "plugin_entry",
+      "id": "pending_approvals",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "count",
+        "approvals"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approvals": {},
+          "count": {}
+        },
+        "required": [
+          "count",
+          "approvals"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.pending_approvals.name",
+        "default": "JARVIS approvals waiting"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
         "$i18n": "entry.task_result.description",
         "default": "Check whether a task handed to JARVIS is still running, finished or failed. Leave command_id empty for the latest one."
       },
@@ -150,11 +223,55 @@
   ],
   "entries_config_sha256": "",
   "entry_methods": {
+    "connector_overview": "connector_overview",
     "delegate_task": "delegate_task",
     "jarvis_status": "jarvis_status",
+    "pending_approvals": "pending_approvals",
     "task_result": "task_result"
   },
   "handlers": {
+    "jarvis_bridge.connector_overview": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.connector_overview.description",
+        "default": "Read-only: the external services JARVIS is connected to and whether each is working. No endpoints or credentials are shown."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "connector_overview",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "connectors"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "connectors": {}
+        },
+        "required": [
+          "connectors"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.connector_overview.name",
+        "default": "JARVIS connectors"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
     "jarvis_bridge.delegate_task": {
       "auto_start": false,
       "description": {
@@ -250,6 +367,51 @@
       "name": {
         "$i18n": "entry.jarvis_status.name",
         "default": "Is JARVIS ready?"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "jarvis_bridge.pending_approvals": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.pending_approvals.description",
+        "default": "Read-only: how many actions JARVIS is waiting for the owner to approve, and what they are. Approving or denying is done in the JARVIS console with the owner's PIN, never from here."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "pending_approvals",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "count",
+        "approvals"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approvals": {},
+          "count": {}
+        },
+        "required": [
+          "count",
+          "approvals"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.pending_approvals.name",
+        "default": "JARVIS approvals waiting"
       },
       "persist": null,
       "quick_action": false,
@@ -370,6 +532,48 @@
       },
       "timeout": null
     },
+    "jarvis_bridge:plugin_entry:connector_overview": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.connector_overview.description",
+        "default": "Read-only: the external services JARVIS is connected to and whether each is working. No endpoints or credentials are shown."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "connector_overview",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "connectors"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "connectors": {}
+        },
+        "required": [
+          "connectors"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.connector_overview.name",
+        "default": "JARVIS connectors"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
     "jarvis_bridge:plugin_entry:delegate_task": {
       "auto_start": false,
       "description": {
@@ -474,6 +678,51 @@
       },
       "timeout": 20
     },
+    "jarvis_bridge:plugin_entry:pending_approvals": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.pending_approvals.description",
+        "default": "Read-only: how many actions JARVIS is waiting for the owner to approve, and what they are. Approving or denying is done in the JARVIS console with the owner's PIN, never from here."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "pending_approvals",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "count",
+        "approvals"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approvals": {},
+          "count": {}
+        },
+        "required": [
+          "count",
+          "approvals"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.pending_approvals.name",
+        "default": "JARVIS approvals waiting"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
     "jarvis_bridge:plugin_entry:task_result": {
       "auto_start": false,
       "description": {
@@ -536,7 +785,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 34889,
+  "source_bytes": 42902,
   "source_files": [
     ".gitignore",
     ".vscode/settings.json",
@@ -554,5 +803,5 @@
     "tests/test_smoke.py",
     "ui/panel.tsx"
   ],
-  "source_sha256": "ab72755a2204c3ad1e52609820d6fcb1be2f93da65196c4f1e7dbf5afe52427d"
+  "source_sha256": "645fdcea1c3ca5f4afee9c3748d1072a02757a010621fed3b0e245e46d989fae"
 }

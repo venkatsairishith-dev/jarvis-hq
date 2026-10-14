@@ -100,3 +100,35 @@ class JarvisClient:
             "kill_switch_on": bool(kernel.get("killed")),
             "busy": busy,
         }
+
+    async def approvals(self) -> list[dict[str, Any]]:
+        """Approvals waiting for the owner, read only and without the action's parameters (they can hold private text).
+
+        Approving or denying happens in JARVIS, with the owner's PIN. This only lets N.E.K.O show that something is waiting.
+        """
+        state = await self._request("GET", "/api/owner/state")
+        rows = state.get("approvals") if isinstance(state, dict) else None
+        out: list[dict[str, Any]] = []
+        for a in rows if isinstance(rows, list) else []:
+            if not isinstance(a, dict):
+                continue
+            act = a.get("action") if isinstance(a.get("action"), dict) else {}
+            what = " ".join(str(x) for x in (act.get("tool"), act.get("op"), act.get("target")) if x)
+            out.append({"id": str(a.get("id") or "")[:40], "level": str(a.get("level") or "")[:20],
+                        "what": " ".join(what.split())[:140], "seconds_left": int(a.get("seconds_left") or 0),
+                        "reason": " ".join(str(a.get("reason") or "").split())[:140]})
+        return out[:10]
+
+    async def connectors(self) -> list[dict[str, Any]]:
+        """Connector names and states only: no endpoints, no secret references, no tool arguments."""
+        data = await self._request("GET", "/api/owner/connectors")
+        rows = data.get("connectors") if isinstance(data, dict) else None
+        out: list[dict[str, Any]] = []
+        for c in rows if isinstance(rows, list) else []:
+            if not isinstance(c, dict):
+                continue
+            out.append({"name": str(c.get("name") or "")[:60], "label": str(c.get("label") or c.get("name") or "")[:80],
+                        "status": str(c.get("status") or "")[:30], "enabled": bool(c.get("enabled")),
+                        "transport": str(c.get("transport") or "")[:20], "lanes": [str(x)[:12] for x in (c.get("lanes") or [])][:3],
+                        "tools_enabled": int(c.get("tools_enabled") or 0)})
+        return out[:30]

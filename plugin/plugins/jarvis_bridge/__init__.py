@@ -38,12 +38,18 @@ class JarvisBridgePlugin(NekoPluginBase):
         client = JarvisClient()
         out: dict[str, Any] = {"console_url": client.base, "ready": False, "busy": None, "kill_switch_on": False,
                                "message": "", "recent": []}
+        out["approvals"], out["connectors"] = [], []
         try:
             status = await client.status()
             rows = await client.commands(20)
         except BridgeError as exc:
             out["message"] = exc.message
             return out
+        try:                                               # read-only extras: a failure here never hides the status
+            out["approvals"] = await client.approvals()
+            out["connectors"] = await client.connectors()
+        except BridgeError:
+            pass
         out.update(ready=status["kernel_reachable"] and status["kernel_authorized"] and not status["kill_switch_on"],
                    busy=status["busy"], kill_switch_on=status["kill_switch_on"])
         out["message"] = ("The kill switch is on." if status["kill_switch_on"] else "JARVIS is ready." if out["ready"]
@@ -161,3 +167,35 @@ class JarvisBridgePlugin(NekoPluginBase):
         else:
             message = "JARVIS is ready."
         return Ok({"ready": ready, "busy": s["busy"], "message": message})
+
+    @plugin_entry(
+        id="pending_approvals",
+        name=tr("entry.pending_approvals.name", default="JARVIS approvals waiting"),
+        description=tr("entry.pending_approvals.description", default=(
+            "Read-only: how many actions JARVIS is waiting for the owner to approve, and what they are. Approving or "
+            "denying is done in the JARVIS console with the owner's PIN, never from here.")),
+        timeout=20,
+        llm_result_fields=["count", "approvals"],
+    )
+    async def pending_approvals(self, **_):
+        try:
+            rows = await JarvisClient().approvals()
+        except BridgeError as exc:
+            return Err(SdkError(exc.message))
+        return Ok({"count": len(rows), "approvals": rows})
+
+    @plugin_entry(
+        id="connector_overview",
+        name=tr("entry.connector_overview.name", default="JARVIS connectors"),
+        description=tr("entry.connector_overview.description", default=(
+            "Read-only: the external services JARVIS is connected to and whether each is working. No endpoints or "
+            "credentials are shown.")),
+        timeout=20,
+        llm_result_fields=["connectors"],
+    )
+    async def connector_overview(self, **_):
+        try:
+            rows = await JarvisClient().connectors()
+        except BridgeError as exc:
+            return Err(SdkError(exc.message))
+        return Ok({"connectors": rows})
