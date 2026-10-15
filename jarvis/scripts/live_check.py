@@ -118,6 +118,23 @@ def local_team(with_adviser: bool):
               f"{td.get('note') or ''} {t.get('error') or ''}"[:200])
 
 
+def deliverables():
+    """Decks and reports through N.E.K.O's plugin runtime (no model call): built, animated, validated, rendered, checked."""
+    fix = Path(__file__).resolve().parents[2] / "plugin" / "plugins" / "deliverables" / "tests" / "fixtures"
+    for entry, name in (("make_presentation", "deck"), ("make_report", "report")):
+        spec = json.loads((fix / f"demo_{name}.json").read_text(encoding="utf-8"))
+        r = run_entry("deliverables", entry, {"spec": spec}, wait=420)
+        d = r.get("data") or {}
+        q = d.get("qa") or {}
+        failed = [k for k, v in (q.get("checks") or {}).items() if not v]
+        check(f"deliverables: the demo {name} is made and passes its checks", r["status"] == "succeeded" and q.get("passed"),
+              f"{d.get('kind')} {q.get('counts')} {('failed: ' + ', '.join(failed)) if failed else ''} {r.get('error') or ''}"[:200])
+        made = Path(d.get("folder") or "")
+        root = Path(r"D:\jarvis\outputs\neko\deliverables").resolve()
+        if made.name and root in made.resolve().parents:       # remove only the folder this check just made
+            shutil.rmtree(made, ignore_errors=True)
+
+
 def privacy():
     """The privacy gateway is up, N.E.K.O's Dahl calls go through it, and a made-up password leaves only as a placeholder."""
     code, _ = jget("http://127.0.0.1:48950/health")
@@ -153,6 +170,8 @@ EXPECTED = {
     "doc_tools": {"read_document", "write_document", "list_outputs"},
     "learn_vault": {"vault_status", "list_notes", "read_note", "search_notes", "save_note", "record_progress", "get_progress"},
     "local_team": {"ask_local", "solve_with_team", "team_status"},
+    "deliverables": {"make_presentation", "make_report", "open_output", "show_in_folder", "start_slideshow", "regenerate",
+                     "list_deliverables"},
 }
 
 
@@ -442,6 +461,7 @@ def main() -> int:
     guard("vault", vault)
     guard("speech", speech, not a.no_asr)
     guard("local team", local_team, not a.no_model)
+    guard("deliverables", deliverables)
     if not a.no_model:
         guard("model path", model_path)
     guard("robustness", robustness)

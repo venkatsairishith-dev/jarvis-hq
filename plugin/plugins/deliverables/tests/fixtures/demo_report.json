@@ -1,0 +1,35 @@
+{
+  "title": "Learning Cybersecurity with AI",
+  "subtitle": "A study roadmap with legal practice resources",
+  "author": "Neko",
+  "topic": "cybersecurity learning roadmap",
+  "summary": "This report outlines a practical way to learn cybersecurity using AI as a tutor while practising only on systems built for learning. It lists free resources [S1] [S3] [S4] and a suggested six-month plan.\n\nThe plan is a recommendation, not an industry standard; map it to the role you want using the NICE Framework [S2].",
+  "sources": [
+    {"id": "S1", "title": "OWASP Top Ten", "url": "https://owasp.org/www-project-top-ten/", "publisher": "OWASP Foundation"},
+    {"id": "S2", "title": "NICE Framework Resource Center", "url": "https://www.nist.gov/itl/applied-cybersecurity/nice/nice-framework-resource-center", "publisher": "NIST"},
+    {"id": "S3", "title": "Web Security Academy", "url": "https://portswigger.net/web-security", "publisher": "PortSwigger"},
+    {"id": "S4", "title": "OverTheWire Wargames", "url": "https://overthewire.org/wargames/", "publisher": "OverTheWire"},
+    {"id": "S5", "title": "MITRE ATT&CK", "url": "https://attack.mitre.org/", "publisher": "MITRE"}
+  ],
+  "sections": [
+    {"heading": "How AI helps a learner", "kind": "opinion",
+     "paragraphs": ["An AI assistant is most useful as a **patient tutor**: it explains concepts, quizzes you and reviews your own code. It is least useful when treated as an oracle, because it can be confidently wrong.",
+                    "Check what it says against primary sources such as the OWASP Top Ten [S1] and MITRE ATT&CK [S5]."],
+     "bullets": ["Ask for explanations at your level", "Ask it to check your reasoning, not to do the work", {"text": "Request sources and read them", "level": 1}]},
+    {"heading": "Practise only where you are allowed", "kind": "fact",
+     "paragraphs": ["Deliberately vulnerable labs exist so learners can practise legally. PortSwigger's Web Security Academy [S3] and the OverTheWire wargames [S4] are free examples."],
+     "callout": "Testing a system without written permission can be illegal. Use the lab systems the platforms provide.",
+     "table": {"columns": ["Resource", "Focus", "Cost"],
+               "rows": [["Web Security Academy [S3]", "Web vulnerabilities", "Free"], ["OverTheWire [S4]", "Linux and fundamentals", "Free"],
+                        ["OWASP Top Ten [S1]", "Web risk categories", "Free"], ["NICE Framework [S2]", "Roles and skills", "Free"]],
+               "caption": "Free learning resources mentioned in this report."}},
+    {"heading": "A suggested six-month plan", "kind": "recommendation",
+     "paragraphs": ["The split below is an example for about twelve hours a week. It is a plan, not measured data."],
+     "chart": {"type": "bar", "title": "Suggested weekly hours", "labels": ["Theory", "Labs", "Projects", "Review"],
+               "series": [{"name": "Hours", "values": [3, 5, 3, 1]}], "caption": "Example weekly study split (a recommendation).", "unit": "hours"},
+     "bullets": ["Months 1-2: networking, Linux, scripting and web fundamentals", "Months 3-4: hands-on web labs and detection practice",
+                 "Months 5-6: threat modelling with ATT&CK [S5] and a portfolio project"]},
+    {"heading": "What is still uncertain", "kind": "uncertain", "level": 3,
+     "paragraphs": ["How well AI tutors improve long-term skill compared with traditional study has not been settled; treat any claim either way with care."]}
+  ]
+}

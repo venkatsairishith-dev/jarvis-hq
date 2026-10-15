@@ -251,6 +251,20 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **Measured and rejected.** GLiNER-PII base: on the same set, fewer secrets found at a usable false-alarm level than small plus Jev. Whole-message reading: surrounding text lowers GLiNER's scores, so it reads sentence by sentence.
 - **Seen live.** MiniMax spent its whole 2,000-token budget deliberating whether a password-related task was allowed. The adviser prompt now says to think briefly and that placeholders are the owner's own data. A budget spent on reasoning is reported instead of silently ignored.
 
+## D21 Deliverables: decks and reports (Neko phase 1, 2026-10-16)
+- **Research:** `jarvis/docs/neko/evidence/05-documents-pptx-pdf.md`. No maintained open generator writes native charts, notes and PowerPoint animations together.
+- **Decks:**
+  - python-pptx (MIT) writes the content: three themes, ten layouts, native charts and tables, notes, citation footnotes, a Sources slide.
+  - OfficeCLI (Apache-2.0) adds transitions and entrance animations and validates the file against the OpenXML schema.
+  - LibreOffice (MPL-2.0) renders for checks and runs the slideshow, since there is no PowerPoint on this PC.
+- **Reports:** an HTML/CSS template printed by the installed Edge through Playwright: tagged PDF, bookmarks, links, page numbers. Charts come from matplotlib as SVG. Untrusted text is escaped, JavaScript is off, and network requests are blocked.
+- **Every deliverable carries a `qa.json`:**
+  - Text fit is measured with the real fonts.
+  - The rendered pages are checked: no text outside the page, page count, links, fonts, tags.
+  - Page images go in a contact sheet, so a person or a vision model can look at the result.
+- **Narrow desktop capability:** the plugin opens, shows in folder or presents **only files it made** under the output root (path-checked, extension allowlist). It needs no kernel round trip; this equals YELLOW_AUTO for its own outputs.
+- **Not done, on purpose:** morph-heavy designs (PowerPoint-only); Presenton and PPTAgent (telemetry by default, Linux only).
+
 ## D18 N.E.K.O is the base of the repository (2026-10-14)
 - **What changed.** The repository root is now N.E.K.O (Project-N-E-K-O/N.E.K.O, Apache-2.0, upstream 3ffcf7b9). The whole previous JARVIS tree (the old `main` at ff470e5, now branch `jarvis-hq-legacy`, also tag `pre-neko-base`) sits unchanged under `jarvis/`. It is a subtree merge (commit b77ddc7b), so both histories are kept and nothing was rewritten. Branches: `main` is the N.E.K.O-based tree, `neko-main` is a pure copy of N.E.K.O's main (tracks `neko/main`), `jarvis-hq-legacy` is the previous JARVIS history. Files: 0 N.E.K.O files modified or deleted, 305 added (jarvis/ and the two plugins), all 275 previous JARVIS files present. The `neko` remote's push URL is disabled.
 - **Why.** Owner direction ("use neko as our full base"), and the reuse-first rule: N.E.K.O already provides the character, voice and vision front end, five-layer memory, a plugin runtime and an agent server. JARVIS provides what N.E.K.O lacks: a deterministic authority, approvals, lanes, audit, connectors and lab agents. Rebuilding either would break the rule.

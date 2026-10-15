@@ -293,3 +293,29 @@ Source of the list: Playa-Cyrene/Cyrene-Agent (MIT, Electron/TypeScript). What w
   - local_team: 21.
   - `live_check.py`: 57 of 57 (`--no-model`). Local team: 5 of 5, including one MiniMax run.
 - Known limit: the model's labels are rough (a passcode can show up as `[USERNAME_2]`). Only the value is hidden, and the reply is restored locally.
+**Deliverables: PPTX decks and PDF reports (added 2026-10-16, D21):**
+- Plugin `deliverables`:
+  - `make_presentation`, `make_report`, `open_output`, `show_in_folder`, `start_slideshow`, `regenerate`, `list_deliverables`.
+  - Outputs go to `D:\jarvis\outputs\neko\deliverables\<time>-<title>\`: the file, `spec.json`, `qa.json` and `previews\` (page PNGs and a contact sheet).
+- Tools:
+
+  | Tool | Location | Licence | Verified | Notes |
+  |---|---|---|---|---|
+  | OfficeCLI v1.0.152 | `D:\jarvis\tools\officecli\v1.0.152` | Apache-2.0 | SHA256SUMS match | 22 Sep build, chosen because it is over 2 weeks old. Auto-update is off (`officecli config autoUpdate false`; the plugin also sets `OFFICECLI_SKIP_UPDATE=1`). It contacted its update server once on the first run, before that was set |
+  | LibreOffice 26.2.6 | `D:\jarvis\tools\libreoffice\26.2.6` | MPL-2.0 | sha256 match; GPG "Good signature" from the LibreOffice Build Team | 1.5 GB. Administrative extract (`msiexec /a`): no system registration and no file associations. Private profile in `D:\jarvis\cache\lo-profile`; first-run dialogs are pre-set off by the plugin |
+  | python-pptx 1.0.2, pdfplumber 0.11.10 | `neko-venv` | — | — | Installed with `uv pip`. **A future `uv sync` removes them: reinstall with the same pins** |
+
+- **Gotchas found:**
+  - OfficeCLI batches are all-or-nothing: one bad command undoes all.
+  - Tables cannot be animated.
+  - python-pptx writes chart axis ids that fail the schema; the builder fixes them.
+  - OfficeCLI leaves a background "resident" process holding the file; the plugin closes it.
+  - LibreOffice's first-run "Welcome" dialog blocked the first visible slideshow.
+- **Checks:**
+  - `python -m plugin.plugins.deliverables.tests.run_demo` builds the demo deck and report.
+  - `live_check.py` builds both through the plugin runtime, then deletes the folders it made.
+  - Measured here: deck 11 slides, 11 transitions, animations on 9 slides, schema-valid, ~10 s; report 5 pages, tagged, 5 source links, fonts embedded, ~5 s.
+- **Not verified:**
+  - Playback in PowerPoint (not installed).
+  - Whether LibreOffice advances slides on its own after animations. In one show the deck was on slide 2 after 15 s while the PC was in use, so a click cannot be ruled out. The owner should watch one run.
+  - Telugu/Hindi text in decks and reports.

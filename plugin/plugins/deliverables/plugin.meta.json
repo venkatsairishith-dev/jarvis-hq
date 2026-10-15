@@ -1,0 +1,1157 @@
+{
+  "build_env": {
+    "arch": "AMD64",
+    "os": "win32",
+    "python": "3.11"
+  },
+  "entries": [
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_deliverables.description",
+        "default": "The newest decks and reports, with whether their checks passed."
+      },
+      "event_key": "deliverables.list_deliverables",
+      "event_type": "plugin_entry",
+      "id": "list_deliverables",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "items",
+        "tools"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "items": {},
+          "tools": {}
+        },
+        "required": [
+          "items",
+          "tools"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_deliverables.name",
+        "default": "List made decks and reports"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.make_presentation.description",
+        "default": "Create a polished, animated PowerPoint deck (.pptx) from a structured outline, check it (text fit, schema, rendering) and optionally open it or start the slideshow. Slides: list of {layout, title, subtitle, bullets, notes, sources}. layout: title, section, bullets, two_column (left_title, left, right_title, right), chart (chart: {type: column|bar|line|pie, title, labels, series: [{name, values}], caption, unit}), table (table: {columns, rows, caption}), quote (quote, attribution), timeline (items: [{label, text}]), stats (items: [{label: '42%', text}]), closing. Cite with [S1] markers that match sources: [{id: 'S1', title, url, date, publisher}]."
+      },
+      "event_key": "deliverables.make_presentation",
+      "event_type": "plugin_entry",
+      "id": "make_presentation",
+      "input_schema": {
+        "properties": {
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          },
+          "spec": {
+            "description": "title, subtitle, author, topic, theme (auto if empty: midnight, paper, vivid), animate, sources, slides.",
+            "type": "object"
+          },
+          "start_show": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "slides",
+        "qa"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "qa": {},
+          "slides": {}
+        },
+        "required": [
+          "file",
+          "slides",
+          "qa"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.make_presentation.name",
+        "default": "Make a presentation"
+      },
+      "return_message": "",
+      "timeout": 600
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.make_report.description",
+        "default": "Create a professional PDF report (cover, contents, sections, tables, charts, references, page numbers, clickable links), check it and optionally open it. Sections: [{heading, level 2|3, kind: fact|opinion|uncertain|recommendation, paragraphs, bullets, callout, table, chart}]. Cite with [S1] markers matching sources."
+      },
+      "event_key": "deliverables.make_report",
+      "event_type": "plugin_entry",
+      "id": "make_report",
+      "input_schema": {
+        "properties": {
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          },
+          "spec": {
+            "description": "title, subtitle, author, topic, theme, summary, sources, sections.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "qa"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "qa": {}
+        },
+        "required": [
+          "file",
+          "qa"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.make_report.name",
+        "default": "Make a PDF report"
+      },
+      "return_message": "",
+      "timeout": 600
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.open_output.description",
+        "default": "Open a deck, report or preview this tool made."
+      },
+      "event_key": "deliverables.open_output",
+      "event_type": "plugin_entry",
+      "id": "open_output",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "opened"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "opened": {}
+        },
+        "required": [
+          "opened"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.open_output.name",
+        "default": "Open a made file"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.regenerate.description",
+        "default": "Build a deliverable again from its saved spec (into a new folder)."
+      },
+      "event_key": "deliverables.regenerate",
+      "event_type": "plugin_entry",
+      "id": "regenerate",
+      "input_schema": {
+        "properties": {
+          "folder": {
+            "type": "string"
+          },
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "qa"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "qa": {}
+        },
+        "required": [
+          "file",
+          "qa"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.regenerate.name",
+        "default": "Make it again"
+      },
+      "return_message": "",
+      "timeout": 600
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.show_in_folder.description",
+        "default": "Show a made file selected in File Explorer."
+      },
+      "event_key": "deliverables.show_in_folder",
+      "event_type": "plugin_entry",
+      "id": "show_in_folder",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "shown"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "shown": {}
+        },
+        "required": [
+          "shown"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.show_in_folder.name",
+        "default": "Show in folder"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.start_slideshow.description",
+        "default": "Start the slideshow of a deck this tool made (LibreOffice Impress, full screen)."
+      },
+      "event_key": "deliverables.start_slideshow",
+      "event_type": "plugin_entry",
+      "id": "start_slideshow",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "presenting"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "presenting": {}
+        },
+        "required": [
+          "presenting"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.start_slideshow.name",
+        "default": "Present a deck"
+      },
+      "return_message": "",
+      "timeout": 30
+    }
+  ],
+  "entries_config_sha256": "",
+  "entry_methods": {
+    "list_deliverables": "list_deliverables",
+    "make_presentation": "make_presentation",
+    "make_report": "make_report",
+    "open_output": "open_output",
+    "regenerate": "regenerate",
+    "show_in_folder": "show_in_folder",
+    "start_slideshow": "start_slideshow"
+  },
+  "handlers": {
+    "deliverables.list_deliverables": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_deliverables.description",
+        "default": "The newest decks and reports, with whether their checks passed."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "list_deliverables",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "items",
+        "tools"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "items": {},
+          "tools": {}
+        },
+        "required": [
+          "items",
+          "tools"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_deliverables.name",
+        "default": "List made decks and reports"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "deliverables.make_presentation": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.make_presentation.description",
+        "default": "Create a polished, animated PowerPoint deck (.pptx) from a structured outline, check it (text fit, schema, rendering) and optionally open it or start the slideshow. Slides: list of {layout, title, subtitle, bullets, notes, sources}. layout: title, section, bullets, two_column (left_title, left, right_title, right), chart (chart: {type: column|bar|line|pie, title, labels, series: [{name, values}], caption, unit}), table (table: {columns, rows, caption}), quote (quote, attribution), timeline (items: [{label, text}]), stats (items: [{label: '42%', text}]), closing. Cite with [S1] markers that match sources: [{id: 'S1', title, url, date, publisher}]."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "make_presentation",
+      "input_schema": {
+        "properties": {
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          },
+          "spec": {
+            "description": "title, subtitle, author, topic, theme (auto if empty: midnight, paper, vivid), animate, sources, slides.",
+            "type": "object"
+          },
+          "start_show": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "slides",
+        "qa"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "qa": {},
+          "slides": {}
+        },
+        "required": [
+          "file",
+          "slides",
+          "qa"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.make_presentation.name",
+        "default": "Make a presentation"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 600
+    },
+    "deliverables.make_report": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.make_report.description",
+        "default": "Create a professional PDF report (cover, contents, sections, tables, charts, references, page numbers, clickable links), check it and optionally open it. Sections: [{heading, level 2|3, kind: fact|opinion|uncertain|recommendation, paragraphs, bullets, callout, table, chart}]. Cite with [S1] markers matching sources."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "make_report",
+      "input_schema": {
+        "properties": {
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          },
+          "spec": {
+            "description": "title, subtitle, author, topic, theme, summary, sources, sections.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "qa"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "qa": {}
+        },
+        "required": [
+          "file",
+          "qa"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.make_report.name",
+        "default": "Make a PDF report"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 600
+    },
+    "deliverables.open_output": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.open_output.description",
+        "default": "Open a deck, report or preview this tool made."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "open_output",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "opened"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "opened": {}
+        },
+        "required": [
+          "opened"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.open_output.name",
+        "default": "Open a made file"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "deliverables.regenerate": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.regenerate.description",
+        "default": "Build a deliverable again from its saved spec (into a new folder)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "regenerate",
+      "input_schema": {
+        "properties": {
+          "folder": {
+            "type": "string"
+          },
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "qa"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "qa": {}
+        },
+        "required": [
+          "file",
+          "qa"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.regenerate.name",
+        "default": "Make it again"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 600
+    },
+    "deliverables.show_in_folder": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.show_in_folder.description",
+        "default": "Show a made file selected in File Explorer."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "show_in_folder",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "shown"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "shown": {}
+        },
+        "required": [
+          "shown"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.show_in_folder.name",
+        "default": "Show in folder"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "deliverables.start_slideshow": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.start_slideshow.description",
+        "default": "Start the slideshow of a deck this tool made (LibreOffice Impress, full screen)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "start_slideshow",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "presenting"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "presenting": {}
+        },
+        "required": [
+          "presenting"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.start_slideshow.name",
+        "default": "Present a deck"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "deliverables:lifecycle:shutdown": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "shutdown",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "shutdown",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "deliverables:lifecycle:startup": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "startup",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "startup",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "deliverables:plugin_entry:list_deliverables": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_deliverables.description",
+        "default": "The newest decks and reports, with whether their checks passed."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "list_deliverables",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "items",
+        "tools"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "items": {},
+          "tools": {}
+        },
+        "required": [
+          "items",
+          "tools"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_deliverables.name",
+        "default": "List made decks and reports"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "deliverables:plugin_entry:make_presentation": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.make_presentation.description",
+        "default": "Create a polished, animated PowerPoint deck (.pptx) from a structured outline, check it (text fit, schema, rendering) and optionally open it or start the slideshow. Slides: list of {layout, title, subtitle, bullets, notes, sources}. layout: title, section, bullets, two_column (left_title, left, right_title, right), chart (chart: {type: column|bar|line|pie, title, labels, series: [{name, values}], caption, unit}), table (table: {columns, rows, caption}), quote (quote, attribution), timeline (items: [{label, text}]), stats (items: [{label: '42%', text}]), closing. Cite with [S1] markers that match sources: [{id: 'S1', title, url, date, publisher}]."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "make_presentation",
+      "input_schema": {
+        "properties": {
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          },
+          "spec": {
+            "description": "title, subtitle, author, topic, theme (auto if empty: midnight, paper, vivid), animate, sources, slides.",
+            "type": "object"
+          },
+          "start_show": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "slides",
+        "qa"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "qa": {},
+          "slides": {}
+        },
+        "required": [
+          "file",
+          "slides",
+          "qa"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.make_presentation.name",
+        "default": "Make a presentation"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 600
+    },
+    "deliverables:plugin_entry:make_report": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.make_report.description",
+        "default": "Create a professional PDF report (cover, contents, sections, tables, charts, references, page numbers, clickable links), check it and optionally open it. Sections: [{heading, level 2|3, kind: fact|opinion|uncertain|recommendation, paragraphs, bullets, callout, table, chart}]. Cite with [S1] markers matching sources."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "make_report",
+      "input_schema": {
+        "properties": {
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          },
+          "spec": {
+            "description": "title, subtitle, author, topic, theme, summary, sources, sections.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "qa"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "qa": {}
+        },
+        "required": [
+          "file",
+          "qa"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.make_report.name",
+        "default": "Make a PDF report"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 600
+    },
+    "deliverables:plugin_entry:open_output": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.open_output.description",
+        "default": "Open a deck, report or preview this tool made."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "open_output",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "opened"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "opened": {}
+        },
+        "required": [
+          "opened"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.open_output.name",
+        "default": "Open a made file"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "deliverables:plugin_entry:regenerate": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.regenerate.description",
+        "default": "Build a deliverable again from its saved spec (into a new folder)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "regenerate",
+      "input_schema": {
+        "properties": {
+          "folder": {
+            "type": "string"
+          },
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "qa"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "qa": {}
+        },
+        "required": [
+          "file",
+          "qa"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.regenerate.name",
+        "default": "Make it again"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 600
+    },
+    "deliverables:plugin_entry:show_in_folder": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.show_in_folder.description",
+        "default": "Show a made file selected in File Explorer."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "show_in_folder",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "shown"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "shown": {}
+        },
+        "required": [
+          "shown"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.show_in_folder.name",
+        "default": "Show in folder"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "deliverables:plugin_entry:start_slideshow": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.start_slideshow.description",
+        "default": "Start the slideshow of a deck this tool made (LibreOffice Impress, full screen)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "start_slideshow",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "presenting"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "presenting": {}
+        },
+        "required": [
+          "presenting"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.start_slideshow.name",
+        "default": "Present a deck"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    }
+  },
+  "schema_version": 4,
+  "sdk_version": "0.1.0",
+  "source_bytes": 100586,
+  "source_files": [
+    ".gitignore",
+    "README.md",
+    "__init__.py",
+    "animate.py",
+    "core.py",
+    "deck.py",
+    "plugin.toml",
+    "pyproject.toml",
+    "qa.py",
+    "report.py",
+    "ruff.toml",
+    "spec.py",
+    "tests/__init__.py",
+    "tests/fixtures/demo_deck.json",
+    "tests/fixtures/demo_report.json",
+    "tests/run_demo.py",
+    "tests/test_core.py",
+    "tests/test_smoke.py",
+    "themes.py",
+    "tools.py"
+  ],
+  "source_sha256": "5190f7b8c9b6739cdfb47cae08873316cc208ba3e8ba9a754c98f8d96a5c4fd1"
+}

@@ -12,14 +12,15 @@ The status legend is the one in `NEKO_REQUIREMENTS.md`. This checklist is update
 - [x] Six parallel research reports with sources (`evidence/01`–`06`)
 - [x] Research report, requirements, architecture, model matrix, security model, this roadmap
 
-## Phase 1: deliverables (PDF and PPTX) — requirements D1–D6, X7
+## Phase 1: deliverables (PDF and PPTX) — requirements D1–D6, X7 ✅ (2026-10-16, D21)
 Why first: it is the largest missing capability with no owner dependency, and it is fully testable here.
-- [ ] Install pdfplumber and python-pptx into `neko-venv` (pinned versions at least 2 weeks old)
-- [ ] OfficeCLI on D: (checksum-verified); LibreOffice portable on D: (checksum-verified); free-space check before and after
-- [ ] `deliverables` plugin, `make_pdf(spec)`: HTML template, then Edge `page.pdf`, then checks (text, links, fonts, outline, overflow), then page PNGs
-- [ ] `deliverables` plugin, `make_pptx(spec)`: python-pptx themes (3 directions), native chart and table, notes, footnotes, a Sources slide; OfficeCLI transitions and animations, then `validate`; LibreOffice render; overflow and contents checks
-- [ ] `open_output` / `show_in_folder` / `start_slideshow`
-- [ ] Unit tests with fixed specs; one live end-to-end run (spec in, files opened)
+- [x] pdfplumber 0.11.10 and python-pptx 1.0.2 in `neko-venv`
+- [x] OfficeCLI v1.0.152 (SHA256SUMS) and LibreOffice 26.2.6 (sha256 and GPG) on D:. D: went from 19.1 to 17.4 GB free
+- [x] `make_report`: cover, contents, badges, tables, charts, references; tagged, bookmarks, links, fonts embedded (live: PASS)
+- [x] `make_presentation`: 3 themes, 10 layouts, native chart and table, notes, footnotes, Sources slide; OfficeCLI transitions and animations; schema-valid; LibreOffice render; checks (live: PASS)
+- [x] `open_output` / `show_in_folder` / `start_slideshow` / `regenerate` (slideshow: launched full screen through the plugin; watching it play is left to the owner)
+- [x] 16 unit tests; `run_demo.py`; `live_check.py` (2 new checks; 60 of 60 total, `--no-model`)
+- [ ] OWNER: watch one slideshow and open a deck in PowerPoint for the web to confirm the animations play
 
 ## Phase 2: research with citations — R1–R4, O2
 - [ ] `research` plugin: bounded plan, then search (`web_search` plugin; Tavily/Brave if the owner adds a key), then fetch, then rank passages, then synthesise with per-sentence citations (Dahl via gateway, streamed), then claim check (Jev/HHEM), then a labelled report

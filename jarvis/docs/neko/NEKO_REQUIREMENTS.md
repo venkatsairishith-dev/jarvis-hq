@@ -22,7 +22,7 @@ The roadmap (`NEKO_IMPLEMENTATION_ROADMAP.md`) updates these statuses as work la
 | X4 | Push-to-talk works as an alternative to the wake word | Holding the hotkey records; releasing it sends | MISSING |
 | X5 | States: sleeping, wake-listening, waking, listening, thinking, working, speaking, completed, needs-permission, error/offline | Every state is driven by a real signal (no timers faking progress); a unit test per transition; a live check | MISSING |
 | X6 | Clickable fallback when the wake word is unavailable | Wake engine off: the icon still activates Neko | MISSING (with X1/X2) |
-| X7 | The completed state offers Open file, Show in folder and Regenerate | Each button works on a real output file | MISSING |
+| X7 | The completed state offers Open file, Show in folder and Regenerate | Each button works on a real output file | PARTIAL (plugin entries exist and work; the icon UI comes in phase 3) |
 | X8 | The needs-permission state shows exactly what needs approval | The text matches the kernel's pending action | PARTIAL: the widget shows a count |
 | X9 | Sleeping does not run a large LLM | No LLM process is loaded while idle (llama-swap TTL) | TESTED (TTL unload) |
 
@@ -74,12 +74,12 @@ The roadmap (`NEKO_IMPLEMENTATION_ROADMAP.md`) updates these statuses as work la
 
 | ID | Requirement | Acceptance test | Status |
 |---|---|---|---|
-| D1 | PPTX: outline, layouts, theme per topic, native charts and tables, speaker notes, source footnotes, Sources slide | Build a deck; python-pptx reopens it; rendered pages show no overflow | MISSING |
-| D2 | PPTX transitions and entrance animations that play in PowerPoint and degrade in LibreOffice | The XML has `p:transition` and `p:timing`; OfficeCLI validates the file | MISSING |
-| D3 | Render slides to images and inspect them visually | PNG per slide; overflow check | MISSING (no renderer installed) |
-| D4 | Open the deck and start the slideshow | `soffice --show` starts full screen | MISSING |
-| D5 | PDF: cover, headings, page numbers, links, tables, captions, charts, references, searchable text, embedded fonts | pypdf and pdfplumber checks pass; visual check of page images | MISSING |
-| D6 | Open the file or show it in the folder | The action works | PARTIAL (`pcopen` in the JARVIS node) |
+| D1 | PPTX: outline, layouts, theme per topic, native charts and tables, speaker notes, source footnotes, Sources slide | Build a deck; python-pptx reopens it; rendered pages show no overflow | TESTED (live, 2026-10-16) |
+| D2 | PPTX transitions and entrance animations that play in PowerPoint and degrade in LibreOffice | The XML has `p:transition` and `p:timing`; OfficeCLI validates the file | TESTED in the file; playback in PowerPoint not seen (OWNER) |
+| D3 | Render slides to images and inspect them visually | PNG per slide; overflow check | TESTED (LibreOffice render, contact sheet) |
+| D4 | Open the deck and start the slideshow | `soffice --show` starts full screen | TESTED (launched full screen through the plugin) |
+| D5 | PDF: cover, headings, page numbers, links, tables, captions, charts, references, searchable text, embedded fonts | pypdf and pdfplumber checks pass; visual check of page images | TESTED (live, 2026-10-16) |
+| D6 | Open the file or show it in the folder | The action works | TESTED (deliverables `open_output`, `show_in_folder` for its own files) |
 
 ## 7. Computer control
 
