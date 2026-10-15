@@ -1,0 +1,35 @@
+# Neko local models, profile cpu16: CPU only, 12 GB RAM or more (NEKO_MODEL_MATRIX.md). llama-swap over llama.cpp's CPU build.
+# Files: python jarvis\scripts\fetch_models.py --profile cpu16. Speeds are estimates until benchmarked on such a machine.
+healthCheckTimeout: 240
+logLevel: info
+
+macros:
+  server: D:\jarvis\tools\llama.cpp\b11669\cpu\llama-server.exe --host 127.0.0.1 --port ${PORT} --jinja --no-webui -np 1
+  models: D:\jarvis\models\llm
+
+models:
+  # Generalist: Ling-3.0-tiny (MIT), a mixture of experts: 7.9B parameters in the file, 1.3B used per token, so it is fast
+  # on a CPU once loaded (needs about 5-6 GB of RAM).
+  ling-tiny:
+    cmd: ${server} -m ${models}\Ling-3.0-tiny-Q4_K_M.gguf -c 8192
+    aliases: [general, local-general]
+    ttl: 300
+  # Router and tool choice: Qwen3.5-4B (Apache-2.0).
+  qwen3.5-4b:
+    cmd: ${server} -m ${models}\Qwen3.5-4B-Q4_K_M.gguf -c 8192
+    aliases: [router-llm, local-router]
+    ttl: 300
+  qwen-coder-1.5b:
+    cmd: ${server} -m ${models}\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf -c 8192
+    aliases: [code, local-code]
+    ttl: 300
+  qwen-math-1.5b:
+    cmd: ${server} -m ${models}\Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf -c 4096
+    aliases: [math, maths, local-math]
+    ttl: 300
+
+groups:
+  one-at-a-time:
+    swap: true
+    exclusive: true
+    members: [ling-tiny, qwen3.5-4b, qwen-coder-1.5b, qwen-math-1.5b]

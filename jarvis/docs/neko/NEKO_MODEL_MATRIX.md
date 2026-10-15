@@ -74,7 +74,7 @@ The model budget is about 2-3 GB, with one LLM loaded at a time.
 | Role | Model | Size | Placement | Speed | Status |
 |---|---|---|---|---|---|
 | R (first line) | rules → Verdict → Ling one-word router | — | CPU and GPU | ~150 ms / ~1 s [L] | **in use** (D20) |
-| R (tool choice) | Qwen3.5-4B Q4_K_M | 2.74 GB | all on GPU | needs a benchmark (Qwen3-4B was ~35 tok/s [L]) | **candidate**: must pass the GPU-vs-CPU output check (Gated DeltaNet on Vulkan) |
+| R (tool choice) | Qwen3.5-4B Q4_K_M | 2.74 GB | all on GPU | **10.7 tok/s on Vulkan, 5-6 on CPU [L]** (`jarvis/bench/neko/result.json`) | **measured, not adopted here**: output correct on Vulkan (same meaning as the CPU build, normal wording drift; JSON identical), but 3x slower than Ling, and routing already scores 0.94 at ~1 s. Kept for the cpu16 profile |
 | P, S, general | Ling-3.0-tiny Q4_K_M | 4.49 GB | `-ngl 99 --n-cpu-moe 16 -np 1` | 31 tok/s [L] | **in use** |
 | C | Qwen2.5-Coder-1.5B Q4_K_M | 1.04 GB | GPU | 80 tok/s [L] | **in use** |
 | Maths | Qwen2.5-Math-1.5B Q4_K_M | 0.92 GB | GPU | 96 tok/s [L] | **in use** |

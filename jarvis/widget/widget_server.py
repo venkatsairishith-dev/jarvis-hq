@@ -214,6 +214,32 @@ def validate_action(body):
     return {"action": act, "path": path}, None
 
 
+FEEDBACK_FILE = os.path.join(DATA, "neko", "feedback.jsonl")
+
+
+def validate_feedback(body):
+    """{"rating": "up"|"down", "file"?: path of a made file, "run_id"?: str, "note"?: short text}."""
+    if not isinstance(body, dict) or body.get("rating") not in ("up", "down"):
+        return None, "rating must be up or down"
+    note = " ".join(str(body.get("note") or "").split())[:300]
+    rec = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "rating": body["rating"], "note": note,
+           "run_id": str(body.get("run_id") or "")[:64]}
+    if body.get("file"):
+        path = os.path.realpath(str(body["file"]))
+        if not path.startswith(os.path.realpath(DELIVERABLES_ROOT) + os.sep):
+            return None, "feedback can only point at files Neko made"
+        rec["file"] = path
+    return rec, None
+
+
+def save_feedback(rec, path=None):
+    path = path or FEEDBACK_FILE
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    return {"ok": True, "saved": True}
+
+
 def do_action(clean, fetch=fetch_json):
     act = clean["action"]
     if act == "stop":
@@ -300,12 +326,17 @@ def make_handler(page_path, fetch=fetch_json):
             if not host_ok(host) or not origin_ok(self.headers.get("Origin"), host):
                 return self._json(403, {"error": "loopback and same origin only"})
             route = self.path.split("?", 1)[0]
-            if route not in ("/api/task", "/api/action"):
+            if route not in ("/api/task", "/api/action", "/api/feedback"):
                 return self._json(404, {"error": "not found"})
             try:
                 body = json.loads(raw.decode("utf-8"))
             except (ValueError, UnicodeDecodeError):
                 return self._json(400, {"ok": False, "error": "send JSON"})
+            if route == "/api/feedback":
+                rec, err = validate_feedback(body)
+                if err:
+                    return self._json(400, {"ok": False, "error": err})
+                return self._json(200, save_feedback(rec))
             if route == "/api/action":
                 clean, err = validate_action(body)
                 if err:

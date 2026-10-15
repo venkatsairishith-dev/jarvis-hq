@@ -180,6 +180,46 @@ def route(task: str, post: Callable = post_json) -> tuple[str, str]:
     return "general", "default"
 
 
+# ---------- memory guard ----------
+
+# Free RAM needed to load each specialist (model file plus working memory, rounded up; vram4/cpu profiles). A model already
+# loaded costs nothing more. Override with NEKO_MODEL_RAM_GB_<NAME>, e.g. NEKO_MODEL_RAM_GB_GENERAL=7.
+NEED_GB = {"general": 5.5, "code": 1.8, "math": 1.6, "router-llm": 3.5}
+RESERVE_GB = 1.5                    # always left for Windows, the browser and N.E.K.O
+
+
+def loaded_models(get: Callable = None) -> set[str]:
+    """Ids and aliases of models llama-swap has loaded (its /running lists ids only, so read /v1/models with status)."""
+    try:
+        data = (get or get_json)(f"{LOCAL_BASE}/models")
+        out = set()
+        for m in data.get("data") or []:
+            if (m.get("status") or {}).get("value") == "ready":
+                out.add(m.get("id"))
+                out |= set(((m.get("meta") or {}).get("llamaswap") or {}).get("aliases") or [])
+        return out
+    except Exception:                                   # noqa: BLE001 - unknown: let the guard decide on RAM alone
+        return set()
+
+
+def memory_ok(model: str, free_gb: float | None = None, loaded: set[str] | None = None) -> tuple[bool, str]:
+    """(ok, message). Refuses to load a model that would push free memory under the reserve."""
+    if loaded and model in loaded:
+        return True, ""
+    if free_gb is None:
+        try:
+            import psutil
+            free_gb = psutil.virtual_memory().available / 2**30
+        except ImportError:
+            return True, ""
+    need = float(os.environ.get(f"NEKO_MODEL_RAM_GB_{model.upper().replace('-', '_')}", NEED_GB.get(model, 2.0)))
+    if free_gb - need < RESERVE_GB:
+        return False, (f"Not enough free memory to load the local {model} model: it needs about {need:.1f} GB and "
+                       f"{free_gb:.1f} GB is free (keeping {RESERVE_GB} GB for everything else). Close some programs or "
+                       "let the remote model do it.")
+    return True, ""
+
+
 # ---------- the local specialists ----------
 
 def ask_local(task: str, specialist: str = "auto", *, think: bool = False, post: Callable = post_json,
@@ -194,6 +234,9 @@ def ask_local(task: str, specialist: str = "auto", *, think: bool = False, post:
         specialist, how = route(task, post)
     if specialist not in SPECIALISTS:
         raise TeamError(f"Unknown specialist {specialist!r}; use auto, code, math or general.")
+    ok, why = memory_ok(SPECIALISTS[specialist], loaded=loaded_models())
+    if not ok:
+        raise TeamError(why)
     body = {"model": SPECIALISTS[specialist], "max_tokens": max_tokens, "temperature": 0.2,
             "messages": [{"role": "user", "content": task}]}
     if specialist == "general":

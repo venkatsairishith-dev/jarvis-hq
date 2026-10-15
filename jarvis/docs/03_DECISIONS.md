@@ -251,6 +251,24 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **Measured and rejected.** GLiNER-PII base: on the same set, fewer secrets found at a usable false-alarm level than small plus Jev. Whole-message reading: surrounding text lowers GLiNER's scores, so it reads sentence by sentence.
 - **Seen live.** MiniMax spent its whole 2,000-token budget deliberating whether a password-related task was allowed. The adviser prompt now says to think briefly and that placeholders are the owner's own data. A budget spent on reasoning is reported instead of silently ignored.
 
+## D25 Measured improvement: evaluations and feedback (Neko phase 7, part 1, 2026-10-16)
+- **Scorecard:** `jarvis/evals/neko_evals.py` scores the small models and pipelines on fixed labelled sets and saves each run.
+  - It compares each run with the last one; a drop exits 1.
+  - It is the gate for any prompt, model or threshold change. Changes go through git, which gives versioning and rollback.
+- **Feedback:** the Neko icon records 👍/👎 per deliverable in `feedback.jsonl`. It is read by people when tuning and never applied automatically.
+- **Not done, on purpose:**
+  - No self-modifying prompts.
+  - No automatic memory writes from feedback.
+  - No fine-tuning (D10; research evidence 06 says an encoder intent model comes first if routing ever falls short).
+
+## D24 Hardware profiles, memory guard, provider fallback (Neko phase 4, 2026-10-16)
+- **Hardware detector:** reads GPU memory from llama.cpp itself (WMI's AdapterRAM is 32-bit and wrong above 4 GB). It picks one of five profiles from the model matrix, and each profile has its own llama-swap config.
+- **Memory guard:** in `local_team` rather than as a wrapper around llama-server. A wrapper process would orphan the server on Windows when llama-swap stops it.
+- **Fallback:** inside the privacy gateway, so every provider gets only redacted text.
+  - One attempt per provider per request, and only on rate limits, server errors or timeouts; a 429 cools that provider down. There are no loops.
+  - Keys are separate files, one per provider; no rotating several keys for one provider (evidence 06: provider terms).
+- **Measured:** Qwen3.5-4B on this GPU is correct but only 10.7 tok/s, so it is not adopted here (model matrix).
+
 ## D23 Neko icon and states from real signals (Neko phase 3, 2026-10-16)
 - **Reused:** the existing widget server and Edge app-mode window. No new process, and no edit to N.E.K.O files.
 - **Signals come from our own components:**

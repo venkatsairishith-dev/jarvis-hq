@@ -16,13 +16,18 @@ import urllib.request
 
 DEST = r"D:\jarvis\models\llm"
 UA = {"User-Agent": "jarvis-model-fetch"}
-MODELS = [
-    # (role, repo, file)
-    ("generalist (MoE, 1.3B active)", "inclusionAI/Ling-3.0-tiny-GGUF", "Ling-3.0-tiny-Q4_K_M.gguf"),
-    ("code", "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF", "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"),
-    ("maths", "bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF", "Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf"),
+LING = ("generalist (MoE, 1.3B active)", "inclusionAI/Ling-3.0-tiny-GGUF", "Ling-3.0-tiny-Q4_K_M.gguf")
+CODER = ("code", "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF", "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")
+MATH = ("maths", "bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF", "Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf")
+PROFILE_MODELS = {   # (role, repo, file) per hardware profile (jarvis/docs/neko/NEKO_MODEL_MATRIX.md)
     # The generalist also routes; SmolLM2-360M was tried as a router and dropped (too inaccurate, see local_team/core.py).
-]
+    "vram4": [LING, CODER, MATH],
+    "cpu8": [("general + router", "unsloth/Qwen3.5-2B-GGUF", "Qwen3.5-2B-Q4_K_M.gguf"), CODER, MATH],
+    "cpu16": [LING, ("router + tool choice", "unsloth/Qwen3.5-4B-GGUF", "Qwen3.5-4B-Q4_K_M.gguf"), CODER, MATH],
+    "vram8plus": [("general + router", "unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q4_K_M.gguf"), CODER, MATH],
+    "remote_only": [],
+}
+MODELS = PROFILE_MODELS["vram4"]
 
 
 def meta(repo, fname):
@@ -64,10 +69,12 @@ def download(repo, fname, size, path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--profile", choices=sorted(PROFILE_MODELS), default="vram4",
+                    help="model set for a hardware profile (see jarvis/local_models/hwdetect.py)")
     a = ap.parse_args()
     os.makedirs(DEST, exist_ok=True)
     rows = []
-    for role, repo, fname in MODELS:
+    for role, repo, fname in PROFILE_MODELS[a.profile]:
         size, want = meta(repo, fname)
         path = os.path.join(DEST, fname)
         if not os.path.exists(path) and not a.check:

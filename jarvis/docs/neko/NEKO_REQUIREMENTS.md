@@ -39,13 +39,13 @@ The roadmap (`NEKO_IMPLEMENTATION_ROADMAP.md`) updates these statuses as work la
 
 | ID | Requirement | Acceptance test | Status |
 |---|---|---|---|
-| M1 | Hardware detector (CPU, RAM, GPU/VRAM, disk, OS) portable to other PCs | A unit test with fake readings; a live run gives the right profile here | MISSING |
-| M2 | Recommend models per hardware profile | The profile selects a llama-swap config | MISSING |
-| M3 | Load on demand, unload idle models, enforce a memory budget | A RAM check before load refuses an oversize model | PARTIAL: TTL and exclusive GPU group; no RAM guard |
+| M1 | Hardware detector (CPU, RAM, GPU/VRAM, disk, OS) portable to other PCs | A unit test with fake readings; a live run gives the right profile here | TESTED (vram4 here; 3 tests) |
+| M2 | Recommend models per hardware profile | The profile selects a llama-swap config | TESTED (vram4 here); other profiles written, not run on such hardware |
+| M3 | Load on demand, unload idle models, enforce a memory budget | A RAM check before load refuses an oversize model | TESTED (memory guard in local_team) |
 | M4 | Route each task to the smallest suitable model | Routing tests; the D20 measurements | TESTED (rules → Jev → Ling) |
 | M5 | Show which provider and model handles a task | The run record and UI show the model | PARTIAL |
 | M6 | Remote use only when configured and authorised; private data redacted | Privacy gateway tests; lane rules | TESTED (D19/D20) |
-| M7 | Ordered provider fallback with bounded retries; no infinite loops; detect 429 and quota exhaustion | Tests with a fake 429 or timeout | MISSING (single upstream) |
+| M7 | Ordered provider fallback with bounded retries; no infinite loops; detect 429 and quota exhaustion | Tests with a fake 429 or timeout | TESTED (4 fallback tests; only Dahl enabled until keys are added) |
 | M8 | Multiple keys per provider, stored securely | Keys only as references in `D:\jarvis-secrets`; per-provider key list | PARTIAL |
 | M9 | Each provider and model can be disabled | Config flag; tests | PARTIAL (kernel providers have `enabled`) |
 | M10 | Benchmarks for latency, resources, quality and task success on this machine | Reproducible scripts with saved results | PARTIAL (D5, D19, D20 benches) |
@@ -106,8 +106,8 @@ The roadmap (`NEKO_IMPLEMENTATION_ROADMAP.md`) updates these statuses as work la
 | ID | Requirement | Acceptance test | Status |
 |---|---|---|---|
 | L1 | Persistent preferences and project context | N.E.K.O memory | TESTED |
-| L2 | Feedback on answers and documents, recorded as signals | A thumbs control writes a feedback row | MISSING |
-| L3 | Task success and failure recorded; evals with regression comparison | `jarvis/evals` reports a delta | PARTIAL |
+| L2 | Feedback on answers and documents, recorded as signals | A thumbs control writes a feedback row | TESTED (Neko icon 👍/👎 to feedback.jsonl) |
+| L3 | Task success and failure recorded; evals with regression comparison | `jarvis/evals` reports a delta | TESTED (neko_evals.py compares with the previous run) |
 | L4 | Versioned prompts, skills and configs with rollback | Rolling back restores the previous version | PARTIAL (git; no runtime versioning) |
 | L5 | No silent self-modification of core code, permissions or security rules | Policy | TESTED (kernel authority; skill gate) |
 

@@ -149,10 +149,51 @@ class SseRestorer:
         return "".join(r.flush() for r in self.parts.values())
 
 
+# ---------- providers (ordered fallback) ----------
+
+PROVIDERS_FILE = os.environ.get("JARVIS_PRIVACY_PROVIDERS", os.path.join(os.path.dirname(os.path.abspath(__file__)), "providers.json"))
+SECRET_ROOT = os.environ.get("NEKO_SECRET_REF_ROOTS", r"D:\jarvis-secrets").split(os.pathsep)[0]
+RETRY_CODES = (429, 500, 502, 503, 504, 520, 522, 524)
+_cooldown: dict[str, float] = {}
+_keys: dict[str, str] = {}
+
+
+def load_providers(path: str = PROVIDERS_FILE, upstream: str | None = None) -> tuple[list[dict], float]:
+    """Enabled providers in order. The first always uses the caller's key and model; --upstream replaces its address."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        provs = [p for p in cfg.get("providers") or [] if p.get("enabled")]
+        cool = float(cfg.get("cooldown_seconds", 60))
+    except (OSError, ValueError):
+        provs, cool = [], 60.0
+    if not provs:
+        provs = [{"name": "upstream", "base_url": DEFAULT_UPSTREAM, "key": "from_request"}]
+    if upstream:
+        provs[0] = {**provs[0], "base_url": upstream}
+    usable = [provs[0]] + [p for p in provs[1:] if p.get("key_file") and p.get("model")]
+    return [{**p, "base_url": p["base_url"].rstrip("/")} for p in usable], cool
+
+
+def read_key(p: dict) -> str:
+    """A fallback provider's key from its file under the secrets folder (never logged, kept only in memory)."""
+    if p["name"] in _keys:
+        return _keys[p["name"]]
+    root = os.path.realpath(SECRET_ROOT)
+    path = os.path.realpath(os.path.join(root, p.get("key_file") or ""))
+    if not path.startswith(root + os.sep) or not os.path.isfile(path):
+        return ""
+    with open(path, encoding="utf-8") as f:
+        key = f.read().strip()
+    _keys[p["name"]] = key
+    return key
+
+
 # ---------- HTTP ----------
 
-def make_handler(red: Redactor, upstream: str, timeout: float):
-    upstream = upstream.rstrip("/")
+def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: float = 60.0):
+    providers = upstream if isinstance(upstream, list) else [{"name": "upstream", "base_url": upstream.rstrip("/"), "key": "from_request"}]
+    upstream = providers[0]["base_url"]
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -180,7 +221,10 @@ def make_handler(red: Redactor, upstream: str, timeout: float):
                                             "redacted": dict(STATS["redacted"]), "errors": STATS["errors"],
                                             "pii_model": red.model is not None, "checks": dict(red.stats),
                                             "inflight": STATS["inflight"],          # model calls waiting right now (the icon's "thinking")
-                                            "last_call_age_s": round(time.time() - last, 1) if last else None})
+                                            "last_call_age_s": round(time.time() - last, 1) if last else None,
+                                            "providers": [p["name"] for p in providers],
+                                            "answered_by": dict(STATS.get("by_provider", {})),
+                                            "cooling_down": [n for n, t in _cooldown.items() if t > time.time()]})
             self._forward(None)
 
         def do_POST(self):
@@ -223,22 +267,57 @@ def make_handler(red: Redactor, upstream: str, timeout: float):
             headers = {k: v for k, v in self.headers.items() if k.lower() in PASS_HEADERS}
             if raw is not None:
                 headers["Content-Type"] = "application/json"
-            req = urllib.request.Request(upstream + self._path(), data=raw, headers=headers,
-                                         method="POST" if raw is not None else "GET")
-            try:
-                resp = urllib.request.urlopen(req, timeout=timeout)
-            except urllib.error.HTTPError as e:
-                payload = e.read()
-                self.send_response(e.code)
-                self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-                return
-            except Exception as e:                               # noqa: BLE001 - report kind only
+            # Fallback only for model calls; the first provider always gets the caller's own key and model.
+            chain = providers if (raw is not None and self._path() in ("/chat/completions", "/completions")) else providers[:1]
+            now = time.time()
+            chain = [chain[0]] + [p for p in chain[1:] if _cooldown.get(p["name"], 0) <= now]
+            tried = []
+            for i, prov in enumerate(chain):
+                last = i == len(chain) - 1
+                hdrs, data = dict(headers), raw
+                if i > 0:
+                    key = read_key(prov)
+                    if not key:
+                        tried.append(f"{prov['name']}: no key file")
+                        continue
+                    hdrs["Authorization"] = f"Bearer {key}"
+                    data = json.dumps({**body, "model": prov["model"]}, ensure_ascii=False).encode("utf-8")
+                req = urllib.request.Request(prov["base_url"] + self._path(), data=data, headers=hdrs,
+                                             method="POST" if data is not None else "GET")
+                try:
+                    resp = urllib.request.urlopen(req, timeout=timeout)
+                except urllib.error.HTTPError as e:
+                    if e.code == 429:
+                        _cooldown[prov["name"]] = time.time() + cooldown
+                    if e.code in RETRY_CODES and not last:
+                        tried.append(f"{prov['name']}: HTTP {e.code}")
+                        e.close()
+                        continue
+                    payload = e.read()
+                    self.send_response(e.code)
+                    self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.send_header("X-Neko-Provider", prov["name"])
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
+                except Exception as e:                           # noqa: BLE001 - report kind only
+                    tried.append(f"{prov['name']}: {type(e).__name__}")
+                    if not last:
+                        continue
+                    with _lock:
+                        STATS["errors"] += 1
+                    return self._json(502, {"error": {"message": "no model provider answered: " + "; ".join(tried)}})
                 with _lock:
-                    STATS["errors"] += 1
-                return self._json(502, {"error": {"message": f"upstream unreachable: {type(e).__name__}"}})
+                    STATS.setdefault("by_provider", {})[prov["name"]] = STATS.setdefault("by_provider", {}).get(prov["name"], 0) + 1
+                self._answer(resp, stream, m, prov["name"])
+                return
+            with _lock:
+                STATS["errors"] += 1
+            return self._json(502, {"error": {"message": "no model provider answered: " + "; ".join(tried)}})
+
+        def _answer(self, resp, stream, m, provider):
+            self._provider = provider
             with resp:
                 ctype = resp.headers.get("Content-Type", "")
                 if stream or "text/event-stream" in ctype:
@@ -253,11 +332,13 @@ def make_handler(red: Redactor, upstream: str, timeout: float):
                     self.send_response(resp.status)
                     self.send_header("Content-Type", ctype or "application/json")
                     self.send_header("Content-Length", str(len(data)))
+                    self.send_header("X-Neko-Provider", provider)
                     self.end_headers()
                     self.wfile.write(data)
 
         def _relay_stream(self, resp, m):
             self.send_response(resp.status)
+            self.send_header("X-Neko-Provider", getattr(self, "_provider", ""))
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Connection", "close")
@@ -277,8 +358,8 @@ def make_handler(red: Redactor, upstream: str, timeout: float):
     return Handler
 
 
-def serve(port: int, upstream: str, timeout: float = 300.0, red: Redactor | None = None):
-    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(red or Redactor(), upstream, timeout))
+def serve(port: int, upstream, timeout: float = 300.0, red: Redactor | None = None, cooldown: float = 60.0):
+    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(red or Redactor(), upstream, timeout, cooldown))
     srv.daemon_threads = True
     return srv
 
@@ -286,10 +367,11 @@ def serve(port: int, upstream: str, timeout: float = 300.0, red: Redactor | None
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=int(os.environ.get("JARVIS_PRIVACY_PORT", "48950")))
-    ap.add_argument("--upstream", default=DEFAULT_UPSTREAM)
+    ap.add_argument("--upstream", default=None, help="replace the first provider's address (testing)")
     a = ap.parse_args()
-    srv = serve(a.port, a.upstream)
-    print(f"privacy gateway on http://127.0.0.1:{a.port}/v1 -> {a.upstream}", flush=True)
+    providers, cooldown = load_providers(upstream=a.upstream)
+    srv = serve(a.port, providers, cooldown=cooldown)
+    print(f"privacy gateway on http://127.0.0.1:{a.port}/v1 -> " + " then ".join(p["name"] for p in providers), flush=True)
     srv.serve_forever()
 
 

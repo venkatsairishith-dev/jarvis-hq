@@ -60,6 +60,18 @@ def test_completed_offers_the_newest_file():
     assert decide(st=status(task=done))["detail"].startswith("Done: Plan a trip")
 
 
+def test_feedback_is_validated_and_appended(tmp_path, monkeypatch):
+    monkeypatch.setattr(ws, "DELIVERABLES_ROOT", str(tmp_path))
+    rec, err = ws.validate_feedback({"rating": "up", "file": str(tmp_path / "j" / "a.pdf"), "note": "  great\n deck "})
+    assert err is None and rec["note"] == "great deck"
+    out = tmp_path / "fb.jsonl"
+    ws.save_feedback(rec, str(out))
+    ws.save_feedback({**rec, "rating": "down"}, str(out))
+    assert len(out.read_text(encoding="utf-8").splitlines()) == 2
+    assert ws.validate_feedback({"rating": "meh"})[1]
+    assert ws.validate_feedback({"rating": "up", "file": r"C:\Windows\win.ini"})[1]
+
+
 def test_action_guard(tmp_path, monkeypatch):
     monkeypatch.setattr(ws, "DELIVERABLES_ROOT", str(tmp_path))
     assert ws.validate_action({"action": "stop"}) == ({"action": "stop"}, None)

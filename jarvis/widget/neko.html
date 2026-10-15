@@ -114,6 +114,10 @@
       <button class="btn ghost" id="folderBtn">Folder</button>
       <button class="btn ghost" id="againBtn">Make again</button>
     </div>
+    <div class="row">
+      <button class="btn ghost" id="upBtn" aria-label="This was good" title="This was good" style="flex:1">👍</button>
+      <button class="btn ghost" id="downBtn" aria-label="This was not good" title="This was not good" style="flex:1">👎</button>
+    </div>
     <div class="note" id="doneNote"></div>
   </div>
 
@@ -182,6 +186,12 @@ $("openBtn").addEventListener("click", () => action("open", "doneNote"));
 $("folderBtn").addEventListener("click", () => action("folder", "doneNote"));
 $("againBtn").addEventListener("click", () => action("regenerate", "doneNote"));
 $("stopBtn").addEventListener("click", () => action("stop", "workNote"));
+async function feedback(rating) {
+  const r = await post("/api/feedback", {rating, file: current.file || "", run_id: current.run_id || ""});
+  $("doneNote").textContent = r.ok ? "Thanks, noted." : (r.error || "Not saved.");
+}
+$("upBtn").addEventListener("click", () => feedback("up"));
+$("downBtn").addEventListener("click", () => feedback("down"));
 
 let poller = null;
 function poll() {

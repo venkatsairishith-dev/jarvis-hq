@@ -262,5 +262,96 @@ class GatewayEndToEnd(unittest.TestCase):
         self.assertNotIn(PW, h)
 
 
+class _Scripted(BaseHTTPRequestHandler):
+    """A fake provider: answers with the next status code from its script and records what it got."""
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        self.server.got.append({"auth": self.headers.get("Authorization"), "model": body.get("model"), "text": json.dumps(body)})
+        code = self.server.script.pop(0) if self.server.script else 200
+        raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": f"from {self.server.name}"}}]}
+                         if code == 200 else {"error": {"message": f"status {code}"}}).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+
+class ProviderFallback(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        gateway._cooldown.clear()
+        gateway._keys.clear()
+        self.servers = []
+        for name in ("first", "second"):
+            s = ThreadingHTTPServer(("127.0.0.1", 0), _Scripted)
+            s.name, s.script, s.got = name, [], []
+            threading.Thread(target=s.serve_forever, daemon=True).start()
+            self.servers.append(s)
+        self.secret_dir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.secret_dir, "providers"))
+        with open(os.path.join(self.secret_dir, "providers", "second.key"), "w") as f:
+            f.write("second-test-key")                           # made-up test value
+        self._old_root = gateway.SECRET_ROOT
+        gateway.SECRET_ROOT = self.secret_dir
+        provs = [{"name": "first", "base_url": f"http://127.0.0.1:{self.servers[0].server_address[1]}/v1", "key": "from_request"},
+                 {"name": "second", "base_url": f"http://127.0.0.1:{self.servers[1].server_address[1]}/v1",
+                  "key_file": "providers/second.key", "model": "fallback-model"}]
+        self.gw = gateway.serve(0, provs, timeout=10, red=RED, cooldown=60)
+        threading.Thread(target=self.gw.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.gw.server_address[1]}/v1/chat/completions"
+
+    def tearDown(self):
+        gateway.SECRET_ROOT = self._old_root
+        self.gw.shutdown()
+        self.gw.server_close()
+        for s in self.servers:
+            s.shutdown()
+            s.server_close()
+
+    def call(self):
+        req = urllib.request.Request(self.url, data=json.dumps({"model": "m", "messages": [{"role": "user", "content": f"password: {PW}"}]}).encode(),
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer caller-key"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, r.headers.get("X-Neko-Provider"), json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers.get("X-Neko-Provider"), json.loads(e.read())
+
+    def test_rate_limit_falls_back_with_the_fallbacks_own_key_and_model(self):
+        self.servers[0].script = [429]
+        code, prov, out = self.call()
+        self.assertEqual((code, prov), (200, "second"))
+        got = self.servers[1].got[0]
+        self.assertEqual(got["auth"], "Bearer second-test-key")
+        self.assertEqual(got["model"], "fallback-model")
+        self.assertNotIn(PW, got["text"])                         # the fallback gets the redacted text too
+        self.assertEqual(self.servers[0].got[0]["auth"], "Bearer caller-key")
+
+    def test_cooling_down_provider_is_skipped_but_the_first_is_always_tried(self):
+        self.servers[1].script = [429]
+        self.servers[0].script = [503]
+        code, _, _ = self.call()                                   # first 503 -> second 429 (last: passed back)
+        self.assertEqual(code, 429)
+        self.servers[0].script = [503]
+        code, _, out = self.call()                                 # second cooling down: only the first is tried
+        self.assertEqual(code, 503)
+        self.assertEqual(len(self.servers[1].got), 1)
+
+    def test_bad_request_is_not_retried(self):
+        self.servers[0].script = [400]
+        code, prov, _ = self.call()
+        self.assertEqual((code, prov), (400, "first"))
+        self.assertEqual(self.servers[1].got, [])
+
+    def test_first_ok_needs_no_fallback(self):
+        code, prov, out = self.call()
+        self.assertEqual((code, prov), (200, "first"))
+        self.assertEqual(self.servers[1].got, [])
+
+
 if __name__ == "__main__":
     unittest.main()

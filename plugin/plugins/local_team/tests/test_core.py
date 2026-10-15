@@ -3,6 +3,20 @@ import pytest
 
 from plugin.plugins.local_team import core
 
+REAL_LOADED_MODELS = core.loaded_models
+
+
+@pytest.fixture(autouse=True)
+def _no_real_models(monkeypatch):
+    """Unit tests never look at the real llama-swap or the real free memory: every model counts as loaded."""
+    monkeypatch.setattr(core, "loaded_models", lambda get=None: {"general", "code", "math", "router-llm"})
+
+
+def test_loaded_models_reads_aliases_from_status():
+    listing = {"data": [{"id": "ling-tiny", "status": {"value": "ready"}, "meta": {"llamaswap": {"aliases": ["general"]}}},
+                        {"id": "qwen-coder-1.5b", "status": {"value": "unloaded"}, "meta": {"llamaswap": {"aliases": ["code"]}}}]}
+    assert REAL_LOADED_MODELS(get=lambda url: listing) == {"ling-tiny", "general"}
+
 
 class FakePost:
     def __init__(self, router_word="general", answer="done", adviser_plan="1. do it"):
@@ -169,6 +183,22 @@ def test_solve_without_adviser_thinks_locally():
     r = core.solve("tell me a story about a cat", adviser=no_adviser, post=post)
     assert r["adviser_used"] is False and "adviser skipped" in r["note"]
     assert post.calls[-1][1]["chat_template_kwargs"] == {"enable_thinking": True}
+
+
+def test_memory_guard():
+    ok, _ = core.memory_ok("general", free_gb=16.0, loaded=set())
+    assert ok
+    ok, why = core.memory_ok("general", free_gb=5.0, loaded=set())
+    assert not ok and "Not enough free memory" in why
+    ok, _ = core.memory_ok("general", free_gb=1.0, loaded={"general"})      # already loaded: nothing more needed
+    assert ok
+
+
+def test_ask_local_refuses_when_memory_is_short(monkeypatch):
+    monkeypatch.setattr(core, "loaded_models", lambda get=None: set())
+    monkeypatch.setattr(core, "memory_ok", lambda m, free_gb=None, loaded=None: (False, "Not enough free memory"))
+    with pytest.raises(core.TeamError, match="Not enough free memory"):
+        core.ask_local("why is the sky blue", "general", post=FakePost())
 
 
 def test_empty_and_too_long_tasks_refused():

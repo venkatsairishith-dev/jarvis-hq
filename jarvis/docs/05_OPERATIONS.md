@@ -358,3 +358,26 @@ Source of the list: Playa-Cyrene/Cyrene-Agent (MIT, Electron/TypeScript). What w
   - "Speaking" is estimated from the synthesized length.
   - Wake listening shows only once the wake word is built (phase 5).
   - The Edge window has no transparent overlay or global push-to-talk (phase 8 shell).
+**Hardware profiles, memory guard and provider fallback (added 2026-10-16, D24):**
+- **Hardware detector:** `python jarvis\local_models\hwdetect.py` reads the CPU (name, cores, AVX2), RAM, disks, OS and GPUs as llama.cpp sees them. It picks a profile (remote_only, cpu8, cpu16, vram4, vram8plus) and saves `<data>\neko\hardware.json`.
+  - This laptop: vram4 (Radeon Pro 5500M, 3439 MiB free).
+  - Override with `NEKO_MODEL_PROFILE`.
+- **Launching models:** `local-models.ps1` starts llama-swap with that profile's config: vram4 uses `llama-swap.yaml`, the others `local_models\profiles\<profile>.yaml`.
+- **Downloading a profile's models:** `fetch_models.py --profile <name>`. The Qwen3.5 2B, 4B and 9B files were checked to exist on Hugging Face (unsloth, Apache-2.0).
+- **Memory guard:** before `local_team` loads a model that is not already loaded, it needs the model's RAM (general 5.5 GB, code 1.8, math 1.6, router 3.5) plus 1.5 GB in reserve. Otherwise it refuses with a plain message. Override per model with `NEKO_MODEL_RAM_GB_<NAME>`.
+- **Provider fallback in the privacy gateway (`jarvis\privacy\providers.json`, no secrets in it):**
+  - Enabled providers are tried in order, and every request is redacted first.
+  - The first provider (Dahl) always gets the caller's key and model.
+  - A fallback needs `enabled`, a `model` and a key file name under `D:\jarvis-secrets`.
+  - Each provider is tried once per request, and only on 429, 5xx or a timeout. A 429 makes that provider sit out for 60 s.
+  - Responses carry `X-Neko-Provider`; `/health` lists `providers`, `answered_by` and `cooling_down`.
+  - Today only Dahl is enabled, so the behaviour is unchanged until the owner adds a key.
+  - Tests: 4 fallback tests with fake providers (27 privacy tests in all). One live call through Dahl after the change was correct.
+**Evaluations and feedback (added 2026-10-16, D25):**
+- **Evaluations:** `python jarvis\evals\neko_evals.py` scores routing (16 requests), the adviser decision (12), the claim checker (8), privacy redaction (24) and the deliverable checks.
+  - It saves `D:\jarvis\outputs\neko\evals\<time>.json` and compares with the previous run.
+  - Exit 1 and a "WORSE:" list mean a regression. Local only.
+- **Baseline (2026-10-16):** routing 0.938 (~1.1 s each), adviser decision 0.917, claims 1.0, secrets hidden 1.0 with 0.25 of ordinary messages flagged, deck and report checks pass.
+- **Feedback:** the 👍/👎 buttons on the Neko icon's Done state write `<data>\neko\feedback.jsonl` (rating, the file, an optional note).
+  - Read it when changing prompts or models. Nothing changes automatically.
+  - Prompt and model changes go through git and must not make `neko_evals.py` worse.

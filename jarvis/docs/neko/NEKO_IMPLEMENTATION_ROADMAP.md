@@ -36,11 +36,12 @@ Why first: it is the largest missing capability with no owner dependency, and it
 - [x] Live: sleeping → speaking → completed pushed by the event stream; `live_check.py` 4 icon checks (66/66)
 - [ ] N.E.K.O page bridge for the exact microphone and playback state (needs the shell's script injection, phase 8)
 
-## Phase 4: models, hardware and providers — M1–M3, M5, M7–M10
-- [ ] `hwdetect.py` (psutil + `llama-server --list-devices`) with profile choice; tests with fake readings
-- [ ] Per-profile llama-swap configs; RAM guard before loading large models
-- [ ] Gateway ordered fallback (429, 5xx, timeout, quota); one hop per request; the answering provider recorded; tests with fake upstreams
-- [ ] Benchmarks: Qwen3.5-4B Vulkan correctness and speed; 100-item router/tool set; over-refusal set
+## Phase 4: models, hardware and providers — M1–M3, M5, M7–M10 ✅ (2026-10-16, D24)
+- [x] `hwdetect.py` (psutil, registry/AVX2, `llama-server --list-devices`); this laptop is vram4; 3 tests with fake readings
+- [x] Per-profile llama-swap configs (cpu8, cpu16, vram8plus; vram4 is the tuned file); `fetch_models.py --profile`; memory guard in `local_team` (2 tests)
+- [x] Gateway ordered fallback: one try per provider, cooldown on 429, `X-Neko-Provider`; 4 tests with fake providers; live call still correct
+- [x] Benchmark: Qwen3.5-4B correct on Vulkan, 10.7 tok/s, not adopted here. Router scorecard in `neko_evals.py` (16 items)
+- [ ] Larger router/tool set (100 items) and an over-refusal set (later)
 - [ ] **OWNER:** Groq / OpenRouter / Cloudflare keys (optional)
 
 ## Phase 5: voice — X3, X4, V3, V4
@@ -57,10 +58,11 @@ Why first: it is the largest missing capability with no owner dependency, and it
 - [ ] **OWNER:** install the Playwright MCP extension in Chrome, then the kernel connector and the account check
 - [ ] **OWNER:** the YouTube in-page automation decision
 
-## Phase 7: memory, feedback and evals — L2–L4
-- [ ] Feedback control on runs and deliverables, then `feedback.jsonl` plus N.E.K.O reinforce/dispute
-- [ ] Eval cases: routing, planning, citations, deliverable QA; comparison with the previous run
-- [ ] Prompt and skill version ids in run records; rollback documented
+## Phase 7: memory, feedback and evals — L2–L4 (part 1 ✅ 2026-10-16, D25)
+- [x] Feedback 👍/👎 on deliverables in the Neko icon, then `feedback.jsonl` (validated; tested)
+- [x] `neko_evals.py`: routing, adviser decision, claims, PII, deliverables; saved runs; regression = exit 1; baseline recorded
+- [ ] Mirror feedback into N.E.K.O reinforce/dispute signals (needs a look at N.E.K.O's memory API)
+- [ ] Prompt and skill version ids in run records (git is the version store today)
 
 ## Phase 8: desktop shell (optional) — X1, X4
 - [ ] 30-minute test of N.E.K.O.-Tauri on this PC (transparency, CPU, crash fail-safe); adopt or fall back to minimal Electron

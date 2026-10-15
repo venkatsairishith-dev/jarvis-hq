@@ -1,0 +1,30 @@
+# Neko local models, profile cpu8: CPU only, about 8 GB RAM (NEKO_MODEL_MATRIX.md). llama-swap over llama.cpp's CPU build.
+# One model at a time; planning, deep research and long writing go to the remote model through the privacy gateway.
+# Files: python jarvis\scripts\fetch_models.py --profile cpu8. Speeds are estimates until benchmarked on such a machine.
+healthCheckTimeout: 180
+logLevel: info
+
+macros:
+  server: D:\jarvis\tools\llama.cpp\b11669\cpu\llama-server.exe --host 127.0.0.1 --port ${PORT} --jinja --no-webui -np 1
+  models: D:\jarvis\models\llm
+
+models:
+  # Router and general helper: Qwen3.5-2B (Apache-2.0); callers pass enable_thinking false for short answers.
+  qwen3.5-2b:
+    cmd: ${server} -m ${models}\Qwen3.5-2B-Q4_K_M.gguf -c 8192
+    aliases: [general, local-general]
+    ttl: 300
+  qwen-coder-1.5b:
+    cmd: ${server} -m ${models}\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf -c 4096
+    aliases: [code, local-code]
+    ttl: 300
+  qwen-math-1.5b:
+    cmd: ${server} -m ${models}\Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf -c 4096
+    aliases: [math, maths, local-math]
+    ttl: 300
+
+groups:
+  one-at-a-time:
+    swap: true
+    exclusive: true
+    members: [qwen3.5-2b, qwen-coder-1.5b, qwen-math-1.5b]
