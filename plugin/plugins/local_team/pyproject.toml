@@ -1,0 +1,4 @@
+[project]
+name = "local_team"
+version = "0.1.0"
+dependencies = []

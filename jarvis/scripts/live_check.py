@@ -85,11 +85,58 @@ def servers():
         check(f"server up: {name}", code == 200, f"HTTP {code}")
 
 
+def local_team(with_adviser: bool):
+    """The local specialists answer through N.E.K.O's plugin runtime (no quota); with the model path, one team run whose
+    public adviser is reached through the privacy gateway."""
+    s = run_entry("local_team", "team_status", {}, wait=30)
+    d = s.get("data") or {}
+    check("local team: local models and privacy gateway are up", d.get("local_models") == "up" and d.get("privacy_gateway") == "up",
+          f"models {d.get('local_models')}, gateway {d.get('privacy_gateway')}, available {len(d.get('available') or [])}")
+    m = run_entry("local_team", "ask_local", {"task": "What is 17 * 23? Give the final number."}, wait=300)
+    md = m.get("data") or {}
+    check("local team: the maths specialist answers 17 * 23 = 391 on this PC", m["status"] == "succeeded" and md.get("specialist") == "math"
+          and "391" in str(md.get("answer")), f"{md.get('specialist')} via {md.get('routed_by')}, {md.get('tokens_per_second')} tok/s")
+    c = run_entry("local_team", "ask_local", {"task": "Write a Python function add(a, b) that returns the sum. Code only."}, wait=300)
+    cd = c.get("data") or {}
+    check("local team: the code specialist writes the function", c["status"] == "succeeded" and cd.get("specialist") == "code"
+          and "def add" in str(cd.get("answer")), f"{cd.get('specialist')}, {cd.get('tokens_per_second')} tok/s")
+    if with_adviser:
+        fake = "Kite-Lemon-5521"
+        t = run_entry("local_team", "solve_with_team", {"task": f"My router admin password = {fake}. Write a two-line note "
+                                                                 "reminding me to change it every 3 months; include the password."}, wait=600)
+        td = t.get("data") or {}
+        check("local team: adviser saw a placeholder, the local answer has the real value",
+              t["status"] == "succeeded" and td.get("adviser_used") and (td.get("hidden_from_adviser") or {}).get("PASSWORD", 0) >= 1
+              and fake in str(td.get("answer")), f"{td.get('specialist')}, hidden {td.get('hidden_from_adviser')}, {t.get('error') or ''}"[:160])
+
+
+def privacy():
+    """The privacy gateway is up, N.E.K.O's Dahl calls go through it, and a made-up password leaves only as a placeholder."""
+    code, _ = jget("http://127.0.0.1:48950/health")
+    check("server up: privacy gateway", code == 200, f"HTTP {code}")
+    cfg = os.path.join(os.environ.get("NEKO_STORAGE_SELECTED_ROOT", r"D:\jarvis\N.E.K.O-data"), "config", "core_config.json")
+    try:
+        with open(cfg, encoding="utf-8") as f:
+            d = json.load(f)
+        urls = {k: d.get(k) for k in d if k.endswith("ModelUrl") and isinstance(d.get(k), str)}   # URL fields only
+    except (OSError, ValueError):
+        urls = {}
+    direct = sorted(k for k, v in urls.items() if "dahl.global" in v)
+    check("N.E.K.O's Dahl calls go through the privacy gateway", bool(urls) and not direct,
+          "direct: " + ", ".join(direct) if direct else f"{sum('127.0.0.1:48950' in v for v in urls.values())} slot(s) via 48950")
+    fake = "Zq7-made-up-Pw!"
+    code, raw = http("http://127.0.0.1:48950/redact", method="POST", body={"text": f"my password = {fake} and mail a.b@example.com"})
+    out = (json.loads(raw).get("text") if code == 200 else "") or ""
+    check("privacy gateway: a password and an e-mail leave as placeholders", code == 200 and fake not in out
+          and "a.b@example.com" not in out and "[PASSWORD_1]" in out, out[:80])
+
+
 EXPECTED = {
     "jarvis_bridge": {"delegate_task", "task_result", "jarvis_status", "pending_approvals", "connector_overview"},
     "main_agent": {"plan_task", "run_task", "resume_run", "run_status", "stop_task"},
     "doc_tools": {"read_document", "write_document", "list_outputs"},
     "learn_vault": {"vault_status", "list_notes", "read_note", "search_notes", "save_note", "record_progress", "get_progress"},
+    "local_team": {"ask_local", "solve_with_team", "team_status"},
 }
 
 
@@ -372,11 +419,13 @@ def main() -> int:
             check(f"{label} (check could not complete)", False, f"{type(exc).__name__}: {str(exc)[:100]}")
 
     guard("servers", servers)
+    guard("privacy", privacy)
     guard("plugins", plugins)
     guard("secrets", secrets_hygiene)
     guard("documents", documents)
     guard("vault", vault)
     guard("speech", speech, not a.no_asr)
+    guard("local team", local_team, not a.no_model)
     if not a.no_model:
         guard("model path", model_path)
     guard("robustness", robustness)

@@ -42,6 +42,23 @@ $env:HF_HUB_DISABLE_TELEMETRY = "1"
 
 function Listening($port) { [bool](Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) }
 
+# Privacy gateway (127.0.0.1:48950, Presidio): N.E.K.O's Dahl URLs point here, so passwords, keys, card numbers, phone and
+# e-mail leave the PC as placeholders like [PASSWORD_1] and are put back in the reply locally. Started first: the servers below call it.
+$privPy = "D:\jarvis\tools\privacy-venv\Scripts\python.exe"
+$privScript = Join-Path $PSScriptRoot "..\privacy\gateway.py"
+if (-not (Listening 48950) -and (Test-Path $privPy) -and (Test-Path $privScript)) {
+  Start-Process $privPy -ArgumentList (Resolve-Path $privScript).Path, "--port", "48950" -WindowStyle Hidden `
+    -RedirectStandardOutput "$logs\privacy.out.log" -RedirectStandardError "$logs\privacy.err.log" | Out-Null
+  foreach ($i in 1..30) { if (Listening 48950) { break }; Start-Sleep 1 }
+}
+# Local specialist models (llama-swap on 127.0.0.1:8080): nothing is loaded until a model is asked for. Never piped (it starts a server).
+$localModels = Join-Path $PSScriptRoot "local-models.ps1"
+if (-not (Listening 8080) -and (Test-Path "D:\jarvis\tools\llama-swap\v261\llama-swap.exe")) {
+  Start-Process powershell -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$localModels`"" -WindowStyle Hidden `
+    -RedirectStandardOutput "$logs\local_models.start.log" | Out-Null
+  foreach ($i in 1..20) { if (Listening 8080) { break }; Start-Sleep 1 }
+}
+
 # The three N.E.K.O servers (memory 48912, main 48911, agent 48915 with the plugin runtime 48916) are started and watched by
 # upstream's own launcher.py, exactly as upstream intends from source. A server that already listens is reused by the launcher.
 if (-not ((Listening 48912) -and (Listening 48911) -and (Listening 48915))) {
@@ -71,7 +88,7 @@ if (Listening 48916) {
   try {
     Invoke-RestMethod -Method POST http://127.0.0.1:48916/plugins/refresh -ContentType 'application/json' -Body '{}' -TimeoutSec 60 | Out-Null
     $states = @()
-    foreach ($id in 'jarvis_bridge', 'doc_tools', 'learn_vault', 'main_agent') {   # the bridge and the tool plugins first: the main agent calls them
+    foreach ($id in 'jarvis_bridge', 'doc_tools', 'learn_vault', 'local_team', 'main_agent') {   # the bridge and the tool plugins first: the main agent calls them
       $p = (Invoke-RestMethod http://127.0.0.1:48916/plugins -TimeoutSec 15).plugins | Where-Object { $_.id -eq $id }
       if ($p -and $p.status -ne 'running') {
         Invoke-RestMethod -Method POST "http://127.0.0.1:48916/plugin/$id/start" -ContentType 'application/json' -Body '{}' -TimeoutSec 60 | Out-Null
@@ -104,6 +121,8 @@ $node = try { (Get-ScheduledTask JarvisNode -ErrorAction Stop).State } catch { "
 "memory 48912: " + (Listening 48912)
 "main   48911: " + (Listening 48911) + "   ->  http://127.0.0.1:48911/"
 "speech 48930: " + (Listening 48930) + "   (local text-to-speech)"
+"privacy 48950: " + (Listening 48950) + "   (redacts private values before Dahl)"
+"local  8080 : " + (Listening 8080) + "   (local specialist models; load on first use)"
 "agent  48915: " + (Listening 48915) + "   plugins 48916: " + (Listening 48916)
 "plugins: $plugins"
 "jarvis : $jarvis | laptop node task: $node"

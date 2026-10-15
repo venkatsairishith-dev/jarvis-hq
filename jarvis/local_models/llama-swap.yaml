@@ -1,0 +1,42 @@
+# Local models for JARVIS, served by llama-swap (MIT, github.com/mostlygeek/llama-swap) over llama.cpp's llama-server.
+# Windows. One OpenAI-compatible endpoint, http://127.0.0.1:8080/v1, where the "model" field picks the specialist.
+# A model loads only when it is asked for and unloads after `ttl` idle seconds, so an idle laptop holds none of them.
+# Weights: D:\jarvis\models\llm (fetched and SHA-256 checked by jarvis\scripts\fetch_models.py).
+# GPU: AMD Radeon Pro 5500M, 4 GB, through llama.cpp's Vulkan build. Started by jarvis\scripts\local-models.ps1.
+healthCheckTimeout: 180
+logLevel: info
+
+macros:
+  # -fa off: flash attention on Vulkan gives garbage after the first token on this GPU (RDNA1), measured 2026-10-15
+  # ("Paris" then "GGGG..."); with it off the output matches the CPU build. llama-bench speeds below were measured with it off.
+  server: D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe --host 127.0.0.1 --port ${PORT} --jinja --no-webui -fa off
+  models: D:\jarvis\models\llm
+
+models:
+  # Generalist: Ling-3.0-tiny, a mixture-of-experts model (7.9B total, 1.3B active per token, MIT). The shared layers run on
+  # the GPU and the experts of the first 16 layers stay in system memory (--n-cpu-moe 16), one request slot (-np 1).
+  # Measured here through llama-server, 2026-10-15: 31 tokens/s (n-cpu-moe 12: 22, 20: 30, all: 27; 4 slots cost ~30%).
+  # It is a hybrid reasoning model: callers pass chat_template_kwargs {"enable_thinking": false} for quick answers.
+  ling-tiny:
+    cmd: ${server} -m ${models}\Ling-3.0-tiny-Q4_K_M.gguf -ngl 99 --n-cpu-moe 16 -c 8192 -np 1
+    aliases: [general, local-general]
+    ttl: 300
+  # Code: Qwen2.5-Coder 1.5B Instruct (Apache-2.0)
+  qwen-coder-1.5b:
+    cmd: ${server} -m ${models}\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf -ngl 99 -c 8192 -np 1
+    aliases: [code, local-code]
+    ttl: 300
+  # Maths: Qwen2.5-Math 1.5B Instruct (Apache-2.0)
+  qwen-math-1.5b:
+    cmd: ${server} -m ${models}\Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
+    aliases: [math, maths, local-math]
+    ttl: 300
+  # No separate router model: the generalist routes (one grammar-limited word, thinking off). SmolLM2-360M was tried and
+  # dropped: 203 tokens/s, but it sorted only 5-6 of 12 requests correctly (plugin/plugins/local_team/core.py).
+
+groups:
+  # One specialist on the 4 GB GPU at a time; asking for another swaps it in.
+  specialists:
+    swap: true
+    exclusive: true
+    members: [ling-tiny, qwen-coder-1.5b, qwen-math-1.5b]

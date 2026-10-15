@@ -26,4 +26,10 @@ foreach ($p in $speech) { try { Stop-Process -Id $p.ProcessId -Force -ErrorActio
 # 4. the desktop widget's backend
 $widget = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*widget_server.py*" }
 foreach ($p in $widget) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; "stopped widget server pid " + $p.ProcessId; $stopped++ } catch { } }
+# 5. the privacy gateway in front of Dahl
+$priv = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*privacy*gateway.py*" }
+foreach ($p in $priv) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; "stopped privacy gateway pid " + $p.ProcessId; $stopped++ } catch { } }
+# 6. the local specialist models (llama-swap and the llama-server it started)
+$local = Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like "D:\jarvis\tools\llama-swap\*" -or $_.ExecutablePath -like "D:\jarvis\tools\llama.cpp\*llama-server.exe" }
+foreach ($p in $local) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; "stopped local model process pid " + $p.ProcessId; $stopped++ } catch { } }
 if ($stopped -eq 0) { "no N.E.K.O server processes running" }

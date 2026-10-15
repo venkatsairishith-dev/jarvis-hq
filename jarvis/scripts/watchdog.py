@@ -3,7 +3,8 @@
     python watchdog.py            one pass: check, heal what is down, log, exit (run it every few minutes: install-watchdog.ps1)
     python watchdog.py --dry-run  check and say what it would do, change nothing
 
-Checks: the six servers answer (N.E.K.O main, memory, agent, plugin runtime, local speech, JARVIS console), the four plugins run,
+Checks: the servers answer (N.E.K.O main, memory, agent, plugin runtime, local speech, JARVIS console, widget, privacy
+gateway, local models), the five plugins run,
 the JARVIS kernel is reachable and authorized. Heals: starts the missing servers with neko-start.ps1 (it only starts what is
 down and never stops anything) and starts a stopped plugin through the plugin runtime. It never touches the JARVIS kernel, the
 kill switch, approvals or the server. At most 3 heal attempts an hour per problem; after that it stops trying and says so in
@@ -26,9 +27,9 @@ STATUS = os.path.join(DATA, "logs", "watchdog_status.json")
 SERVERS = {"main": ("http://127.0.0.1:48911/health", 48911), "memory": ("http://127.0.0.1:48912/health", 48912),
            "agent": ("http://127.0.0.1:48915/health", 48915), "plugins": ("http://127.0.0.1:48916/health", 48916),
            "speech": ("http://127.0.0.1:48930/health", 48930), "console": ("http://127.0.0.1:8799/api/owner/state", 8799),   # fast liveness; kernel detail comes from /api/health below
-          
-           "widget": ("http://127.0.0.1:48940/health", 48940)}
-PLUGINS = ("jarvis_bridge", "main_agent", "doc_tools", "learn_vault")
+           "widget": ("http://127.0.0.1:48940/health", 48940), "privacy": ("http://127.0.0.1:48950/health", 48950),
+           "local_models": ("http://127.0.0.1:8080/health", 8080)}
+PLUGINS = ("jarvis_bridge", "main_agent", "doc_tools", "learn_vault", "local_team")
 MAX_HEALS_PER_HOUR = 3
 BOOT_GRACE_SECONDS = 180
 

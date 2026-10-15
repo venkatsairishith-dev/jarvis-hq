@@ -202,6 +202,31 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **A real defect found by the first tests** (and fixed): the audit chain recorded connector arguments (truncated) in the generic action entry; it now records their keys and size only, while the approval prompt shows them in full.
 - **Not done, on purpose:** OAuth flows (a connector needing OAuth is a template until the owner sets it up), UI entry of credentials, automatic discovery of servers, and any connector for the public lane that carries private data.
 
+## D19 Local specialist models, and a privacy gateway in front of Dahl (owner, 2026-10-15)
+- **Owner direction.** Small or "large but only a tiny part active" models on this laptop share tasks. MiniMax or DeepSeek on Dahl do the reasoning, but never see private values: "my password = X" reaches them as `[PASSWORD_1]`, while the local models see X.
+- **Privacy gateway** (`jarvis/privacy/`, 127.0.0.1:48950).
+  - What it is: an OpenAI-compatible proxy built on Microsoft Presidio (MIT) and spaCy `en_core_web_sm`, with recognisers added for passwords/PINs/OTPs after a cue word, API keys and tokens, JWTs, private keys, Indian mobile numbers, Aadhaar and PAN. Names and places are left alone by default (`JARVIS_PRIVACY_NAMES=1` turns them on).
+  - What it does: it redacts every chat request, then restores the placeholders in the reply, including streamed replies and tool-call arguments. It keeps no values and logs only counts.
+  - Wiring: all five N.E.K.O model URLs (conversation, summary, correction, emotion, agent) now point at it. Backup: `D:\jarvis-apps\tmp\core_config.before-privacy-gateway-20261015-230616.json`.
+  - Measured live: Dahl received `[PASSWORD_1]` and `[EMAIL_ADDRESS_1]`, and N.E.K.O got the real e-mail back.
+- **Lanes do not change.** Dahl stays public-lane only and still gets no private connector data. The gateway is a second layer for what the owner types, not permission to send private material.
+- **Local models** (`jarvis/local_models/llama-swap.yaml`). llama.cpp b11669 runs them on the Vulkan GPU, behind llama-swap (MIT) at 127.0.0.1:8080. A model loads on first use and unloads after 5 idle minutes, and one specialist is on the GPU at a time.
+  - Generalist and router: Ling-3.0-tiny Q4_K_M, a mixture-of-experts model with 7.9B parameters in total but only 1.3B active per token (MIT). 31 tok/s, with 16 layers' experts kept in system RAM.
+  - Code: Qwen2.5-Coder-1.5B, 80 tok/s.
+  - Maths: Qwen2.5-Math-1.5B, 96 tok/s.
+  - For comparison, MiniMax on Dahl does about 11 tok/s.
+- **Measured and rejected:**
+  - SmolLM2-360M as the router: 203 tok/s, but only 5 of 12 requests routed correctly. Ling with a clearer prompt got 11 of 12.
+  - Vulkan flash attention: it produced garbage after the first token on this RDNA1 GPU, so `-fa off`.
+  - 4 server slots: about 30% slower than 1.
+- **Coordination** (`plugin/plugins/local_team`, a N.E.K.O plugin, so the main agent sees it as tools).
+  - `ask_local`: keyword rules choose the specialist, then Ling; the answer is produced on the PC.
+  - `solve_with_team`: MiniMax plans through the gateway, streaming its reply because Cloudflare cuts a silent request at ~100 s (HTTP 524). The local specialist then writes the answer with the real values.
+  - Safety rule, tested: the adviser call is refused unless the agent model URL is the gateway.
+- **Not done, on purpose:**
+  - "Approve actions" stays with the owner PIN in the JARVIS console; admin rights on the PC do not replace the kernel's approvals.
+  - DeepSeek-V4-Flash stays off (it loops).
+
 ## D18 N.E.K.O is the base of the repository (2026-10-14)
 - **What changed.** The repository root is now N.E.K.O (Project-N-E-K-O/N.E.K.O, Apache-2.0, upstream 3ffcf7b9). The whole previous JARVIS tree (the old `main` at ff470e5, now branch `jarvis-hq-legacy`, also tag `pre-neko-base`) sits unchanged under `jarvis/`. It is a subtree merge (commit b77ddc7b), so both histories are kept and nothing was rewritten. Branches: `main` is the N.E.K.O-based tree, `neko-main` is a pure copy of N.E.K.O's main (tracks `neko/main`), `jarvis-hq-legacy` is the previous JARVIS history. Files: 0 N.E.K.O files modified or deleted, 305 added (jarvis/ and the two plugins), all 275 previous JARVIS files present. The `neko` remote's push URL is disabled.
 - **Why.** Owner direction ("use neko as our full base"), and the reuse-first rule: N.E.K.O already provides the character, voice and vision front end, five-layer memory, a plugin runtime and an agent server. JARVIS provides what N.E.K.O lacks: a deterministic authority, approvals, lanes, audit, connectors and lab agents. Rebuilding either would break the rule.

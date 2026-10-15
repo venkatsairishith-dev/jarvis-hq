@@ -248,3 +248,32 @@ Source of the list: Playa-Cyrene/Cyrene-Agent (MIT, Electron/TypeScript). What w
 **Daily report and test runner (2026-10-15):** `jarvis\scripts\daily_report.py` (task `JarvisNekoDailyReport`, 09:00, `install-daily-report.ps1`) writes `<data>\logs\daily_report_YYYYMMDD.md`: the no-model live checks, what the watchdog repaired in 24 hours, the top warnings and errors, and free disk space; it keeps 14 days and makes no model calls. `live_check.py` also checks that the watchdog reported in the last 25 minutes, and its browser step keeps Edge's throw-away profiles on D: (they went to C:). `jarvis\scripts\run-upstream-tests.ps1` runs N.E.K.O's unit tests correctly on this laptop: it points uv at the existing environment (`UV_PROJECT_ENVIRONMENT`, `UV_NO_SYNC`), sets `NODE_OPTIONS=--test-reporter=tap` for Node 24, and uses throw-away data; with that, 12 of the 14 failures that had looked like "environment" pass. Two remain (avatar tests needing the Windows symlink privilege, i.e. Developer Mode) plus one upstream bug (`test_pr3078_review_evidence::test_c1`, a missing method in upstream's own hot-swap code).
 **Panel buttons were dead in a real browser (found 2026-10-15 by driving the UI):** the main-agent and JARVIS panels submitted through the UI kit's `ActionForm`, a native `<form>`, and the plugin manager's panel frame is sandboxed without form submission, so "Plan and run" and "Hand over" did nothing (console: "Blocked form submission ... 'allow-forms' permission is not set"). Compile and render checks could not see it. Both panels now use inputs plus a `Button` calling `props.api.call`, the pattern upstream's bundled panels use; the main-agent panel also refreshes itself every 4 s while a task is active. `live_check.py` presses each panel's button with an empty task and requires the "Type the task first" toast. The planner no longer offers the web-browser helper unless the request points at the web (a link, a site, "latest", "news", "price", a form); a small planner model was sending plain questions to the browser, which failed. Result: the real panel runs a task end to end (two of two).
 **Full upstream unit run with the correct environment (2026-10-15, run-upstream-tests.ps1, 34 minutes): 41,937 passed, 3 failed, 219 skipped.** The 3 are the known ones: two avatar tests that need the Windows symlink privilege and `test_pr3078_review_evidence::test_c1` (a missing method in upstream's own hot-swap code). An earlier run that lost a worker had been disturbed by plugin reloads and restarts I made while it ran; do not restart or reload the stack during a full run. `live_check.py`: 50 of 50 (full, including the model call).
+**Privacy gateway (added 2026-10-15):**
+- What it does: N.E.K.O's five model URLs point at `http://127.0.0.1:48950/v1`. Passwords, keys, card and phone numbers, e-mail, Aadhaar and PAN leave the PC as `[PASSWORD_1]`-style placeholders and come back restored.
+- Run, stop and watch: `neko-start.ps1` starts it first and `neko-stop.ps1` stops it. The watchdog heals it. Its log is `<data>\logs\privacy.err.log` (requests and counts, never values).
+- Check: `POST /redact {"text": ...}` shows what Dahl would receive. `GET /health` gives counts by kind.
+- Undo: copy `D:\jarvis-apps\tmp\core_config.before-privacy-gateway-20261015-230616.json` back over `<data>\config\core_config.json` with the servers stopped.
+- Tests:
+  - `D:\jarvis\tools\privacy-venv\Scripts\python.exe -m unittest jarvis/privacy/test_privacy.py` (13, with a fake upstream).
+  - `jarvis\privacy\demo_live.py` makes one live call (one small Dahl request).
+- Environment: `D:\jarvis\tools\privacy-venv` (Python 3.11, presidio 2.2.364, spaCy 3.8.16, en_core_web_sm 3.8.0, 255 MB).
+
+**Local models (added 2026-10-15):**
+- Serving: `jarvis\scripts\local-models.ps1` (`-Stop`) runs llama-swap v261 on `127.0.0.1:8080` with `jarvis\local_models\llama-swap.yaml`. `neko-start.ps1` starts it, `neko-stop.ps1` stops it, and the watchdog heals it.
+- Models: kept in `D:\jarvis\models\llm` (6.5 GB). `jarvis\scripts\fetch_models.py` downloads them with resume and a free-space check, and verifies each against Hugging Face's SHA-256; `--check` only verifies.
+- Speeds through llama-server on the Radeon Pro 5500M (Vulkan):
+  - Ling-3.0-tiny: 31 tok/s.
+  - Qwen2.5-Coder-1.5B: 80 tok/s.
+  - Qwen2.5-Math-1.5B: 96 tok/s.
+- Must keep `-fa off`: Vulkan flash attention gives garbage on this GPU.
+- Ling reasons before answering unless the request sets `chat_template_kwargs: {"enable_thinking": false}`.
+- Quick check: `python jarvis\local_models\smoke.py` (local only).
+- Plugin `local_team`: tools `ask_local`, `solve_with_team` and `team_status` (see its README).
+- Live check: `live_check.py` has 7 new checks:
+  - 3 for the privacy gateway.
+  - 3 local-team checks with no quota (status, maths 391, code).
+  - 1 team run with the redacted adviser, model path only.
+- Results: 55 of 55 (`--no-model`); local team 4 of 4, including the adviser run.
+- Gotchas:
+  - Port 8091 on this PC belongs to another service ("Verdict"); leave it alone.
+  - `Start-Process -Wait` waits for every process the script starts, so it hangs on start scripts.
