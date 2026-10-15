@@ -30,7 +30,7 @@ DEFAULT_UPSTREAM = os.environ.get("JARVIS_PRIVACY_UPSTREAM", "https://inference.
 PASS_HEADERS = ("authorization", "content-type", "accept", "user-agent", "openai-organization", "openai-project")
 MAX_BODY = 32 * 1024 * 1024
 _lock = threading.Lock()
-STATS = {"requests": 0, "redacted": {}, "errors": 0, "started": time.time()}
+STATS = {"requests": 0, "redacted": {}, "errors": 0, "started": time.time(), "inflight": 0, "last_call_end": 0.0}
 
 
 def _count(mapping: Mapping):
@@ -175,9 +175,12 @@ def make_handler(red: Redactor, upstream: str, timeout: float):
         def do_GET(self):
             if self.path in ("/health", "/v1/health"):
                 with _lock:
+                    last = STATS["last_call_end"]
                     return self._json(200, {"ok": True, "upstream": upstream, "requests": STATS["requests"],
                                             "redacted": dict(STATS["redacted"]), "errors": STATS["errors"],
-                                            "pii_model": red.model is not None, "checks": dict(red.stats)})
+                                            "pii_model": red.model is not None, "checks": dict(red.stats),
+                                            "inflight": STATS["inflight"],          # model calls waiting right now (the icon's "thinking")
+                                            "last_call_age_s": round(time.time() - last, 1) if last else None})
             self._forward(None)
 
         def do_POST(self):
@@ -195,6 +198,16 @@ def make_handler(red: Redactor, upstream: str, timeout: float):
             self._forward(raw)
 
         def _forward(self, raw):
+            with _lock:
+                STATS["inflight"] += 1
+            try:
+                return self._forward_inner(raw)
+            finally:
+                with _lock:
+                    STATS["inflight"] -= 1
+                    STATS["last_call_end"] = time.time()
+
+        def _forward_inner(self, raw):
             m = Mapping()
             body, stream = None, False
             if raw:

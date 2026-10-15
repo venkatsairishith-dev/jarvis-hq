@@ -95,6 +95,31 @@ def parse_multipart(body: bytes, content_type: str) -> dict:
     return parts
 
 
+_ACTIVITY = {"tts_at": 0.0, "tts_audio_s": 0.0, "asr_at": 0.0}   # for the Neko icon: what speech work happened when
+
+
+def _wav_seconds(wav: bytes) -> float:
+    try:
+        import io
+        import wave
+        with wave.open(io.BytesIO(wav)) as w:
+            return w.getnframes() / float(w.getframerate() or 1)
+    except Exception:                                      # noqa: BLE001 - only an estimate for the icon
+        return 0.0
+
+
+def activity(now: float | None = None) -> dict:
+    """Seconds since the last synthesis and transcription, and how long the last synthesized audio lasts. The page plays
+    audio right after synthesis, so 'speaking' is estimated as: synthesized less than its own length ago (+1 s)."""
+    import time as _t
+    now = now or _t.time()
+    a = dict(_ACTIVITY)
+    tts_age = now - a["tts_at"] if a["tts_at"] else None
+    asr_age = now - a["asr_at"] if a["asr_at"] else None
+    return {"tts_age_s": tts_age, "tts_audio_s": a["tts_audio_s"], "asr_age_s": asr_age,
+            "speaking_estimate": bool(tts_age is not None and tts_age <= a["tts_audio_s"] + 1.0)}
+
+
 def make_handler(synthesize, transcribe=None):
     """`synthesize(text, lang) -> wav_bytes` and `transcribe(wav_bytes, lang) -> text`; both raise ValueError for unusable
     input (the message is safe to return). Without `transcribe` the recognition endpoint answers 501."""
@@ -141,6 +166,8 @@ def make_handler(synthesize, transcribe=None):
                 return self._json(403, {"error": {"message": "loopback only"}})
             if self.path in ("/health", "/"):
                 return self._json(200, {"status": "ok", "service": "jarvis-local-speech", "languages": ["en", "hi", "te"]})
+            if self.path == "/activity":
+                return self._json(200, activity())
             if self.path in ("/v1/models", "/models"):
                 return self._json(200, {"object": "list", "data": [{"id": "jarvis-local", "object": "model", "owned_by": "local"}]})
             return self._json(404, {"error": {"message": "not found"}})
@@ -171,6 +198,8 @@ def make_handler(synthesize, transcribe=None):
                 if fmt not in ("json", "text"):
                     return self._json(400, {"error": {"message": "response_format must be json or text"}})
                 text = transcribe(wav, LANG_ALIASES.get(language.strip().lower(), "en"))
+                import time as _t
+                _ACTIVITY["asr_at"] = _t.time()
                 if fmt == "text":
                     return self._send(200, text.encode("utf-8"), "text/plain; charset=utf-8")
                 return self._json(200, {"text": text})
@@ -213,6 +242,8 @@ def make_handler(synthesize, transcribe=None):
                 return self._json(400, {"error": {"message": "response_format must be pcm or wav"}})
             try:
                 wav = synthesize(text, pick_language(req.get("voice"), text))
+                import time as _t
+                _ACTIVITY.update(tts_at=_t.time(), tts_audio_s=_wav_seconds(wav))
                 if fmt == "wav":
                     return self._send(200, wav, "audio/wav")
                 return self._send(200, wav_to_pcm16(wav), "audio/pcm")

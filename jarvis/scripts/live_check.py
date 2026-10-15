@@ -135,6 +135,28 @@ def deliverables():
             shutil.rmtree(made, ignore_errors=True)
 
 
+def neko_icon():
+    """The Neko icon page and its state come from the widget server; the live stream sends the current state at once."""
+    code, s = jget("http://127.0.0.1:48940/api/neko", timeout=20)
+    states = ("error", "needs_permission", "speaking", "working", "thinking", "listening", "completed", "wake_listening", "sleeping")
+    check("Neko icon: the state server answers with a known state", code == 200 and (s or {}).get("state") in states,
+          f"{(s or {}).get('state')}: {(s or {}).get('detail')}"[:120])
+    code, raw = http("http://127.0.0.1:48940/neko", timeout=10)
+    check("Neko icon: the page is served", code == 200 and b"<title>Neko</title>" in raw, f"HTTP {code}")
+    first = None
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:48940/api/events", timeout=20) as r:
+            for line in r:
+                if line.startswith(b"data:"):
+                    first = json.loads(line[5:])
+                    break
+    except (OSError, ValueError):
+        pass
+    check("Neko icon: the live event stream pushes the state", bool(first and first.get("state") in states), str((first or {}).get("state")))
+    code, raw = http("http://127.0.0.1:48940/api/action", method="POST", body={"action": "open", "path": r"C:\Windows\win.ini"})
+    check("Neko icon: actions refuse files Neko did not make", code == 400, f"HTTP {code}")
+
+
 def research():
     """One quick research run (web search + one public-model call through the privacy gateway): cited and checked."""
     r = run_entry("research", "research_topic", {"question": "What does the OWASP Top 10 cover?", "depth": "quick"}, wait=900)
@@ -474,6 +496,7 @@ def main() -> int:
     guard("speech", speech, not a.no_asr)
     guard("local team", local_team, not a.no_model)
     guard("deliverables", deliverables)
+    guard("neko icon", neko_icon)
     if not a.no_model:
         guard("research", research)
     if not a.no_model:

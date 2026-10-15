@@ -251,6 +251,18 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **Measured and rejected.** GLiNER-PII base: on the same set, fewer secrets found at a usable false-alarm level than small plus Jev. Whole-message reading: surrounding text lowers GLiNER's scores, so it reads sentence by sentence.
 - **Seen live.** MiniMax spent its whole 2,000-token budget deliberating whether a password-related task was allowed. The adviser prompt now says to think briefly and that placeholders are the owner's own data. A budget spent on reasoning is reported instead of silently ignored.
 
+## D23 Neko icon and states from real signals (Neko phase 3, 2026-10-16)
+- **Reused:** the existing widget server and Edge app-mode window. No new process, and no edit to N.E.K.O files.
+- **Signals come from our own components:**
+  - the privacy gateway sees every model call (thinking);
+  - the local speech server makes every spoken reply and every transcription (speaking, listening);
+  - the run files, kernel approvals and health probes give the rest.
+- **Rule:** no state is shown without a signal behind it. "Speaking" is an estimate and the docs say so.
+- **Actions from the icon:** limited to the deliverables folder (open, folder, regenerate) and to stopping the main agent's current task after its step. Approving stays in the console with the PIN.
+- **Not done yet:**
+  - The N.E.K.O page bridge (exact microphone and playback state).
+  - A transparent overlay and global push-to-talk (Tauri shell, phase 8).
+
 ## D22 Research with checked citations (Neko phase 2, 2026-10-16)
 - **Design:** one bounded `research` plugin, built from borrowed patterns, not an adopted repo (evidence 03: GPT-Researcher needs Python 3.12 and 80+ dependencies; open_deep_research is archived).
   - Search through N.E.K.O's existing `web_search` plugin.

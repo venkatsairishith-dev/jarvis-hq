@@ -26,7 +26,8 @@ PORT = 48940
 SERVERS = {"N.E.K.O": "http://127.0.0.1:48911/health", "memory": "http://127.0.0.1:48912/health",
            "agent": "http://127.0.0.1:48915/health", "plugins": "http://127.0.0.1:48916/health",
            "speech": "http://127.0.0.1:48930/health", "console": "http://127.0.0.1:8799/api/owner/state"}   # state: fast; /api/health may be slow
-PLUGINS = ("jarvis_bridge", "main_agent", "doc_tools", "learn_vault")
+PLUGINS = ("jarvis_bridge", "main_agent", "doc_tools", "learn_vault", "local_team", "web_search", "deliverables", "research")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))     # neko_state.py lives next to this file
 MODES = ("chat", "work", "code", "learn")
 MAX_TASK = 2000
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
@@ -144,6 +145,84 @@ def start_task(task, mode, fetch=fetch_json):
     return {"ok": True, "run_id": run_id, "note": "planning"}
 
 
+# ---------- Neko icon: one state from real signals, pushed live ----------
+
+DELIVERABLES_ROOT = os.environ.get("DELIVERABLES_OUT_DIR", r"D:\jarvis\outputs\neko\deliverables")
+_STATUS_CACHE = {"at": 0.0, "value": None}
+ACTIONS = ("open", "folder", "regenerate", "stop")
+
+
+def newest_deliverable(root=None):
+    root = root or DELIVERABLES_ROOT
+    try:
+        dirs = [os.path.join(root, d) for d in os.listdir(root) if os.path.isfile(os.path.join(root, d, "qa.json"))]
+        d = max(dirs, key=lambda p: os.path.getmtime(os.path.join(p, "qa.json")))
+        q = json.load(open(os.path.join(d, "qa.json"), encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return {"file": q.get("file"), "folder": d, "name": os.path.basename(q.get("file") or d), "kind": q.get("kind"),
+            "passed": (q.get("qa") or {}).get("passed"), "age_s": int(time.time() - os.path.getmtime(os.path.join(d, "qa.json")))}
+
+
+def cached_status(fetch=fetch_json, max_age=5.0):
+    """The full status (nine probes) at most every few seconds; the fast signals below are read every second."""
+    if _STATUS_CACHE["value"] is None or time.time() - _STATUS_CACHE["at"] > max_age:
+        _STATUS_CACHE.update(value=build_status(fetch), at=time.time())
+    return _STATUS_CACHE["value"]
+
+
+def neko_state(fetch=fetch_json):
+    import neko_state as ns
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        g = pool.submit(fetch, "http://127.0.0.1:48950/health", 1.5)
+        sp = pool.submit(fetch, "http://127.0.0.1:48930/activity", 1.5)
+        own = pool.submit(fetch, "http://127.0.0.1:8799/api/owner/state", 2.5)
+        gateway, speech, owner = g.result(), sp.result(), own.result()
+    status = cached_status(fetch)
+    approvals = (owner or {}).get("approvals") or []
+    out = ns.decide(status, approvals, gateway, speech, newest_deliverable())
+    out["time"] = time.strftime("%H:%M:%S")
+    return out
+
+
+def run_plugin_entry(plugin, entry, args, fetch=fetch_json, wait_s=8.0):
+    res = fetch("http://127.0.0.1:48916/runs", 10.0, {"plugin_id": plugin, "entry_id": entry, "args": args})
+    run_id = (res or {}).get("run_id")
+    if not run_id:
+        return {"ok": False, "error": f"the {plugin} plugin did not accept the request"}
+    for _ in range(int(wait_s * 2)):
+        time.sleep(0.5)
+        st = fetch(f"http://127.0.0.1:48916/runs/{run_id}", 3.0) or {}
+        if st.get("status") == "succeeded":
+            return {"ok": True}
+        if st.get("status") in ("failed", "cancelled", "timeout"):
+            return {"ok": False, "error": ((st.get("error") or {}).get("message") or "refused")[:200]}
+    return {"ok": True, "note": "still running"}
+
+
+def validate_action(body):
+    if not isinstance(body, dict) or body.get("action") not in ACTIONS:
+        return None, "action must be one of " + ", ".join(ACTIONS)
+    act = body["action"]
+    if act == "stop":
+        return {"action": act}, None
+    path = os.path.realpath(str(body.get("path") or ""))
+    root = os.path.realpath(DELIVERABLES_ROOT)
+    if not path.startswith(root + os.sep):
+        return None, "only files Neko made can be opened here"
+    return {"action": act, "path": path}, None
+
+
+def do_action(clean, fetch=fetch_json):
+    act = clean["action"]
+    if act == "stop":
+        return run_plugin_entry("main_agent", "stop_task", {}, fetch)
+    entry = {"open": "open_output", "folder": "show_in_folder", "regenerate": "regenerate"}[act]
+    args = {"folder": os.path.dirname(clean["path"])} if act == "regenerate" else {"path": clean["path"]}
+    return run_plugin_entry("deliverables", entry, args, fetch, wait_s=60.0 if act == "regenerate" else 8.0)
+
+
 def make_handler(page_path, fetch=fetch_json):
     class Handler(BaseHTTPRequestHandler):
         server_version = "jarvis-widget"
@@ -163,6 +242,33 @@ def make_handler(page_path, fetch=fetch_json):
         def _json(self, code, obj):
             self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"))
 
+        def _events(self):
+            """Server-sent events: the Neko state whenever it changes (checked every second), a comment every 15 s to
+            keep the connection, closed after 10 minutes (the page reconnects)."""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            last, quiet, t0 = None, 0, time.time()
+            try:
+                while time.time() - t0 < 600:
+                    st = neko_state(fetch)
+                    key = json.dumps({k: v for k, v in st.items() if k != "time"}, sort_keys=True)
+                    if key != last:
+                        self.wfile.write(f"data: {json.dumps(st, ensure_ascii=False)}\n\n".encode("utf-8"))
+                        self.wfile.flush()
+                        last, quiet = key, 0
+                    else:
+                        quiet += 1
+                        if quiet >= 15:
+                            self.wfile.write(b": keep-alive\n\n")
+                            self.wfile.flush()
+                            quiet = 0
+                    time.sleep(1.0)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                return
+
         def do_GET(self):
             if not host_ok(self.headers.get("Host")):
                 return self._json(403, {"error": "loopback only"})
@@ -174,6 +280,15 @@ def make_handler(page_path, fetch=fetch_json):
                     return self._json(500, {"error": "page missing"})
             if path == "/api/status":
                 return self._json(200, build_status(fetch))
+            if path == "/neko":
+                try:
+                    return self._send(200, open(os.path.join(HERE, "neko.html"), "rb").read(), "text/html; charset=utf-8")
+                except OSError:
+                    return self._json(500, {"error": "page missing"})
+            if path == "/api/neko":
+                return self._json(200, neko_state(fetch))
+            if path == "/api/events":
+                return self._events()
             if path == "/health":
                 return self._json(200, {"status": "ok", "service": "jarvis-widget"})
             return self._json(404, {"error": "not found"})
@@ -184,12 +299,18 @@ def make_handler(page_path, fetch=fetch_json):
             raw = self.rfile.read(min(max(n, 0), 64 * 1024))            # always consume the body before answering
             if not host_ok(host) or not origin_ok(self.headers.get("Origin"), host):
                 return self._json(403, {"error": "loopback and same origin only"})
-            if self.path.split("?", 1)[0] != "/api/task":
+            route = self.path.split("?", 1)[0]
+            if route not in ("/api/task", "/api/action"):
                 return self._json(404, {"error": "not found"})
             try:
                 body = json.loads(raw.decode("utf-8"))
             except (ValueError, UnicodeDecodeError):
                 return self._json(400, {"ok": False, "error": "send JSON"})
+            if route == "/api/action":
+                clean, err = validate_action(body)
+                if err:
+                    return self._json(400, {"ok": False, "error": err})
+                return self._json(200, do_action(clean, fetch))
             clean, err = validate_task(body)
             if err:
                 return self._json(400, {"ok": False, "error": err})

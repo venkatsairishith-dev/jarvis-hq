@@ -332,3 +332,29 @@ Source of the list: Playa-Cyrene/Cyrene-Agent (MIT, Electron/TypeScript). What w
   - Text after the JSON broke parsing.
   - The privacy filter turned "AI" into `[API_KEY_1]`; model-found secrets must now be at least 4 characters, and placeholders are never searched.
 - **Checks:** `live_check.py` has a research test that runs only on the model path (it uses the web and one Dahl call).
+**Neko icon and states (added 2026-10-16, D23):**
+- **The window:** `jarvis\scripts\open-widget.ps1` opens the Neko icon by default (always on top, bottom right). `-Page status` gives the old detailed widget. The login task `JarvisWidget` therefore shows the icon from the next login.
+- **What it offers:** click the cat to type a task; Talk opens N.E.K.O for voice. When something finishes it shows Open, Folder and Make again; while working, "Stop after this step"; when approval is needed, a link to the console.
+- **States:** one state, from real signals only (`jarvis/widget/neko_state.py`). In priority order:
+
+  | State | Signal |
+  |---|---|
+  | error | a server is down, the kernel is unreachable or killed, or the watchdog gave up |
+  | needs_permission | kernel approvals are waiting (shows the bound action) |
+  | speaking | estimated: the speech server synthesized a reply less than that reply's length ago |
+  | working | a main-agent run is active (shows its step) |
+  | thinking | a model call is in flight through the privacy gateway |
+  | listening | the speech server transcribed something in the last 4 s |
+  | completed | a run or deliverable finished in the last 3 minutes |
+  | sleeping | none of the above |
+
+- **New endpoints:**
+  - Widget server: `GET /neko`, `GET /api/neko`, `GET /api/events` (server-sent events, checked every second), `POST /api/action` (open, folder, regenerate or stop; paths limited to the deliverables folder).
+  - Speech server: `GET /activity`.
+  - Gateway `/health`: adds `inflight` and `last_call_age_s`.
+- **Measured live:** sleeping → speaking (on a real synthesis) → completed (on a real deliverable), all pushed by the event stream. `live_check.py`: 4 icon checks, 66 of 66.
+- **Limits:**
+  - "Listening" means "just transcribed", not "microphone open": N.E.K.O's page does not report its microphone state.
+  - "Speaking" is estimated from the synthesized length.
+  - Wake listening shows only once the wake word is built (phase 5).
+  - The Edge window has no transparent overlay or global push-to-talk (phase 8 shell).

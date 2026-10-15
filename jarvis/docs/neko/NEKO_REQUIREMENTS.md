@@ -16,14 +16,14 @@ The roadmap (`NEKO_IMPLEMENTATION_ROADMAP.md`) updates these statuses as work la
 
 | ID | Requirement | Acceptance test | Status |
 |---|---|---|---|
-| X1 | A recognisable Neko icon or animated character is always available on the desktop | The icon is visible and stays on top; the CPU cost while idle is measured | PARTIAL: status widget; no Neko icon yet |
-| X2 | Clicking the icon activates Neko | One click opens the listening or input state | PARTIAL: the widget has a task box |
+| X1 | A recognisable Neko icon or animated character is always available on the desktop | The icon is visible and stays on top; the CPU cost while idle is measured | PARTIAL: Neko icon window (always on top, from the next login); idle CPU not measured yet |
+| X2 | Clicking the icon activates Neko | One click opens the listening or input state | TESTED (click opens the task box; voice via Talk) |
 | X3 | "Hey Neko" activates Neko by voice | A wake benchmark on real recordings: misses ≤ 5%, false accepts ≤ 0.5 per hour | MISSING: runtime not built |
 | X4 | Push-to-talk works as an alternative to the wake word | Holding the hotkey records; releasing it sends | MISSING |
-| X5 | States: sleeping, wake-listening, waking, listening, thinking, working, speaking, completed, needs-permission, error/offline | Every state is driven by a real signal (no timers faking progress); a unit test per transition; a live check | MISSING |
-| X6 | Clickable fallback when the wake word is unavailable | Wake engine off: the icon still activates Neko | MISSING (with X1/X2) |
-| X7 | The completed state offers Open file, Show in folder and Regenerate | Each button works on a real output file | PARTIAL (plugin entries exist and work; the icon UI comes in phase 3) |
-| X8 | The needs-permission state shows exactly what needs approval | The text matches the kernel's pending action | PARTIAL: the widget shows a count |
+| X5 | States: sleeping, wake-listening, waking, listening, thinking, working, speaking, completed, needs-permission, error/offline | Every state is driven by a real signal (no timers faking progress); a unit test per transition; a live check | PARTIAL: 9 of 10 states from real signals (wake-listening waits for phase 5); speaking is an estimate |
+| X6 | Clickable fallback when the wake word is unavailable | Wake engine off: the icon still activates Neko | TESTED (the icon works with the wake word off) |
+| X7 | The completed state offers Open file, Show in folder and Regenerate | Each button works on a real output file | PARTIAL: buttons wired and the path guard tested live; not clicked on screen while the owner was working |
+| X8 | The needs-permission state shows exactly what needs approval | The text matches the kernel's pending action | PRESENT: shows the level, bound action and reason (unit-tested; no live approval, PIN not set) |
 | X9 | Sleeping does not run a large LLM | No LLM process is loaded while idle (llama-swap TTL) | TESTED (TTL unload) |
 
 ## 2. Voice

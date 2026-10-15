@@ -29,11 +29,12 @@ Why first: it is the largest missing capability with no owner dependency, and it
 - [x] 12 tests with fakes; live runs (37–66 s; 7/16 to 11/17 statements confirmed, the rest labelled); `live_check.py` research check on the model path
 - [ ] OWNER: choose a search backend (current AnySearch/DuckDuckGo, or add Tavily/Brave)
 
-## Phase 3: Neko states and icon — X1, X2, X5, X6, X7, X8
-- [ ] State engine in the widget server: priority rules, SSE `/api/events`, unit tests per state
-- [ ] Neko icon window: animated states (CSS/SVG), click to activate, a Stop button (kernel kill switch), completed actions (open, folder, regenerate), the exact approval text
-- [ ] Page bridge: speaking and listening signals from N.E.K.O page events
-- [ ] Live check: forced states (start a run, then working; an approval waiting, then needs_permission; a server down, then error)
+## Phase 3: Neko states and icon — X1, X2, X5, X6, X7, X8 ✅ (2026-10-16, D23)
+- [x] State engine (`neko_state.py`): priority rules from real signals; SSE `/api/events`; 6 unit tests
+- [x] Neko icon window: animated states (CSS/SVG, light and dark), click to give a task, Stop after this step, Open / Folder / Make again, the exact approval text and a console link; checked headless in all states
+- [x] Signals: gateway in-flight calls (thinking), speech-server activity (speaking estimate, listening), run files, approvals, health
+- [x] Live: sleeping → speaking → completed pushed by the event stream; `live_check.py` 4 icon checks (66/66)
+- [ ] N.E.K.O page bridge for the exact microphone and playback state (needs the shell's script injection, phase 8)
 
 ## Phase 4: models, hardware and providers — M1–M3, M5, M7–M10
 - [ ] `hwdetect.py` (psutil + `llama-server --list-devices`) with profile choice; tests with fake readings
