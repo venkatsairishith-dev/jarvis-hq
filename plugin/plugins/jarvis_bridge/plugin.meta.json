@@ -785,7 +785,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 42902,
+  "source_bytes": 44612,
   "source_files": [
     ".gitignore",
     ".vscode/settings.json",
@@ -803,5 +803,5 @@
     "tests/test_smoke.py",
     "ui/panel.tsx"
   ],
-  "source_sha256": "645fdcea1c3ca5f4afee9c3748d1072a02757a010621fed3b0e245e46d989fae"
+  "source_sha256": "c197bfa3b0c0766eeeb5f05f0a1794feebeeed6901c84777a5d3ef55e7939463"
 }

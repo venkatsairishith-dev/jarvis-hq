@@ -902,7 +902,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 109090,
+  "source_bytes": 114607,
   "source_files": [
     ".gitignore",
     ".vscode/settings.json",
@@ -925,5 +925,5 @@
     "tests/test_store.py",
     "ui/panel.tsx"
   ],
-  "source_sha256": "94889210eaecbeb0049e9d6d7aa55952c7601435a8b74f2625881505ee2390df"
+  "source_sha256": "8169caf5504ce15a918ca256b333360665eee77c50c13b6ea2ebeb021032863b"
 }

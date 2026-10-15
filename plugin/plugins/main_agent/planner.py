@@ -34,7 +34,7 @@ MODE_RULES: dict[str, dict[str, Any]] = {
 }
 MODE_GUIDANCE = {
     "chat": "Mode: chat. No tools are available; answer conversationally with one think step.",
-    "work": "Mode: work. Chain the available tools to get the task done; prefer the fewest steps.",
+    "work": "Mode: work. Chain the available tools to get the task done; prefer the fewest steps. Use think for anything the model can answer from general knowledge (facts, explanations, writing, summaries). Use the browser ONLY when the task needs live information or a specific website that the model cannot know (current news, prices, a given page) or must operate a website; never for general knowledge.",
     "code": "Mode: code. Software work is done by JARVIS in the bound project (its lab agents have language-server queries); "
             "describe the engineering task precisely, one jarvis step per coherent change, then think to summarise.",
     "learn": "Mode: learn. Work with the study vault and documents only: read, explain, organise notes, make exercises, "
@@ -42,6 +42,24 @@ MODE_GUIDANCE = {
              "add a learn_vault save_note step AFTER the think step that depends on it, with a path such as exercises/<topic>.md.",
 }
 MAX_GOAL = 600
+
+# The web browser helper is slow and, with a small planner model, gets picked for plain questions ("find the capital of Italy").
+# It is only offered when the request itself points at the web: a link, a site, live information, or filling in a form.
+_WEB_CUES = re.compile(
+    r"https?://|\bwww\.|\.(?:com|org|net|io|in|gov|edu)\b|\bweb ?(?:site|page)\b|\bbrowse\b|\bbrowser\b|\bonline\b|\binternet\b"
+    r"|\bgoogle\b|\bsearch (?:the )?(?:web|internet|online)\b|\blatest\b|\bcurrent(?:ly)?\b|\btoday\b|\bnews\b|\bweather\b|\bforecast\b"
+    r"|\bprices?\b|\bstocks?\b|\bscores?\b|\bdownload\b|\blog ?in\b|\bsign ?in\b|\bfill (?:in|out)\b|\bform\b|\bbook(?:ing)?\b",
+    re.I,
+)
+
+
+def needs_web(task: str) -> bool:
+    return bool(_WEB_CUES.search(str(task or "")))
+
+
+def filter_for_task(caps, task: str):
+    """The catalogue for THIS request: the browser helper only when the request points at the web."""
+    return [c for c in caps if c.kind != "browser" or needs_web(task)]
 # An earlier result may be passed into a later plugin step as {{s1}}, but only into content-type arguments and only from a step the
 # plan says it depends on. The data fills a value; it can never add, remove or redirect a step.
 PLACEHOLDER = re.compile(r"\{\{\s*([a-z0-9_]{1,20})\s*\}\}")
@@ -118,7 +136,7 @@ def build_catalogue(plugins: Iterable[dict[str, Any]], *, browser_ready: bool, j
     caps = [Capability("think", "think",
                        "Reason, summarise, compare or write using only the results of earlier steps (no outside access).")]
     if browser_ready and "browser" in kinds:
-        caps.append(Capability("browser", "browser", "Operate a web browser to look things up, read pages or fill forms on the web."))
+        caps.append(Capability("browser", "browser", "Operate a real web browser: read a specific page, get live information (current news, prices) or fill in a form on the web. Slow; not for general knowledge."))
     if jarvis_ready and "jarvis" in kinds:
         caps.append(Capability("jarvis", "jarvis",
                                "JARVIS, the owner's main agent with its own sub-agents: code, files on this PC, long multi-step "

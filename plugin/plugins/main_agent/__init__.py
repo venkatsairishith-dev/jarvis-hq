@@ -24,8 +24,8 @@ import httpx
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr, ui
 
 from .executor import StepContext, StepFailed, StepResult, StepUnknown, final_text, run_plan, run_state
-from .planner import (DEFAULT_MODE, MODE_RULES, MODES, Capability, Plan, PlanError, Step, build_catalogue, fill_args, normalize_mode,
-                      parse_plan, planner_messages)
+from .planner import (DEFAULT_MODE, MODE_RULES, MODES, Capability, Plan, PlanError, Step, build_catalogue, fill_args, filter_for_task,
+                      normalize_mode, parse_plan, planner_messages)
 from .store import RunStore, plan_from_dict, plan_to_dict, result_from_dict, result_to_dict
 
 AGENT_PORT = os.environ.get("TOOL_SERVER_PORT", "48915")
@@ -206,6 +206,7 @@ class MainAgentPlugin(NekoPluginBase):
 
     async def _make_plan(self, task: str, caps: list[Capability], mode: str = DEFAULT_MODE) -> Plan:
         max_steps = _int_env("MAIN_AGENT_MAX_STEPS", 6, 1, 10)
+        caps = filter_for_task(caps, task)        # no browser helper unless the request points at the web (also validated below)
         messages = planner_messages(task, caps, max_steps, mode)
         text = await self._llm(messages, max_tokens=1500, timeout=120.0)
         try:

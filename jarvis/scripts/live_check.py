@@ -337,6 +337,25 @@ def browser():
                 except Exception:
                     pass
             check(f"plugin manager panel renders: {pid}", all(n in text for n in needles), f"{len(page.frames) - 1} hosted frame(s)")
+        # The panels run in a sandboxed frame: a button that submits a native form is silently blocked there, which no
+        # "does it render" check can see. Press each panel's button with the task empty: the click handler itself must run
+        # (it answers with a "Type the task first" toast without calling any model).
+        for pid, button in (("main_agent", "Plan and run"), ("jarvis_bridge", "Hand over")):
+            console = []
+            page.on("console", lambda m, c=console: c.append(m.text) if m.type == "error" else None)
+            page.goto(f"{PLUGIN_URL}/ui/plugins/{pid}", wait_until="networkidle", timeout=60000)
+            page.wait_for_timeout(2500)
+            try:
+                page.get_by_text("Panel", exact=True).first.click()
+                page.wait_for_timeout(2500)
+                page.frames[1].get_by_role("button", name=button).click()
+                page.wait_for_timeout(2000)
+                seen = page.inner_text("body") + " " + " ".join(f.inner_text("body") for f in page.frames[1:])
+            except Exception as exc:
+                seen = f"could not press the button: {type(exc).__name__}"
+            blocked = [c for c in console if "allow-forms" in c or "sandbox" in c.lower()]
+            check(f"panel button works inside the sandbox: {pid}", "Type the task first" in seen and not blocked,
+                  f"toast={'yes' if 'Type the task first' in seen else 'no'} blocked={len(blocked)}")
         b.close()
 
 

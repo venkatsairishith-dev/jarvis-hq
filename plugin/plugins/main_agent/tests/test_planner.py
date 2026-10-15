@@ -205,3 +205,25 @@ def test_fill_args_substitutes_truncates_and_leaves_other_values_alone():
     assert out["path"] == "a.md" and out["n"] == 3
     assert out["content"].startswith("Intro\n") and out["content"].count("X") == 20000 and out["content"].endswith("End two ")
     assert "{{" not in out["content"]
+
+
+def test_work_mode_tells_the_planner_not_to_use_the_browser_for_general_knowledge():
+    system = planner_messages("what is the capital of Italy", caps(), 4, "work")[0]["content"]
+    assert "Use think for anything the model can answer from general knowledge" in system
+    assert "Use the browser ONLY when" in system and "never for general knowledge" in system
+    browser_line = next(l for l in system.splitlines() if l.startswith('- agent "browser"'))
+    assert "Not for general knowledge".lower() in browser_line.lower()
+
+
+def test_the_browser_helper_is_offered_only_when_the_request_points_at_the_web():
+    from plugin.plugins.main_agent.planner import filter_for_task, needs_web
+    full = caps()
+    assert any(c.kind == "browser" for c in full)
+    for plain in ("find the capital of Italy and save it to a document", "write a poem about cats", "summarise my notes"):
+        assert not needs_web(plain), plain
+        assert all(c.kind != "browser" for c in filter_for_task(full, plain)), plain
+    for web in ("open https://example.com and read the title", "what is the latest news about electric cars",
+                "check the weather today in Hyderabad", "fill in the form on that site", "search the web for flight prices"):
+        assert needs_web(web), web
+        assert any(c.kind == "browser" for c in filter_for_task(full, web)), web
+    assert [c.kind for c in filter_for_task(full, "plain task")] == [c.kind for c in full if c.kind != "browser"]

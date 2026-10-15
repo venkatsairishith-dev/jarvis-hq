@@ -1,5 +1,15 @@
-import { ActionButton, ActionForm, Alert, Card, DataTable, Inline, Page, Stack, StatusBadge, Text } from "@neko/plugin-ui"
+import { ActionButton, Alert, Button, Card, DataTable, Field, Inline, Input, Page, Stack, StatusBadge, Text, useForm, useToast } from "@neko/plugin-ui"
 import type { HostedAction, PluginSurfaceProps } from "@neko/plugin-ui"
+
+// The panel runs in a sandboxed frame that does not allow native form submission, so the task is sent with a plain button and
+// props.api.call (the same pattern the other bundled panels use), never with a <form> submit.
+function unwrap(envelope: any): Record<string, any> {
+  if (envelope && typeof envelope === "object") {
+    if (envelope.result && typeof envelope.result === "object") return envelope.result
+    return envelope
+  }
+  return {}
+}
 
 type Recent = { id: string; state: string; when: string; task: string }
 type Approval = { id: string; level: string; what: string; seconds_left: number; reason: string }
@@ -30,6 +40,26 @@ export default function Panel(props: PluginSurfaceProps<State>) {
   const approvals = state.approvals || []
   const connectors = state.connectors || []
   const console_url = state.console_url || "http://127.0.0.1:8799"
+  const form = useForm<{ task: string }>({ task: "" })
+  const toast = useToast()
+
+  async function handOver() {
+    const task = form.values.task.trim()
+    if (!send) return
+    if (!task) {
+      toast.error(t("panel.needTask", { defaultValue: "Type the task first." }))
+      return
+    }
+    try {
+      const res = unwrap(await props.api.call(send.id, { task }))
+      if (res.error || res.status === "failed") throw new Error(String(res.error || res.message || "JARVIS did not accept the task."))
+      form.setField("task", "")
+      toast.success(String(res.message || t("panel.handedOver", { defaultValue: "Handed over to JARVIS." })))
+      await props.api.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   return (
     <Page
@@ -75,7 +105,16 @@ export default function Panel(props: PluginSurfaceProps<State>) {
 
         <Card title={t("panel.send", { defaultValue: "Give JARVIS a task" })}>
           {send ? (
-            <ActionForm action={send} submitLabel={t("panel.sendButton", { defaultValue: "Hand over" })} />
+            <Stack>
+              <Field label={t("panel.taskLabel", { defaultValue: "The task, in plain words" })}>
+                <Input
+                  value={form.values.task}
+                  placeholder={t("panel.taskPlaceholder", { defaultValue: "For example: open my downloads folder" })}
+                  onChange={(value) => form.setField("task", String(value))}
+                />
+              </Field>
+              <Button tone="primary" onClick={handOver}>{t("panel.sendButton", { defaultValue: "Hand over" })}</Button>
+            </Stack>
           ) : (
             <Alert tone="warning" message={t("panel.noAction", { defaultValue: "The task action is not available (is the plugin running?)." })} />
           )}
