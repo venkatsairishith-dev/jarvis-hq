@@ -251,6 +251,29 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **Measured and rejected.** GLiNER-PII base: on the same set, fewer secrets found at a usable false-alarm level than small plus Jev. Whole-message reading: surrounding text lowers GLiNER's scores, so it reads sentence by sentence.
 - **Seen live.** MiniMax spent its whole 2,000-token budget deliberating whether a password-related task was allowed. The adviser prompt now says to think briefly and that placeholders are the owner's own data. A budget spent on reasoning is reported instead of silently ignored.
 
+## D22 Research with checked citations (Neko phase 2, 2026-10-16)
+- **Design:** one bounded `research` plugin, built from borrowed patterns, not an adopted repo (evidence 03: GPT-Researcher needs Python 3.12 and 80+ dependencies; open_deep_research is archived).
+  - Search through N.E.K.O's existing `web_search` plugin.
+  - Fetching guarded against SSRF.
+  - BM25 passages.
+  - A writer that must attach sources to every statement.
+- **Claim checking, measured on 16 hand-made claims:**
+
+  | Checker | Correct |
+  |---|---|
+  | Jev decision model | 8/16 (said "supported" to everything) |
+  | Word overlap + numbers | 15/16 |
+  | Local NLI cross-encoder (`nli-deberta-v3-xsmall` int8, onnxruntime only, ~0.1 s) | 16/16 |
+
+  NLI is used, plus a check that every number in a statement appears in its source.
+- **What happens to statements that fail:**
+  - Unsupported, uncited or wrongly cited factual statements are never presented as facts; they move to a labelled "could not be confirmed" section.
+  - Opinion and recommendation sections may stand uncited.
+- **Privacy:** the question is redacted before any search, and placeholders are dropped from queries. The writing call goes only through the privacy gateway (public lane), using passages from public web pages.
+- **Not done, on purpose:**
+  - No paid search API until the owner chooses one (Tavily/Brave need keys or a card).
+  - No automatic writing of research into memory (memory-poisoning risk; evidence 03).
+
 ## D21 Deliverables: decks and reports (Neko phase 1, 2026-10-16)
 - **Research:** `jarvis/docs/neko/evidence/05-documents-pptx-pdf.md`. No maintained open generator writes native charts, notes and PowerPoint animations together.
 - **Decks:**

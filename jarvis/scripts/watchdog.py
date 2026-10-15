@@ -29,7 +29,7 @@ SERVERS = {"main": ("http://127.0.0.1:48911/health", 48911), "memory": ("http://
            "speech": ("http://127.0.0.1:48930/health", 48930), "console": ("http://127.0.0.1:8799/api/owner/state", 8799),   # fast liveness; kernel detail comes from /api/health below
            "widget": ("http://127.0.0.1:48940/health", 48940), "privacy": ("http://127.0.0.1:48950/health", 48950),
            "local_models": ("http://127.0.0.1:8080/health", 8080)}
-PLUGINS = ("jarvis_bridge", "main_agent", "doc_tools", "learn_vault", "local_team")
+PLUGINS = ("jarvis_bridge", "main_agent", "doc_tools", "learn_vault", "local_team", "web_search", "deliverables", "research")
 MAX_HEALS_PER_HOUR = 3
 BOOT_GRACE_SECONDS = 180
 

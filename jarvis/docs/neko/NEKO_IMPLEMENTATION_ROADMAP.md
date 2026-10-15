@@ -22,11 +22,12 @@ Why first: it is the largest missing capability with no owner dependency, and it
 - [x] 16 unit tests; `run_demo.py`; `live_check.py` (2 new checks; 60 of 60 total, `--no-model`)
 - [ ] OWNER: watch one slideshow and open a deck in PowerPoint for the web to confirm the animations play
 
-## Phase 2: research with citations — R1–R4, O2
-- [ ] `research` plugin: bounded plan, then search (`web_search` plugin; Tavily/Brave if the owner adds a key), then fetch, then rank passages, then synthesise with per-sentence citations (Dahl via gateway, streamed), then claim check (Jev/HHEM), then a labelled report
-- [ ] Budgets: maximum queries, pages, seconds and characters; cache and deduplication
-- [ ] Hand off to deliverables: "research X and make a PPT/PDF"
-- [ ] Tests with a fake search and fetch; one live run (one Dahl synthesis)
+## Phase 2: research with citations — R1–R4, O2 ✅ (2026-10-16, D22)
+- [x] `research` plugin: redacted question; local query plan; `web_search` plugin; SSRF-safe fetch with cache; BM25 passages with relevance cut; Dahl writes structured statements with sources through the gateway (local fallback); NLI claim check; labelled report
+- [x] Budgets: quick and standard (queries, pages, passages, seconds); cache and deduplication; the run record is saved
+- [x] Hands off to deliverables (`deliverable=report|presentation`). Live: PDF and deck made, QA passed
+- [x] 12 tests with fakes; live runs (37–66 s; 7/16 to 11/17 statements confirmed, the rest labelled); `live_check.py` research check on the model path
+- [ ] OWNER: choose a search backend (current AnySearch/DuckDuckGo, or add Tavily/Brave)
 
 ## Phase 3: Neko states and icon — X1, X2, X5, X6, X7, X8
 - [ ] State engine in the widget server: priority rules, SSE `/api/events`, unit tests per state

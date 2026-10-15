@@ -55,7 +55,7 @@ The roadmap (`NEKO_IMPLEMENTATION_ROADMAP.md`) updates these statuses as work la
 | ID | Requirement | Acceptance test | Status |
 |---|---|---|---|
 | O1 | A coordinator plans, decides direct vs planned work, delegates to role sub-agents, collects, verifies and delivers | main_agent tests and live runs | TESTED (plan-then-run) |
-| O2 | Roles: research, verification, browser/search, document/presentation, code, desktop, QA | Each role is a catalogue capability with its own tools | PARTIAL: browser, jarvis, computer and think exist; research, documents and QA are missing |
+| O2 | Roles: research, verification, browser/search, document/presentation, code, desktop, QA | Each role is a catalogue capability with its own tools | PARTIAL: browser, jarvis, computer, think, research, documents and QA (deliverables checks) exist; a desktop role via the OS layer is pending |
 | O3 | Least-privilege tools per role | The catalogue is filtered per role and mode | PARTIAL (mode filters, web-cue gating) |
 | O4 | A real task timeline: agent names, current operation, source counts, queue, completion | Typed run events feed the UI; no fabricated progress | PARTIAL (run JSON, panel refresh) |
 | O5 | Pause, cancel, retry and approve; cancelling stops subprocesses | Tests per control | PARTIAL (stop_task, resume) |
@@ -65,10 +65,10 @@ The roadmap (`NEKO_IMPLEMENTATION_ROADMAP.md`) updates these statuses as work la
 
 | ID | Requirement | Acceptance test | Status |
 |---|---|---|---|
-| R1 | Search, read and compare sources; prefer current, authoritative ones; keep dates | Research run on a fixed topic; every claim maps to a fetched source | MISSING |
-| R2 | Citations with title, URL, date and supported claim; no fabricated sources | A checker verifies each cited sentence against its source text | MISSING |
-| R3 | Separate verified facts, opinions, uncertain points and recommendations | Report sections are labelled | MISSING |
-| R4 | Caching, deduplication and budgets | Tests | MISSING |
+| R1 | Search, read and compare sources; prefer current, authoritative ones; keep dates | Research run on a fixed topic; every claim maps to a fetched source | TESTED (live, 2026-10-16) |
+| R2 | Citations with title, URL, date and supported claim; no fabricated sources | A checker verifies each cited sentence against its source text | TESTED (NLI check; unconfirmed statements labelled) |
+| R3 | Separate verified facts, opinions, uncertain points and recommendations | Report sections are labelled | TESTED (fact/opinion/uncertain/recommendation badges) |
+| R4 | Caching, deduplication and budgets | Tests | TESTED (24 h page cache, deduplication, quick/standard budgets) |
 
 ## 6. Deliverables
 

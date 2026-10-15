@@ -1,0 +1,319 @@
+{
+  "build_env": {
+    "arch": "AMD64",
+    "os": "win32",
+    "python": "3.11"
+  },
+  "entries": [
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.research_topic.description",
+        "default": "Research a question on the web within fixed limits and return a report in which every factual sentence cites a source and was checked against it; unconfirmed statements are labelled. Optionally turn it into a PDF report or an animated presentation (deliverable=report|presentation). Use for questions that need current or multiple sources."
+      },
+      "event_key": "research.research_topic",
+      "event_type": "plugin_entry",
+      "id": "research_topic",
+      "input_schema": {
+        "properties": {
+          "deliverable": {
+            "default": "none",
+            "enum": [
+              "none",
+              "report",
+              "presentation"
+            ],
+            "type": "string"
+          },
+          "depth": {
+            "default": "standard",
+            "enum": [
+              "quick",
+              "standard"
+            ],
+            "type": "string"
+          },
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          },
+          "question": {
+            "description": "The research question, in the owner's words.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "stats",
+        "file",
+        "sources"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "sources": {},
+          "stats": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "stats",
+          "file",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.research_topic.name",
+        "default": "Research a topic"
+      },
+      "return_message": "",
+      "timeout": 900
+    }
+  ],
+  "entries_config_sha256": "",
+  "entry_methods": {
+    "research_topic": "research_topic"
+  },
+  "handlers": {
+    "research.research_topic": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.research_topic.description",
+        "default": "Research a question on the web within fixed limits and return a report in which every factual sentence cites a source and was checked against it; unconfirmed statements are labelled. Optionally turn it into a PDF report or an animated presentation (deliverable=report|presentation). Use for questions that need current or multiple sources."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "research_topic",
+      "input_schema": {
+        "properties": {
+          "deliverable": {
+            "default": "none",
+            "enum": [
+              "none",
+              "report",
+              "presentation"
+            ],
+            "type": "string"
+          },
+          "depth": {
+            "default": "standard",
+            "enum": [
+              "quick",
+              "standard"
+            ],
+            "type": "string"
+          },
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          },
+          "question": {
+            "description": "The research question, in the owner's words.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "stats",
+        "file",
+        "sources"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "sources": {},
+          "stats": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "stats",
+          "file",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.research_topic.name",
+        "default": "Research a topic"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 900
+    },
+    "research:lifecycle:shutdown": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "shutdown",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "shutdown",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "research:lifecycle:startup": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "startup",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "startup",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "research:plugin_entry:research_topic": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.research_topic.description",
+        "default": "Research a question on the web within fixed limits and return a report in which every factual sentence cites a source and was checked against it; unconfirmed statements are labelled. Optionally turn it into a PDF report or an animated presentation (deliverable=report|presentation). Use for questions that need current or multiple sources."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "research_topic",
+      "input_schema": {
+        "properties": {
+          "deliverable": {
+            "default": "none",
+            "enum": [
+              "none",
+              "report",
+              "presentation"
+            ],
+            "type": "string"
+          },
+          "depth": {
+            "default": "standard",
+            "enum": [
+              "quick",
+              "standard"
+            ],
+            "type": "string"
+          },
+          "open_after": {
+            "default": false,
+            "type": "boolean"
+          },
+          "question": {
+            "description": "The research question, in the owner's words.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "stats",
+        "file",
+        "sources"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "sources": {},
+          "stats": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "stats",
+          "file",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.research_topic.name",
+        "default": "Research a topic"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 900
+    }
+  },
+  "schema_version": 4,
+  "sdk_version": "0.1.0",
+  "source_bytes": 45943,
+  "source_files": [
+    ".gitignore",
+    "README.md",
+    "__init__.py",
+    "core.py",
+    "fetch.py",
+    "plugin.toml",
+    "pyproject.toml",
+    "rank.py",
+    "ruff.toml",
+    "tests/__init__.py",
+    "tests/test_core.py",
+    "tests/test_smoke.py",
+    "verify.py"
+  ],
+  "source_sha256": "c91d87d09988886487a5992a15df0043459200bc9863a45e6d2e8ad704f89a81"
+}

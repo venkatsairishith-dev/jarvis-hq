@@ -88,7 +88,7 @@ if (Listening 48916) {
   try {
     Invoke-RestMethod -Method POST http://127.0.0.1:48916/plugins/refresh -ContentType 'application/json' -Body '{}' -TimeoutSec 60 | Out-Null
     $states = @()
-    foreach ($id in 'jarvis_bridge', 'doc_tools', 'learn_vault', 'local_team', 'main_agent') {   # the bridge and the tool plugins first: the main agent calls them
+    foreach ($id in 'jarvis_bridge', 'doc_tools', 'learn_vault', 'local_team', 'web_search', 'deliverables', 'research', 'main_agent') {   # the bridge and the tool plugins first: the main agent calls them
       $p = (Invoke-RestMethod http://127.0.0.1:48916/plugins -TimeoutSec 15).plugins | Where-Object { $_.id -eq $id }
       if ($p -and $p.status -ne 'running') {
         Invoke-RestMethod -Method POST "http://127.0.0.1:48916/plugin/$id/start" -ContentType 'application/json' -Body '{}' -TimeoutSec 60 | Out-Null

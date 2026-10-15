@@ -126,6 +126,10 @@ class ModelRedaction(unittest.TestCase):
             self.assertNotIn(leak, out)
         self.assertEqual(_r._widen("key Blue7Whale#.", 4, 14), (4, 15))   # takes the "#", leaves the full stop
 
+    def test_short_words_are_never_model_secrets(self):
+        text = "How can a beginner learn cybersecurity with AI, safely and legally?"
+        self.assertEqual(self.yes.redact(text, Mapping()), text)
+
     def test_rejected_candidates_stay(self):
         text = "Remind me to call mom at 7 pm."
         self.assertEqual(self.no.redact(text, Mapping()), text)

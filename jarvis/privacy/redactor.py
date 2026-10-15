@@ -123,6 +123,8 @@ def model_candidates(model, sentence: str):
         if not kind:
             continue
         s, e = _widen(sentence, ent["start"], ent["end"])
+        if len(sentence[s:e].strip()) < 4:       # "AI" became [API_KEY_1] in a research query (seen live); real
+            continue                             # secrets this short are caught by the cue patterns ("pin 123")
         words = sentence[s:e].lower().split()
         if words and all(w.strip(_TRAILING) in CUE_WORDS for w in words):
             continue

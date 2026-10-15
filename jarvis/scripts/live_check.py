@@ -135,6 +135,16 @@ def deliverables():
             shutil.rmtree(made, ignore_errors=True)
 
 
+def research():
+    """One quick research run (web search + one public-model call through the privacy gateway): cited and checked."""
+    r = run_entry("research", "research_topic", {"question": "What does the OWASP Top 10 cover?", "depth": "quick"}, wait=900)
+    d = r.get("data") or {}
+    st, c = d.get("stats") or {}, d.get("counts") or {}
+    check("research: a quick run returns cited statements that its sources support", r["status"] == "succeeded"
+          and c.get("sources_cited", 0) >= 1 and st.get("supported", 0) >= 1,
+          f"{c.get('sources_cited')} sources, {st.get('supported')}/{st.get('cited')} supported, {d.get('seconds')} s {r.get('error') or ''}"[:200])
+
+
 def privacy():
     """The privacy gateway is up, N.E.K.O's Dahl calls go through it, and a made-up password leaves only as a placeholder."""
     code, _ = jget("http://127.0.0.1:48950/health")
@@ -172,6 +182,8 @@ EXPECTED = {
     "local_team": {"ask_local", "solve_with_team", "team_status"},
     "deliverables": {"make_presentation", "make_report", "open_output", "show_in_folder", "start_slideshow", "regenerate",
                      "list_deliverables"},
+    "research": {"research_topic"},
+    "web_search": {"search"},
 }
 
 
@@ -462,6 +474,8 @@ def main() -> int:
     guard("speech", speech, not a.no_asr)
     guard("local team", local_team, not a.no_model)
     guard("deliverables", deliverables)
+    if not a.no_model:
+        guard("research", research)
     if not a.no_model:
         guard("model path", model_path)
     guard("robustness", robustness)

@@ -319,3 +319,16 @@ Source of the list: Playa-Cyrene/Cyrene-Agent (MIT, Electron/TypeScript). What w
   - Playback in PowerPoint (not installed).
   - Whether LibreOffice advances slides on its own after animations. In one show the deck was on slide 2 after 15 s while the PC was in use, so a click cannot be ruled out. The owner should watch one run.
   - Telugu/Hindi text in decks and reports.
+**Research with citations (added 2026-10-16, D22):**
+- **Plugin:** `research.research_topic(question, depth=quick|standard, deliverable=none|report|presentation)`. It searches with N.E.K.O's `web_search` plugin (now started at login), reads pages within limits, has Dahl write through the privacy gateway (or the local generalist), and checks every cited statement with a local NLI model.
+- **Where results go:**
+  - The run record (queries, sources, passages, the writer's draft, check results) is saved as `research.json` next to the deliverable, or in `D:\jarvis\outputs\neko\research\`.
+  - Page cache: `D:\jarvis\cache\research` (24 h).
+- **NLI model:** `D:\jarvis\models\nli\nli-deberta-v3-xsmall` (int8 ONNX, 87 MB, Apache-2.0, revision a150876, sha256 checked).
+- **Live results (quick depth, 2026-10-16):** 37–66 s per run. Between 7 of 16 and 11 of 17 cited statements were confirmed; the rest are listed as unconfirmed. About 3–6 of 8–10 pages refuse scripted reads (HTTP 403, or pages built by scripts).
+- **Fixed during live runs:**
+  - The planner dropped "AI" from the question; the owner's own words are now always the first query.
+  - MiniMax ignored inline `[S#]` markers; it now gets a structured `sources` field per statement, and the code adds the markers.
+  - Text after the JSON broke parsing.
+  - The privacy filter turned "AI" into `[API_KEY_1]`; model-found secrets must now be at least 4 characters, and placeholders are never searched.
+- **Checks:** `live_check.py` has a research test that runs only on the model path (it uses the web and one Dahl call).
