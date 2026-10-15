@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gateway  # noqa: E402
 from redactor import Mapping, Redactor, StreamRestorer, restore  # noqa: E402
 
-RED = Redactor(names=False)
+RED = Redactor(names=False, model=None)            # patterns only: deterministic, no model files or services needed
 PW = "Tr0ub4dor&3xyz"
 KEY = "sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"
 
@@ -87,6 +87,87 @@ class Redaction(unittest.TestCase):
         s = StreamRestorer(m)
         got = "".join(s.feed(c) for c in ["Your pass", "word is [PASS", "WORD_", "1]. Keep it", " safe [x"]) + s.flush()
         self.assertEqual(got, f"Your password is {PW}. Keep it safe [x")
+
+
+import redactor as _r  # noqa: E402
+
+_MODEL = _r.load_pii_model()
+
+
+@unittest.skipIf(_MODEL is None, "GLiNER-PII model not installed")
+class ModelRedaction(unittest.TestCase):
+    """Secrets with no cue word: the PII model proposes, the decision model (faked here) confirms. Values are made up.
+    The real models' quality is measured by eval_pii.py, which needs the Jev service."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.calls = []
+        cls.yes = Redactor(names=False, model=_MODEL, verifier=lambda t, spans: cls.calls.append(spans) or [0.9] * len(spans))
+        cls.no = Redactor(names=False, model=_MODEL, verifier=lambda t, spans: [0.1] * len(spans))
+
+        def down(t, spans):
+            raise OSError("decision model down")
+        cls.down = Redactor(names=False, model=_MODEL, verifier=down)
+
+    def test_confirmed_candidates_are_hidden(self):
+        for text, secret in [("netflix login is ravi_k88 / Sunny#Day2024.", "Sunny#Day2024"),
+                             ("use Mango!Tree77 for the office wifi", "Mango!Tree77"),
+                             ("my SBI account 30012345678 ifsc SBIN0001234", "30012345678"),
+                             ("ATM pin 9921, card in the drawer", "9921")]:
+            out = self.yes.redact(text, Mapping())
+            self.assertNotIn(secret, out, text)
+        self.assertNotIn("!", self.yes.redact("use Mango!Tree77 for the office wifi", Mapping()))   # a split secret's middle
+
+    def test_cue_words_stay_and_glued_symbols_go(self):
+        out = self.yes.redact("the vpn login is k.rao and the passcode Blue7Whale#. ATM pin 9921", Mapping())
+        for word in ("vpn", "passcode", "ATM pin"):
+            self.assertIn(word, out)
+        for leak in ("Blue7Whale", "#", "9921"):
+            self.assertNotIn(leak, out)
+        self.assertEqual(_r._widen("key Blue7Whale#.", 4, 14), (4, 15))   # takes the "#", leaves the full stop
+
+    def test_rejected_candidates_stay(self):
+        text = "Remind me to call mom at 7 pm."
+        self.assertEqual(self.no.redact(text, Mapping()), text)
+
+    def test_pattern_hits_need_no_confirmation(self):
+        out = self.no.redact(f"my password = {PW}", Mapping())
+        self.assertNotIn(PW, out)
+
+    def test_decision_model_down_hides_candidates(self):
+        out = self.down.redact("ATM pin 9921, card in the drawer", Mapping())
+        self.assertNotIn("9921", out)
+        self.assertGreaterEqual(self.down.stats["jev_unreachable"], 1)
+
+    def test_long_text_is_read_sentence_by_sentence(self):
+        text = ("Yesterday I went to the market and bought vegetables. " * 40) + "ATM pin 9921, card in the drawer."
+        self.assertNotIn("9921", self.yes.redact(text, Mapping()))
+
+    def test_one_decision_call_per_sentence_and_sentences_are_cached(self):
+        asked = []
+        r = Redactor(names=False, model=_MODEL, verifier=lambda t, spans: asked.append(t) or [0.9] * len(spans))
+        vpn = "the vpn login is k.rao and the passcode Blue7Whale#."
+        r.redact(vpn, Mapping())
+        self.assertEqual(asked, [vpn])                    # one call for the sentence, however many candidates it has
+        r.redact(vpn + " Tell me a joke about cats.", Mapping())
+        self.assertEqual(asked.count(vpn), 1)             # the repeated sentence was not asked again
+
+    def test_shallow_mode_skips_the_model(self):
+        text = "ATM pin 9921, card in the drawer"
+        self.assertEqual(self.yes.redact(text, Mapping(), deep=False), text)
+
+
+class GatewayRoles(unittest.TestCase):
+    def test_only_user_and_tool_messages_are_deep(self):
+        seen = []
+
+        class Spy:
+            def redact(self, text, m, deep=True):
+                seen.append((text, deep))
+                return text
+        gateway.redact_body({"messages": [{"role": "system", "content": "sys"}, {"role": "user", "content": "u"},
+                                          {"role": "assistant", "content": "a"}, {"role": "tool", "content": "t"}]}, Spy(), Mapping())
+        self.assertEqual(seen, [("sys", False), ("u", True), ("a", False), ("t", True)])
 
 
 class FakeUpstream(BaseHTTPRequestHandler):

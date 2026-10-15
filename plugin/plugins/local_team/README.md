@@ -9,6 +9,11 @@ private values.
 | `solve_with_team` | Dahl's MiniMax writes a short plan through the privacy gateway (it sees `[PASSWORD_1]`, not the password), then the local specialist writes the answer with the real values. With no gateway it skips the adviser and the local model reasons on its own. | Only the redacted text |
 | `team_status` | Which local models are available or loaded, and whether the privacy gateway is up. | No |
 
+**Decisions** use a TypeSafe-Jev-style model, the owner's OpenJev "Verdict" service (`JARVIS_JEV_URL`, default
+`http://127.0.0.1:8091/v1/systemone`). It answers typed questions in about 150 ms with no GPU: which specialist gets a
+task (used when it is at least 50% sure) and whether a task needs MiniMax (`use_adviser=auto`). When it is down, routing
+uses Ling and MiniMax is asked.
+
 The models are served by llama-swap at `http://127.0.0.1:8080/v1` (`jarvis/local_models/llama-swap.yaml`,
 started by `jarvis/scripts/local-models.ps1`). A model loads on first use and unloads after 5 idle minutes.
 

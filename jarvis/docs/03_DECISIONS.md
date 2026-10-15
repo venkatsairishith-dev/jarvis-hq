@@ -227,6 +227,30 @@ Each item below was a real fault or gap seen against the live system, not a theo
   - "Approve actions" stays with the owner PIN in the JARVIS console; admin rights on the PC do not replace the kernel's approvals.
   - DeepSeek-V4-Flash stays off (it loops).
 
+## D20 TypeSafe-Jev-style decision models (owner: "use similar models like TypeSafe Jev", 2026-10-16)
+- **What Jev is.** TypeSafe AI's "System One" model. You send a state and typed questions (choice, score, true/false) and get structured answers with calibrated probabilities, in one pass and with no generated text. The owner already runs an open version, OpenJev "Verdict" (151M ModernBERT + GLiClass, Apache-2.0, github.com/Heman10x-NGU/Verdict-open-jev), in WSL on 127.0.0.1:8091 (`POST /v1/systemone`). It is used as a service, with no code copied.
+- **Decision 1, routing (`local_team`).** Keyword rules go first. Next, Jev picks code, math or general when its top probability is at least 0.5. Anything else goes to Ling.
+  - Jev alone: 10 of 12, about 150 ms, no GPU.
+  - Every Jev choice at 0.5 or above was right; both misses were below 0.5.
+- **Decision 2, does a task need MiniMax (`solve_with_team`, `use_adviser=auto`).** MiniMax is called only when Jev's probability that the task is "deep" is at least 0.77.
+  - Tuned on 12 tasks, then 11 of 12 right on 12 fresh ones, about 110 ms each.
+  - `always` and `never` override it.
+- **Decision 3, is a value a secret (privacy gateway).** GLiNER-PII small (Knowledgator, the same family as Verdict's GLiClass head, Apache-2.0, int8 ONNX, 83 MB) proposes candidates sentence by sentence at 0.3. Jev keeps a candidate only if it is a secret rather than ordinary information; one call per sentence covers all its candidates. Pattern hits are kept without a check. Results on 12 secrets with no cue word and 12 ordinary messages, none of which were used for tuning (`jarvis/privacy/eval_pii.py`):
+
+  | Setup | Secrets hidden | Ordinary messages flagged |
+  |---|---|---|
+  | Patterns only | 0 of 12 | 0 of 12 |
+  | Patterns + GLiNER | 12 of 12 | 12 of 12 |
+  | Patterns + GLiNER + Jev | 12 of 12 | 3 of 12 |
+
+- **Rules around the model pass:**
+  - It runs on user and tool messages only. The generated system prompt and earlier assistant replies get the patterns. Running the model on N.E.K.O's 5,900-character system prompt took 30 s on a fresh start; with this rule a turn costs 0.6-0.7 s.
+  - Sentences are cached in memory.
+  - Plain cue words ("passcode", "ATM pin") are never blanked, and a span grows over symbols glued to it.
+- **If the Jev service is down.** Routing falls back to Ling. The adviser decision falls back to calling MiniMax. The gateway hides every GLiNER candidate (the safe side) and caches nothing from that time. `/health` reports `jev_unreachable`.
+- **Measured and rejected.** GLiNER-PII base: on the same set, fewer secrets found at a usable false-alarm level than small plus Jev. Whole-message reading: surrounding text lowers GLiNER's scores, so it reads sentence by sentence.
+- **Seen live.** MiniMax spent its whole 2,000-token budget deliberating whether a password-related task was allowed. The adviser prompt now says to think briefly and that placeholders are the owner's own data. A budget spent on reasoning is reported instead of silently ignored.
+
 ## D18 N.E.K.O is the base of the repository (2026-10-14)
 - **What changed.** The repository root is now N.E.K.O (Project-N-E-K-O/N.E.K.O, Apache-2.0, upstream 3ffcf7b9). The whole previous JARVIS tree (the old `main` at ff470e5, now branch `jarvis-hq-legacy`, also tag `pre-neko-base`) sits unchanged under `jarvis/`. It is a subtree merge (commit b77ddc7b), so both histories are kept and nothing was rewritten. Branches: `main` is the N.E.K.O-based tree, `neko-main` is a pure copy of N.E.K.O's main (tracks `neko/main`), `jarvis-hq-legacy` is the previous JARVIS history. Files: 0 N.E.K.O files modified or deleted, 305 added (jarvis/ and the two plugins), all 275 previous JARVIS files present. The `neko` remote's push URL is disabled.
 - **Why.** Owner direction ("use neko as our full base"), and the reuse-first rule: N.E.K.O already provides the character, voice and vision front end, five-layer memory, a plugin runtime and an agent server. JARVIS provides what N.E.K.O lacks: a deterministic authority, approvals, lanes, audit, connectors and lab agents. Rebuilding either would break the rule.

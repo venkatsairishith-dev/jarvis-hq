@@ -2,15 +2,17 @@
 
 Built on Microsoft Presidio (recognisers with validation: e-mail, phone, card numbers with Luhn, IBAN, IP, crypto) plus
 recognisers added here for what Presidio does not cover: passwords/PINs/OTPs written after a cue word, API keys and tokens,
-private keys, JWTs, Indian Aadhaar and PAN numbers. Names and places are NOT redacted by default (it would wreck ordinary
+private keys, JWTs, Indian Aadhaar and PAN numbers, and a small PII model (GLiNER-PII) for secrets with no cue word. Names and places are NOT redacted by default (it would wreck ordinary
 conversation); set JARVIS_PRIVACY_NAMES=1 to include PERSON and LOCATION.
 
 The mapping lives only in memory for one request. Nothing here logs a value.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
+import urllib.request
 from dataclasses import dataclass, field
 
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer, RecognizerResult
@@ -18,6 +20,26 @@ from presidio_analyzer.nlp_engine import NlpEngineProvider
 
 BASE_ENTITIES = ["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "IBAN_CODE", "IP_ADDRESS", "CRYPTO"]
 CUSTOM_ENTITIES = ["PASSWORD", "API_KEY", "PRIVATE_KEY", "JWT", "AADHAAR", "PAN"]
+
+# Two small encoder models find secrets written without a cue word ("netflix login is ravi_k88 / Sunny#Day2024"):
+#  1. GLiNER-PII small (Knowledgator, Apache-2.0, int8 ONNX, ~20 ms a sentence) proposes candidates generously (0.3);
+#  2. the Jev-style decision model (the owner's OpenJev "Verdict" service, a typed choice question) keeps a candidate only if
+#     it is a secret rather than ordinary information. Pattern hits are trusted without a check.
+# Measured 2026-10-16 on made-up chat messages never used for tuning: patterns alone hid 0 of 12 such secrets; patterns +
+# GLiNER 12 of 12 but flagged 12 of 12 ordinary messages; patterns + GLiNER + Jev 12 of 12 and 3 of 12. A false alarm only
+# costs the public model one word (the reply is restored locally). Jev unreachable: every candidate is hidden (safe side).
+# Model files missing: the patterns still run.
+PII_MODEL_DIR = os.environ.get("JARVIS_PRIVACY_MODEL", r"D:\jarvis\models\pii\gliner-pii-small-v1.0")
+PII_MODEL_THRESHOLD = 0.3
+JEV_URL = os.environ.get("JARVIS_JEV_URL", "http://127.0.0.1:8091/v1/systemone")
+JEV_MODEL = os.environ.get("JARVIS_JEV_MODEL", "verdict-1.4")
+JEV_SECRET_MIN = 0.5
+JEV_SECRET = {"secret": "a password, PIN, passcode, account or ID number, key or token that must stay private",
+              "ordinary": "ordinary information such as a time, a price, a quantity, a percentage, a place, a product, a film or a person"}
+_SENTENCE = re.compile(r"[^\n]+?(?:[.!?](?=\s)|\n|$)|\n")    # never splits "Mango!Tree77"
+PII_LABELS = {"password": "PASSWORD", "username": "USERNAME", "bank account number": "BANK_ACCOUNT",
+              "credit card number": "CREDIT_CARD", "passport number": "PASSPORT", "driver's license number": "DRIVING_LICENCE",
+              "one-time code": "OTP", "api key": "API_KEY", "street address": "ADDRESS"}
 NAME_ENTITIES = ["PERSON", "LOCATION"]
 PLACEHOLDER = re.compile(r"\[([A-Z_]+)_(\d+)\]")
 
@@ -69,6 +91,86 @@ def _custom_recognizers():
     ]
 
 
+def sentences(text: str):
+    """(offset, sentence) pairs. The PII model reads one sentence at a time: surrounding text lowers its scores (measured)."""
+    return [(mm.start(), mm.group(0)) for mm in _SENTENCE.finditer(text) if mm.group(0).strip()]
+
+
+# Words that name a secret rather than being one: the model sometimes marks them ("the vpn login is ...", "ATM pin ...").
+CUE_WORDS = {"password", "passwords", "passcode", "passphrase", "pass", "pwd", "pw", "pin", "otp", "code", "key", "token",
+             "login", "username", "user", "id", "vpn", "atm", "wifi", "wi-fi", "account", "number", "card", "cvv", "secret",
+             "admin", "root", "ssh", "api"}
+_TRAILING = ".,;:?)\"'"
+
+
+def _widen(sentence: str, s: int, e: int) -> tuple[int, int]:
+    """Grow a span over characters glued to it ("Blue7Whale" + "#"), so no piece of a secret is left behind; sentence
+    punctuation at the very end is not taken."""
+    while s > 0 and not sentence[s - 1].isspace() and sentence[s - 1] not in "([\"'":
+        s -= 1
+    while e < len(sentence) and not sentence[e].isspace():
+        e += 1
+    while e > s and sentence[e - 1] in _TRAILING:
+        e -= 1
+    return s, e
+
+
+def model_candidates(model, sentence: str):
+    """GLiNER-PII candidates in one sentence, as (kind, start, end, score) relative to the sentence."""
+    out = []
+    for ent in model.predict_entities(sentence, list(PII_LABELS), threshold=PII_MODEL_THRESHOLD):
+        kind = PII_LABELS.get(ent["label"])
+        if not kind:
+            continue
+        s, e = _widen(sentence, ent["start"], ent["end"])
+        words = sentence[s:e].lower().split()
+        if words and all(w.strip(_TRAILING) in CUE_WORDS for w in words):
+            continue
+        if any(o[1] == s and o[2] == e for o in out):
+            continue
+        out.append((kind, s, e, float(ent["score"])))
+    return out
+
+
+def jev_secret_probabilities(sentence: str, spans: list[str]) -> list[float]:
+    """Ask the Jev-style decision model, in one call, whether each span in `sentence` is a secret. Raises if unreachable."""
+    questions = {f"q{i}": {"type": "choice", "instructions": f"Is \"{span}\" in this message a secret that must not be shared?",
+                           "criteria": JEV_SECRET} for i, span in enumerate(spans)}
+    body = {"state": f"Message: {_clip(sentence, 1500)}", "model": JEV_MODEL, "questions": questions}
+    req = urllib.request.Request(JEV_URL, data=json.dumps(body).encode("utf-8"), headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        answers = json.loads(r.read().decode("utf-8"))["answers"]
+    return [float(answers[f"q{i}"]["probabilities"]["secret"]) for i in range(len(spans))]
+
+
+def _clip(text: str, n: int) -> str:
+    return text if len(text) <= n else text[:n]
+
+
+def load_pii_model(path: str = PII_MODEL_DIR):
+    """The int8 ONNX GLiNER-PII model, or None (no package, no files): the patterns then work alone."""
+    if not path or not os.path.isfile(os.path.join(path, "onnx", "model_quint8.onnx")):
+        return None
+    try:
+        from gliner import GLiNER
+        return GLiNER.from_pretrained(path, load_onnx_model=True, load_tokenizer=True, onnx_model_file="onnx/model_quint8.onnx")
+    except Exception:                                   # noqa: BLE001 - a broken optional model must not stop redaction
+        return None
+
+
+def _merge_adjacent(spans, text):
+    """A secret the model split at a symbol (Mango / ! / Tree77) becomes one span, so the symbol does not leak either."""
+    merged = []
+    for r in spans:
+        gap = text[merged[-1].end:r.start] if merged else None
+        if gap is not None and len(gap) <= 2 and not any(ch.isspace() for ch in gap):
+            p = merged[-1]
+            merged[-1] = RecognizerResult(p.entity_type, p.start, r.end, max(p.score, r.score))
+        else:
+            merged.append(r)
+    return merged
+
+
 @dataclass
 class Mapping:
     """One request's placeholders: value -> placeholder and back. Same value, same placeholder."""
@@ -87,30 +189,79 @@ class Mapping:
 
 
 class Redactor:
-    def __init__(self, names: bool | None = None, threshold: float = 0.5):
+    def __init__(self, names: bool | None = None, threshold: float = 0.5, model="auto", verifier="auto"):
         if names is None:
             names = os.environ.get("JARVIS_PRIVACY_NAMES", "0") == "1"
         provider = NlpEngineProvider(nlp_configuration={"nlp_engine_name": "spacy", "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}]})
         self.engine = AnalyzerEngine(nlp_engine=provider.create_engine(), supported_languages=["en"])
         for r in _custom_recognizers():
             self.engine.registry.add_recognizer(r)
+        self.model = load_pii_model() if model == "auto" else model
+        # verifier(sentence, [span, ...]) -> [probability it is a secret, ...]; None keeps every model candidate
+        self.verifier = jev_secret_probabilities if verifier == "auto" else verifier
         self.entities = BASE_ENTITIES + CUSTOM_ENTITIES + (NAME_ENTITIES if names else [])
         self.threshold = threshold
+        self.stats = {"model_candidates": 0, "kept_by_jev": 0, "dropped_by_jev": 0, "jev_unreachable": 0}
+        # Caches (in memory only, like the values themselves): a chat resends its history and a system prompt that changes a
+        # little every turn, so whole messages and single sentences are both remembered; only new sentences cost model time.
+        self._cache: dict = {}              # text -> spans
+        self._seg_cache: dict = {}          # sentence -> confirmed model spans (kind, start, end, score), relative
 
-    def find(self, text: str):
+    def _model_spans(self, text: str):
+        out = []
+        for off, seg in sentences(text):
+            confirmed = self._seg_cache.get(seg)
+            if confirmed is None:
+                cands = model_candidates(self.model, seg)
+                self.stats["model_candidates"] += len(cands)
+                unsure = False
+                if not cands or self.verifier is None:
+                    confirmed = cands
+                else:
+                    try:                                # one call per sentence: all its candidates as separate questions
+                        probs = self.verifier(seg, [seg[s:e] for _, s, e, _ in cands])
+                        keep = [p >= JEV_SECRET_MIN for p in probs]
+                        self.stats["kept_by_jev"] += sum(keep)
+                        self.stats["dropped_by_jev"] += len(keep) - sum(keep)
+                        confirmed = [c for c, k in zip(cands, keep) if k]
+                    except Exception:                   # noqa: BLE001 - decision model down: hide them (safe side)
+                        self.stats["jev_unreachable"] += 1
+                        confirmed, unsure = cands, True
+                if not unsure:                          # an answer made while the checker was down is not remembered
+                    if len(self._seg_cache) > 4096:
+                        self._seg_cache.clear()
+                    self._seg_cache[seg] = confirmed
+            out.extend(RecognizerResult(k, off + s, off + e, sc) for k, s, e, sc in confirmed)
+        return out
+
+    def find(self, text: str, deep: bool = True):
+        """deep: also run the PII model (+ decision model). The gateway uses it for what the owner typed and tool results;
+        generated text (system prompt, earlier assistant replies) gets the patterns only, which keeps a turn fast."""
         if not text or not text.strip():
             return []
+        deep = deep and self.model is not None
+        hit = self._cache.get((text, deep))
+        if hit is not None:
+            return hit
+        unreachable_before = self.stats["jev_unreachable"]
         results = self.engine.analyze(text=text, language="en", entities=self.entities, score_threshold=self.threshold)
+        if deep:
+            results = results + self._model_spans(text)   # overlaps with pattern hits are resolved below
         # keep the strongest, longest non-overlapping spans
         results.sort(key=lambda r: (-(r.end - r.start), -r.score))
         chosen = []
         for r in results:
             if all(r.end <= c.start or r.start >= c.end for c in chosen):
                 chosen.append(r)
-        return sorted(chosen, key=lambda r: r.start)
+        chosen = _merge_adjacent(sorted(chosen, key=lambda r: r.start), text)
+        if self.stats["jev_unreachable"] == unreachable_before:     # not remembered while the checker is down
+            if len(self._cache) > 512:
+                self._cache.clear()
+            self._cache[(text, deep)] = chosen
+        return chosen
 
-    def redact(self, text: str, mapping: Mapping) -> str:
-        spans = self.find(text)
+    def redact(self, text: str, mapping: Mapping, deep: bool = True) -> str:
+        spans = self.find(text, deep)
         out, pos = [], 0
         for r in spans:
             value = text[r.start:r.end]

@@ -65,7 +65,7 @@
       "auto_start": false,
       "description": {
         "$i18n": "entry.solve_with_team.description",
-        "default": "Harder tasks: a public reasoning model (MiniMax) plans with private values hidden as placeholders, then a local specialist (code, math or general) writes the final answer on this PC with the real values."
+        "default": "Harder tasks: a public reasoning model (MiniMax) plans with private values hidden as placeholders, then a local specialist (code, math or general) writes the final answer on this PC with the real values. A fast decision model skips the public model when the task is simple (use_adviser=auto)."
       },
       "event_key": "local_team.solve_with_team",
       "event_type": "plugin_entry",
@@ -74,6 +74,15 @@
         "properties": {
           "task": {
             "description": "The full request, with any context it needs.",
+            "type": "string"
+          },
+          "use_adviser": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
             "type": "string"
           }
         },
@@ -226,7 +235,7 @@
       "auto_start": false,
       "description": {
         "$i18n": "entry.solve_with_team.description",
-        "default": "Harder tasks: a public reasoning model (MiniMax) plans with private values hidden as placeholders, then a local specialist (code, math or general) writes the final answer on this PC with the real values."
+        "default": "Harder tasks: a public reasoning model (MiniMax) plans with private values hidden as placeholders, then a local specialist (code, math or general) writes the final answer on this PC with the real values. A fast decision model skips the public model when the task is simple (use_adviser=auto)."
       },
       "dynamic": false,
       "enabled": true,
@@ -237,6 +246,15 @@
         "properties": {
           "task": {
             "description": "The full request, with any context it needs.",
+            "type": "string"
+          },
+          "use_adviser": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
             "type": "string"
           }
         },
@@ -445,7 +463,7 @@
       "auto_start": false,
       "description": {
         "$i18n": "entry.solve_with_team.description",
-        "default": "Harder tasks: a public reasoning model (MiniMax) plans with private values hidden as placeholders, then a local specialist (code, math or general) writes the final answer on this PC with the real values."
+        "default": "Harder tasks: a public reasoning model (MiniMax) plans with private values hidden as placeholders, then a local specialist (code, math or general) writes the final answer on this PC with the real values. A fast decision model skips the public model when the task is simple (use_adviser=auto)."
       },
       "dynamic": false,
       "enabled": true,
@@ -456,6 +474,15 @@
         "properties": {
           "task": {
             "description": "The full request, with any context it needs.",
+            "type": "string"
+          },
+          "use_adviser": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
             "type": "string"
           }
         },
@@ -548,7 +575,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 24212,
+  "source_bytes": 31252,
   "source_files": [
     ".gitignore",
     "README.md",
@@ -560,5 +587,5 @@
     "tests/test_core.py",
     "tests/test_smoke.py"
   ],
-  "source_sha256": "97c5417892635c69bc37e6a13d49ee74ada0753596fe441bd23ceda4b7f13a96"
+  "source_sha256": "70a39dc67d11b7b200bae1fd97b364d7dc7c20a4b6283b522db35563102fccf2"
 }

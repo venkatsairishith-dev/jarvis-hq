@@ -20,6 +20,11 @@ import urllib.request
 from typing import Callable
 
 LOCAL_BASE = os.environ.get("JARVIS_LOCAL_LLM", "http://127.0.0.1:8080/v1").rstrip("/")
+# A TypeSafe-Jev-style decision model ("System One": typed questions in, a choice with calibrated probabilities out, one
+# pass, no text generation). The owner's OpenJev service (Verdict, 151M ModernBERT + GLiClass, Apache-2.0) runs in WSL here.
+JEV_URL = os.environ.get("JARVIS_JEV_URL", "http://127.0.0.1:8091/v1/systemone")
+JEV_MODEL = os.environ.get("JARVIS_JEV_MODEL", "verdict-1.4")
+JEV_MIN_PROB = 0.5        # measured 2026-10-15: every Jev route at >= 0.5 was right (6 of 6); both misses were below 0.5
 GATEWAY_HOSTS = ("127.0.0.1:48950", "localhost:48950")
 SPECIALISTS = {"code": "code", "math": "math", "general": "general"}
 MAX_TASK = 12000
@@ -88,7 +93,7 @@ def post_stream(url: str, body: dict, headers: dict | None = None, timeout: floa
     thinks: Dahl sits behind Cloudflare, which ends a request with HTTP 524 after ~100 s without a byte (seen 2026-10-15)."""
     req = urllib.request.Request(url, data=json.dumps({**body, "stream": True}).encode("utf-8"),
                                  headers={"Content-Type": "application/json", "Accept": "text/event-stream", **(headers or {})})
-    parts = []
+    parts, finish = [], None
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             for raw in r:
@@ -106,11 +111,15 @@ def post_stream(url: str, body: dict, headers: dict | None = None, timeout: floa
                     piece = (ch.get("delta") or {}).get("content")
                     if isinstance(piece, str):
                         parts.append(piece)
+                    finish = ch.get("finish_reason") or finish
     except urllib.error.HTTPError as e:
         raise TeamError(f"HTTP {e.code} from {url.split('/v1')[0]}") from None
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         raise TeamError(f"no answer from {url.split('/v1')[0]} ({type(e).__name__})") from None
-    return "".join(parts)
+    text = "".join(parts)
+    if finish == "length" and not strip_reasoning(text):
+        raise TeamError("the adviser used its whole token budget on reasoning and gave no plan")
+    return text
 
 
 def get_json(url: str, timeout: float = 5.0) -> dict:
@@ -129,11 +138,35 @@ def rule_route(task: str) -> str | None:
     return None
 
 
+JEV_ROUTE = {
+    "code": "programming: writing or fixing code, scripts, software errors, websites, automating tasks on a computer",
+    "math": "calculation: numbers to compute, money splits, unit conversion, equations, word problems",
+    "general": "everything else: writing notes or emails, stories, advice, explanations, facts, travel plans, translation",
+}
+
+
+def jev_choice(state: str, question: str, criteria: dict, post: Callable = post_json) -> tuple[str | None, float]:
+    """Ask the Jev-style decision model one choice question. Returns (choice, its probability); (None, 0) if unavailable."""
+    try:
+        out = post(JEV_URL, {"state": _clip(state, 2000), "model": JEV_MODEL,
+                             "questions": {"q": {"type": "choice", "instructions": question, "criteria": criteria}}}, timeout=10)
+        a = (out.get("answers") or {}).get("q") or {}
+        choice = a.get("choice")
+        prob = float((a.get("probabilities") or {}).get(choice, 0.0))
+        return (choice, prob) if choice in criteria else (None, 0.0)
+    except (TeamError, AttributeError, TypeError, ValueError):
+        return None, 0.0
+
+
 def route(task: str, post: Callable = post_json) -> tuple[str, str]:
-    """(specialist, how): keyword rules first; the tiny router model only when the rules cannot tell; general if all fails."""
+    """(specialist, how): keyword rules; then the Jev decision model when it is sure (about 150 ms, no GPU); then the
+    generalist as a one-word router; general if all fails."""
     r = rule_route(task)
     if r:
         return r, "rules"
+    choice, prob = jev_choice(task, "Which specialist should handle this request?", JEV_ROUTE, post)
+    if choice and prob >= JEV_MIN_PROB:
+        return choice, f"jev ({prob:.2f})"
     try:
         out = post(f"{LOCAL_BASE}/chat/completions", {
             "model": ROUTER_MODEL, "max_tokens": 3, "temperature": 0, "grammar": ROUTER_GRAMMAR,
@@ -182,9 +215,11 @@ def adviser_allowed(base_url: str) -> bool:
     return any(h in str(base_url or "") for h in GATEWAY_HOSTS)
 
 
-ADVISER_SYSTEM = ("You advise a small local model that will write the final answer. Give the key reasoning and a short "
-                  "numbered plan (at most 150 words). Values in square brackets such as [PASSWORD_1] or [EMAIL_ADDRESS_1] "
-                  "are private placeholders: keep them exactly as written, never guess them.")
+# Kept short and explicit: on 2026-10-16 MiniMax spent its whole 2000-token budget deliberating whether a task that mentioned
+# a (placeholder) password was allowed, and returned nothing usable.
+ADVISER_SYSTEM = ("You advise a small local model that will write the final answer for the owner of this data. Think briefly. "
+                  "Reply with a short numbered plan (at most 120 words). Values in square brackets such as [PASSWORD_1] are "
+                  "the owner's own data, replaced on purpose before reaching you; keep them exactly as written.")
 
 
 def advise(task: str, base_url: str, model: str, api_key: str, stream: Callable = post_stream,
@@ -206,14 +241,36 @@ def advise(task: str, base_url: str, model: str, api_key: str, stream: Callable 
     return {"plan": plan, "hidden_from_adviser": kinds}
 
 
-def solve(task: str, *, adviser: Callable[[str], dict] | None, post: Callable = post_json) -> dict:
-    """Team work: the router picks a specialist; the adviser (redacted) reasons; the specialist writes the answer locally."""
+JEV_DEPTH = {"direct": "a simple request a small assistant can answer directly in one step",
+             "deep": "a complex request that needs careful multi-step reasoning, analysis, planning or design"}
+JEV_DEEP_MIN = 0.77       # measured 2026-10-15: 12 tuning cases, then 11 of 12 fresh ones right (easy 0.68-0.76, hard 0.80-0.83)
+
+
+def needs_adviser(task: str, post: Callable = post_json) -> tuple[bool, str]:
+    """Jev decides whether the task is worth a call to the public adviser. If Jev is unavailable, ask the adviser."""
+    choice, prob = jev_choice(task, "How much reasoning does this request need?", JEV_DEPTH, post)
+    if not choice:
+        return True, "decision model unavailable"
+    p_deep = prob if choice == "deep" else 1.0 - prob
+    return p_deep >= JEV_DEEP_MIN, f"jev p_deep={p_deep:.2f}"
+
+
+def solve(task: str, *, adviser: Callable[[str], dict] | None, post: Callable = post_json, use_adviser: str = "auto") -> dict:
+    """Team work: the router picks a specialist; Jev decides whether the public adviser is needed; the adviser (redacted)
+    reasons; the specialist writes the answer locally. use_adviser: auto | always | never."""
     task = str(task or "").strip()
     if not task:
         raise TeamError("Give the task text.")
+    if use_adviser not in ("auto", "always", "never"):
+        raise TeamError("use_adviser must be auto, always or never.")
     specialist, how = route(task, post)
     plan, hidden, note = "", {}, ""
-    if adviser is not None:
+    depth = use_adviser
+    if adviser is not None and use_adviser == "auto":
+        wanted, depth = needs_adviser(task, post)
+        if not wanted:
+            adviser, note = None, f"answered locally: the decision model rated it a direct task ({depth})"
+    if adviser is not None and use_adviser != "never":
         try:
             a = adviser(task)
             plan, hidden = a.get("plan") or "", a.get("hidden_from_adviser") or {}
@@ -226,7 +283,7 @@ def solve(task: str, *, adviser: Callable[[str], dict] | None, post: Callable = 
         prompt = task
     res = ask_local(prompt, specialist, think=not plan, post=post)
     res.update({"routed_by": how, "adviser_used": bool(plan), "adviser_plan": _clip(plan, 1500),
-                "hidden_from_adviser": hidden, "note": note})
+                "hidden_from_adviser": hidden, "adviser_decision": depth, "note": note})
     return res
 
 
@@ -239,6 +296,11 @@ def status(get: Callable = get_json) -> dict:
         out["loaded"] = [m.get("id") for m in models.get("data") or [] if (m.get("status") or {}).get("value") == "ready"]
     except Exception:                                   # noqa: BLE001
         pass
+    try:
+        jm = get(JEV_URL.rsplit("/", 1)[0] + "/models")
+        out["decision_model"] = ", ".join(m.get("name", "?") for m in jm.get("models") or []) or "up"
+    except Exception:                                   # noqa: BLE001
+        out["decision_model"] = "down (routing falls back to the generalist)"
     try:
         h = get("http://127.0.0.1:48950/health")
         out["privacy_gateway"] = "up" if h.get("ok") else "down"

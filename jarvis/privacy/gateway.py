@@ -42,11 +42,14 @@ def _count(mapping: Mapping):
 
 # ---------- outbound: redact ----------
 
-def redact_content(content, red: Redactor, m: Mapping):
+DEEP_ROLES = ("user", "tool", "function")      # what the owner typed and what tools read: patterns + PII model + Jev check
+
+
+def redact_content(content, red: Redactor, m: Mapping, deep: bool = True):
     if isinstance(content, str):
-        return red.redact(content, m)
+        return red.redact(content, m, deep)
     if isinstance(content, list):                               # [{"type":"text","text":...}, {"type":"image_url",...}]
-        return [{**p, "text": red.redact(p["text"], m)} if isinstance(p, dict) and isinstance(p.get("text"), str) else p
+        return [{**p, "text": red.redact(p["text"], m, deep)} if isinstance(p, dict) and isinstance(p.get("text"), str) else p
                 for p in content]
     return content
 
@@ -61,7 +64,7 @@ def redact_body(body: dict, red: Redactor, m: Mapping) -> dict:
                 continue
             msg = dict(msg)
             if "content" in msg:
-                msg["content"] = redact_content(msg["content"], red, m)
+                msg["content"] = redact_content(msg["content"], red, m, deep=msg.get("role") in DEEP_ROLES)
             if isinstance(msg.get("tool_calls"), list):
                 calls = []
                 for c in msg["tool_calls"]:
@@ -173,7 +176,8 @@ def make_handler(red: Redactor, upstream: str, timeout: float):
             if self.path in ("/health", "/v1/health"):
                 with _lock:
                     return self._json(200, {"ok": True, "upstream": upstream, "requests": STATS["requests"],
-                                            "redacted": dict(STATS["redacted"]), "errors": STATS["errors"]})
+                                            "redacted": dict(STATS["redacted"]), "errors": STATS["errors"],
+                                            "pii_model": red.model is not None, "checks": dict(red.stats)})
             self._forward(None)
 
         def do_POST(self):

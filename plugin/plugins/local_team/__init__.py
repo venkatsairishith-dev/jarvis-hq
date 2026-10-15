@@ -65,16 +65,18 @@ class LocalTeamPlugin(NekoPluginBase):
         name=tr("entry.solve_with_team.name", default="Solve with the local team"),
         description=tr("entry.solve_with_team.description", default=(
             "Harder tasks: a public reasoning model (MiniMax) plans with private values hidden as placeholders, then a "
-            "local specialist (code, math or general) writes the final answer on this PC with the real values.")),
+            "local specialist (code, math or general) writes the final answer on this PC with the real values. A fast "
+            "decision model skips the public model when the task is simple (use_adviser=auto).")),
         input_schema={"type": "object", "properties": {
-            "task": {"type": "string", "description": "The full request, with any context it needs."}},
+            "task": {"type": "string", "description": "The full request, with any context it needs."},
+            "use_adviser": {"type": "string", "enum": ["auto", "always", "never"], "default": "auto"}},
             "required": ["task"]},
         timeout=600,
         llm_result_fields=["specialist", "answer", "adviser_used"],
     )
-    async def solve_with_team(self, task: str = "", **_):
+    async def solve_with_team(self, task: str = "", use_adviser: str = "auto", **_):
         try:
-            return Ok(await asyncio.to_thread(core.solve, task, adviser=_adviser))
+            return Ok(await asyncio.to_thread(core.solve, task, adviser=_adviser, use_adviser=use_adviser))
         except TeamError as exc:
             return Err(SdkError(str(exc)))
 

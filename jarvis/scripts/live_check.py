@@ -90,8 +90,13 @@ def local_team(with_adviser: bool):
     public adviser is reached through the privacy gateway."""
     s = run_entry("local_team", "team_status", {}, wait=30)
     d = s.get("data") or {}
-    check("local team: local models and privacy gateway are up", d.get("local_models") == "up" and d.get("privacy_gateway") == "up",
-          f"models {d.get('local_models')}, gateway {d.get('privacy_gateway')}, available {len(d.get('available') or [])}")
+    check("local team: local models, decision model and privacy gateway are up", d.get("local_models") == "up"
+          and d.get("privacy_gateway") == "up" and not str(d.get("decision_model", "down")).startswith("down"),
+          f"models {d.get('local_models')}, decision {d.get('decision_model')}, gateway {d.get('privacy_gateway')}")
+    r = run_entry("local_team", "ask_local", {"task": "make my website's button turn red on hover", "specialist": "auto"}, wait=300)
+    rd = r.get("data") or {}
+    check("local team: the Jev decision model routes a request the keyword rules cannot", r["status"] == "succeeded"
+          and rd.get("specialist") == "code" and str(rd.get("routed_by", "")).startswith("jev"), f"{rd.get('specialist')} via {rd.get('routed_by')}")
     m = run_entry("local_team", "ask_local", {"task": "What is 17 * 23? Give the final number."}, wait=300)
     md = m.get("data") or {}
     check("local team: the maths specialist answers 17 * 23 = 391 on this PC", m["status"] == "succeeded" and md.get("specialist") == "math"
@@ -102,12 +107,15 @@ def local_team(with_adviser: bool):
           and "def add" in str(cd.get("answer")), f"{cd.get('specialist')}, {cd.get('tokens_per_second')} tok/s")
     if with_adviser:
         fake = "Kite-Lemon-5521"
-        t = run_entry("local_team", "solve_with_team", {"task": f"My router admin password = {fake}. Write a two-line note "
-                                                                 "reminding me to change it every 3 months; include the password."}, wait=600)
+        t = run_entry("local_team", "solve_with_team", {"task": f"Our home wifi key = {fake}. Plan three steps to let guests "
+                                                                 "join safely with a printed QR card, then write the card text "
+                                                                 "including the key.", "use_adviser": "always"}, wait=600)
         td = t.get("data") or {}
         check("local team: adviser saw a placeholder, the local answer has the real value",
-              t["status"] == "succeeded" and td.get("adviser_used") and (td.get("hidden_from_adviser") or {}).get("PASSWORD", 0) >= 1
-              and fake in str(td.get("answer")), f"{td.get('specialist')}, hidden {td.get('hidden_from_adviser')}, {t.get('error') or ''}"[:160])
+              t["status"] == "succeeded" and td.get("adviser_used") and sum((td.get("hidden_from_adviser") or {}).values()) >= 1
+              and fake in str(td.get("answer")),
+              f"{td.get('specialist')}, adviser {td.get('adviser_used')}, hidden {td.get('hidden_from_adviser')}, "
+              f"{td.get('note') or ''} {t.get('error') or ''}"[:200])
 
 
 def privacy():
@@ -129,6 +137,14 @@ def privacy():
     out = (json.loads(raw).get("text") if code == 200 else "") or ""
     check("privacy gateway: a password and an e-mail leave as placeholders", code == 200 and fake not in out
           and "a.b@example.com" not in out and "[PASSWORD_1]" in out, out[:80])
+    # no cue word: only the PII model (GLiNER-PII) with the Jev-style decision model's confirmation finds these
+    code, raw = http("http://127.0.0.1:48950/redact", method="POST", timeout=60,
+                     body={"text": "the vpn login is k.rao and the passcode Blue7Whale#. What is 15% of 240?"})
+    out = (json.loads(raw).get("text") if code == 200 else "") or ""
+    _, h = jget("http://127.0.0.1:48950/health")
+    check("privacy gateway: a secret with no cue word is hidden, a sum is left alone (PII model + Jev check)",
+          code == 200 and "Blue7Whale" not in out and "15% of 240" in out and (h or {}).get("pii_model")
+          and not ((h or {}).get("checks") or {}).get("jev_unreachable"), out[:90])
 
 
 EXPECTED = {

@@ -277,3 +277,19 @@ Source of the list: Playa-Cyrene/Cyrene-Agent (MIT, Electron/TypeScript). What w
 - Gotchas:
   - Port 8091 on this PC belongs to another service ("Verdict"); leave it alone.
   - `Start-Process -Wait` waits for every process the script starts, so it hangs on start scripts.
+**Jev-style decision models (added 2026-10-16, D20):**
+- The owner's OpenJev "Verdict" service (WSL, `http://127.0.0.1:8091/v1/systemone`; set `JARVIS_JEV_URL` and `JARVIS_JEV_MODEL` to change it) is used for three decisions:
+  - which local specialist gets a task;
+  - whether MiniMax is needed;
+  - whether a value the PII model found is a secret.
+- JARVIS does not start or stop that service. When it is down, routing uses Ling, MiniMax is asked, and the gateway hides every candidate. `team_status` shows `decision_model`, and the gateway's `/health` shows `pii_model` and `checks` (`jev_unreachable`).
+- PII model files:
+  - Location: `D:\jarvis\models\pii\gliner-pii-small-v1.0` (revision d21aad5b, int8 ONNX, SHA-256 checked).
+  - The base model was measured (D20) and removed.
+- Privacy environment: now 3.45 GB, with PyTorch CPU 2.8.0, gliner 0.2.29 and onnxruntime 1.31.
+- Quality check: `D:\jarvis\tools\privacy-venv\Scripts\python.exe jarvis\privacy\eval_pii.py`. Local only; exit 0 means 12 of 12 hidden and at most 3 of 12 flagged.
+- Tests:
+  - Privacy: 22, with no services needed.
+  - local_team: 21.
+  - `live_check.py`: 57 of 57 (`--no-model`). Local team: 5 of 5, including one MiniMax run.
+- Known limit: the model's labels are rough (a passcode can show up as `[USERNAME_2]`). Only the value is hidden, and the reply is restored locally.
