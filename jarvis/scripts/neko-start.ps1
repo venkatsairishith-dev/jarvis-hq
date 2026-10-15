@@ -15,6 +15,15 @@ $py   = Join-Path $Venv "Scripts\python.exe"
 $logs = Join-Path $Data "logs"
 if (-not (Test-Path $py)) { throw "Python environment not found: $py (see the setup note at the top of this script)" }
 New-Item -ItemType Directory $logs -Force | Out-Null
+# Upstream's launcher.py switches into a project-local .venv whenever one exists. Tools such as "uv run" or the upstream test
+# suite create an EMPTY one, and the servers then fail with "No module named fastapi". An empty one is removed here; one that
+# holds packages is left alone and reported (run uv with UV_PROJECT_ENVIRONMENT=$Venv so it never makes its own).
+$strayVenv = Join-Path $repo ".venv"
+if (Test-Path (Join-Path $strayVenv "Scripts\python.exe")) {
+  $pkgs = @(Get-ChildItem (Join-Path $strayVenv "Lib\site-packages") -Force -ErrorAction SilentlyContinue).Count
+  if ($pkgs -eq 0) { Remove-Item $strayVenv -Recurse -Force; "removed an empty project .venv that would have broken the launcher" }
+  else { throw "A project .venv with $pkgs packages exists at $strayVenv; upstream's launcher.py would switch into it. Move or delete it, or use -Venv." }
+}
 $env:NEKO_STORAGE_SELECTED_ROOT = $Data
 $env:NEKO_LANGUAGE = "en"        # force English regardless of region/system detection
 $env:NEKO_SECRET_REF_ROOTS = "D:\jarvis-secrets"   # lets a stored API key be a "file:<path>" reference into this folder
