@@ -1224,7 +1224,7 @@ async def faster_whisper_asr_worker(
                                     committed.add(key)
                                     handoff = _DecodeHandoff()
                                     task = asyncio.create_task(
-                                        transcribe(key, bytes(pcm16), handoff),
+                                        transcribe(key, bytes(pcm16), handoff),  # noqa: ASYNC_BLOCK — the async inner transcribe() above (decodes on the decoder thread), not _EndpointModel.transcribe
                                         name="faster-whisper-asr-transcribe",
                                     )
                                     # A task cancelled before it first runs never
