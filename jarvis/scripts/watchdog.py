@@ -83,10 +83,12 @@ def observe():
 
 
 def uptime_seconds():
+    """Seconds since the machine booted (a direct system call: no process to start, so it is instant even under load)."""
     try:
-        out = subprocess.run(["powershell", "-NoProfile", "-Command", "[int](New-TimeSpan -Start (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalSeconds"],
-                             capture_output=True, text=True, timeout=30).stdout.strip()
-        return float(out)
+        import ctypes
+        get_tick = ctypes.windll.kernel32.GetTickCount64
+        get_tick.restype = ctypes.c_uint64
+        return get_tick() / 1000.0
     except Exception:
         return 10 ** 6
 
