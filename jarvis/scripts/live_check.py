@@ -230,6 +230,41 @@ def robustness():
     check("inline-reasoning models: predicate and stream stripper behave", line == "RESULT True False 'Paris.'", line)
 
 
+def english_only():
+    """Her persona prompt and stored memory must be English: Chinese there makes her reply in a Chinese/English mix."""
+    cjk = re.compile(r"[㐀-䶿一-鿿]")
+    internal = {"主人", "猫娘", "当前猫娘", "档案名"}    # keys the code looks up
+    chars = json.loads((DATA / "config" / "characters.json").read_text(encoding="utf-8"))
+
+    def stray(o):
+        if isinstance(o, dict):
+            return sum(stray(v) + (0 if k in internal or not cjk.search(k) else 1) for k, v in o.items())
+        if isinstance(o, list):
+            return sum(stray(v) for v in o)
+        return 1 if isinstance(o, str) and cjk.search(o) else 0
+
+    n = stray(chars)
+    guidance = json.dumps(chars)
+    check("persona: the character card has no Chinese text", n == 0, f"{n} stray string(s)")
+    check("persona: the prompt no longer allows other languages", "multiple languages" not in guidance, "English only")
+    memdir = DATA / "memory"
+    bad = []
+
+    def has_cjk(o):                      # a fact that only repeats an internal key's label ("<key>: Boss") is allowed
+        if isinstance(o, dict):
+            return any(has_cjk(v) for v in o.values())
+        if isinstance(o, list):
+            return any(has_cjk(v) for v in o)
+        return isinstance(o, str) and bool(cjk.search(o)) and not any(o.startswith(k + ":") for k in internal)
+
+    for d in memdir.iterdir() if memdir.is_dir() else []:
+        for name in ("persona.json", "recent.json"):
+            f = d / name
+            if f.is_file() and has_cjk(json.loads(f.read_text(encoding="utf-8"))):
+                bad.append(f"{d.name}/{name}")
+    check("memory: her persona and recent chat contain no Chinese", not bad, str(bad) if bad else "clean")
+
+
 def jarvis():
     code, h = jget("http://127.0.0.1:8799/api/health")
     k = (h or {}).get("kernel", {})
@@ -310,6 +345,7 @@ def main() -> int:
     if not a.no_model:
         guard("model path", model_path)
     guard("robustness", robustness)
+    guard("english", english_only)
     guard("JARVIS", jarvis)
     if not a.no_browser:
         guard("browser", browser)

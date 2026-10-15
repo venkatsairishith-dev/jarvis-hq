@@ -405,3 +405,36 @@ async def test_initial_phase2_generation_aborts_after_ui_engagement(
         output.result.body["reason_code"]
         == contracts.PROACTIVE_REASON_DELIVERY_PREEMPTED
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        ["<think>The gap is about 1 hour since the last chat.\n\n\n", "[CHAT]\n", "Hello there."],      # close tag dropped by the endpoint
+        ["<thi", "nk>Reasoning here.</thi", "nk>\n\n[CHAT]\n", "Hello there."],                         # well-formed, split across chunks
+    ],
+)
+async def test_minimax_reasoning_never_reaches_the_greeting(monkeypatch, chunks) -> None:
+    """MiniMax M2 reasons inside <think> on every reply; the greeting path must not show or speak it."""
+    _patch_runtime_guards(monkeypatch)
+    mgr = _FakeManager()
+
+    generated = await generation._generate_phase2_stream(
+        mgr=mgr,
+        proactive_sid="proactive-sid",
+        lanlan_name="YUI",
+        messages=[object(), object()],
+        make_llm=_make_llm_factory(chunks),
+        phase2_use_vision=False,
+        phase2_disable_thinking=True,
+        conversation_model="MiniMaxAI/MiniMax-M2.7",
+        expects_source_tag=True,
+        proactive_lang="en",
+        master_name="Boss",
+        human_text="start",
+        screenshot_b64=None,
+    )
+
+    assert generated.full_text == "Hello there."
+    assert "think" not in generated.response_text.lower() and "gap is about" not in generated.response_text

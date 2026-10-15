@@ -37,6 +37,7 @@ from config import (
     focus_extra_body,
     leaks_thinking_in_content,
 )
+from config.providers import always_inlines_thinking
 from config.prompts.prompts_directives import (
     is_semantically_empty_term,
     term_needs_case_sensitive_match,
@@ -953,11 +954,13 @@ async def _generate_phase2_stream(
         full_text += text
         return False
 
-    thinking_stripper = (
-        ThinkingStreamStripper()
-        if not phase2_disable_thinking and leaks_thinking_in_content(conversation_model)
-        else None
-    )
+    if always_inlines_thinking(conversation_model):
+        # MiniMax M2: reasons inside <think> on every reply, and the endpoint can drop the closing tag (chat path does the same)
+        thinking_stripper = ThinkingStreamStripper(open_tag_only=True)
+    elif not phase2_disable_thinking and leaks_thinking_in_content(conversation_model):
+        thinking_stripper = ThinkingStreamStripper()
+    else:
+        thinking_stripper = None
     try:
         async with asyncio.timeout(25.0):
             async with await make_llm(
