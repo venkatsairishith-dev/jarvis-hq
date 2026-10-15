@@ -25,7 +25,9 @@ Remove-Item Env:NEKO_LANGUAGE -ErrorAction SilentlyContinue
 Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 Set-Location $repo
 if (-not $PytestArgs) { $PytestArgs = @("tests/unit", "-n", "4", "--dist", "loadfile") }
-& (Join-Path $venv "Scripts\python.exe") -m pytest @PytestArgs -q -p no:cacheprovider
+$quiet = @()
+if (-not ($PytestArgs | Where-Object { $_ -match '^-v+$|^--verbose$' })) { $quiet = @("-q") }   # -q would cancel a requested -v
+& (Join-Path $venv "Scripts\python.exe") -m pytest @PytestArgs @quiet -p no:cacheprovider
 $code = $LASTEXITCODE
 if (Test-Path (Join-Path $repo ".venv")) { Write-Host "NOTE: a project .venv appeared in $repo; remove it if empty (neko-start.ps1 does)." }
 exit $code
