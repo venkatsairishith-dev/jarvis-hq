@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS Widget</title>
+<style>
+  :root {
+    --bg: #f4f6fa; --card: #ffffff; --text: #17202e; --muted: #5d6b82; --line: #dfe5ee;
+    --ok: #1a9b55; --warn: #c27b00; --bad: #c8342b; --accent: #2d6cdf; --accent-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #11161f; --card: #1a212d; --text: #e8edf5; --muted: #98a6bd; --line: #2a3445;
+            --ok: #3ccf82; --warn: #f0b24a; --bad: #ff6b5f; --accent: #5b94ff; --accent-text: #0c1220; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 13px/1.4 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  body { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+  header { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  h1 { font-size: 14px; margin: 0; font-weight: 600; flex: 1; }
+  .time { color: var(--muted); font-size: 11px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px 10px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+  .banner { font-size: 12px; border-radius: 6px; padding: 5px 8px; }
+  .banner.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--text); }
+  .banner.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--text); }
+  .task-title { font-weight: 600; margin-bottom: 2px; }
+  .task-meta { color: var(--muted); font-size: 12px; }
+  .steps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .step { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; color: var(--muted); }
+  .step.success { color: var(--ok); border-color: var(--ok); } .step.failure, .step.unknown { color: var(--bad); border-color: var(--bad); }
+  .step.running { color: var(--accent); border-color: var(--accent); }
+  form { display: flex; gap: 6px; }
+  input[type=text] { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--card); color: var(--text);
+                     border-radius: 6px; padding: 6px 8px; font: inherit; }
+  input[type=text]:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { border: 0; border-radius: 6px; padding: 6px 12px; background: var(--accent); color: var(--accent-text);
+           font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .55; cursor: default; }
+  footer { display: flex; gap: 12px; font-size: 12px; margin-top: auto; }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  #msg { min-height: 16px; font-size: 12px; color: var(--muted); }
+  #msg.err { color: var(--bad); }
+</style>
+</head>
+<body>
+  <header>
+    <span id="light" class="dot" aria-hidden="true"></span>
+    <h1 id="headline">JARVIS</h1>
+    <span class="time" id="time"></span>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <section class="card" aria-label="System">
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="card" aria-label="Newest task">
+    <div class="task-title" id="taskTitle">No task yet</div>
+    <div class="task-meta" id="taskMeta"></div>
+    <div class="steps" id="steps"></div>
+  </section>
+
+  <form id="form" autocomplete="off">
+    <input type="text" id="task" placeholder="Give a task, then press Enter" maxlength="2000" aria-label="Task">
+    <button type="submit" id="go">Go</button>
+  </form>
+  <div id="msg" role="status" aria-live="polite"></div>
+
+  <footer>
+    <a href="http://127.0.0.1:48911/" target="_blank" rel="noopener">Open her</a>
+    <a href="http://127.0.0.1:8799/" target="_blank" rel="noopener">JARVIS console</a>
+  </footer>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const label = { "N.E.K.O": "Her", memory: "Memory", agent: "Agent", plugins: "Plugins", speech: "Voice", console: "Console" };
+  function dot(cls) { const d = document.createElement("span"); d.className = "dot " + cls; return d; }
+  function chip(text, cls) {
+    const c = document.createElement("span"); c.className = "chip";
+    c.append(dot(cls), document.createTextNode(text)); return c;
+  }
+  function render(s) {
+    $("time").textContent = s.time || "";
+    const j = s.jarvis || {};
+    const chips = $("chips"); chips.textContent = "";
+    for (const [k, ok] of Object.entries(s.servers || {})) chips.append(chip(label[k] || k, ok ? "ok" : "bad"));
+    chips.append(chip("JARVIS", j.killed ? "bad" : j.reachable && j.authorized ? "ok" : "bad"));
+    const light = $("light"), head = $("headline"), banner = $("banner");
+    banner.hidden = true; banner.className = "banner";
+    if (j.killed) { light.className = "dot bad"; head.textContent = "Kill switch is ON"; banner.hidden = false; banner.classList.add("bad");
+                    banner.textContent = "JARVIS will not act until the kill switch is turned off in the console."; }
+    else if (!s.healthy) { light.className = "dot warn"; head.textContent = "Needs attention";
+                           banner.hidden = false; banner.classList.add("warn");
+                           banner.textContent = (s.problems || []).length ? "Not running: " + s.problems.join(", ") + (s.watchdog && s.watchdog.gave_up_on && s.watchdog.gave_up_on.length ? " (the watchdog gave up; see the daily report)" : " (the watchdog will retry)") : "JARVIS is not reachable."; }
+    else if (j.approvals_waiting) { light.className = "dot warn"; head.textContent = j.approvals_waiting + " approval" + (j.approvals_waiting > 1 ? "s" : "") + " waiting";
+                                    banner.hidden = false; banner.classList.add("warn"); banner.textContent = "Open the JARVIS console to approve or deny (needs your PIN)."; }
+    else { light.className = "dot ok"; head.textContent = j.busy ? "All good, JARVIS busy" : "All good"; }
+    const t = s.task;
+    if (t) {
+      $("taskTitle").textContent = t.summary || "(task)";
+      $("taskMeta").textContent = (t.state || "") + (t.mode ? " · " + t.mode : "") + " · " + (t.age_s < 90 ? t.age_s + " s ago" : Math.round(t.age_s / 60) + " min ago");
+      const box = $("steps"); box.textContent = "";
+      for (const st of t.steps || []) { const e = document.createElement("span"); e.className = "step " + (st.outcome || ""); e.textContent = st.id + " " + (st.agent || "") + ": " + (st.outcome || ""); box.append(e); }
+    }
+  }
+  async function refresh() {
+    try { render(await (await fetch("/api/status", { cache: "no-store" })).json()); }
+    catch (e) { $("headline").textContent = "Widget server not answering"; $("light").className = "dot bad"; }
+  }
+  $("form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const task = $("task").value.trim(), msg = $("msg");
+    if (!task) { msg.className = "err"; msg.textContent = "Type the task first."; return; }
+    $("go").disabled = true; msg.className = ""; msg.textContent = "Sending...";
+    try {
+      const r = await fetch("/api/task", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task, mode: "work" }) });
+      const j = await r.json();
+      if (j.ok) { $("task").value = ""; msg.textContent = j.note === "planning" ? "Started (planning)." : "Started."; }
+      else { msg.className = "err"; msg.textContent = j.error || "The task was not accepted."; }
+    } catch (e) { msg.className = "err"; msg.textContent = "Could not reach the widget server."; }
+    $("go").disabled = false; refresh();
+  });
+  refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>

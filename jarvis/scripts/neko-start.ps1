@@ -56,6 +56,13 @@ if (-not (Listening 48930) -and (Test-Path $speechPy)) {
     -RedirectStandardOutput "$logs\speech.out.log" -RedirectStandardError "$logs\speech.err.log" | Out-Null
   foreach ($i in 1..20) { if (Listening 48930) { break }; Start-Sleep 1 }
 }
+# The desktop widget's backend (stdlib only, loopback only): status and a quick task box for the always-on-top widget window.
+$widgetScript = Join-Path $PSScriptRoot "..\widget\widget_server.py"
+if (-not (Listening 48940) -and (Test-Path $widgetScript)) {
+  Start-Process $py -ArgumentList (Resolve-Path $widgetScript).Path, "--port", "48940" -WindowStyle Hidden `
+    -RedirectStandardOutput "$logs\widget.out.log" -RedirectStandardError "$logs\widget.err.log" | Out-Null
+  foreach ($i in 1..10) { if (Listening 48940) { break }; Start-Sleep 1 }
+}
 # The agent server (started by the launcher above) hosts the plugin runtime (48916) and routes tasks; the JARVIS plugins live there.
 
 # The startup scan can come up empty, so ask for a rescan and make sure both plugins are running (idempotent).

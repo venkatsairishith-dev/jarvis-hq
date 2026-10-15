@@ -25,7 +25,9 @@ STATE = os.path.join(DATA, "logs", "watchdog_state.json")
 STATUS = os.path.join(DATA, "logs", "watchdog_status.json")
 SERVERS = {"main": ("http://127.0.0.1:48911/health", 48911), "memory": ("http://127.0.0.1:48912/health", 48912),
            "agent": ("http://127.0.0.1:48915/health", 48915), "plugins": ("http://127.0.0.1:48916/health", 48916),
-           "speech": ("http://127.0.0.1:48930/health", 48930), "console": ("http://127.0.0.1:8799/api/health", 8799)}
+           "speech": ("http://127.0.0.1:48930/health", 48930), "console": ("http://127.0.0.1:8799/api/owner/state", 8799),   # fast liveness; kernel detail comes from /api/health below
+          
+           "widget": ("http://127.0.0.1:48940/health", 48940)}
 PLUGINS = ("jarvis_bridge", "main_agent", "doc_tools", "learn_vault")
 MAX_HEALS_PER_HOUR = 3
 BOOT_GRACE_SECONDS = 180

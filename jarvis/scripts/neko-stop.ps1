@@ -23,4 +23,7 @@ foreach ($p in $left) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction 
 # 3. the local speech server
 $speech = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*local_speech_server.py*" }
 foreach ($p in $speech) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; "stopped speech server pid " + $p.ProcessId; $stopped++ } catch { } }
+# 4. the desktop widget's backend
+$widget = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*widget_server.py*" }
+foreach ($p in $widget) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; "stopped widget server pid " + $p.ProcessId; $stopped++ } catch { } }
 if ($stopped -eq 0) { "no N.E.K.O server processes running" }

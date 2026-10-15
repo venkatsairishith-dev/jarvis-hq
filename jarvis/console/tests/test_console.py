@@ -208,6 +208,28 @@ class Text(unittest.TestCase):
         self.assertEqual(sentences("One. Two! Three?"), ["One.", "Two!", "Three?"])
 
 
+class HealthIsQuick(Base):
+    def test_an_optional_local_model_that_does_not_answer_cannot_slow_the_health_check(self):
+        """Regression: a closed or silent local-LLM port made /api/health take 2 s every time, which the widget and the
+        watchdog read as 'console down'."""
+        import socket
+        silent = socket.socket()
+        silent.bind(("127.0.0.1", 0))
+        silent.listen(1)                                         # accepts the connection, never answers
+        try:
+            self.cfg.local_llm_url = f"http://127.0.0.1:{silent.getsockname()[1]}"
+            t0 = time.time()
+            code, h, _ = self.call("GET", "/api/health")
+            took = time.time() - t0
+        finally:
+            silent.close()
+        self.assertEqual(code, 200)
+        self.assertFalse(h["local_llm"]["ok"])
+        # the optional probe itself is capped (the hub probe in this test points at a closed port, which this OS takes
+        # ~2 s to refuse, so the whole response time is not what is measured here)
+        self.assertLess(h["local_llm"]["ms"], 900, f"local_llm probe took {h['local_llm']['ms']} ms")
+
+
 @unittest.skipUnless(np, "numpy not installed")
 class WavAndRealVoice(unittest.TestCase):
     def test_wav_roundtrip_and_resample(self):

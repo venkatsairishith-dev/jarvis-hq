@@ -58,6 +58,8 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
     hub_local = f"{_hu.scheme}://127.0.0.1:{_hu.port or 80}"   # what THIS process uses: Python's resolver does not know *.localhost,
     hub_host = _hu.netloc                                      # so connect to loopback and name the site in the Host header
 
+    OPTIONAL_PROBE_TIMEOUT = 0.5      # a local model server that is up answers in milliseconds; do not wait 2 s for one that is not
+
     def probe(url, headers=None, timeout=2.0):
         t0 = time.time()
         try:
@@ -403,7 +405,7 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
         except KernelError as e:
             out["kernel"] = {"reachable": False, "authorized": False, "error": str(e)}
         out["voice"] = voice.status()
-        p = probe(cfg.local_llm_url + "/health")
+        p = probe(cfg.local_llm_url + "/health", timeout=OPTIONAL_PROBE_TIMEOUT)    # optional; a closed port takes ~2 s to refuse on this OS
         out["local_llm"] = {"ok": p["ok"], "ms": p["ms"], "url": cfg.local_llm_url, "error": p.get("error")}
         p = probe(hub_local + "/control/state", {"X-Jarvis-Hub": "1", "Host": hub_host})
         out["hub"] = {"ok": p["ok"], "ms": p["ms"], "url": hub, "error": p.get("error")}
@@ -491,7 +493,7 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
         return {"active": active, "staged": staged}
 
     def local_models():
-        p = probe(cfg.local_llm_url + "/v1/models", timeout=2.0)
+        p = probe(cfg.local_llm_url + "/v1/models", timeout=OPTIONAL_PROBE_TIMEOUT)
         models = []
         if p["ok"]:
             try:
