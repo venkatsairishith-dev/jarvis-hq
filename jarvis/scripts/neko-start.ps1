@@ -32,6 +32,12 @@ $env:HF_HOME = "D:\jarvis\cache\hf"          # local speech-recognition model we
 # Speech recognition for N.E.K.O goes to JARVIS's int8 recognizers (Parakeet; IndicConformer for Hindi and Telugu) through the
 # local speech server instead of loading Whisper in-process. Loopback only. Remove this line to go back to Whisper base.
 $env:NEKO_WHISPER_ENDPOINT = "http://127.0.0.1:48930/v1/audio/transcriptions"
+# The small helper calls (emotion enrichment, suggested-reply chips, topic search) have budgets sized for a model that answers
+# directly. Dahl's MiniMax reasons inline first, which used up the time and the output cap (timeouts, cut-off JSON). Remove to restore upstream's.
+$env:NEKO_AUX_LLM_TIMEOUT_SCALE = "3"
+$env:NEKO_AUX_LLM_TOKEN_SCALE = "4"
+# A new chat waits for the previous chat's settle summary (consistency). With a slow model that takes a minute or more; upstream gives up after 5 s.
+$env:NEKO_MEMORY_FETCH_TIMEOUT_S = "150"
 $env:HF_HUB_DISABLE_TELEMETRY = "1"
 
 function Listening($port) { [bool](Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) }

@@ -327,14 +327,18 @@ async def generate_galgame_options(request: Request):
         get_galgame_dialogue_footer(lang),
     ))
 
+    from config.providers import aux_llm_scales
+    _timeout_scale, _token_scale = aux_llm_scales()
+    option_timeout = GALGAME_OPTION_TIMEOUT_SECONDS * _timeout_scale
+
     set_call_type("galgame_options")
     try:
         llm = await create_chat_llm_async(
             model,
             base_url,
             api_key,
-            max_completion_tokens=GALGAME_OPTION_MAX_TOKENS,
-            timeout=GALGAME_OPTION_TIMEOUT_SECONDS,
+            max_completion_tokens=int(GALGAME_OPTION_MAX_TOKENS * _token_scale),
+            timeout=option_timeout,
             provider_type=summary_config.get('provider_type'),
         )
         async with llm:
@@ -343,7 +347,7 @@ async def generate_galgame_options(request: Request):
                     SystemMessage(content=system_prompt),
                     HumanMessage(content=dialogue_block),
                 ]),
-                timeout=GALGAME_OPTION_TIMEOUT_SECONDS,
+                timeout=option_timeout,
             )
     except asyncio.TimeoutError:
         logger.warning("GalGame option generation timed out")

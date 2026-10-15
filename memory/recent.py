@@ -1087,10 +1087,11 @@ class CompressedRecentHistoryManager:
         """
         api_config = self._config_manager.get_model_api_config('summary')
         from config import LLM_OUTPUT_GUARD_MAX_TOKENS
+        from config.providers import aux_llm_scales
         return create_chat_llm(
             api_config['model'], api_config['base_url'],
             api_config['api_key'] or None,
-            timeout=30, max_retries=0,
+            timeout=30 * aux_llm_scales()[0], max_retries=0,   # x1 unless NEKO_AUX_LLM_TIMEOUT_SCALE is set (slow reasoning models)
             max_completion_tokens=LLM_OUTPUT_GUARD_MAX_TOKENS,  # runaway guard; generous so variable-length summary/JSON isn't truncated
             provider_type=api_config.get('provider_type'),
         )

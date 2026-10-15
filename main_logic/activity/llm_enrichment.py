@@ -472,12 +472,16 @@ async def _invoke_emotion_tier(prompt: str, *, timeout: float, label: str) -> st
         _report_failure(label, 'emotion_model_or_api_key_missing')
         return None
 
+    from config.providers import aux_llm_scales
+    _timeout_scale, _token_scale = aux_llm_scales()
+    timeout = timeout * _timeout_scale
+
     set_call_type('activity_enrichment')
     try:
         llm = await create_chat_llm_async(
             model, base_url, api_key,
             temperature=0.4,
-            max_completion_tokens=512,
+            max_completion_tokens=int(512 * _token_scale),
             timeout=timeout,  # same budget the asyncio.wait_for below enforces
             provider_type=cfg.get('provider_type'),
         )
@@ -525,12 +529,16 @@ async def _invoke_capable_tier(prompt: str, *, timeout: float, label: str) -> st
         _report_failure(label, 'summary_model_or_api_key_missing')
         return None
 
+    from config.providers import aux_llm_scales
+    _timeout_scale, _token_scale = aux_llm_scales()
+    timeout = timeout * _timeout_scale
+
     set_call_type('topic_deep_search')
     try:
         llm = await create_chat_llm_async(
             model, base_url, api_key,
             temperature=0.3,
-            max_completion_tokens=128,
+            max_completion_tokens=int(128 * _token_scale),
             timeout=timeout,  # same budget the asyncio.wait_for below enforces
             provider_type=cfg.get('provider_type'),
         )

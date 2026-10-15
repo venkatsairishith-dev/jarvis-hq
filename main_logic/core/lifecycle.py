@@ -1579,7 +1579,8 @@ class LifecycleMixin:
 
     def _new_dialog_request_kwargs(self) -> dict:
         """Share explicit-locale provenance across initial and hot-swap bootstrap."""
-        request_kwargs = {"timeout": 5.0}
+        from config.providers import memory_fetch_timeout_seconds
+        request_kwargs = {"timeout": memory_fetch_timeout_seconds()}
         if getattr(self, "_user_language_explicit", False):
             request_kwargs["params"] = {"language": self.user_language}
         elif getattr(self, "_conversation_render_language", None):

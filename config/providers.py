@@ -363,6 +363,39 @@ def leaks_thinking_in_content(model: str) -> bool:
     return any(tag in m for tag in ("qwen3.5", "qwen3.6", "qwen3.7"))
 
 
+def aux_llm_scales() -> tuple[float, float]:
+    """(timeout_scale, token_scale) for the small helper LLM calls (emotion enrichment, suggested-reply chips, topic search).
+
+    Those calls ship with budgets sized for a model that answers directly (6-10 s, 128-600 output tokens). A model that reasons
+    inline before answering (MiniMax M2 family) spends the budget on its reasoning, so the call times out or the JSON is cut off.
+    ``NEKO_AUX_LLM_TIMEOUT_SCALE`` / ``NEKO_AUX_LLM_TOKEN_SCALE`` multiply the budgets; unset or invalid means 1.0 (unchanged).
+    """
+    import os
+
+    def _read(name: str) -> float:
+        try:
+            v = float(os.environ.get(name, "1") or 1)
+        except ValueError:
+            return 1.0
+        return v if 1.0 <= v <= 20.0 else 1.0
+
+    return _read("NEKO_AUX_LLM_TIMEOUT_SCALE"), _read("NEKO_AUX_LLM_TOKEN_SCALE")
+
+
+def memory_fetch_timeout_seconds() -> float:
+    """How long a new chat waits for the memory server's /new_dialog (upstream: 5 s).
+
+    /new_dialog waits for the previous chat's settle summary so it reads consistent data; with a slow model that summary takes
+    far longer than 5 s and the next chat fails to start. ``NEKO_MEMORY_FETCH_TIMEOUT_S`` (5 to 300) raises the wait.
+    """
+    import os
+    try:
+        v = float(os.environ.get("NEKO_MEMORY_FETCH_TIMEOUT_S", "5") or 5)
+    except ValueError:
+        return 5.0
+    return v if 5.0 <= v <= 300.0 else 5.0
+
+
 def always_inlines_thinking(model: str) -> bool:
     """True for models that put their reasoning in ``content`` inside paired ``<think>...</think>`` tags on EVERY reply,
     whether or not the turn asked for thinking (the MiniMax M2 family, checked 2026-10-14 against an OpenAI-compatible
