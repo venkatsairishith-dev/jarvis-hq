@@ -106,6 +106,46 @@ class Conversion(unittest.TestCase):
         first = open(os.path.join(self.data, "backups", dirs[0], "persona.json"), encoding="utf-8").read()
         self.assertEqual(first, original)                                                    # the first backup still has the originals
 
+    def _seed_leak(self):
+        def ai(text):
+            return {"type": "ai", "data": {"content": [{"type": "text", "text": text}]}}
+        leak = ai("[20261015 Thu 16:42] The user wants me to start a conversation. Looking at the recent context...\n\n\nHi.")
+        good = ai("[20261015 Thu 16:43] Paris. AGAIN. Fourth time.")
+        json.dump([leak, {"type": "human", "data": {"content": "hello"}}, good],
+                  open(os.path.join(self.mem, "recent.json"), "w", encoding="utf-8"), ensure_ascii=False)
+        lines = [{"op_id": "a", "type": "x", "payload": {"messages": [leak]}, "status": "pending", "ts": 1},
+                 {"op_id": "a", "status": "done", "ts": 2},
+                 {"op_id": "b", "type": "x", "payload": {"messages": [leak, good]}, "status": "pending", "ts": 3},
+                 {"op_id": "c", "type": "x", "payload": {"messages": [good]}, "status": "pending", "ts": 4}]
+        open(os.path.join(self.mem, "outbox.ndjson"), "w", encoding="utf-8").write("\n".join(json.dumps(l) for l in lines) + "\n")
+        conn = sqlite3.connect(os.path.join(self.mem, "time_indexed.db"))
+        try:
+            conn.execute("delete from time_indexed_original")
+            conn.execute("insert into time_indexed_original (message) values (?)", (json.dumps(leak),))
+            conn.execute("insert into time_indexed_original (message) values (?)", (json.dumps(good),))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def test_leaked_reasoning_is_removed_only_when_asked_and_replies_stay(self):
+        self._seed_leak()
+        self.run_main("--apply")                                                             # without the flag nothing is dropped
+        self.assertIn("The user wants me to", self.read(os.path.join("memory", "YUI", "recent.json")))
+        self.run_main("--apply", "--drop-leaked-reasoning")
+        recent = json.loads(self.read(os.path.join("memory", "YUI", "recent.json")))
+        self.assertEqual([m["type"] for m in recent], ["human", "ai"])
+        self.assertIn("Paris. AGAIN.", json.dumps(recent))
+        ops = [json.loads(l) for l in self.read(os.path.join("memory", "YUI", "outbox.ndjson")).splitlines() if l.strip()]
+        self.assertEqual([o["op_id"] for o in ops], ["b", "c"])                              # op "a" and its status line are gone
+        self.assertEqual(len(ops[0]["payload"]["messages"]), 1)                              # "b" keeps only the real reply
+        conn = sqlite3.connect(os.path.join(self.mem, "time_indexed.db"))
+        try:
+            rows = [r[0] for r in conn.execute("select message from time_indexed_original")]
+        finally:
+            conn.close()
+        self.assertEqual(len(rows), 1)
+        self.assertIn("Fourth time", rows[0])
+
     def test_running_twice_gives_the_same_result(self):
         self.run_main("--apply")
         once = self.read(os.path.join("memory", "YUI", "persona.json"))

@@ -184,7 +184,7 @@ def speech(do_asr: bool):
         model = fw._EndpointModel("http://127.0.0.1:48930/v1/audio/transcriptions")
         rounds = (("en", text, ("paris", "france")),
                   ("hi", hindi, ("नमस्ते", "कैसे")),
-                  ("te", telugu, ("నమస్కారం", "ఎలా")))
+                  ("te", telugu, ("నమస్కారం", "ఉన్నారు")))     # greeting word and closing word: one vowel in the middle word varies run to run
         for lang, sample, needles in rounds:
             c3, r3 = http("http://127.0.0.1:48930/v1/audio/speech", method="POST",
                           body={"model": "jarvis-local", "input": sample, "voice": lang, "response_format": "pcm"}, timeout=180)

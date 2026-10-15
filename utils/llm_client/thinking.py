@@ -31,6 +31,17 @@ _THINK_OPEN_RE = re.compile(r"\s*<think(?:ing)?\s*>", re.IGNORECASE)
 # Where a stripped closing tag used to sit: the reasoning ends, a blank gap of three or more newlines follows, then the answer.
 _THINK_GAP_RE = re.compile(r"\n{3,}")
 
+# Untagged reasoning (seen from MiniMax M2 on Dahl in greetings): plain prose about the task that starts like this and is
+# followed by the same blank gap before the real reply. Only used by the opt-in ``open_tag_only`` stripper, and only acted on
+# when the gap really arrives; otherwise the held text is released unchanged.
+_REASONING_OPENER_RE = re.compile(
+    r"(?:The user (?:wants|is asking|asks|has asked|said|says|mentioned|is)\b|The gap is\b"
+    r"|Looking at the (?:recent|conversation|context|history)\b"
+    r"|Let me (?:think|write|look|craft|check|figure|draft|compose)\b|Okay,? (?:so|the user)\b|Now,? (?:the|there's|let me)\b)"
+)
+_OPENER_FIRST_LETTERS = "TLON"
+_OPENER_DECIDE_AT = 32            # characters needed to tell an opener from an ordinary reply
+
 def strip_thinking_segments(text: str | None) -> str:
     """Remove leaked chain-of-thought from a *non-streaming* model reply.
 
@@ -112,11 +123,27 @@ class ThinkingStreamStripper:
         if self._open_tag_only:
             opened = _THINK_OPEN_RE.match(self._buf)
             if opened is None:
-                probe = self._buf.lstrip().lower()
-                if len(probe) >= len("<thinking>") or (probe and not "<thinking>".startswith(probe)):
-                    out, self._buf, self._passthrough = self._buf, "", True      # not a reasoning reply: stream it
-                    return out
-                return ""                                                       # could still turn into an opening tag
+                text_now = self._buf.lstrip()
+                probe = text_now.lower()
+                if probe.startswith("<"):
+                    if len(probe) < len("<thinking>") and "<thinking>".startswith(probe):
+                        return ""                                               # could still turn into an opening tag
+                    if not probe.startswith("<think"):
+                        out, self._buf, self._passthrough = self._buf, "", True  # some other markup: stream it
+                        return out
+                    return ""                                                   # "<think" but not complete yet
+                opener = _REASONING_OPENER_RE.match(text_now)
+                if opener or (len(text_now) < _OPENER_DECIDE_AT and text_now[:1] in _OPENER_FIRST_LETTERS):
+                    if not opener:
+                        return ""                                               # too short to tell yet
+                    gap = _THINK_GAP_RE.search(text_now, opener.end())
+                    if gap:                                                      # untagged reasoning ends at the blank gap
+                        tail = text_now[gap.end():]
+                        self._buf, self._passthrough = "", True
+                        return tail
+                    return ""                                                   # hold; flush() releases it unchanged if no gap comes
+                out, self._buf, self._passthrough = self._buf, "", True          # an ordinary reply: stream it
+                return out
             gap = _THINK_GAP_RE.search(self._buf, opened.end())
             if gap:
                 tail = self._buf[gap.end():]

@@ -1,6 +1,7 @@
 """Make her persona and stored memory English-only. Windows. Stop the N.E.K.O servers first (neko-stop.ps1), start them after.
 
     python make_persona_english.py            dry run: shows what would change
+    python make_persona_english.py --apply --drop-leaked-reasoning   also removes reasoning that leaked into her history
     python make_persona_english.py --apply    backs the files up to <data>\\backups\\english-<stamp>\\ and rewrites them
 
 Why: the "sharp-tongued junior" personality preset ships in Chinese, and its prompt allows "multiple languages ... including
@@ -16,6 +17,7 @@ import os
 import re
 import shutil
 import sqlite3
+import sys
 import time
 
 DATA = os.environ.get("NEKO_STORAGE_SELECTED_ROOT", r"D:\jarvis\N.E.K.O-data")
@@ -111,6 +113,43 @@ def walk(o, path="", keep_keys=True):
     return o
 
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")))
+from utils.llm_client.thinking import _REASONING_OPENER_RE            # the stripper's own opener pattern: they cannot drift apart
+
+_STAMP = re.compile(r"^\s*(?:\[\d{8} \w{3} \d{2}:\d{2}\]\s*)?(?:\.\.\.)?\s*")
+
+
+def _message_text(msg):
+    c = (msg.get("data") or {}).get("content", "") if isinstance(msg, dict) else ""
+    if isinstance(c, list):
+        return " ".join(str(p.get("text", "")) for p in c if isinstance(p, dict))
+    return str(c)
+
+
+def is_leaked_reasoning(msg):
+    """An assistant message that is the model's reasoning about the task instead of a reply."""
+    if not isinstance(msg, dict) or msg.get("type") != "ai":
+        return False
+    text = _message_text(msg)
+    return bool(_REASONING_OPENER_RE.match(_STAMP.sub("", text, count=1)))
+
+
+def drop_leaked_from_outbox(lines):
+    """Remove leaked-reasoning messages from the outbox journal; an operation left with no messages goes, with its status lines."""
+    parsed = [json.loads(l) for l in lines if l.strip()]
+    dead = set()
+    for rec in parsed:
+        msgs = (rec.get("payload") or {}).get("messages")
+        if isinstance(msgs, list) and msgs:
+            keep = [m for m in msgs if not is_leaked_reasoning(m)]
+            if len(keep) != len(msgs):
+                changes.append(("outbox", f"{len(msgs) - len(keep)} leaked-reasoning message(s) removed", ""))
+                rec["payload"]["messages"] = keep
+                if not keep:
+                    dead.add(rec.get("op_id"))
+    return [json.dumps(r, ensure_ascii=False, separators=(",", ":")) for r in parsed if r.get("op_id") not in dead]
+
+
 def load(p):
     return json.load(open(p, encoding="utf-8"))
 
@@ -123,6 +162,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--character", default="YUI")
+    ap.add_argument("--drop-leaked-reasoning", action="store_true",
+                    help="also remove assistant messages that are the model's reasoning (\"The user wants me to...\") from her history")
     a = ap.parse_args()
     mem = os.path.join(DATA, "memory", a.character)
     targets = [os.path.join(DATA, "config", "characters.json")] + [os.path.join(mem, n) for n in
@@ -150,6 +191,11 @@ def main():
         p = os.path.join(mem, name)
         if os.path.exists(p):
             n = walk(load(p), name)
+            if a.drop_leaked_reasoning and name == "recent.json":
+                kept = [m for m in n if not is_leaked_reasoning(m)]
+                if len(kept) != len(n):
+                    changes.append((name, f"{len(n) - len(kept)} leaked-reasoning message(s) removed", ""))
+                n = kept
             if a.apply:
                 dump(n, p, indent=2 if name == "persona.json" else None, separators=None if name == "persona.json" else (",", ":"))
     # 3. outbox.ndjson
@@ -160,6 +206,8 @@ def main():
         for l in lines:
             if l.strip():
                 out.append(json.dumps(walk(json.loads(l), "outbox"), ensure_ascii=False, separators=(",", ":")))
+        if a.drop_leaked_reasoning:
+            out = drop_leaked_from_outbox(out)
         if a.apply:
             open(p, "w", encoding="utf-8").write("\n".join(out) + "\n")
     # 4. anti-repeat index: drop only the Chinese fragments
@@ -187,6 +235,19 @@ def main():
                     nm = tr(m)
                 if a.apply:
                     c.execute("update time_indexed_original set message=? where id=?", (nm, rid))
+        if a.drop_leaked_reasoning:
+            gone = 0
+            for rid, m in rows:
+                try:
+                    leaked = is_leaked_reasoning(json.loads(m))
+                except (ValueError, TypeError):
+                    leaked = False
+                if leaked:
+                    gone += 1
+                    if a.apply:
+                        c.execute("delete from time_indexed_original where id=?", (rid,))
+            if gone:
+                changes.append(("time_indexed.db", f"{gone} leaked-reasoning row(s) removed", ""))
         if a.apply:
             c.commit()
         c.close()

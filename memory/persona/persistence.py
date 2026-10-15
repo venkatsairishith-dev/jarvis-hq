@@ -393,6 +393,7 @@ class PersistenceMixin:
     def _apply_character_card_sync(
         self, name: str, persona: dict,
         master_basic_config, lanlan_basic_config,
+        locale: str | None = None,
     ) -> bool:
         from config import CHARACTER_RESERVED_FIELDS
         excluded_fields = set(CHARACTER_RESERVED_FIELDS)
@@ -425,7 +426,19 @@ class PersistenceMixin:
                     # 用带点的前缀精确匹配约定命名，避免误伤 __ai_contextual_* 这类普通键。
                     text = str(v)
                 else:
-                    text = f"{k}: {v}"
+                    label = k
+                    if k == "档案名":       # internal key for the profile name: show its meaning, not the key, in English
+                        # follow the card's pinned locale (not the live global language) so the sync stays idempotent
+                        card_lang = locale
+                        if not card_lang:
+                            try:
+                                from utils.language_utils import get_global_language_full
+                                card_lang = get_global_language_full()
+                            except Exception:
+                                card_lang = ""
+                        if str(card_lang or "").lower().startswith("en"):
+                            label = "Profile name"
+                    text = f"{label}: {v}"
                 expected.append((entry_id, text))
             return expected
 
@@ -534,7 +547,7 @@ class PersistenceMixin:
         except Exception:
             return False
         return self._apply_character_card_sync(
-            name, persona, master_basic_config, lanlan_basic_config,
+            name, persona, master_basic_config, lanlan_basic_config, locale=locale,
         )
 
     async def _async_sync_character_card(self, name: str, persona: dict) -> bool:
@@ -551,7 +564,7 @@ class PersistenceMixin:
         except Exception:
             return False
         return self._apply_character_card_sync(
-            name, persona, master_basic_config, lanlan_basic_config,
+            name, persona, master_basic_config, lanlan_basic_config, locale=locale,
         )
 
     def save_persona(self, name: str, persona: dict | None = None) -> None:

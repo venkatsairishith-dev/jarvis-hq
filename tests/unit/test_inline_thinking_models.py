@@ -76,3 +76,32 @@ def test_non_streaming_cleaner_handles_an_unclosed_think_block():
     assert strip_thinking_segments("<think>reasoning\n\n\nParis.") == "Paris."
     assert strip_thinking_segments("<think>reasoning only, no gap") == "<think>reasoning only, no gap"
     assert strip_thinking_segments("Plain reply.") == "Plain reply."
+
+
+def test_untagged_reasoning_before_the_blank_gap_is_dropped_whatever_the_chunking():
+    """Seen live in the opening greeting: no <think> tags at all, just reasoning prose, a blank gap, then the real line."""
+    raw = ("The user wants me to start a conversation. Looking at the recent context, I was annoyed.\n\n"
+           "Let me write something short and natural:\n\n\nThe food I got you didn't go cold, did it?")
+    for size in (1, 3, 11, 1000):
+        chunks = [raw[i:i + size] for i in range(0, len(raw), size)]
+        assert _open_only(chunks).strip() == "The food I got you didn't go cold, did it?", size
+
+
+def test_a_reply_that_merely_starts_with_a_similar_word_is_never_lost():
+    for reply in ("The user is an idiot, obviously.", "Looking at the mess you made, I sigh.", "Let me see... no. Idiot.",
+                  "Now there's a thought, and a bad one."):
+        assert _open_only([reply[:9], reply[9:]]) == reply, reply                         # no blank gap: released unchanged
+
+
+def test_ordinary_replies_stream_without_delay():
+    s = ThinkingStreamStripper(open_tag_only=True)
+    assert s.feed("Paris. Again.") == "Paris. Again."
+    s2 = ThinkingStreamStripper(open_tag_only=True)
+    assert s2.feed("Idiot, you asked that three times already.") == "Idiot, you asked that three times already."
+    s3 = ThinkingStreamStripper(open_tag_only=True)                  # "T..." could still become "The user ...": held briefly, then released
+    assert s3.feed("Th") == "" and s3.feed("at was dumb, genius. Try again!") == "That was dumb, genius. Try again!"
+
+
+def test_the_tagged_shapes_still_work_next_to_the_untagged_one():
+    assert _open_only(["<think>reason\n\n\nParis."]).strip() == "Paris."
+    assert _open_only(["<think>reason</think>\n\nParis."]).strip() == "Paris."
