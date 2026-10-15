@@ -265,6 +265,18 @@ def english_only():
     check("memory: her persona and recent chat contain no Chinese", not bad, str(bad) if bad else "clean")
 
 
+def watchdog():
+    """The self-healing watchdog (scheduled every 10 minutes) must be alive, recent and not stuck on a problem it gave up on."""
+    f = DATA / "logs" / "watchdog_status.json"
+    if not f.is_file():
+        check("watchdog: has reported", False, "no watchdog_status.json (install-watchdog.ps1)")
+        return
+    age = time.time() - f.stat().st_mtime
+    st = json.loads(f.read_text(encoding="utf-8"))
+    check("watchdog: reported within the last 25 minutes", age < 25 * 60, f"{age / 60:.0f} min ago")
+    check("watchdog: nothing it gave up on", not st.get("gave_up_on"), str(st.get("gave_up_on") or "none"))
+
+
 def jarvis():
     code, h = jget("http://127.0.0.1:8799/api/health")
     k = (h or {}).get("kernel", {})
@@ -295,6 +307,10 @@ def jarvis():
 
 
 def browser():
+    # Edge writes a throw-away profile into the temp folder per run; keep those on D: (workspace rule: nothing big on C:)
+    tmp = r"D:\jarvis-apps\tmp"
+    os.makedirs(tmp, exist_ok=True)
+    os.environ["TEMP"] = os.environ["TMP"] = tmp
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -346,6 +362,7 @@ def main() -> int:
         guard("model path", model_path)
     guard("robustness", robustness)
     guard("english", english_only)
+    guard("watchdog", watchdog)
     guard("JARVIS", jarvis)
     if not a.no_browser:
         guard("browser", browser)
