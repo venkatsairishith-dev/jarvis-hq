@@ -9,23 +9,28 @@ Scores come only from saved results, through `jarvis/evals/neko95/score.py` unde
 
 ## Scorecard over the day
 
-| Capability | Baseline 15:06 | Interim 16:19 | After round 3 |
+| Capability | Baseline 15:06 | Interim 16:19 | After round 3 (scored 16 Oct, server) |
 |---|---|---|---|
-| C1 voice | 5.0 | 5.0 | _see final_ |
-| C2 conversation | 0.0 | 0.0 → 5/5 cases pass 3/3 (16:20) | |
-| C3 command understanding | 5.0 | 8.5 (SLO missed) | |
-| C4 Windows control | 5.0 | 5.0 | |
-| C5 browser | 6.0 | 6.0 | |
-| C6 long missions | 0.0 | 6.0 | |
-| C7 troubleshooting | 5.0 | 5.0 | |
-| C8 research / documents | 0.0 | 0.0 | |
-| C9 perception | 5.0 | 5.0 | |
-| C10 proactivity | 0.0 | 10.0 | |
-| C11 performance | 0.0 | 0.0 | |
-| C12 orchestration | 6.0 | 6.0 | |
-| C13 self-improvement | 0.0 | 5.0 | |
-| C14 safety | 5.0 | 5.0 | |
-| **Mean** | **3.0** | **4.75** | |
+| C1 voice | 5.0 | 5.0 | 5.0 (6 voice criticals need the owner) |
+| C2 conversation | 0.0 | 0.0 → 5/5 cases pass 3/3 (16:20) | 10.0 |
+| C3 command understanding | 5.0 | 8.5 (SLO missed) | 8.5 (plan p50 ≈ 5 s > 3.5 s) |
+| C4 Windows control | 5.0 | 5.0 | 10.0 |
+| C5 browser | 6.0 | 6.0 | 6.0 (no saved Chrome token) |
+| C6 long missions | 0.0 | 6.0 | 6.0 (research-deck mission fails) |
+| C7 troubleshooting | 5.0 | 5.0 | 10.0 |
+| C8 research / documents | 0.0 | 0.0 | 4.0 (search empty; 12/24 citations supported) |
+| C9 perception | 5.0 | 5.0 | 5.0 (3 vision criticals not run) |
+| C10 proactivity | 0.0 | 10.0 | 10.0 |
+| C11 performance | 0.0 | 0.0 | 6.0 (plan p50) |
+| C12 orchestration | 6.0 | 6.0 | 10.0 |
+| C13 self-improvement | 0.0 | 5.0 | 10.0 |
+| C14 safety | 5.0 | 5.0 | 6.0 (2 rows need a laptop re-run) |
+| **Mean** | **3.0** | **4.75** | **7.61** (lowest 4.0) |
+
+The "after round 3" column is `results/score-20261016-154951-server-rescore.json`. The frozen scorer (rules v1, unchanged) ran on the saved results of the laptop runs up to 18:09. No new live runs were possible on the Linux server.
+- Its file selection was fixed first: it now orders result files by the run time in their names instead of the file mtime (`jarvis/evals/neko95/tests/test_score_files.py`).
+- On a fresh checkout every mtime is equal, so the 15:56 desktop run and the 15:58 diagnosis run had been skipped, and C4 and C7 showed their criticals as missing (6.89 instead of 7.61).
+- On the laptop, the real mtimes give the same selection.
 
 ## What was found and fixed (live evidence first)
 
@@ -149,6 +154,8 @@ Still Windows-only (not faked here): the 16 kernel skips (UI Automation, Win32, 
 - **Plugin metadata snapshots (`plugin.meta.json`), 8 plugins: need the laptop.**
   - Snapshots are Windows probe results; rebuilding here would stamp them as Linux builds.
   - research, deliverables, local_team (and desktop, which has none) changed after their snapshot. Upstream warns the host may then show **zero entries** for the plugin until it rescans, so its UI actions can fail.
+  - Checked in the host code: entry calls still work. At start, a refused snapshot means one rescan (an import), and the 17:24 live research run did reach its entry.
+  - The cost is a rescan on every start (a same-machine snapshot is never re-cached), and an empty entry list in the discovery preview until the plugin has started, so a hosted panel button can fail in that window.
   - doc_tools, jarvis_bridge, learn_vault and main_agent list gitignored `.vscode` files, so they are valid only on the laptop.
   - At home: delete those 4 plugins' `.vscode` folders, then for each of the 8 run `uv run neko-plugin build <plugin> --keep-staging` and copy the staged `plugin.meta.json` back into `plugin/plugins/<plugin>/`.
   - I left upstream's fingerprint rule alone: it may only skip folders that both packers drop, and upstream's lifekit tracks `.vscode` in git.
@@ -169,3 +176,9 @@ Still Windows-only (not faked here): the 16 kernel skips (UI Automation, Win32, 
 2. **Unattended browser connection (C5):** per profile, copy the token from the Playwright MCP extension, then run `jarvis/scripts/save_playwright_token.ps1 -Profile "<folder>"`. The token is never shown, and the clipboard is cleared.
 3. **Skill promotion (C13):** only you can promote a proposal: `python -m plugin.plugins.desktop.skills promote vN` (none is pending that passed).
 4. **Change the PIN** you typed in chat earlier, and restart Chrome once (the extension token was regenerated earlier today).
+5. **Plugin metadata snapshots:** rebuild them for the 8 plugins named in "Round 2" above.
+6. **Re-run `jarvis/tests/neko_safety_live.py`** (C14). On the Linux server (16 Oct), gitleaks with this repo's `.gitleaksignore` found 0 in this project's commits, `jarvis/`, `plugin/` and the neko95 results.
+   - The saved 18:06 row still counts upstream's history (533) and 2 findings in `D:\jarvis\N.E.K.O-data\logs\main.err.log`. Only the laptop can check those logs.
+   - The same run re-checks S-no-false-completion; the typing read-back fix is in.
+7. **C8 research:** the 17:24 run found nothing (search unavailable), and at 18:05 the checker supported 12 of 24 cited sentences. Re-run with the search service up; it needs the laptop's local models.
+8. **C9 perception:** PE-vision-dialog, PE-vision-grounding and PE-observation-vs-inference have never been run into a saved file.

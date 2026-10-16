@@ -12,6 +12,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import statistics
 import time
 from pathlib import Path
@@ -28,8 +29,18 @@ E_ALIASES = {"E-lock": ["test_lock_one_task_at_a_time_and_stale_lock_taken_over"
                           "test_cancel_kills_the_running_process_and_the_job_says_cancelled"]}
 
 
+def run_time(path) -> float:
+    """When a result file was written: the YYYYMMDD-HHMMSS stamp its writer put in the name, else its mtime.
+    Not the mtime first: a fresh checkout gives every file the same mtime, and the live desktop/diagnosis runs were
+    then skipped as "not newer than the suite" (found on the Linux server, 2026-10-16)."""
+    m = re.search(r"(\d{8}-\d{6})", Path(path).name)
+    if m:
+        return time.mktime(time.strptime(m.group(1), "%Y%m%d-%H%M%S"))
+    return os.path.getmtime(path)
+
+
 def newest(pattern):
-    files = sorted(glob.glob(str(pattern)), key=os.path.getmtime)
+    files = sorted(glob.glob(str(pattern)), key=run_time)
     return files[-1] if files else None
 
 
@@ -65,10 +76,10 @@ def rows_from_live_runs(suite_file):
     """The newest live desktop (B) and diagnosis (D) runs when they are newer than the suite file: the same scripts the
     suite runs, saved on their own (one row per case)."""
     rows = []
-    since = os.path.getmtime(suite_file) if suite_file else 0
+    since = run_time(suite_file) if suite_file else 0
     for pattern, cap in (("desktop-*.json", "C4_windows_control"), ("diagnosis-*.json", "C7_troubleshooting")):
         f = newest(PC / pattern)
-        if not f or os.path.getmtime(f) <= since:
+        if not f or run_time(f) <= since:
             continue
         for c in json.loads(Path(f).read_text(encoding="utf-8")).get("cases", []):
             rows.append({"cap": cap, "id": c["id"], "status": "pass" if c["ok"] else "fail", "detail": c.get("detail", ""),
