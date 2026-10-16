@@ -31,17 +31,21 @@ def score(plan: decide.Plan, exp: dict) -> tuple[bool, str]:
         return False, f"status {plan.status}"
     if exp.get("status") == "clarify":
         return True, ""
+    if plan.status == "clarify" and "clarify" in exp.get("tool_in", []):
+        return True, ""                                      # asking was listed as an acceptable answer
     if plan.status != "ok" and not exp.get("status_in"):
         return False, f"status {plan.status}: {plan.question or plan.problems}"
     if "tool" in exp and first.get("tool") != exp["tool"]:
         return False, f"tool {first.get('tool')} != {exp['tool']}"
+    if "has_tool" in exp and exp["has_tool"] not in tools:
+        return False, f"tools {tools} lack {exp['has_tool']}"
     if "tools" in exp and tools[:len(exp["tools"])] != exp["tools"]:
         return False, f"tools {tools}"
     if "tool_in" in exp and first.get("tool") not in exp["tool_in"] and plan.status != "clarify":
         return False, f"tool {first.get('tool')} not in {exp['tool_in']}"
     if "profile" in exp and not any(s.get("profile") == exp["profile"] for s in plan.steps):
         return False, f"profile {[s.get('profile') for s in plan.steps]} != {exp['profile']}"
-    if "host" in exp and not any(exp["host"] in str(s.get("url", "")) for s in plan.steps):
+    if "host" in exp and not any(h in str(s.get("url", "")) for s in plan.steps for h in exp["host"].split("|")):
         return False, f"url {[s.get('url') for s in plan.steps]}"
     for k in ("app", "query", "target", "text", "name"):
         if k in exp and not any(exp[k].lower() in str(s.get(k, "")).lower().replace("calculator", "calc") for s in plan.steps):
@@ -68,7 +72,7 @@ def run_model(model: str, cases: list, profiles: list, repeat: int) -> dict:
     rows, lat = [], []
     for rep in range(repeat):
         for c in cases:
-            p = decide.decide(c["req"], profiles, model=model, timeout=120)
+            p = decide.decide(c["req"], profiles, model=model, timeout=120, context=c.get("context", ""))
             ok, why = score(p, c["expect"])
             if p.model != "rule":
                 lat.append(p.seconds)
@@ -90,12 +94,13 @@ def main():
     ap.add_argument("--models", default="decider-ling,decider-qwen3-1.7b,decider-qwen3-4b")
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--only", default="")
+    ap.add_argument("--set", default="decision_cases.json", help="decision_cases.json (dev) or decision_cases_holdout.json")
     a = ap.parse_args()
-    cases = json.loads((HERE / "decision_cases.json").read_text(encoding="utf-8"))
+    cases = json.loads((HERE / a.set).read_text(encoding="utf-8"))
     if a.only:
         cases = [c for c in cases if c["id"] in a.only.split(",")]
     profiles = core.profiles()
-    out = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "profiles": len(profiles), "models": []}
+    out = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "profiles": len(profiles), "prompt_version": decide.PROMPT_VERSION, "set": a.set, "models": []}
     for m in a.models.split(","):
         r = run_model(m.strip(), cases, profiles, a.repeat)
         out["models"].append(r)

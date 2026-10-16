@@ -1,0 +1,24 @@
+{
+ "windows_mcp_start_s": 3.2,
+ "windows_mcp_tools": [
+  "Snapshot",
+  "Type"
+ ],
+ "repeats": 5,
+ "windows_mcp": {
+  "snapshot_median_s": 0.7,
+  "type_median_s": 0.0,
+  "type_success": "1/5",
+  "failures": []
+ },
+ "neko_uia": {
+  "snapshot_median_s": 0.49,
+  "type_median_s": 1.4,
+  "type_success": "2/5",
+  "failures": [
+   "round 0: type 'NoneType' object is not subscriptable",
+   "round 2: type ui-action-failed:target is not the foreground window",
+   "round 4: type ui-action-failed:target is not the foreground window"
+  ]
+ }
+}

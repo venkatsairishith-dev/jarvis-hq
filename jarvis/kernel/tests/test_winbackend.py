@@ -47,7 +47,7 @@ class Backend(unittest.TestCase):
         from jarvis_kernel.jobs import UI_OPS
         # exactly what the kernel's job validator accepts (focus, key, scroll and click_at added 2026-10-16), nothing more
         self.assertEqual(set(w.BACKEND), UI_OPS)
-        self.assertEqual(UI_OPS, {"launch", "click", "type", "focus", "key", "scroll", "click_at"})
+        self.assertEqual(UI_OPS, {"launch", "click", "type", "focus", "key", "scroll", "click_at", "minimize", "maximize", "restore"})
 
 
 if __name__ == "__main__":

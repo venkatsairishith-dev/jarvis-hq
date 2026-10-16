@@ -13,7 +13,7 @@ _SAFE = re.compile(r"^[A-Za-z0-9_.\- ]{1,80}$")
 FIND = r"""
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-$p = Get-Process -Name $env:JARVIS_UI_PROC | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+$p = Get-Process -Name $env:JARVIS_UI_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 if (-not $p) { throw 'no window' }
 $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
 $cond = New-Object System.Windows.Automation.OrCondition(
@@ -25,7 +25,7 @@ if (-not $el) { throw 'no element' }
 CLICK = FIND + r"""
 $pat = $null
 if ($el.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pat)) { $pat.Invoke() }
-elseif ($el.Current.ClassName -eq 'Button' -and $el.Current.NativeWindowHandle -ne 0) {
+elseif ($el.Current.ClassName -in 'Button', 'CCPushButton' -and $el.Current.NativeWindowHandle -ne 0) {
   # a classic Win32 button (MessageBox OK) without UIA's Invoke: its own click message, still by element, not by position
   Add-Type @'
 using System; using System.Runtime.InteropServices;
@@ -95,6 +95,9 @@ def type_text(target, params):
     text = str(params.get("text", ""))
     if len(text) > 2000:
         raise ValueError("text too long")
+    # bring the window forward the way FOCUS does (Windows' foreground lock): a field without a value pattern (classic
+    # Edit controls show up as Pane) is typed into with keys, which only go to the foreground window
+    _run(FOCUS, {"JARVIS_UI_PROC": proc})
     _run(TYPE, {"JARVIS_UI_PROC": proc, "JARVIS_UI_ELEM": elem, "JARVIS_UI_TEXT": text})
 
 
@@ -113,18 +116,28 @@ public class W32 {
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
 }
 '@
 """
 FOCUS = WIN32 + r"""
 $ErrorActionPreference='Stop'
-$p = Get-Process -Name $env:JARVIS_UI_PROC | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+$p = Get-Process -Name $env:JARVIS_UI_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 if (-not $p) { throw 'no window' }
 $h = $p.MainWindowHandle
-if ([W32]::IsIconic($h)) { [void][W32]::ShowWindow($h, 9) }
-[W32]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [W32]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)   # lets a background process take the foreground
-[void][W32]::SetForegroundWindow($h)
-Start-Sleep -Milliseconds 300
+$fpid = 0; [void][W32]::GetWindowThreadProcessId([W32]::GetForegroundWindow(), [ref]$fpid)
+for ($try = 0; $try -lt 3 -and ($fpid -ne $p.Id -or [W32]::IsIconic($h)); $try++) {   # already in front: do nothing (an Alt tap would close an open menu)
+  if ([W32]::IsIconic($h)) { [void][W32]::ShowWindow($h, 9) }
+  [W32]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [W32]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)   # lets a background process take the foreground
+  if ($try -gt 0) {                                # Windows' foreground lock: join the foreground thread's input for the hand-over
+    $ft = [W32]::GetWindowThreadProcessId([W32]::GetForegroundWindow(), [ref]$fpid); $me = [W32]::GetCurrentThreadId()
+    [void][W32]::AttachThreadInput($me, $ft, $true); [void][W32]::BringWindowToTop($h); [void][W32]::SetForegroundWindow($h); [void][W32]::AttachThreadInput($me, $ft, $false)
+  } else { [void][W32]::SetForegroundWindow($h) }
+  Start-Sleep -Milliseconds 300
+  $fpid = 0; [void][W32]::GetWindowThreadProcessId([W32]::GetForegroundWindow(), [ref]$fpid)
+}
 $fpid = 0; [void][W32]::GetWindowThreadProcessId([W32]::GetForegroundWindow(), [ref]$fpid)
 if ($fpid -ne $p.Id) { throw 'target is not the foreground window' }
 """
@@ -222,4 +235,29 @@ def click_at(target, params):
     _run(CLICK_AT, {"JARVIS_UI_PROC": _proc(proc), "JARVIS_UI_X": m.group(1), "JARVIS_UI_Y": m.group(2)})
 
 
-BACKEND = {"launch": launch, "click": click, "type": type_text, "focus": focus, "key": key, "scroll": scroll, "click_at": click_at}
+WINDOW_STATE = WIN32 + r"""
+$ErrorActionPreference='Stop'
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class WS { [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h); }
+'@
+$p = Get-Process -Name $env:JARVIS_UI_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if (-not $p) { throw 'no window' }
+$h = $p.MainWindowHandle
+[void][W32]::ShowWindow($h, [int]$env:JARVIS_UI_SHOW)
+Start-Sleep -Milliseconds 400
+$state = if ([W32]::IsIconic($h)) { 'minimized' } elseif ([WS]::IsZoomed($h)) { 'maximized' } else { 'normal' }
+if ($state -ne $env:JARVIS_UI_WANT) { throw "pattern: window is $state" }
+"""
+SHOW = {"minimize": ("6", "minimized"), "maximize": ("3", "maximized"), "restore": ("9", "normal")}
+
+
+def _window_state(op):
+    def run(target, params):
+        n, want = SHOW[op]
+        _run(WINDOW_STATE, {"JARVIS_UI_PROC": _proc(target), "JARVIS_UI_SHOW": n, "JARVIS_UI_WANT": want})   # checked after
+    return run
+
+
+BACKEND = {"launch": launch, "click": click, "type": type_text, "focus": focus, "key": key, "scroll": scroll, "click_at": click_at,
+           "minimize": _window_state("minimize"), "maximize": _window_state("maximize"), "restore": _window_state("restore")}

@@ -33,7 +33,7 @@ function Walk($el, $depth) {
     if ($wantValues -and -not $i.IsPassword) { try { $pat = $null
       if ($c.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pat)) { $val = $pat.Current.Value }
       elseif ($c.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$pat)) { $val = $pat.DocumentRange.GetText(300) } } catch {} }
-    [void]$out.Add([ordered]@{ depth=$depth; type=($i.ControlType.ProgrammaticName -replace 'ControlType\.',''); name=$i.Name; id=$i.AutomationId; enabled=$i.IsEnabled; offscreen=$i.IsOffscreen; value=$val })
+    [void]$out.Add([ordered]@{ depth=$depth; type=($i.ControlType.ProgrammaticName -replace 'ControlType\.',''); name=$i.Name; id=$i.AutomationId; cls=$i.ClassName; enabled=$i.IsEnabled; offscreen=$i.IsOffscreen; value=$val })
     Walk $c ($depth+1)
     $c = $walker.GetNextSibling($c)
   }

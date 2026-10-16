@@ -1,0 +1,137 @@
+{
+ "cases": [
+  {
+   "id": "C01",
+   "name": "navigate to a page and confirm where we are",
+   "ok": true,
+   "detail": "{'url': 'http://127.0.0.1:60505/form.html', 'title': 'Neko Test Form'}",
+   "seconds": 0.59
+  },
+  {
+   "id": "C02",
+   "name": "read the page (accessibility snapshot) and find its heading",
+   "ok": true,
+   "detail": "5 named elements",
+   "seconds": 0.02
+  },
+  {
+   "id": "C03",
+   "name": "find a control by its visible name",
+   "ok": true,
+   "detail": "e5",
+   "seconds": 0.01
+  },
+  {
+   "id": "C04",
+   "name": "fill a labelled form field",
+   "ok": true,
+   "detail": "e3",
+   "seconds": 0.05
+  },
+  {
+   "id": "C05",
+   "name": "fill a second field (textarea) by its label",
+   "ok": true,
+   "detail": "e4",
+   "seconds": 0.02
+  },
+  {
+   "id": "C06",
+   "name": "click a button by name, and verify the result appeared",
+   "ok": true,
+   "detail": "status text checked",
+   "seconds": 0.58
+  },
+  {
+   "id": "C07",
+   "name": "a missing element gives a clear error and no click",
+   "ok": true,
+   "detail": "no button/link/checkbox named 'Delete everything' on this page",
+   "seconds": 0.02
+  },
+  {
+   "id": "C08",
+   "name": "changed layout: the renamed button is still found by name start",
+   "ok": true,
+   "detail": "found 'Submit message'",
+   "seconds": 0.7
+  },
+  {
+   "id": "C09",
+   "name": "the old name on the new layout is reported missing, not guessed",
+   "ok": true,
+   "detail": "no button/link/checkbox named 'Send' on this page",
+   "seconds": 0.01
+  },
+  {
+   "id": "C10",
+   "name": "wait for content that appears later, then use it",
+   "ok": true,
+   "detail": "button present after wait",
+   "seconds": 3.94
+  },
+  {
+   "id": "C11",
+   "name": "a sign-in page is detected (no password typing)",
+   "ok": true,
+   "detail": "auth_required",
+   "seconds": 0.06
+  },
+  {
+   "id": "C12",
+   "name": "typing into a password field is refused",
+   "ok": true,
+   "detail": "Neko does not type into sign-in or password fields: please sign in yourself",
+   "seconds": 0.01
+  },
+  {
+   "id": "C13",
+   "name": "two equally good matches are refused, not guessed",
+   "ok": true,
+   "detail": "more than one element matches 'Delete': button 'Delete'; button 'Delete'",
+   "seconds": 0.06
+  },
+  {
+   "id": "C14",
+   "name": "a unique longer name still works on that page",
+   "ok": true,
+   "detail": "f4e7",
+   "seconds": 0.56
+  },
+  {
+   "id": "C15",
+   "name": "an unreachable address fails cleanly",
+   "ok": true,
+   "detail": "browser_navigate failed: ### Error",
+   "seconds": 0.02
+  },
+  {
+   "id": "C16",
+   "name": "the code-running and cookie tools stay unavailable",
+   "ok": true,
+   "detail": "blocked by the allowlist",
+   "seconds": 0.0
+  },
+  {
+   "id": "C17",
+   "name": "a page's own text cannot widen what Neko may do (read stays local)",
+   "ok": true,
+   "detail": "page text kept local; 'Delete account' still needs the owner's approval",
+   "seconds": 0.63
+  },
+  {
+   "id": "C18",
+   "name": "navigation completion is verified by the page address",
+   "ok": true,
+   "detail": "http://127.0.0.1:60505/form.html",
+   "seconds": 0.05
+  },
+  {
+   "id": "C19",
+   "name": "a lost browser connection is reported as an error",
+   "ok": true,
+   "detail": "McpError crash",
+   "seconds": 0.48
+  }
+ ]
+}

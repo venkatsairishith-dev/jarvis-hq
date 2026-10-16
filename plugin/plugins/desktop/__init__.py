@@ -10,7 +10,7 @@ import time
 
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr
 
-from . import core
+from . import core, decide
 
 PROFILE_HELP = "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles."
 
@@ -148,7 +148,8 @@ class DesktopPlugin(NekoPluginBase):
             "key such as ctrl+s or playpause, scroll, or as a last resort click at a point ('process|x,y'). Structured "
             "accessibility first; risky keys and consequential clicks wait for the owner's approval.")),
         input_schema={"type": "object", "properties": {
-            "action": {"type": "string", "enum": ["open_app", "focus", "click", "type", "key", "scroll", "click_at"]},
+            "action": {"type": "string", "enum": ["open_app", "focus", "click", "type", "key", "scroll", "click_at", "minimize", "maximize",
+                                                  "restore"]},
             "target": {"type": "string", "description": "Start-menu app name for open_app; otherwise 'process|element' or 'process|x,y'"},
             "text": {"type": "string", "description": "Text to type, the key (e.g. ctrl+s, enter, playpause), or up/down"},
             "approval_id": {"type": "string"}}, "required": ["action", "target"]},
@@ -260,6 +261,188 @@ class DesktopPlugin(NekoPluginBase):
             return Err(SdkError(str(e)))
         finally:
             core.set_activity("idle")
+
+    # ---------- the coordinator: one request -> local decision -> agents -> verified outcome ----------
+    def _agents(self, loop) -> dict:
+        """The step runners the coordinator uses. Every PC action is a kernel job (core.Pc); nothing here decides permission."""
+        import re as _re
+        active = self._active_pcs = getattr(self, "_active_pcs", [])
+
+        def pc(body, timeout=90.0, what=""):
+            p = core.Pc(on_state=core.set_activity)
+            active.append(p)
+            try:
+                res = p.run(body, timeout, what)
+            finally:
+                active.remove(p)
+            r = dict(res.get("result") or {})
+            core.take_local(r.pop("local_result", None))            # screen/page text: read by nobody here, deleted
+            r["state"] = res.get("state")
+            r["ok"] = bool(r.get("ok")) and res.get("state") == "done"
+            for k in ("approval_id", "how"):
+                if res.get(k):
+                    r[k] = res[k]
+            return r
+
+        def alias(folder):
+            return "default" if folder == "Default" else _re.sub(r"[^a-z0-9]", "", str(folder).lower())
+
+        def find_process(app):
+            """The process of an open window whose title or process name fits the app the owner named."""
+            ws = pc({"op": "windows"}, 30).get("windows") or []
+            words = [w for w in _re.split(r"\W+", app.lower()) if len(w) > 2 and w not in ("app", "the", "window")]
+            words = words or [app.lower()]
+            for w in ws:
+                hay = (str(w.get("process", "")) + " " + str(w.get("title", ""))).lower()
+                if all(x in hay for x in words) or str(w.get("process", "")).lower() == app.lower().replace(" ", ""):
+                    return w.get("process")
+            for w in ws:
+                if any(x in (str(w.get("process", "")) + " " + str(w.get("title", ""))).lower() for x in words):
+                    return w.get("process")
+            return None
+
+        def need_proc(step):
+            proc = find_process(step["app"])
+            if not proc:
+                raise RuntimeError(f"no open window for '{step['app']}'")
+            return proc
+
+        def window(step):
+            proc = need_proc(step)
+            if step.get("action") == "inspect":
+                r = pc({"op": "diag", "check": "window_text", "target": proc}, 60)
+                r["inspected"] = proc
+                return r
+            return dict(pc({"op": "ui", "action": step.get("action", "focus"), "target": f"{proc}|", "text": ""}, 60), process=proc)
+
+        def type_text(step):
+            proc = need_proc(step)
+            target = step.get("target") or ""
+            if not target:                                       # the window's first text field, by accessibility
+                snap = pc({"op": "snapshot", "target": proc}, 60)
+                fields = [e for e in snap.get("elements") or [] if str(e.get("type", "")).endswith(("Edit", "Document"))
+                          or str(e.get("cls") or "").startswith(("Edit", "RichEdit"))]       # classic controls come through as Pane
+                if not fields:
+                    return {"ok": False, "error": f"no text field found in {proc}"}
+                target = fields[0].get("id") or fields[0].get("name") or ""
+            return pc({"op": "ui", "action": "type", "target": f"{proc}|{target}", "text": step.get("text", "")}, 60)
+
+        def press_key(step):
+            key = step.get("key", "")
+            if key == "playpause" and step.get("intent") in ("pause", "play"):    # a toggle: look first, never start what should stop
+                playing = [m for m in pc({"op": "media"}, 30).get("sessions") or [] if m.get("status") == "Playing"]
+                if (step["intent"] == "pause") != bool(playing):
+                    return {"ok": True, "done": "nothing to do", "note": "nothing was playing" if step["intent"] == "pause" else "already playing"}
+            if key in decide.KEY_WORDS:
+                return pc({"op": "ui", "action": "key", "target": "media|", "text": key}, 30)
+            return pc({"op": "ui", "action": "key", "target": f"{need_proc(step)}|", "text": key}, 30)
+
+        def open_file(step):
+            name, folder = step.get("name", ""), step.get("folder", "")
+            known = ("downloads", "documents", "desktop", "pictures", "videos", "music")
+            if name.lower().strip() in known or _re.sub(r"(?i)\b(my|the|folder)\b", "", name).strip().lower() in known:
+                return pc({"op": "open_folder", "target": _re.sub(r"(?i)\b(my|the|folder)\b", "", name).strip()}, 60)
+            last = {}
+            for f in ([folder] if folder.lower() in known else []) + ["Documents", "Desktop", "Downloads"]:
+                last = pc({"op": "open_file", "target": f, "path": name}, 60)
+                if last.get("ok"):
+                    return last
+            return last
+
+        def check(step):
+            if step.get("check") == "media":
+                return pc({"op": "media"}, 30)
+            return pc({"op": "diag", "check": step.get("check", "disk"), "target": step.get("app", "")}, 90)
+
+        def call(coro, timeout):
+            import asyncio as _a
+            return _a.run_coroutine_threadsafe(coro, loop).result(timeout)
+
+        def troubleshoot(step):
+            proc = find_process(step["app"])
+            start = step["app"]
+            if not proc:                                         # not open: start it so its error can be seen
+                pc({"op": "open_app", "target": start}, 60)
+                time.sleep(3)
+                proc = find_process(step["app"])
+            if not proc:
+                return {"ok": False, "error": f"'{step['app']}' has no window, even after starting it"}
+            res = call(self.run_troubleshooter(app=proc, start_name=start), 900)
+            data = res.value if isinstance(res, Ok) else {"error": str(getattr(res, "error", res))}
+            return {"ok": data.get("outcome") in ("fixed and verified", "diagnosed"), **data}
+
+        def research(step):
+            res = call(self.plugins.call_entry_json("research:research_topic", {"question": step["query"], "deliverable": step.get("deliverable", "none")},
+                                                    timeout=900.0), 960)
+            data = res.value.get("data", res.value) if isinstance(res, Ok) and isinstance(res.value, dict) else {}
+            return {"ok": bool(data.get("summary")), "summary": str(data.get("summary") or "")[:600], "file": data.get("file"),
+                    "sources": (data.get("sources") or [])[:8], "error": None if data else str(getattr(res, "error", ""))[:200]}
+
+        def stop(step):
+            for p in list(active):
+                p.stopped = True
+            self._cancel = True
+            return {"ok": True, "stopped_jobs": len(active)}
+
+        return {
+            "open_website": lambda s: pc({"op": "browser", "action": "open", "profile": alias(s["profile"]), "url": s["url"]}, 90),
+            "play_media": lambda s: (lambda r: dict(r, windows_media=[f"{m.get('title')} ({m.get('status')})" for m in
+                                                                      pc({"op": "media"}, 30).get("sessions") or []]) if r.get("ok") else r)(
+                pc({"op": "browser", "action": "play", "profile": alias(s["profile"]), "target": s["query"]}, 200)),
+            "browser": lambda s: pc({"op": "browser", "action": s["action"], "profile": alias(s.get("profile", "Default")),
+                                     "target": s.get("target", ""), "text": s.get("text", "")}, 120, f"{s['action']} {s.get('target', '')}"),
+            "open_app": lambda s: pc({"op": "open_app", "target": s["app"]}, 60),
+            "window": window, "type_text": type_text, "press_key": press_key, "open_file": open_file, "check_pc": check,
+            "troubleshoot": troubleshoot, "research": research, "stop": stop,
+        }
+
+    @plugin_entry(
+        id="run_pc_task",
+        name=tr("entry.run_pc_task.name", default="Do a task on the PC"),
+        description=tr("entry.run_pc_task.description", default=(
+            "Do what the owner asked on this PC in one go: a small local model plans the steps (open sites or apps, play "
+            "music, use the owner's Chrome accounts, type, press keys, check or troubleshoot the PC, research), each step "
+            "runs through the JARVIS kernel and is checked afterwards. Reports what was verified and what was not.")),
+        input_schema={"type": "object", "properties": {"request": {"type": "string", "description": "The owner's request, in their words"}},
+                      "required": ["request"]},
+        timeout=900, llm_result_fields=["status", "summary", "question", "steps", "uncertain", "approval_id", "how"],
+    )
+    async def run_pc_task(self, request: str = "", **_):
+        from . import coordinator as coord
+        loop = asyncio.get_running_loop()
+        self._cancel = False
+        c = coord.Coordinator(self._agents(loop), core.profiles(), on_progress=core.set_activity,
+                              cancelled=lambda: bool(getattr(self, "_cancel", False)))
+        try:
+            rec = await asyncio.to_thread(c.run, request)
+        except asyncio.CancelledError:
+            self._cancel = True
+            for p in list(getattr(self, "_active_pcs", [])):
+                p.stopped = True
+            raise
+        finally:
+            core.set_activity("idle")
+        return Ok({"status": rec["status"], "summary": coord.summary(rec), "question": rec.get("question"), "task": rec["id"],
+                   "plan_model": (rec.get("plan") or {}).get("model"), "plan_seconds": (rec.get("plan") or {}).get("seconds"),
+                   "steps": [{k: s.get(k) for k in ("n", "tool", "agent", "attempts", "passed", "checked", "uncertainty")} for s in rec["steps"]],
+                   "uncertain": rec.get("uncertain"), "approval_id": rec.get("approval_id"), "how": rec.get("how"),
+                   "route": rec.get("route")})
+
+    @plugin_entry(
+        id="stop_pc_task",
+        name=tr("entry.stop_pc_task.name", default="Stop the PC task"),
+        description=tr("entry.stop_pc_task.description", default="Stop the running PC task and the job it is waiting on."),
+        input_schema={"type": "object", "properties": {}}, timeout=30, llm_result_fields=["stopped_jobs"],
+    )
+    async def stop_pc_task(self, **_):
+        self._cancel = True
+        n = 0
+        for p in list(getattr(self, "_active_pcs", [])):
+            p.stopped = True
+            if p.current_job:
+                await asyncio.to_thread(p.cancel, p.current_job)
+                n += 1
+        return Ok({"stopped_jobs": n})
 
     @plugin_entry(
         id="stop_pc_job",

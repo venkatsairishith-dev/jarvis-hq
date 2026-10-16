@@ -1,0 +1,144 @@
+{
+ "cases": [
+  {
+   "id": "B01",
+   "name": "open an app (launch allowlist) and see its window",
+   "ok": true,
+   "detail": "window appeared",
+   "seconds": 7.5
+  },
+  {
+   "id": "B02",
+   "name": "focus a window and confirm it is in front",
+   "ok": false,
+   "detail": "RuntimeError: ui-action-failed:target is not the foreground window",
+   "seconds": 1.65
+  },
+  {
+   "id": "B03",
+   "name": "type into a field found by its accessible name",
+   "ok": false,
+   "detail": "RuntimeError: ui-action-failed:target is not the foreground window",
+   "seconds": 1.96
+  },
+  {
+   "id": "B04",
+   "name": "minimize a window",
+   "ok": true,
+   "detail": "iconic",
+   "seconds": 1.72
+  },
+  {
+   "id": "B05",
+   "name": "restore a minimized window",
+   "ok": true,
+   "detail": "normal",
+   "seconds": 2.24
+  },
+  {
+   "id": "B06",
+   "name": "maximize then restore",
+   "ok": true,
+   "detail": "zoomed then normal",
+   "seconds": 3.15
+  },
+  {
+   "id": "B07",
+   "name": "inspect the active window (local text only)",
+   "ok": true,
+   "detail": "{'windows': 1, 'dialogs': 0}",
+   "seconds": 45.43
+  },
+  {
+   "id": "B08",
+   "name": "a shortcut opens a dialog (Find), seen as a dialog",
+   "ok": true,
+   "detail": "{'windows': 2, 'dialogs': 1}",
+   "seconds": 49.32
+  },
+  {
+   "id": "B09",
+   "name": "dismiss the dialog by its Cancel button (structured click)",
+   "ok": true,
+   "detail": "{'windows': 1, 'dialogs': 0}",
+   "seconds": 92.25
+  },
+  {
+   "id": "B10",
+   "name": "missing element gives a specific error, no action",
+   "ok": true,
+   "detail": "ui-action-failed:no element",
+   "seconds": 0.37
+  },
+  {
+   "id": "B11",
+   "name": "point outside the window is refused",
+   "ok": true,
+   "detail": "ui-action-failed:point outside the window",
+   "seconds": 0.46
+  },
+  {
+   "id": "B12",
+   "name": "raw SendKeys syntax is refused",
+   "ok": true,
+   "detail": "bad key",
+   "seconds": 0.0
+  },
+  {
+   "id": "B13",
+   "name": "keys land in the intended app after focus moved away",
+   "ok": true,
+   "detail": "find neko test 2",
+   "seconds": 7.91
+  },
+  {
+   "id": "B14",
+   "name": "scroll a window (structured, then wheel)",
+   "ok": true,
+   "detail": "scrolled",
+   "seconds": 0.49
+  },
+  {
+   "id": "B15",
+   "name": "close with unsaved text shows a save dialog; Don't Save closes it",
+   "ok": true,
+   "detail": "pressed 'Don't Save', notepad closed: True",
+   "seconds": 54.5
+  },
+  {
+   "id": "B16",
+   "name": "acting on a window that is gone fails cleanly",
+   "ok": true,
+   "detail": "ui-action-failed:no window",
+   "seconds": 0.4
+  },
+  {
+   "id": "B17",
+   "name": "read a sample error dialog and dismiss it",
+   "ok": false,
+   "detail": "RuntimeError: ui-action-failed:no window",
+   "seconds": 33.94
+  },
+  {
+   "id": "B19",
+   "name": "an app outside the launch list is refused",
+   "ok": true,
+   "detail": "app not in the launch allowlist",
+   "seconds": 0.0
+  },
+  {
+   "id": "B20",
+   "name": "sensitive app names are refused by diagnostics",
+   "ok": true,
+   "detail": "refused",
+   "seconds": 0.0
+  }
+ ],
+ "not_tested": [
+  {
+   "id": "B18",
+   "name": "password fields are never typed into",
+   "why": "no harmless app with a password field here; the refusal is in winbackend TYPE (IsPassword)"
+  }
+ ]
+}

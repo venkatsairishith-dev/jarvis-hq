@@ -66,6 +66,19 @@ class Diagnostics(unittest.TestCase):
         self.assertEqual(json.load(open(r["local_result"], encoding="utf-8"))[0]["texts"], ["Config error: line 3"])
         self.assertTrue(r["local_result"].startswith(os.path.realpath(self.tmp.name)))
 
+    def test_nothing_in_the_local_folder_outlives_ten_minutes(self):
+        from jarvis_node import paths
+        d = paths.local_result_dir()
+        os.makedirs(os.path.join(d, "playwright-1-abc"), exist_ok=True)
+        old, new = os.path.join(d, "window_text-old.json"), os.path.join(d, "window_text-new.json")
+        for p in (old, new):
+            open(p, "w").write("[]")
+        past = time.time() - 3600
+        os.utime(old, (past, past))
+        os.utime(os.path.join(d, "playwright-1-abc"), (past, past))
+        self.assertEqual(paths.sweep_local(), 2)
+        self.assertEqual(sorted(os.listdir(d)), ["window_text-new.json"])
+
     def test_plain_checks_and_refusals(self):
         r = diag.run({"op": "disk", "target": ""}, runner=self.fake([{"drive": "C", "free_gb": 20.0, "total_gb": 100.0}]))
         self.assertEqual(r["rows"][0]["drive"], "C")
@@ -240,6 +253,18 @@ class Browser(unittest.TestCase):
         self.assertTrue(r["ok"] and r["playing"])
         self.assertIn("Kalyani Raga Song", r["chose"])
         self.assertIn("browser_press_key", FakeMcp.calls)               # the page did not autoplay: YouTube's own play key
+
+    def test_navigation_after_a_failed_load_is_retried_once(self):
+        class S:
+            n = 0
+
+            def call(self, tool, args, timeout=45):
+                S.n += 1
+                if S.n == 1:
+                    raise browserext.BrowserError("browser_navigate failed: ### Error")
+                return "- Page URL: " + args["url"]
+        self.assertIn("example.org", browserext.navigate(S(), "https://example.org/"))
+        self.assertEqual(S.n, 2)
 
     def test_only_allowlisted_tools_and_the_fixed_script(self):
         prof = {"dir": "Default", "name": "Venkat", "account": ""}

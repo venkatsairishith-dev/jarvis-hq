@@ -53,13 +53,13 @@ def step1():
                       'ssh -t -i D:\\jarvis-secrets\\ssh\\jarvis_vm_ed25519 ubuntu@100.125.91.51 '
                       '"cd ~/jarvis/kernel && python3 -m jarvis_kernel resume"'], creationflags=subprocess.CREATE_NEW_CONSOLE)
     t0 = time.time()
-    while time.time() - t0 < 1800:
+    while time.time() - t0 < 4 * 3600:
         time.sleep(3)
         if not console("GET", "state")[1].get("killed"):
             R["estop_resume"] = f"lifted by the owner after {int(time.time() - t0)} s"
             say("Thank you: the kill switch is off. You can close the SSH window.")
             return
-    R["estop_resume"] = "not lifted within 30 minutes"
+    R["estop_resume"] = "not lifted within 4 hours"
     save()
     sys.exit(1)
 

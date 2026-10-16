@@ -25,7 +25,7 @@ import time
 import urllib.parse
 
 from . import runtime
-from .paths import local_result_dir
+from .paths import local_result_dir, sweep_local
 
 CHROME = next((p for p in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
@@ -158,7 +158,7 @@ def extension_ready(profile: dict) -> bool:
 class Session:
     """One Playwright MCP connection to the running Chrome profile, for the length of one job."""
 
-    def __init__(self, profile: dict, session_factory=None):
+    def __init__(self, profile: dict, session_factory=None, isolated: bool = False):
         self.profile = profile
         env = dict(os.environ)
         if os.path.isfile(TOKEN_FILE):
@@ -168,6 +168,9 @@ class Session:
         self.work = os.path.join(local_result_dir(), f"playwright-{os.getpid()}-{secrets.token_hex(3)}")
         argv = [NODE, MCP_CLI, "--extension", "--profile-dir-name", profile["dir"], "--image-responses", "omit",
                 "--output-dir", self.work]
+        if isolated:                    # tests and risky scenarios: a throwaway headless Chrome, no owner profile, no extension
+            argv = [NODE, MCP_CLI, "--headless", "--isolated", "--browser", "chrome", "--image-responses", "omit",
+                    "--output-dir", self.work]
         if session_factory is None:                     # the real server, started through runtime so a cancel kills it
             from .mcpclient import StdioSession
             os.makedirs(self.work, exist_ok=True)
@@ -183,7 +186,12 @@ class Session:
     def __exit__(self, *a):
         self.s.close()
         import shutil
-        shutil.rmtree(self.work, ignore_errors=True)    # page console logs are page content: not kept
+        for _ in range(5):                              # page console logs are page content: not kept (retry: Windows file locks)
+            shutil.rmtree(self.work, ignore_errors=True)
+            if not os.path.exists(self.work):
+                break
+            time.sleep(0.5)
+        sweep_local()
 
     def call(self, tool: str, args: dict, timeout=45.0) -> str:
         if tool not in ALLOWED_TOOLS:
@@ -234,9 +242,54 @@ def watch_links(snapshot: str) -> list:
     return uniq
 
 
+REF = re.compile(r"^(?:f\d+)?e\d+$")
+CLICKABLE = ("button", "link", "checkbox", "radio", "menuitem", "tab", "option", "switch", "combobox")
+TYPABLE = ("textbox", "searchbox", "combobox", "spinbutton")
+
+
+def elements(snapshot: str) -> list[tuple[str, str, str]]:
+    """(role, name, ref) for every named element in a Playwright accessibility snapshot."""
+    out = []
+    for line in (snapshot or "").splitlines():
+        m = re.search(r"""-\s+'?([a-z]+)\s+"(.+?)"(?:\s+\[[^\]]*\])*?\s*\[ref=([^\]]+)\]""", line)
+        if m:
+            out.append((m.group(1), m.group(2), m.group(3)))
+    return out
+
+
+def find_ref(snapshot: str, name: str, roles=CLICKABLE) -> str:
+    """The ref of the element the owner named, by accessible role and name: an exact name first, then one that starts
+    with it, then one that contains it. Two equally good matches -> an error that names them (never a guess)."""
+    want = " ".join((name or "").lower().split())
+    if not want:
+        raise BrowserError("no element named")
+    cands = [(r, n, ref) for r, n, ref in elements(snapshot) if r in roles]
+    for test in (lambda n: n == want, lambda n: n.startswith(want), lambda n: want in n):
+        hit = [(r, n, ref) for r, n, ref in cands if test(" ".join(n.lower().split()))]
+        if len(hit) == 1:
+            return hit[0][2]
+        if len(hit) > 1:
+            raise BrowserError("more than one element matches '" + name + "': " + "; ".join(f"{r} '{n[:40]}'" for r, n, _ in hit[:4]))
+    raise BrowserError(f"no {'/'.join(roles[:3])} named '{name}' on this page")
+
+
+AUTH_HOSTS = ("accounts.google.com", "login.microsoftonline.com", "login.live.com", "github.com/login")
+
+
+def auth_required(snapshot: str, url: str = "") -> bool:
+    """Does this page ask the owner to sign in? (a password box, or a sign-in page) Neko never fills in passwords."""
+    if any(h in (url or "") for h in AUTH_HOSTS):
+        return True
+    els = elements(snapshot)
+    has_password = any(r == "textbox" and re.search(r"(?i)password|passcode", n) for r, n, _ in els)
+    sign_in = any(r in ("heading", "button") and re.search(r"(?i)^(sign|log) ?in\b", n) for r, n, _ in els)
+    return has_password or (sign_in and any(r == "textbox" for r, _, _ in els))
+
+
 def save_local(kind: str, text: str) -> str:
     d = local_result_dir()
     os.makedirs(d, exist_ok=True)
+    sweep_local()
     path = os.path.join(d, f"{kind}-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}.txt")
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
@@ -253,10 +306,20 @@ def _video(sess) -> dict:
         return {}
 
 
+def navigate(sess, url: str) -> str:
+    """Go to an address. After a failed load (an unreachable site), the next navigation can report an error although the
+    page then loads (seen live 2026-10-16): try once more, and judge by where the page actually is."""
+    try:
+        return sess.call("browser_navigate", {"url": url})
+    except BrowserError:
+        time.sleep(0.5)
+        return sess.call("browser_navigate", {"url": url})
+
+
 def play(sess, query: str) -> dict:
     """Search YouTube, open the first real video, and check that it is playing (position moving). If the page will not
     start it, say so: the owner presses play (site rules: no forced playback tricks)."""
-    sess.call("browser_navigate", {"url": "https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(query)})
+    navigate(sess, "https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(query))
     vids = []
     for _ in range(4):                                 # results render after the page "loads": wait until videos are listed
         sess.call("browser_wait_for", {"time": 2})
@@ -266,7 +329,7 @@ def play(sess, query: str) -> dict:
     if not vids:
         return {"ok": False, "error": "no video results found on the YouTube results page", "query": query}
     name, _ref, href = vids[0]
-    sess.call("browser_navigate", {"url": "https://www.youtube.com" + href})
+    navigate(sess, "https://www.youtube.com" + href)
     sess.call("browser_wait_for", {"time": 4})
     v1 = _video(sess)
     if v1.get("paused"):
@@ -289,7 +352,7 @@ def play(sess, query: str) -> dict:
 
 def whoami(sess, profile: dict) -> dict:
     """The account the visible browser is signed in to, from the Google Account page itself (masked)."""
-    sess.call("browser_navigate", {"url": "https://myaccount.google.com/"})
+    navigate(sess, "https://myaccount.google.com/")
     snap = sess.call("browser_snapshot", {})
     found = EMAIL.findall(snap)
     emails = list(dict.fromkeys(e.lower() for e in found))            # page order: the signed-in account comes first
@@ -300,6 +363,44 @@ def whoami(sess, profile: dict) -> dict:
             "matches": bool(want) and want in ids, "first_is_expected": bool(ids) and ids[0] == want,
             "verified_by": "myaccount.google.com in the visible browser (compared by account fingerprint, not by the mask)",
             "error": None if emails else "no account shown (signed out, or the page did not load)"}
+
+
+def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | None:
+    """One browser action in an open session (the owner's profile, or an isolated test browser). Elements are found by
+    accessible role and name in the page snapshot; a click or typing goes to that exact element's ref."""
+    if op == "open":
+        t = sess.call("browser_tabs", {"action": "new", "url": url})
+        return {"ok": True, "opened": url, "profile": prof.get("dir"), "account": prof.get("account"), **page_meta(t)}
+    if op in ("read", "find"):
+        t = sess.call("browser_snapshot", {}) if op == "read" else sess.call("browser_find", {"text": target})
+        meta = page_meta(t)
+        return {"ok": True, **meta, "chars": len(t), "auth_required": auth_required(t, meta.get("url", "")),
+                "local_result": save_local("page", t), "note": "the page text stayed on this laptop (local_result)"}
+    if op == "tabs":
+        t = sess.call("browser_tabs", {"action": "list"})
+        return {"ok": True, "tabs": len(re.findall(r"^\s*-\s*\d+:", t, re.M)), "local_result": save_local("tabs", t)}
+    if op in ("click", "type"):
+        ref = target
+        if not REF.match(target or ""):
+            snap = sess.call("browser_snapshot", {})
+            if op == "type" and auth_required(snap, page_meta(snap).get("url", "")) and re.search(r"(?i)password", target):
+                raise BrowserError("Neko does not type into sign-in or password fields: please sign in yourself")
+            ref = find_ref(snap, target, CLICKABLE if op == "click" else TYPABLE)
+        if op == "click":
+            t = sess.call("browser_click", {"target": ref, "element": target or ref})
+            return {"ok": True, "clicked": (target or ref)[:80], "ref": ref, **page_meta(t)}
+        t = sess.call("browser_type", {"target": ref, "element": target or ref, "text": text})
+        return {"ok": True, "typed_chars": len(text), "ref": ref, **page_meta(t)}
+    if op == "press":
+        t = sess.call("browser_press_key", {"key": text or "Enter"})
+        return {"ok": True, "pressed": text or "Enter", **page_meta(t)}
+    if op == "play":
+        return {**play(sess, target), "profile": prof.get("dir")}
+    if op == "media":
+        return {"ok": True, **_video(sess)}
+    if op == "whoami":
+        return whoami(sess, prof)
+    return None
 
 
 def run(p: dict, session_factory=None) -> dict:
@@ -319,31 +420,9 @@ def run(p: dict, session_factory=None) -> dict:
                 "profile": prof["dir"], "needs": "extension"}
     try:
         with Session(prof, session_factory) as sess:
-            if op == "open":
-                t = sess.call("browser_tabs", {"action": "new", "url": url})
-                return {"ok": True, "opened": url, "profile": prof["dir"], "account": prof["account"], **page_meta(t)}
-            if op in ("read", "find"):
-                t = sess.call("browser_snapshot", {}) if op == "read" else sess.call("browser_find", {"text": target})
-                return {"ok": True, **page_meta(t), "chars": len(t), "local_result": save_local("page", t),
-                        "note": "the page text stayed on this laptop (local_result)"}
-            if op == "tabs":
-                t = sess.call("browser_tabs", {"action": "list"})
-                return {"ok": True, "tabs": len(re.findall(r"^\s*-\s*\d+:", t, re.M)), "local_result": save_local("tabs", t)}
-            if op == "click":
-                t = sess.call("browser_click", {"target": target, "element": target})
-                return {"ok": True, "clicked": target[:80], **page_meta(t)}
-            if op == "type":
-                t = sess.call("browser_type", {"target": target, "element": target, "text": text})
-                return {"ok": True, "typed_chars": len(text), **page_meta(t)}
-            if op == "press":
-                t = sess.call("browser_press_key", {"key": text or "Enter"})
-                return {"ok": True, "pressed": text or "Enter", **page_meta(t)}
-            if op == "play":
-                return {**play(sess, target), "profile": prof["dir"]}
-            if op == "media":
-                return {"ok": True, **_video(sess)}
-            if op == "whoami":
-                return whoami(sess, prof)
+            out = act(sess, op, url, target, text, prof)
+            if out is not None:
+                return out
     except runtime.Cancelled:
         raise
     except BrowserError as e:

@@ -41,7 +41,7 @@ RULES = [
     ("models", "prefer", YELLOW_AUTO),
     ("ui", "snapshot|list_windows", GREEN),
     ("ui", "screenshot", YELLOW_AUTO),     # the owner's own side at once; a lab agent needs approval (raised in decide below)
-    ("ui", "launch|focus|click|type|key|scroll|click_at", YELLOW_APPROVAL),
+    ("ui", "launch|focus|click|type|key|scroll|click_at|minimize|maximize|restore", YELLOW_APPROVAL),
     # Opening things on the laptop (2026-10-10): the owner's own agent (private lane) at once; a lab agent (public
     # lane) only with the owner's approval and never a folder listing (raised in decide below).
     ("pc", "open_app|open_folder|open_file|list_folder", YELLOW_AUTO),
@@ -102,7 +102,7 @@ WRITE_OPS = re.compile(r"write|edit|delete|remove|rename|move|commit|truncate|ov
 SECRET_COMPONENTS = {".jarvis", ".jarvis-kernel", "secrets.env", "keys.json", "protected.json", "id_ed25519", "id_rsa"}
 # What the owner may ask for directly without an approval each time (owner_direct): looking, opening, clicking, typing,
 # keys, scrolling. A click or key whose words could pay, send, delete, install, sign out or accept is raised back to approval.
-ORDINARY_OPS = {"ui": {"launch", "focus", "click", "type", "key", "scroll", "click_at"},
+ORDINARY_OPS = {"ui": {"launch", "focus", "click", "type", "key", "scroll", "click_at", "minimize", "maximize", "restore"},
                 "browser": {"click", "type", "select", "press"}}
 CONSEQUENTIAL = re.compile(
     r"\b(pay|payment|buy|purchase|order|checkout|check out|place order|subscribe|donate|send|post|publish|share|tweet|reply|"

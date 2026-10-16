@@ -1,0 +1,855 @@
+{
+ "time": "2026-10-16 12:48:35",
+ "profiles": 6,
+ "prompt_version": 2,
+ "set": "decision_cases.json",
+ "models": [
+  {
+   "model": "decider-qwen3-1.7b",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 48,
+   "total": 70,
+   "accuracy": 0.686,
+   "json_valid": 70,
+   "cold_first_call_s": 4.1,
+   "first_call_status": "ok",
+   "p50_s": 0.59,
+   "p95_s": 1.26,
+   "memory": {
+    "ram_mb": 1475,
+    "top_gpu_dedicated_mb": 1703
+   },
+   "failures": [
+    {
+     "id": "A07",
+     "why": "profile ['Default'] != Profile 1",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      }
+     ]
+    },
+    {
+     "id": "A08",
+     "why": "profile ['Default'] != Profile 2",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/"
+      }
+     ]
+    },
+    {
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.wikipedia.org/"
+      }
+     ]
+    },
+    {
+     "id": "A13",
+     "why": "profile ['Default'] != Profile 1",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "lo-fi beats"
+      }
+     ]
+    },
+    {
+     "id": "A24",
+     "why": "name ['my documents']",
+     "steps": [
+      {
+       "tool": "open_file",
+       "name": "my documents",
+       "folder": "excel"
+      }
+     ]
+    },
+    {
+     "id": "A31",
+     "why": "tool browser != check_pc",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "A32",
+     "why": "key ['']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "playpause",
+       "key": ""
+      }
+     ]
+    },
+    {
+     "id": "A33",
+     "why": "tool open_app != press_key",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "save the file"
+      }
+     ]
+    },
+    {
+     "id": "A34",
+     "why": "tool open_app != type_text",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "hello world"
+      }
+     ]
+    },
+    {
+     "id": "A41",
+     "why": "status clarify: What should I open?",
+     "steps": []
+    },
+    {
+     "id": "A42",
+     "why": "target ['page']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "find",
+       "target": "page",
+       "text": "pricing"
+      }
+     ]
+    },
+    {
+     "id": "A44",
+     "why": "tool open_website != play_media",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      },
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "Kalyani song"
+      }
+     ]
+    },
+    {
+     "id": "A45",
+     "why": "status clarify: Which website should I open?",
+     "steps": []
+    },
+    {
+     "id": "A47",
+     "why": "tools ['check_pc']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "disk",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A48",
+     "why": "status clarify: Which website should I open?",
+     "steps": []
+    },
+    {
+     "id": "A53",
+     "why": "tool stop not in ['answer', 'clarify', 'check_pc']",
+     "steps": [
+      {
+       "tool": "stop"
+      }
+     ]
+    },
+    {
+     "id": "A54",
+     "why": "status clarify: Which website should I open?",
+     "steps": []
+    },
+    {
+     "id": "A55",
+     "why": "tool browser != answer",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "A57",
+     "why": "tool play_media != press_key",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "next song"
+      }
+     ]
+    },
+    {
+     "id": "A61",
+     "why": "status clarify: Which website should I open?",
+     "steps": []
+    },
+    {
+     "id": "A63",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "it"
+      }
+     ]
+    },
+    {
+     "id": "A70",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "model": "decider-qwen3-4b",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 51,
+   "total": 70,
+   "accuracy": 0.729,
+   "json_valid": 70,
+   "cold_first_call_s": 20.2,
+   "first_call_status": "ok",
+   "p50_s": 3.08,
+   "p95_s": 5.72,
+   "memory": {
+    "ram_mb": 3390,
+    "top_gpu_dedicated_mb": 2803
+   },
+   "failures": [
+    {
+     "id": "A07",
+     "why": "profile ['Default', 'Default'] != Profile 1",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      },
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "type",
+       "target": "search",
+       "text": "VenkatAMV"
+      }
+     ]
+    },
+    {
+     "id": "A08",
+     "why": "profile ['Default'] != Profile 2",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/"
+      }
+     ]
+    },
+    {
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.wikipedia.org/"
+      }
+     ]
+    },
+    {
+     "id": "A13",
+     "why": "profile ['Default'] != Profile 1",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "lo-fi beats"
+      }
+     ]
+    },
+    {
+     "id": "A23",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "stop"
+      }
+     ]
+    },
+    {
+     "id": "A24",
+     "why": "status clarify: Which file?",
+     "steps": []
+    },
+    {
+     "id": "A25",
+     "why": "status clarify: Which file?",
+     "steps": []
+    },
+    {
+     "id": "A34",
+     "why": "tool open_app != type_text",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "hello world"
+      }
+     ]
+    },
+    {
+     "id": "A44",
+     "why": "tool open_website != play_media",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      }
+     ]
+    },
+    {
+     "id": "A45",
+     "why": "status clarify: Which website should I open?",
+     "steps": []
+    },
+    {
+     "id": "A47",
+     "why": "status clarify: Which file?",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "disk",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A48",
+     "why": "profile ['Default'] != Profile 2",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.netflix.com/"
+      }
+     ]
+    },
+    {
+     "id": "A52",
+     "why": "status clarify: Which file?",
+     "steps": []
+    },
+    {
+     "id": "A53",
+     "why": "tool troubleshoot not in ['answer', 'clarify', 'check_pc']",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "Windows Firewall"
+      }
+     ]
+    },
+    {
+     "id": "A54",
+     "why": "status clarify: Which website should I open?",
+     "steps": []
+    },
+    {
+     "id": "A57",
+     "why": "status clarify: Which Chrome account? no Chrome profile matches 'none'.",
+     "steps": []
+    },
+    {
+     "id": "A61",
+     "why": "status clarify: Which website should I open?",
+     "steps": []
+    },
+    {
+     "id": "A63",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "it"
+      }
+     ]
+    },
+    {
+     "id": "A70",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      },
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "profile called nobodyknows"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "model": "decider-ling",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 42,
+   "total": 70,
+   "accuracy": 0.6,
+   "json_valid": 70,
+   "cold_first_call_s": 24.4,
+   "first_call_status": "ok",
+   "p50_s": 4.22,
+   "p95_s": 8.7,
+   "memory": {
+    "ram_mb": 4821,
+    "top_gpu_dedicated_mb": 2384
+   },
+   "failures": [
+    {
+     "id": "A07",
+     "why": "profile ['Default'] != Profile 1",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      }
+     ]
+    },
+    {
+     "id": "A08",
+     "why": "profile ['Default', 'Default'] != Profile 2",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/"
+      },
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "A09",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/"
+      }
+     ]
+    },
+    {
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://wikipedia.org"
+      }
+     ]
+    },
+    {
+     "id": "A13",
+     "why": "profile ['Default'] != Profile 1",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "lo-fi beats"
+      }
+     ]
+    },
+    {
+     "id": "A14",
+     "why": "deliverable ['none', None]",
+     "steps": [
+      {
+       "tool": "research",
+       "query": "latest Ryzen laptop chips 2024",
+       "deliverable": "none"
+      },
+      {
+       "tool": "answer"
+      }
+     ]
+    },
+    {
+     "id": "A15",
+     "why": "deliverable ['none', None]",
+     "steps": [
+      {
+       "tool": "research",
+       "query": "history of Carnatic music",
+       "deliverable": "none"
+      },
+      {
+       "tool": "answer"
+      }
+     ]
+    },
+    {
+     "id": "A23",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     ]
+    },
+    {
+     "id": "A25",
+     "why": "tool open_app != open_file",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "explorer"
+      },
+      {
+       "tool": "window",
+       "app": "explorer",
+       "action": "focus"
+      },
+      {
+       "tool": "type_text",
+       "app": "explorer",
+       "target": "",
+       "text": "Downloads"
+      }
+     ]
+    },
+    {
+     "id": "A31",
+     "why": "tool play_media != check_pc",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "what song is playing right now"
+      }
+     ]
+    },
+    {
+     "id": "A33",
+     "why": "tool open_app != press_key",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "Hello"
+      }
+     ]
+    },
+    {
+     "id": "A34",
+     "why": "tool open_app != type_text",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "hello world"
+      }
+     ]
+    },
+    {
+     "id": "A38",
+     "why": "tool check_pc != window",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "processes",
+       "app": "sample app"
+      }
+     ]
+    },
+    {
+     "id": "A40",
+     "why": "tool open_website != browser",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://whatismybrowser.com"
+      }
+     ]
+    },
+    {
+     "id": "A41",
+     "why": "tool open_website != browser",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      }
+     ]
+    },
+    {
+     "id": "A42",
+     "why": "target ['current page']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "read",
+       "target": "current page",
+       "text": "find the word pricing"
+      }
+     ]
+    },
+    {
+     "id": "A45",
+     "why": "tool open_app != play_media",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "VenkatAMV"
+      },
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "Kalyani song"
+      }
+     ]
+    },
+    {
+     "id": "A47",
+     "why": "tools ['check_pc', 'open_app']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "disk",
+       "app": ""
+      },
+      {
+       "tool": "open_app",
+       "app": "explorer"
+      }
+     ]
+    },
+    {
+     "id": "A48",
+     "why": "status clarify: Which website should I open?",
+     "steps": []
+    },
+    {
+     "id": "A52",
+     "why": "tool open_app not in ['open_file', 'clarify', 'answer']",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "File Explorer"
+      },
+      {
+       "tool": "window",
+       "app": "File Explorer",
+       "action": "focus"
+      },
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "tabs",
+       "target": "",
+       "text": ""
+      },
+      {
+       "tool": "type_text",
+       "app": "File Explorer",
+       "target": "",
+       "text": "C:\\Users\\YourName\\Downloads"
+      }
+     ]
+    },
+    {
+     "id": "A53",
+     "why": "tool open_app not in ['answer', 'clarify', 'check_pc']",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "wf.msc"
+      },
+      {
+       "tool": "press_key",
+       "app": "wf.msc",
+       "key": "ctrl+r"
+      },
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "type",
+       "target": "wf.msc",
+       "text": "wf.msc"
+      }
+     ]
+    },
+    {
+     "id": "A55",
+     "why": "tool check_pc != answer",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "network",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A56",
+     "why": "key ['volume']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "explorer",
+       "key": "volume"
+      }
+     ]
+    },
+    {
+     "id": "A58",
+     "why": "check ['processes']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "processes",
+       "app": "Windows Update"
+      }
+     ]
+    },
+    {
+     "id": "A60",
+     "why": "check ['processes']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "processes",
+       "app": "all"
+      }
+     ]
+    },
+    {
+     "id": "A61",
+     "why": "tool open_app != open_website",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "Google Maps"
+      }
+     ]
+    },
+    {
+     "id": "A63",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "what would you like to play?"
+      }
+     ]
+    },
+    {
+     "id": "A70",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      },
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "nobodyknows",
+       "text": ""
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

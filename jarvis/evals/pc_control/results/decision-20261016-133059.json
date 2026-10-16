@@ -1,0 +1,66 @@
+{
+ "time": "2026-10-16 13:29:39",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases_holdout.json",
+ "models": [
+  {
+   "model": "decider",
+   "cases": 30,
+   "repeat": 1,
+   "correct": 27,
+   "total": 30,
+   "accuracy": 0.9,
+   "json_valid": 30,
+   "cold_first_call_s": 1.8,
+   "first_call_status": "ok",
+   "p50_s": 2.44,
+   "p95_s": 3.67,
+   "memory": {
+    "ram_mb": 3519,
+    "top_gpu_dedicated_mb": 2681
+   },
+   "failures": [
+    {
+     "id": "H17",
+     "why": "key ['m']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "media",
+       "key": "m"
+      }
+     ]
+    },
+    {
+     "id": "H18",
+     "why": "key ['playpause']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "media",
+       "key": "playpause",
+       "intent": ""
+      }
+     ]
+    },
+    {
+     "id": "H19",
+     "why": "tool open_app != type_text",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "wordpad"
+      },
+      {
+       "tool": "type_text",
+       "app": "wordpad",
+       "target": "",
+       "text": "dear sir"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

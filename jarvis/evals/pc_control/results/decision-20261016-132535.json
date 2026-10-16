@@ -1,0 +1,261 @@
+{
+ "time": "2026-10-16 13:22:03",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases_holdout.json",
+ "models": [
+  {
+   "model": "decider",
+   "cases": 30,
+   "repeat": 1,
+   "correct": 27,
+   "total": 30,
+   "accuracy": 0.9,
+   "json_valid": 30,
+   "cold_first_call_s": 10.9,
+   "first_call_status": "ok",
+   "p50_s": 1.78,
+   "p95_s": 3.63,
+   "memory": {
+    "ram_mb": 3519,
+    "top_gpu_dedicated_mb": 2681
+   },
+   "failures": [
+    {
+     "id": "H17",
+     "why": "key ['m']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "media",
+       "key": "m"
+      }
+     ]
+    },
+    {
+     "id": "H18",
+     "why": "key ['playpause']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "media",
+       "key": "playpause",
+       "intent": ""
+      }
+     ]
+    },
+    {
+     "id": "H19",
+     "why": "tool open_app != type_text",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "wordpad"
+      },
+      {
+       "tool": "type_text",
+       "app": "wordpad",
+       "target": "",
+       "text": "dear sir"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "model": "decider-qwen3-4b",
+   "cases": 30,
+   "repeat": 1,
+   "correct": 25,
+   "total": 30,
+   "accuracy": 0.833,
+   "json_valid": 30,
+   "cold_first_call_s": 18.0,
+   "first_call_status": "ok",
+   "p50_s": 2.36,
+   "p95_s": 5.78,
+   "memory": {
+    "ram_mb": 3519,
+    "top_gpu_dedicated_mb": 2675
+   },
+   "failures": [
+    {
+     "id": "H10",
+     "why": "tool research != answer",
+     "steps": [
+      {
+       "tool": "research",
+       "query": "who wrote the Ramayana",
+       "deliverable": "report"
+      }
+     ]
+    },
+    {
+     "id": "H17",
+     "why": "key ['muted']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "media",
+       "key": "muted"
+      }
+     ]
+    },
+    {
+     "id": "H18",
+     "why": "key ['previous track']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "media",
+       "key": "previous track"
+      }
+     ]
+    },
+    {
+     "id": "H19",
+     "why": "tool open_app != type_text",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "wordpad"
+      },
+      {
+       "tool": "type_text",
+       "app": "wordpad",
+       "target": "",
+       "text": "dear sir"
+      },
+      {
+       "tool": "press_key",
+       "app": "wordpad",
+       "key": "enter"
+      }
+     ]
+    },
+    {
+     "id": "H24",
+     "why": "action ['read']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "read",
+       "target": "refund policy",
+       "text": "refund policy"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "model": "decider-qwen3-1.7b",
+   "cases": 30,
+   "repeat": 1,
+   "correct": 23,
+   "total": 30,
+   "accuracy": 0.767,
+   "json_valid": 30,
+   "cold_first_call_s": 7.8,
+   "first_call_status": "ok",
+   "p50_s": 0.67,
+   "p95_s": 0.95,
+   "memory": {
+    "ram_mb": 1477,
+    "top_gpu_dedicated_mb": 1703
+   },
+   "failures": [
+    {
+     "id": "H10",
+     "why": "tool research != answer",
+     "steps": [
+      {
+       "tool": "research",
+       "query": "who wrote the Ramayana",
+       "deliverable": "none"
+      }
+     ]
+    },
+    {
+     "id": "H18",
+     "why": "tool browser != press_key",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "tabs",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "H19",
+     "why": "tool open_app != type_text",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "wordpad"
+      },
+      {
+       "tool": "type_text",
+       "app": "wordpad",
+       "target": "",
+       "text": "dear sir"
+      }
+     ]
+    },
+    {
+     "id": "H21",
+     "why": "tool browser != window",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "read",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "H23",
+     "why": "target ['']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "H24",
+     "why": "target ['']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "read",
+       "target": "",
+       "text": "refund policy"
+      }
+     ]
+    },
+    {
+     "id": "H27",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_file",
+       "name": "zzzz",
+       "folder": "Documents"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

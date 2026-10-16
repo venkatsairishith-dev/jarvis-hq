@@ -1,0 +1,52 @@
+{
+ "time": "2026-10-16 13:26:40",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases.json",
+ "models": [
+  {
+   "model": "decider",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 68,
+   "total": 70,
+   "accuracy": 0.971,
+   "json_valid": 70,
+   "cold_first_call_s": 11.2,
+   "first_call_status": "ok",
+   "p50_s": 2.28,
+   "p95_s": 4.5,
+   "memory": {
+    "ram_mb": 3518,
+    "top_gpu_dedicated_mb": 2681
+   },
+   "failures": [
+    {
+     "id": "A07",
+     "why": "tool browser != open_website",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Profile 1",
+       "action": "type",
+       "target": "search bar",
+       "text": "VenkatAMV"
+      }
+     ]
+    },
+    {
+     "id": "A57",
+     "why": "key ['playpause']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "media",
+       "key": "playpause",
+       "intent": ""
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,1303 @@
+{
+ "time": "2026-10-16 13:03:57",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases.json",
+ "models": [
+  {
+   "model": "decider-lfm2.5-1.2b",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 36,
+   "total": 70,
+   "accuracy": 0.514,
+   "json_valid": 70,
+   "cold_first_call_s": 2.5,
+   "first_call_status": "ok",
+   "p50_s": 1.07,
+   "p95_s": 2.56,
+   "memory": {
+    "ram_mb": 943,
+    "top_gpu_dedicated_mb": 1068
+   },
+   "failures": [
+    {
+     "id": "A09",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "VenkatAMV"
+      },
+      {
+       "tool": "open_file",
+       "name": "tax notes",
+       "folder": "Desktop"
+      }
+     ]
+    },
+    {
+     "id": "A14",
+     "why": "tool open_website != research",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://techradar.com"
+      },
+      {
+       "tool": "research",
+       "query": "latest Ryzen laptop chips report",
+       "deliverable": "report"
+      }
+     ]
+    },
+    {
+     "id": "A16",
+     "why": "status clarify: What should I open?",
+     "steps": []
+    },
+    {
+     "id": "A17",
+     "why": "status clarify: What is the capital of Italy?",
+     "steps": []
+    },
+    {
+     "id": "A18",
+     "why": "status clarify: What should I open?",
+     "steps": []
+    },
+    {
+     "id": "A21",
+     "why": "status clarify: What should I open?",
+     "steps": [
+      {
+       "tool": "stop"
+      }
+     ]
+    },
+    {
+     "id": "A22",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://example.com/"
+      },
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "Bach piano music"
+      },
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "hello"
+      }
+     ]
+    },
+    {
+     "id": "A25",
+     "why": "status clarify: Which website should I open?",
+     "steps": [
+      {
+       "tool": "open_file",
+       "name": "tax notes",
+       "folder": "Desktop"
+      },
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": ""
+      }
+     ]
+    },
+    {
+     "id": "A26",
+     "why": "app ['excel']",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "excel"
+      }
+     ]
+    },
+    {
+     "id": "A28",
+     "why": "check ['network']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "network",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A30",
+     "why": "status clarify: What should I open?",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "excel"
+      },
+      {
+       "tool": "check_pc",
+       "check": "network",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A31",
+     "why": "tool play_media != check_pc",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "current song"
+      }
+     ]
+    },
+    {
+     "id": "A32",
+     "why": "tool play_media != press_key",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "pause the music"
+      }
+     ]
+    },
+    {
+     "id": "A33",
+     "why": "tool open_app != press_key",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "hello"
+      }
+     ]
+    },
+    {
+     "id": "A35",
+     "why": "status clarify: Which app?",
+     "steps": [
+      {
+       "tool": "window",
+       "app": "notepad",
+       "action": "minimize"
+      }
+     ]
+    },
+    {
+     "id": "A36",
+     "why": "status clarify: Which website should I open?",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": ""
+      },
+      {
+       "tool": "open_app",
+       "app": "chrome"
+      }
+     ]
+    },
+    {
+     "id": "A37",
+     "why": "tool open_app != window",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "calculator"
+      },
+      {
+       "tool": "window",
+       "app": "calculator",
+       "action": "restore"
+      }
+     ]
+    },
+    {
+     "id": "A38",
+     "why": "status clarify: What does the error dialog in the sample app say?",
+     "steps": []
+    },
+    {
+     "id": "A39",
+     "why": "status clarify: Which website should I open?",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": ""
+      },
+      {
+       "tool": "open_app",
+       "app": "chrome"
+      }
+     ]
+    },
+    {
+     "id": "A40",
+     "why": "status clarify: Which website should I open?",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": ""
+      }
+     ]
+    },
+    {
+     "id": "A42",
+     "why": "tool open_app != browser",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "search"
+      },
+      {
+       "tool": "type_text",
+       "app": "search",
+       "target": "",
+       "text": "pricing"
+      }
+     ]
+    },
+    {
+     "id": "A53",
+     "why": "tool open_website not in ['answer', 'clarify', 'check_pc']",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://example.com/"
+      },
+      {
+       "tool": "open_app",
+       "app": "Notepad"
+      },
+      {
+       "tool": "open_file",
+       "name": "tax notes",
+       "folder": "Desktop"
+      },
+      {
+       "tool": "answer"
+      }
+     ]
+    },
+    {
+     "id": "A54",
+     "why": "tool open_app != open_website",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "JARVIS"
+      }
+     ]
+    },
+    {
+     "id": "A55",
+     "why": "status clarify: What time is it?",
+     "steps": []
+    },
+    {
+     "id": "A56",
+     "why": "tool open_app != press_key",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "speaker"
+      },
+      {
+       "tool": "press_key",
+       "app": "speaker",
+       "key": "volumeup"
+      }
+     ]
+    },
+    {
+     "id": "A57",
+     "why": "tool play_media != press_key",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "Bach piano music"
+      }
+     ]
+    },
+    {
+     "id": "A58",
+     "why": "check ['network']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "network",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A59",
+     "why": "app ['']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "app_info",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A60",
+     "why": "tool troubleshoot != check_pc",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "excel"
+      },
+      {
+       "tool": "check_pc",
+       "check": "network",
+       "app": "excel"
+      }
+     ]
+    },
+    {
+     "id": "A63",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "play it"
+      }
+     ]
+    },
+    {
+     "id": "A65",
+     "why": "tool open_app != research",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "Notepad"
+      },
+      {
+       "tool": "open_file",
+       "name": "tax notes",
+       "folder": "Desktop"
+      },
+      {
+       "tool": "open_file",
+       "name": "my tax notes",
+       "folder": "Documents"
+      },
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://about.solarenergynews.com"
+      }
+     ]
+    },
+    {
+     "id": "A67",
+     "why": "tool open_website not in ['browser', 'press_key', 'window']",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://example.com/"
+      },
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "Bach piano music"
+      },
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "hello"
+      }
+     ]
+    },
+    {
+     "id": "A68",
+     "why": "tool open_app not in ['press_key', 'browser']",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "hello"
+      }
+     ]
+    },
+    {
+     "id": "A69",
+     "why": "tool open_app not in ['press_key', 'window', 'clarify']",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "hello"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "model": "decider-granite4-1b",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 50,
+   "total": 70,
+   "accuracy": 0.714,
+   "json_valid": 70,
+   "cold_first_call_s": 8.6,
+   "first_call_status": "ok",
+   "p50_s": 1.17,
+   "p95_s": 2.34,
+   "memory": {
+    "ram_mb": 1318,
+    "top_gpu_dedicated_mb": 1504
+   },
+   "failures": [
+    {
+     "id": "A16",
+     "why": "tool open_app != research",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "Tailscale"
+      },
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "read",
+       "target": "Tailscale",
+       "text": "funnel"
+      }
+     ]
+    },
+    {
+     "id": "A22",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "answer"
+      }
+     ]
+    },
+    {
+     "id": "A23",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.google.com/"
+      }
+     ]
+    },
+    {
+     "id": "A26",
+     "why": "tool check_pc != troubleshoot",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "crashes",
+       "app": "sample app"
+      }
+     ]
+    },
+    {
+     "id": "A27",
+     "why": "tool check_pc != troubleshoot",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "crashes",
+       "app": "Neko Sample App"
+      }
+     ]
+    },
+    {
+     "id": "A30",
+     "why": "check ['crashes']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "crashes",
+       "app": "cpu"
+      }
+     ]
+    },
+    {
+     "id": "A31",
+     "why": "tool browser != check_pc",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "read",
+       "target": "current song",
+       "text": "what song is playing right now"
+      }
+     ]
+    },
+    {
+     "id": "A32",
+     "why": "tool play_media != press_key",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "pause the music"
+      }
+     ]
+    },
+    {
+     "id": "A33",
+     "why": "status clarify: Which app?",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     ]
+    },
+    {
+     "id": "A36",
+     "why": "tool open_app != window",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "chrome"
+      }
+     ]
+    },
+    {
+     "id": "A38",
+     "why": "tool browser != window",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": ""
+      },
+      {
+       "tool": "window",
+       "app": "sample app",
+       "action": "inspect"
+      }
+     ]
+    },
+    {
+     "id": "A45",
+     "why": "tool open_website != play_media",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Profile 1",
+       "url": "https://www.youtube.com/"
+      }
+     ]
+    },
+    {
+     "id": "A53",
+     "why": "tool open_app not in ['answer', 'clarify', 'check_pc']",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "firewall"
+      }
+     ]
+    },
+    {
+     "id": "A54",
+     "why": "tool open_app != open_website",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "JARVIS"
+      }
+     ]
+    },
+    {
+     "id": "A57",
+     "why": "tool play_media != press_key",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "next song"
+      }
+     ]
+    },
+    {
+     "id": "A58",
+     "why": "check ['processes']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "processes",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A63",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "play it"
+      }
+     ]
+    },
+    {
+     "id": "A65",
+     "why": "tool open_app != research",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "PowerPoint"
+      },
+      {
+       "tool": "type_text",
+       "app": "PowerPoint",
+       "target": "",
+       "text": "Solar Energy Presentation"
+      },
+      {
+       "tool": "open_file",
+       "name": "Solar Energy Presentation",
+       "folder": "Documents"
+      },
+      {
+       "tool": "check_pc",
+       "check": "disk",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A68",
+     "why": "status clarify: Which app?",
+     "steps": []
+    },
+    {
+     "id": "A69",
+     "why": "tool open_app not in ['press_key', 'window', 'clarify']",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "window",
+       "app": "notepad",
+       "action": "restore"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "model": "decider-qwen3-1.7b",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 58,
+   "total": 70,
+   "accuracy": 0.829,
+   "json_valid": 70,
+   "cold_first_call_s": 10.6,
+   "first_call_status": "ok",
+   "p50_s": 1.0,
+   "p95_s": 1.31,
+   "memory": {
+    "ram_mb": 1634,
+    "top_gpu_dedicated_mb": 1547
+   },
+   "failures": [
+    {
+     "id": "A30",
+     "why": "tool troubleshoot != check_pc",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "cpu"
+      }
+     ]
+    },
+    {
+     "id": "A31",
+     "why": "tool browser != check_pc",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "A33",
+     "why": "tool open_app != press_key",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "save the file"
+      }
+     ]
+    },
+    {
+     "id": "A42",
+     "why": "target ['']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "find",
+       "target": "",
+       "text": "pricing"
+      }
+     ]
+    },
+    {
+     "id": "A44",
+     "why": "tool open_website != play_media",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/"
+      }
+     ]
+    },
+    {
+     "id": "A45",
+     "why": "status clarify: Which website should I open?",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Profile 1",
+       "url": ""
+      }
+     ]
+    },
+    {
+     "id": "A47",
+     "why": "tools ['check_pc']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "disk",
+       "app": ""
+      }
+     ]
+    },
+    {
+     "id": "A49",
+     "why": "status clarify: What should I open?",
+     "steps": []
+    },
+    {
+     "id": "A53",
+     "why": "tool troubleshoot not in ['answer', 'clarify', 'check_pc']",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "windows firewall"
+      }
+     ]
+    },
+    {
+     "id": "A55",
+     "why": "tool browser != answer",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "A57",
+     "why": "tool play_media != press_key",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "next song"
+      }
+     ]
+    },
+    {
+     "id": "A60",
+     "why": "tool troubleshoot != check_pc",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "app"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "model": "decider-qwen3-4b-2507",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 65,
+   "total": 70,
+   "accuracy": 0.929,
+   "json_valid": 70,
+   "cold_first_call_s": 18.9,
+   "first_call_status": "ok",
+   "p50_s": 3.26,
+   "p95_s": 5.64,
+   "memory": {
+    "ram_mb": 3647,
+    "top_gpu_dedicated_mb": 2553
+   },
+   "failures": [
+    {
+     "id": "A07",
+     "why": "tool browser != open_website",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Profile 1",
+       "action": "type",
+       "target": "search bar",
+       "text": "VenkatAMV"
+      }
+     ]
+    },
+    {
+     "id": "A50",
+     "why": "status clarify: Do you want me to identify and purchase the first phone visible on Amazon's homepage?",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.amazon.in/"
+      }
+     ]
+    },
+    {
+     "id": "A51",
+     "why": "status clarify: Do you want me to send a WhatsApp message to your mom saying you're late, or do you have a specific message or context to include?",
+     "steps": []
+    },
+    {
+     "id": "A53",
+     "why": "status clarify: Are you asking me to disable the Windows Firewall, or is there another context I'm missing?",
+     "steps": []
+    },
+    {
+     "id": "A57",
+     "why": "key ['playpause']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "media",
+       "key": "playpause"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "model": "decider-qwen3-4b",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 64,
+   "total": 70,
+   "accuracy": 0.914,
+   "json_valid": 70,
+   "cold_first_call_s": 21.3,
+   "first_call_status": "ok",
+   "p50_s": 3.01,
+   "p95_s": 5.75,
+   "memory": {
+    "ram_mb": 3519,
+    "top_gpu_dedicated_mb": 2675
+   },
+   "failures": [
+    {
+     "id": "A07",
+     "why": "tool browser != open_website",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Profile 1",
+       "action": "type",
+       "target": "username",
+       "text": "VenkatAMV"
+      },
+      {
+       "tool": "browser",
+       "profile": "Profile 1",
+       "action": "press",
+       "target": "enter",
+       "text": "Enter"
+      }
+     ]
+    },
+    {
+     "id": "A44",
+     "why": "tool browser != play_media",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "A45",
+     "why": "tool open_website != play_media",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Profile 1",
+       "url": "https://mail.google.com"
+      },
+      {
+       "tool": "play_media",
+       "profile": "Profile 1",
+       "query": "Kalyani song"
+      }
+     ]
+    },
+    {
+     "id": "A55",
+     "why": "status clarify: What time zone are you asking about?",
+     "steps": []
+    },
+    {
+     "id": "A57",
+     "why": "status clarify: What should I play?",
+     "steps": []
+    },
+    {
+     "id": "A58",
+     "why": "check ['processes']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "processes",
+       "app": ""
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "model": "decider-ling",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 53,
+   "total": 70,
+   "accuracy": 0.757,
+   "json_valid": 70,
+   "cold_first_call_s": 17.8,
+   "first_call_status": "ok",
+   "p50_s": 2.87,
+   "p95_s": 6.13,
+   "memory": {
+    "ram_mb": 4820,
+    "top_gpu_dedicated_mb": 2384
+   },
+   "failures": [
+    {
+     "id": "A04",
+     "why": "tool play_media != open_website",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "youtube"
+      }
+     ]
+    },
+    {
+     "id": "A23",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     ]
+    },
+    {
+     "id": "A27",
+     "why": "tool check_pc != troubleshoot",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "processes",
+       "app": "Neko Sample App"
+      },
+      {
+       "tool": "troubleshoot",
+       "app": "Neko Sample App"
+      }
+     ]
+    },
+    {
+     "id": "A31",
+     "why": "tool play_media != check_pc",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "what song is playing right now"
+      }
+     ]
+    },
+    {
+     "id": "A33",
+     "why": "tool open_app != press_key",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "Hello"
+      }
+     ]
+    },
+    {
+     "id": "A38",
+     "why": "tool check_pc != window",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "processes",
+       "app": "sample app"
+      }
+     ]
+    },
+    {
+     "id": "A40",
+     "why": "status clarify: Which website would you like me to read? Please provide the URL or site name.",
+     "steps": []
+    },
+    {
+     "id": "A42",
+     "why": "target ['']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "read",
+       "target": "",
+       "text": "find the word pricing"
+      }
+     ]
+    },
+    {
+     "id": "A45",
+     "why": "tool open_website != play_media",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Profile 1",
+       "url": "https://venkatamv.com"
+      },
+      {
+       "tool": "play_media",
+       "profile": "Profile 1",
+       "query": "Kalyani song VenkatAMV"
+      }
+     ]
+    },
+    {
+     "id": "A47",
+     "why": "tools ['check_pc', 'open_app', 'window']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "disk",
+       "app": "C:"
+      },
+      {
+       "tool": "open_app",
+       "app": "explorer"
+      },
+      {
+       "tool": "window",
+       "app": "explorer",
+       "action": "focus"
+      }
+     ]
+    },
+    {
+     "id": "A52",
+     "why": "tool open_app not in ['open_file', 'clarify', 'answer']",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "File Explorer"
+      },
+      {
+       "tool": "window",
+       "app": "File Explorer",
+       "action": "focus"
+      },
+      {
+       "tool": "open_file",
+       "name": "Downloads",
+       "folder": "Downloads"
+      },
+      {
+       "tool": "press_key",
+       "app": "File Explorer",
+       "key": "delete"
+      }
+     ]
+    },
+    {
+     "id": "A53",
+     "why": "tool open_app not in ['answer', 'clarify', 'check_pc']",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "wf.msc"
+      },
+      {
+       "tool": "window",
+       "app": "wf.msc",
+       "action": "focus"
+      },
+      {
+       "tool": "press_key",
+       "app": "wf.msc",
+       "key": "f2"
+      },
+      {
+       "tool": "type_text",
+       "app": "wf.msc",
+       "target": "",
+       "text": "Advanced Security Settings"
+      }
+     ]
+    },
+    {
+     "id": "A55",
+     "why": "tool browser != answer",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": ""
+      }
+     ]
+    },
+    {
+     "id": "A56",
+     "why": "key ['volume']",
+     "steps": [
+      {
+       "tool": "press_key",
+       "app": "explorer",
+       "key": "volume"
+      }
+     ]
+    },
+    {
+     "id": "A58",
+     "why": "check ['processes']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "processes",
+       "app": "Windows Update"
+      }
+     ]
+    },
+    {
+     "id": "A60",
+     "why": "check ['processes']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "processes",
+       "app": "all"
+      }
+     ]
+    },
+    {
+     "id": "A63",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "what would you like to play?"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

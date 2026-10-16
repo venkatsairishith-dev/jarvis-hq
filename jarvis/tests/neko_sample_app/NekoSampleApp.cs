@@ -18,6 +18,12 @@ static class NekoSampleApp {
             var data = (System.Collections.Generic.Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(File.ReadAllText(cfg));
             if (!data.ContainsKey("port") || !(data["port"] is int)) throw new FormatException("\"port\" must be a whole number");
             port = (int)data["port"];
+            if (data.ContainsKey("plugin") && !File.Exists(Path.Combine(dir, (string)data["plugin"]))) {   // a missing library
+                string msg = "The code execution cannot proceed because " + (string)data["plugin"] + " was not found. Reinstalling the program may fix this problem.";
+                File.AppendAllText(log, DateTime.Now.ToString("s") + " ERROR " + msg + Environment.NewLine);
+                MessageBox.Show(msg, "NekoSampleApp.exe - System Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return 3;
+            }
         } catch (Exception e) {
             string why = (e is FormatException || e is ArgumentException || e is InvalidOperationException)
                 ? "config.json is not valid: " + e.Message : "config.json could not be read: " + e.GetType().Name;

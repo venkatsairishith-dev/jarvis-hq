@@ -1,0 +1,144 @@
+{
+ "cases": [
+  {
+   "id": "B01",
+   "name": "open an app (launch allowlist) and see its window",
+   "ok": true,
+   "detail": "window appeared",
+   "seconds": 19.41
+  },
+  {
+   "id": "B02",
+   "name": "focus a window and confirm it is in front",
+   "ok": true,
+   "detail": "foreground",
+   "seconds": 3.9
+  },
+  {
+   "id": "B03",
+   "name": "type into a field found by its accessible name",
+   "ok": false,
+   "detail": "RuntimeError: no text field found",
+   "seconds": 2.48
+  },
+  {
+   "id": "B04",
+   "name": "minimize a window",
+   "ok": true,
+   "detail": "iconic",
+   "seconds": 4.17
+  },
+  {
+   "id": "B05",
+   "name": "restore a minimized window",
+   "ok": true,
+   "detail": "normal",
+   "seconds": 5.79
+  },
+  {
+   "id": "B06",
+   "name": "maximize then restore",
+   "ok": true,
+   "detail": "zoomed then normal",
+   "seconds": 8.37
+  },
+  {
+   "id": "B07",
+   "name": "inspect the active window (local text only)",
+   "ok": true,
+   "detail": "{'windows': 1, 'dialogs': 0}",
+   "seconds": 1.72
+  },
+  {
+   "id": "B08",
+   "name": "menu by keyboard opens a dialog (Help > About)",
+   "ok": false,
+   "detail": "{'windows': 1, 'dialogs': 0}",
+   "seconds": 7.37
+  },
+  {
+   "id": "B09",
+   "name": "dismiss the dialog by its OK button (structured click)",
+   "ok": true,
+   "detail": "{'windows': 1, 'dialogs': 0}",
+   "seconds": 4.77
+  },
+  {
+   "id": "B10",
+   "name": "missing element gives a specific error, no action",
+   "ok": true,
+   "detail": "ui-action-failed:no element",
+   "seconds": 1.75
+  },
+  {
+   "id": "B11",
+   "name": "point outside the window is refused",
+   "ok": true,
+   "detail": "ui-action-failed:point outside the window",
+   "seconds": 2.12
+  },
+  {
+   "id": "B12",
+   "name": "raw SendKeys syntax is refused",
+   "ok": true,
+   "detail": "bad key",
+   "seconds": 0.0
+  },
+  {
+   "id": "B13",
+   "name": "keys land in the intended app after focus moved away",
+   "ok": false,
+   "detail": "RuntimeError: no text field found",
+   "seconds": 9.49
+  },
+  {
+   "id": "B14",
+   "name": "scroll a window (structured, then wheel)",
+   "ok": true,
+   "detail": "scrolled",
+   "seconds": 2.27
+  },
+  {
+   "id": "B15",
+   "name": "close with unsaved text shows a save dialog; Don't Save closes it",
+   "ok": false,
+   "detail": "no save dialog buttons: []",
+   "seconds": 4.06
+  },
+  {
+   "id": "B16",
+   "name": "acting on a window that is gone fails cleanly",
+   "ok": false,
+   "detail": "ui-action-failed:other",
+   "seconds": 1.89
+  },
+  {
+   "id": "B17",
+   "name": "read a sample error dialog and dismiss it",
+   "ok": true,
+   "detail": "text read: True; exited after OK: True",
+   "seconds": 8.98
+  },
+  {
+   "id": "B19",
+   "name": "an app outside the launch list is refused",
+   "ok": true,
+   "detail": "app not in the launch allowlist",
+   "seconds": 0.0
+  },
+  {
+   "id": "B20",
+   "name": "sensitive app names are refused by diagnostics",
+   "ok": true,
+   "detail": "refused",
+   "seconds": 0.0
+  }
+ ],
+ "not_tested": [
+  {
+   "id": "B18",
+   "name": "password fields are never typed into",
+   "why": "no harmless app with a password field here; the refusal is in winbackend TYPE (IsPassword)"
+  }
+ ]
+}

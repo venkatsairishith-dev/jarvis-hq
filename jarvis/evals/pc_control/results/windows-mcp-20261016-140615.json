@@ -1,0 +1,29 @@
+{
+ "repeats": 5,
+ "phases": "separate (Windows-MCP first, then Neko), a fresh Notepad each round",
+ "windows_mcp": {
+  "snapshot_median_s": 60.0,
+  "type_median_s": null,
+  "type_success": "0/5",
+  "failures": [
+   "round 0: Snapshot McpError timeout",
+   "round 1: Snapshot McpError timeout",
+   "round 2: Snapshot McpError timeout",
+   "round 3: Snapshot McpError timeout",
+   "round 4: Snapshot McpError timeout"
+  ],
+  "start_s": 3.5
+ },
+ "neko_uia": {
+  "snapshot_median_s": 0.75,
+  "type_median_s": 1.62,
+  "type_success": "0/5",
+  "failures": [
+   "round 0: type ui-action-failed:target is not the foreground window",
+   "round 1: type ui-action-failed:target is not the foreground window",
+   "round 2: type ui-action-failed:target is not the foreground window",
+   "round 3: type ui-action-failed:target is not the foreground window",
+   "round 4: type ui-action-failed:target is not the foreground window"
+  ]
+ }
+}

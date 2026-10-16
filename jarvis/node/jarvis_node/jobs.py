@@ -180,7 +180,7 @@ def ui_snapshot(p: dict, snap=None) -> dict:
     if SENSITIVE_PROC.search(str(s.get("process", "")) + " " + str(s.get("window", ""))):
         return {"ok": False, "error": "refused: that window belongs to a password manager, wallet or bank"}
     return {"ok": True, "window": s.get("window"), "process": s.get("process"), "count": len(s.get("elements") or []),
-            "truncated": s.get("truncated"), "elements": [{k: e.get(k) for k in ("depth", "type", "name", "id", "enabled")}
+            "truncated": s.get("truncated"), "elements": [{k: e.get(k) for k in ("depth", "type", "name", "id", "cls", "enabled")}
                                                          for e in (s.get("elements") or [])[:60]]}
 
 

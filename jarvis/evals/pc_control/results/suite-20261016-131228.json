@@ -1,0 +1,446 @@
+{
+ "time": "2026-10-16 13:12:28",
+ "decider": "decider-qwen3-4b-2507",
+ "by_category": {
+  "E": {
+   "pass": 21,
+   "fail": 0,
+   "not_tested": 0
+  },
+  "F": {
+   "pass": 48,
+   "fail": 1,
+   "not_tested": 0
+  }
+ },
+ "rows": [
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_lock_one_task_at_a_time_and_stale_lock_taken_over",
+   "name": "test_lock_one_task_at_a_time_and_stale_lock_taken_over",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_play_needs_the_chosen_video_playing",
+   "name": "test_play_needs_the_chosen_video_playing",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_agent_crash_is_a_failed_step_and_the_lock_is_released",
+   "name": "test_agent_crash_is_a_failed_step_and_the_lock_is_released",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_routing_without_actions",
+   "name": "test_routing_without_actions",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_record_keeps_no_screen_text",
+   "name": "test_record_keeps_no_screen_text",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_refusals_and_denials_are_not_retried",
+   "name": "test_refusals_and_denials_are_not_retried",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_completed_only_when_verified",
+   "name": "test_completed_only_when_verified",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_cancel_between_steps_and_time_budget",
+   "name": "test_cancel_between_steps_and_time_budget",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_waiting_for_permission_ends_the_task_with_the_question",
+   "name": "test_waiting_for_permission_ends_the_task_with_the_question",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_coordinator.test_transient_failure_is_retried_once_only",
+   "name": "test_transient_failure_is_retried_once_only",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-Loop.test_a_cancel_reaches_the_running_job_at_the_next_poll",
+   "name": "test_a_cancel_reaches_the_running_job_at_the_next_poll",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-Cancellation.test_a_cancelled_job_starts_nothing_more",
+   "name": "test_a_cancelled_job_starts_nothing_more",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-Cancellation.test_cancel_kills_the_running_process_and_the_job_says_cancelled",
+   "name": "test_cancel_kills_the_running_process_and_the_job_says_cancelled",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-OwnerPlanePC.test_cancel_queued_and_running",
+   "name": "test_cancel_queued_and_running",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_core.test_diagnosis_is_verified_against_the_named_file_and_proposes_a_safe_fix",
+   "name": "test_diagnosis_is_verified_against_the_named_file_and_proposes_a_safe_fix",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_core.test_unknown_errors_stay_hypotheses",
+   "name": "test_unknown_errors_stay_hypotheses",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_core.test_local_results_are_read_once_and_only_from_neko_local",
+   "name": "test_local_results_are_read_once_and_only_from_neko_local",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_core.test_approval_is_waited_for_then_the_same_request_continues_with_its_id",
+   "name": "test_approval_is_waited_for_then_the_same_request_continues_with_its_id",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_core.test_denied_and_never_answered",
+   "name": "test_denied_and_never_answered",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_core.test_ordinary_action_waits_for_the_job",
+   "name": "test_ordinary_action_waits_for_the_job",
+   "status": "pass"
+  },
+  {
+   "cat": "E",
+   "id": "E-test_core.test_a_job_that_never_finishes_is_cancelled",
+   "name": "test_a_job_that_never_finishes_is_cancelled",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-NewJobKinds.test_browser",
+   "name": "test_browser",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-NewJobKinds.test_ui_diag_repair_media",
+   "name": "test_ui_diag_repair_media",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-OwnerDirectPolicy.test_owner_direct_is_part_of_the_digest",
+   "name": "test_owner_direct_is_part_of_the_digest",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-OwnerDirectPolicy.test_consequential_words_need_the_owner",
+   "name": "test_consequential_words_need_the_owner",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-OwnerDirectPolicy.test_diagnostics_repairs_and_media",
+   "name": "test_diagnostics_repairs_and_media",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-OwnerDirectPolicy.test_the_old_refusals_still_win",
+   "name": "test_the_old_refusals_still_win",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-OwnerDirectPolicy.test_ordinary_owner_actions_run_at_once_but_only_on_the_owner_plane",
+   "name": "test_ordinary_owner_actions_run_at_once_but_only_on_the_owner_plane",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-OwnerDirectPolicy.test_keys",
+   "name": "test_keys",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-OwnerPlanePC.test_ordinary_ui_action_is_queued_at_once",
+   "name": "test_ordinary_ui_action_is_queued_at_once",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-OwnerPlanePC.test_consequential_action_waits_for_the_owner_and_the_approval_is_single_use_and_bound",
+   "name": "test_consequential_action_waits_for_the_owner_and_the_approval_is_single_use_and_bound",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-OwnerPlanePC.test_refusals",
+   "name": "test_refusals",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Keys.test_sendkeys_mapping_refuses_raw_syntax",
+   "name": "test_sendkeys_mapping_refuses_raw_syntax",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Browser.test_only_allowlisted_tools_and_the_fixed_script",
+   "name": "test_only_allowlisted_tools_and_the_fixed_script",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Browser.test_session_argv_has_no_extra_capabilities",
+   "name": "test_session_argv_has_no_extra_capabilities",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Browser.test_real_youtube_results_page",
+   "name": "test_real_youtube_results_page",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Diagnostics.test_plain_checks_and_refusals",
+   "name": "test_plain_checks_and_refusals",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Diagnostics.test_window_text_stays_on_the_laptop",
+   "name": "test_window_text_stays_on_the_laptop",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Profiles.test_registry_keeps_aliases_and_masked_accounts_only",
+   "name": "test_registry_keeps_aliases_and_masked_accounts_only",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Profiles.test_resolve",
+   "name": "test_resolve",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Repairs.test_edit_backs_up_first_and_restore_undoes_it",
+   "name": "test_edit_backs_up_first_and_restore_undoes_it",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Repairs.test_a_tampered_backup_is_not_restored",
+   "name": "test_a_tampered_backup_is_not_restored",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-Repairs.test_refusals_change_nothing",
+   "name": "test_refusals_change_nothing",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_only_user_and_tool_messages_are_deep.test_only_user_and_tool_messages_are_deep",
+   "name": "test_only_user_and_tool_messages_are_deep",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_confirmed_candidates_are_hidden.test_confirmed_candidates_are_hidden",
+   "name": "test_confirmed_candidates_are_hidden",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_cue_words_stay_and_glued_symbols_go.test_cue_words_stay_and_glued_symbols_go",
+   "name": "test_cue_words_stay_and_glued_symbols_go",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_decision_model_down_hides_candidates.test_decision_model_down_hides_candidates",
+   "name": "test_decision_model_down_hides_candidates",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_long_text_is_read_sentence_by_sentence.test_long_text_is_read_sentence_by_sentence",
+   "name": "test_long_text_is_read_sentence_by_sentence",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_one_decision_call_per_sentence_and_sentences_are_cached.test_one_decision_call_per_sentence_and_sentences_are_cached",
+   "name": "test_one_decision_call_per_sentence_and_sentences_are_cached",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_pattern_hits_need_no_confirmation.test_pattern_hits_need_no_confirmation",
+   "name": "test_pattern_hits_need_no_confirmation",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_rejected_candidates_stay.test_rejected_candidates_stay",
+   "name": "test_rejected_candidates_stay",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_shallow_mode_skips_the_model.test_shallow_mode_skips_the_model",
+   "name": "test_shallow_mode_skips_the_model",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_short_words_are_never_model_secrets.test_short_words_are_never_model_secrets",
+   "name": "test_short_words_are_never_model_secrets",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_contact_and_card.test_contact_and_card",
+   "name": "test_contact_and_card",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_cue_forms.test_cue_forms",
+   "name": "test_cue_forms",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_indian_ids.test_indian_ids",
+   "name": "test_indian_ids",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_keys_and_tokens.test_keys_and_tokens",
+   "name": "test_keys_and_tokens",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_ordinary_text_untouched.test_ordinary_text_untouched",
+   "name": "test_ordinary_text_untouched",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_password_after_cue.test_password_after_cue",
+   "name": "test_password_after_cue",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_phone_numbers.test_phone_numbers",
+   "name": "test_phone_numbers",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_same_value_same_tag.test_same_value_same_tag",
+   "name": "test_same_value_same_tag",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-test_stream_restorer_split_tag.test_stream_restorer_split_tag",
+   "name": "test_stream_restorer_split_tag",
+   "status": "pass"
+  },
+  {
+   "cat": "F",
+   "id": "F-leak-bearer-token",
+   "name": "no bearer token in logs, task records or the profile registry",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "cat": "F",
+   "id": "F-leak-groq-key",
+   "name": "no groq key in logs, task records or the profile registry",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "cat": "F",
+   "id": "F-leak-tavily-key",
+   "name": "no tavily key in logs, task records or the profile registry",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "cat": "F",
+   "id": "F-leak-openai-style-key",
+   "name": "no openai-style key in logs, task records or the profile registry",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "cat": "F",
+   "id": "F-leak-extension-token",
+   "name": "no extension token in logs, task records or the profile registry",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "cat": "F",
+   "id": "F-leak-full-owner-address",
+   "name": "no full owner address in logs, task records or the profile registry",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "cat": "F",
+   "id": "F-no-screenshots",
+   "name": "no screenshots were taken or kept by the suite",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "cat": "F",
+   "id": "F-no-local-text-left",
+   "name": "no screen/page text or Playwright logs left behind",
+   "status": "fail",
+   "detail": "playwright-16300-66c82e, playwright-19712-0e0eaf, window_text-20261016-125342-e1e719.json, window_text-20261016-125547-c53bec.json, window_text-20261016-125552-685b30.json"
+  }
+ ]
+}

@@ -168,13 +168,13 @@ FILE_IN_TEXT = re.compile(r"([A-Za-z]:\\[^\s\"'<>|*?]+\.(?:json|ini|cfg|conf|con
 NUMBER_TYPO = re.compile(r"^(\d+)[^\d\s,}\]]+(\d*)$")
 
 
-def diagnose(windows: list, events: list, crashes: list) -> dict:
+def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = None) -> dict:
     """What went wrong, from the error dialog, the event log and crash records, checked against the files it names.
     A cause is 'verified' only when the named file really has the fault; otherwise it is a hypothesis."""
     texts = [t for w in windows or [] for t in (w.get("texts") or []) + [w.get("title") or ""]]
     dialog = [w for w in windows or [] if w.get("dialog")]
     out = {"dialog_seen": bool(dialog), "dialog_title": (dialog[0].get("title") if dialog else "")[:120],
-           "verified": False, "cause": "", "evidence": [], "fix": None}
+           "verified": False, "cause": "", "evidence": [], "fix": None, "app_dir": app_dir}
     joined = " ".join(texts)
     m = FILE_IN_TEXT.search(joined)
     if m:
@@ -194,6 +194,16 @@ def diagnose(windows: list, events: list, crashes: list) -> dict:
                 if fix:
                     out["fix"] = {"action": "edit_file", "target": path, "args": {"find": fix[0], "replace": fix[1]},
                                   "why": "a value that must be a number has a typo"}
+    dll = re.search(r"(?i)\b([\w.-]+\.dll)\b was not found|(?:missing|cannot find|could not load)\D{0,20}\b([\w.-]+\.dll)\b", joined)
+    mod = re.search(r"No module named '([\w.]+)'", joined)
+    if not out["cause"] and dll:
+        name = dll.group(1) or dll.group(2)
+        found = _dll_present(name, out.get("app_dir"))
+        out.update(cause=f"a required library is missing: {name}", verified=not found, dependency=name)
+        out["evidence"].append(f"{name} {'is present after all (the error may be about a different copy)' if found else 'is in neither the program folder nor the system path'}")
+    elif not out["cause"] and mod:
+        out.update(cause=f"a required Python module is missing: {mod.group(1)} (a hypothesis until its environment is checked)",
+                   dependency=mod.group(1))
     if not out["cause"] and dialog:
         out["cause"] = "the program showed an error dialog: " + ("; ".join(texts)[:200] if screen_text_allowed() else
                                                                 "its text stayed on this laptop")
@@ -207,6 +217,11 @@ def diagnose(windows: list, events: list, crashes: list) -> dict:
     if not out["cause"]:
         out["cause"] = "no error dialog, crash record or error event was found for it"
     return out
+
+
+def _dll_present(name: str, app_dir: str | None = None) -> bool:
+    dirs = ([app_dir] if app_dir else []) + [os.environ.get("SystemRoot", r"C:\Windows") + r"\System32"] + os.environ.get("PATH", "").split(os.pathsep)
+    return any(d and os.path.isfile(os.path.join(d, name)) for d in dirs)
 
 
 def _number_typo_fix(line: str):

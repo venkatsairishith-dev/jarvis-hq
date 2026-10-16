@@ -30,3 +30,23 @@ def jarvis_home() -> str:
 def local_result_dir() -> str:
     """outputs\\neko-local: results that must stay on this laptop (screen text, page text). Read once by the Neko plugin."""
     return os.path.join(os.path.realpath(os.environ.get("JARVIS_OUTPUTS") or os.path.join(jarvis_home(), "outputs")), "neko-local")
+
+
+def sweep_local(max_age_s: float = 600) -> int:
+    """Nothing in neko-local outlives ten minutes, even if a reader never came (a killed job, a test): screen and page
+    text is not kept. Called on every write there. Returns how many entries were removed."""
+    import shutil
+    import time as _t
+    d, n = local_result_dir(), 0
+    try:
+        entries = list(os.scandir(d))
+    except OSError:
+        return 0
+    for e in entries:
+        try:
+            if _t.time() - e.stat().st_mtime > max_age_s:
+                shutil.rmtree(e.path) if e.is_dir() else os.remove(e.path)
+                n += 1
+        except OSError:
+            pass
+    return n

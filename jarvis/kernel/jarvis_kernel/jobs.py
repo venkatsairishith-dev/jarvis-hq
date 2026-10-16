@@ -14,7 +14,7 @@ NAME = re.compile(r"^[A-Za-z0-9_.-]{1,40}$")
 # Output files: a plain name with a known text extension (no folders, no hidden files). The node re-checks the same rule.
 OUTPUT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,79}\.(md|txt|html|json|csv|log|py)$")
 MAX_OUTPUT = 200_000    # characters per saved output
-UI_OPS = {"launch", "click", "type", "focus", "key", "scroll", "click_at"}
+UI_OPS = {"launch", "click", "type", "focus", "key", "scroll", "click_at", "minimize", "maximize", "restore"}
 PC_OPS = {"open_app", "open_folder", "open_file", "list_folder"}   # "open Spotify", "open the X folder in Downloads"
 # Neko's PC control (2026-10-16). Browser: the owner's EXISTING Chrome profiles, by alias; the node keeps the registry.
 BROWSER_OPS = {"open": "open", "read": "snapshot", "tabs": "snapshot", "whoami": "snapshot", "find": "snapshot",

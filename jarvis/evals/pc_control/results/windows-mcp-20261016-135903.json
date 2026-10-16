@@ -1,0 +1,30 @@
+{
+ "windows_mcp_start_s": 2.4,
+ "windows_mcp_tools": [
+  "Snapshot",
+  "Type"
+ ],
+ "repeats": 5,
+ "windows_mcp": {
+  "snapshot_median_s": 60.0,
+  "type_median_s": 0.0,
+  "type_success": "1/5",
+  "failures": [
+   "round 1: Snapshot McpError timeout",
+   "round 2: Snapshot McpError timeout",
+   "round 3: Snapshot McpError timeout",
+   "round 4: Snapshot McpError timeout"
+  ]
+ },
+ "neko_uia": {
+  "snapshot_median_s": 0.76,
+  "type_median_s": 1.62,
+  "type_success": "1/5",
+  "failures": [
+   "round 1: type ui-action-failed:target is not the foreground window",
+   "round 2: type ui-action-failed:target is not the foreground window",
+   "round 3: type ui-action-failed:target is not the foreground window",
+   "round 4: type ui-action-failed:target is not the foreground window"
+  ]
+ }
+}

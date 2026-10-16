@@ -12,7 +12,7 @@ import secrets
 import time
 
 from . import runtime
-from .paths import local_result_dir
+from .paths import local_result_dir, sweep_local
 
 NAME = re.compile(r"^[A-Za-z0-9_. :()-]{0,80}$")
 
@@ -68,6 +68,7 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $ids = @(Get-Process -Name $env:JARVIS_DIAG_NAME -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
 if (-not $ids) { '[]'; exit }
 $A = [System.Windows.Automation.AutomationElement]
+$S = [System.Windows.Automation.TreeScope]
 $out = @()
 foreach ($w in $A::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
   if ($ids -notcontains $w.Current.ProcessId) { continue }
@@ -77,12 +78,22 @@ foreach ($w in $A::RootElement.FindAll([System.Windows.Automation.TreeScope]::Ch
     $t = $e.Current.ControlType.ProgrammaticName; $n = $e.Current.Name
     if (-not $n) { continue }
     $c = $e.Current.ClassName      # classic Win32 dialogs (MessageBox) come through as Pane: their class says what they are
-    if ($t -eq 'ControlType.Button' -or $c -eq 'Button') { $buttons += $n }
+    if ($t -eq 'ControlType.Button' -or $c -in 'Button', 'CCPushButton') { $buttons += $n }
     elseif ($t -in 'ControlType.Text', 'ControlType.Edit', 'ControlType.Document' -or $c -in 'Static', 'Edit', 'RichEdit20W') { $texts += $n }
     if ($texts.Count -gt 60) { break }
   }
   $out += [pscustomobject]@{ title = $w.Current.Name; class = $w.Current.ClassName; dialog = ($w.Current.ClassName -eq '#32770');
                              texts = $texts; buttons = $buttons }
+  # an app's own dialogs (Find, Save?, About) sit under its main window in the UIA tree: list each as its own dialog
+  foreach ($d in $w.FindAll($S::Descendants, (New-Object System.Windows.Automation.PropertyCondition($A::ClassNameProperty, '#32770')))) {
+    $dt = @(); $db = @()
+    foreach ($e in $d.FindAll($S::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+      if ($e.Current.IsPassword -or -not $e.Current.Name) { continue }
+      $t = $e.Current.ControlType.ProgrammaticName; $c = $e.Current.ClassName
+      if ($t -eq 'ControlType.Button' -or $c -in 'Button', 'CCPushButton') { $db += $e.Current.Name } elseif ($c -in 'Static', 'Edit' -or $t -eq 'ControlType.Text') { $dt += $e.Current.Name }
+    }
+    $out += [pscustomobject]@{ title = $d.Current.Name; class = '#32770'; dialog = $true; texts = $dt; buttons = $db; owner = $w.Current.Name }
+  }
 }
 @($out) | ConvertTo-Json -Compress -Depth 4
 """
@@ -133,6 +144,7 @@ def save_local(kind: str, data) -> str:
     """Screen or message text for the Neko plugin on this laptop only. The plugin reads it once and deletes it."""
     d = local_result_dir()
     os.makedirs(d, exist_ok=True)
+    sweep_local()
     path = os.path.join(d, f"{kind}-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
