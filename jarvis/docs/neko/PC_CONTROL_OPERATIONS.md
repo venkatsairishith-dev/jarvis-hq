@@ -33,8 +33,8 @@ numbers in PC_CONTROL_BENCHMARK.md and the test results in PC_CONTROL_TEST_REPOR
 - **Low-memory mode:** point the alias at `decider-qwen3-1.7b` (1.0 s, 1.6 GB; lower accuracy, see the benchmark). Edit
   `jarvis/local_models/llama-swap.yaml`, then restart llama-swap with `local-models.ps1 -Stop` and `local-models.ps1`.
   With no local model available, the coordinator answers "fallback" and nothing runs.
-- Candidates are kept for comparison: Granite-4.0-1B, LFM2.5-1.2B, Qwen3-1.7B, Qwen3-4B. Delete their GGUFs from
-  D:\jarvis\models\gguf to reclaim about 5 GB.
+- Kept: Qwen3-1.7B (low-memory mode) and Qwen3-4B (already on disk before). Granite-4.0-1B and LFM2.5-1.2B were benchmarked
+  and deleted afterwards (2026-10-16); jarvis\evals\pc_control\fetch_candidates.py downloads them again, hash-checked.
 
 ## Chrome profiles and the extension
 - **Extension:** Microsoft's Playwright extension (id `mmlmfjhmonkocbjadbfplnigmagldckm`, version 0.4.0) is installed and enabled in all six

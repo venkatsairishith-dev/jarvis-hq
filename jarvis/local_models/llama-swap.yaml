@@ -38,12 +38,6 @@ models:
   decider-qwen3-4b:
     cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-4B-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
     ttl: 300
-  decider-lfm2.5-1.2b:
-    cmd: ${server} -m D:\jarvis\models\gguf\LFM2.5-1.2B-Instruct-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
-    ttl: 300
-  decider-granite4-1b:
-    cmd: ${server} -m D:\jarvis\models\gguf\granite-4.0-1b-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
-    ttl: 300
   # the chosen decision model (PC_CONTROL_BENCHMARK.md): 92.9% dev, 3.3 s median on this GPU
   decider-qwen3-4b-2507:
     aliases: [decider]
@@ -57,4 +51,4 @@ groups:
   specialists:
     swap: true
     exclusive: true
-    members: [ling-tiny, qwen-coder-1.5b, qwen-math-1.5b, decider-qwen3-1.7b, decider-qwen3-4b, decider-lfm2.5-1.2b, decider-granite4-1b, decider-qwen3-4b-2507]
+    members: [ling-tiny, qwen-coder-1.5b, qwen-math-1.5b, decider-qwen3-1.7b, decider-qwen3-4b, decider-qwen3-4b-2507]
