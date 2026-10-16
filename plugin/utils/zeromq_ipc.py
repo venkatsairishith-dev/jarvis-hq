@@ -163,8 +163,12 @@ class ZmqIpcServer:
         self._dropped_count = 0
         self._handled_count = 0
         self._handled_items = 0
+        self._inflight: set = set()
+        self._send_lock = None
 
     async def serve_forever(self, shutdown_event) -> None:
+        if self._send_lock is None:
+            self._send_lock = asyncio.Lock()
         while self._running and not shutdown_event.is_set():
             try:
                 frames = await asyncio.wait_for(self._sock.recv_multipart(), timeout=0.2)
@@ -232,24 +236,33 @@ class ZmqIpcServer:
             except Exception:
                 pass
 
-            try:
-                resp = await self._request_handler(request)
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                resp = {
-                    "request_id": req_id,
-                    "error": str(e),
-                    "result": None,
-                }
+            # Each request is served in its own task (2026-10-16): awaiting it here blocked every other request until it
+            # finished, so a plugin entry that itself calls another plugin (research -> web_search, inside a long
+            # desktop -> research call) deadlocked until a timeout.
+            task = asyncio.ensure_future(self._serve_one(ident, req_id, request))
+            self._inflight.add(task)
+            task.add_done_callback(self._inflight.discard)
 
-            if not isinstance(resp, dict):
-                resp = {"request_id": req_id, "error": "invalid response", "result": None}
-            resp.setdefault("request_id", req_id)
-            try:
+    async def _serve_one(self, ident, req_id: str, request: dict) -> None:
+        try:
+            resp = await self._request_handler(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            resp = {
+                "request_id": req_id,
+                "error": str(e),
+                "result": None,
+            }
+
+        if not isinstance(resp, dict):
+            resp = {"request_id": req_id, "error": "invalid response", "result": None}
+        resp.setdefault("request_id", req_id)
+        try:
+            async with self._send_lock:                   # one multipart message at a time on the socket
                 await self._sock.send_multipart([ident, req_id.encode("utf-8"), _dumps(resp)])
-            except Exception:
-                continue
+        except Exception:
+            pass
 
     def close(self) -> None:
         self._running = False

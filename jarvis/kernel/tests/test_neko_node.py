@@ -317,6 +317,15 @@ class Vision(unittest.TestCase):
         self.assertFalse(r["ok"])
 
 
+class WindowTitles(unittest.TestCase):
+    def test_titles_are_scrubbed_in_one_deep_pass(self):
+        from jarvis_node import windows
+        fake = "ghp" + "_" + "Ab3" * 12                     # built at run time: no secret-like literal in the repo
+        out = windows._scrub_titles([{"title": f"deploy {fake} - Notepad"}, {"title": "Untitled - Notepad"}])
+        self.assertNotIn(fake, out[0]["title"])
+        self.assertEqual(out[1]["title"], "Untitled - Notepad")
+
+
 class Tokens(unittest.TestCase):
     def test_each_profile_uses_its_own_token_file_else_the_shared_one(self):
         with tempfile.TemporaryDirectory() as d:

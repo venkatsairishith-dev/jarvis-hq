@@ -1,0 +1,36 @@
+{
+ "time": "2026-10-16 17:24:54",
+ "seconds": 470,
+ "rows": [
+  {
+   "cap": "C8_research_documents",
+   "id": "R-citations-verified",
+   "status": "fail",
+   "detail": "research run failed: {'status': 'failed', 'data': None, 'error': \"Plugin 'research' entry 'entry research_topic' execution failed: The search found nothing (or the search service is not available).\"}"
+  },
+  {
+   "cap": "C8_research_documents",
+   "id": "R-no-fabricated-sources",
+   "status": "fail",
+   "detail": "research run failed: {'status': 'failed', 'data': None, 'error': \"Plugin 'research' entry 'entry research_topic' execution failed: The search found nothing (or the search service is not available).\"}"
+  },
+  {
+   "cap": "C8_research_documents",
+   "id": "R-pdf-open-searchable",
+   "status": "fail",
+   "detail": "research run failed: {'status': 'failed', 'data': None, 'error': \"Plugin 'research' entry 'entry research_topic' execution failed: The search found nothing (or the search service is not available).\"}"
+  },
+  {
+   "cap": "C8_research_documents",
+   "id": "R-e2e-research-to-deck-open",
+   "status": "fail",
+   "detail": "status None; ; "
+  },
+  {
+   "cap": "C8_research_documents",
+   "id": "R-deck-render-qa",
+   "status": "fail",
+   "detail": "research step passed (it fails when the deck's QA fails): None; qa.json passed: None; None"
+  }
+ ]
+}

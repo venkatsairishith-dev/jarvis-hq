@@ -1,0 +1,73 @@
+{
+ "time": "2026-10-16 17:25:38",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases_holdout2.json",
+ "models": [
+  {
+   "model": "decider",
+   "cases": 40,
+   "repeat": 1,
+   "correct": 36,
+   "total": 40,
+   "accuracy": 0.9,
+   "json_valid": 40,
+   "cold_first_call_s": 2.1,
+   "first_call_status": "ok",
+   "p50_s": 2.32,
+   "p95_s": 4.37,
+   "memory": {
+    "ram_mb": 3521,
+    "top_gpu_dedicated_mb": 2138
+   },
+   "failures": [
+    {
+     "id": "K05",
+     "why": "tool open_website != open_app",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://open.spotify.com/",
+       "post": "a Chrome window of profile Default shows the page"
+      }
+     ]
+    },
+    {
+     "id": "K14",
+     "why": "tool stop != press_key",
+     "steps": [
+      {
+       "tool": "stop",
+       "post": "the running work stopped"
+      }
+     ]
+    },
+    {
+     "id": "K17",
+     "why": "tool play_media != press_key",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "next song",
+       "post": "the chosen video is playing: same video id, position moving"
+      }
+     ]
+    },
+    {
+     "id": "K27",
+     "why": "tool window != check_pc",
+     "steps": [
+      {
+       "tool": "window",
+       "app": "media",
+       "action": "inspect",
+       "post": "the media window is in the requested state"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

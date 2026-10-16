@@ -138,7 +138,8 @@ class ResearchPlugin(NekoPluginBase):
         try:
             return Ok(await asyncio.to_thread(work))
         except ResearchError as exc:
-            return Err(SdkError(str(exc)))
+            why = "; ".join(dict.fromkeys(search_notes))[-200:]       # e.g. "web_search failed (...)": the real reason
+            return Err(SdkError(str(exc) + (f" Search: {why}" if why else "")))
         except Exception as exc:  # noqa: BLE001 - say what failed, never a value or a URL with a query
             return Err(SdkError(f"research failed ({type(exc).__name__})"))
 

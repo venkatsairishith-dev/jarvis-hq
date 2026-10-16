@@ -75,10 +75,26 @@ def list_windows(include_minimized=True) -> list:
         w, h = rect.right - rect.left, rect.bottom - rect.top
         if not mini and (w < 40 or h < 20):
             return True
-        out.append({"hwnd": int(hwnd), "pid": int(pid.value), "process": _process_name(pid.value), "title": scrub(t, deep=True)[0][:120],
+        out.append({"hwnd": int(hwnd), "pid": int(pid.value), "process": _process_name(pid.value), "title": t,
                     "class": c, "foreground": hwnd == fg, "minimized": mini, "x": rect.left, "y": rect.top, "w": w, "h": h})
         return True
     user32.EnumWindows(cb, 0)
+    return _scrub_titles(out)
+
+
+def _scrub_titles(out: list) -> list:
+    """The same scrub as scrub(t, deep=True) per title, but ONE gitleaks run over all titles instead of one per title
+    (each run costs ~0.5 s: a 5-window list took 2.5 s, measured 2026-10-16). Built-in pass per title, then every
+    secret the deep pass finds anywhere is redacted in every title it appears in."""
+    from jarvis_kernel.scrub import _gitleaks_secrets, scrub
+    for w in out:
+        w["title"] = scrub(w["title"])[0]
+    joined = "\n".join(w["title"] for w in out)
+    secrets = [s for _, s in (_gitleaks_secrets(joined) or []) if len(s) >= 6] if joined else []
+    for w in out:
+        for s in secrets:
+            w["title"] = w["title"].replace(s, "[REDACTED]")
+        w["title"] = w["title"][:120]
     return out
 
 

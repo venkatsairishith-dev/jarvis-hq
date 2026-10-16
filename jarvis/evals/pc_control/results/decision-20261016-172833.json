@@ -1,0 +1,51 @@
+{
+ "time": "2026-10-16 17:27:26",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases_holdout2.json",
+ "models": [
+  {
+   "model": "decider",
+   "cases": 40,
+   "repeat": 1,
+   "correct": 38,
+   "total": 40,
+   "accuracy": 0.95,
+   "json_valid": 40,
+   "cold_first_call_s": 0.0,
+   "first_call_status": "ok",
+   "p50_s": 4.34,
+   "p95_s": 5.55,
+   "memory": {
+    "ram_mb": 3372,
+    "top_gpu_dedicated_mb": 2515
+   },
+   "failures": [
+    {
+     "id": "K05",
+     "why": "tool open_website != open_app",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://open.spotify.com/",
+       "post": "a Chrome window of profile Default shows the page"
+      }
+     ]
+    },
+    {
+     "id": "K27",
+     "why": "tool window != check_pc",
+     "steps": [
+      {
+       "tool": "window",
+       "app": "media",
+       "action": "inspect",
+       "post": "the media window is in the requested state"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

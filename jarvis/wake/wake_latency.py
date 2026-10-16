@@ -62,7 +62,7 @@ async def main_async():
             for k, (name, v) in enumerate(variants.items()):
                 if name == "quiet":
                     continue
-                pcm = np.clip(v, -32768, 32767).astype(np.float32)
+                pcm = np.frombuffer(v, dtype="<i2").astype(np.float32)      # variants() returns 16-bit PCM bytes
                 w, a = await one(det, pcm, 100 + rep * 10 + k)
                 if w is None:
                     missed += 1

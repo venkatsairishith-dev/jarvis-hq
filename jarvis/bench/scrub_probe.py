@@ -22,14 +22,14 @@ CASES = {
     "slack_bot_token": "xoxb-" + r(11, string.digits) + "-" + r(12, string.digits) + "-" + r(24),
     "google_api_key": "key=AIza" + r(35, string.ascii_letters + string.digits + "-_"),
     "stripe_live": "sk_live_" + r(24),
-    "groq_key": "GROQ_API_KEY=gsk_" + r(52),
+    "groq_key": "GROQ_API_KEY=gsk_" + r(52),  # gitleaks:allow (random at run time)
     "openrouter_key": "sk-or-v1-" + r(64, string.hexdigits.lower()),
     "telegram_bot_token": "bot token 1234567890:AA" + r(33, string.ascii_letters + string.digits + "-_"),
     "jwt": "eyJ" + r(20) + "." + "eyJ" + r(30) + "." + r(43, string.ascii_letters + string.digits + "-_"),
     "generic_password_assignment": 'db_password = "' + r(16, string.ascii_letters + string.digits + "!#$%") + '"',
     "npm_token": "//registry.npmjs.org/:_authToken=npm_" + r(36),
     "sendgrid": "SG." + r(22, string.ascii_letters + string.digits + "-_") + "." + r(43, string.ascii_letters + string.digits + "-_"),
-    "private_key_header": "-----BEGIN RSA PRIVATE KEY-----\n" + "\n".join(r(64, string.ascii_letters + string.digits + "+/") for _ in range(4)) + "\n-----END RSA PRIVATE KEY-----",
+    "private_key_header": "-----BEGIN RSA PRIVATE KEY-----\n" + "\n".join(r(64, string.ascii_letters + string.digits + "+/") for _ in range(4)) + "\n-----END RSA PRIVATE KEY-----",  # gitleaks:allow (random at run time)
     "plain_text_no_secret": "The quarterly report shows revenue up four percent; run pip install fastembed.",
 }
 

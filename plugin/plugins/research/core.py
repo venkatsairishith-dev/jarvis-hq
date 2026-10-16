@@ -178,8 +178,10 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
             notes.append(f"query planning skipped ({type(e).__name__})")
 
     found, seen = [], set()
-    for q in queries:
-        if clock() - t0 > b["seconds"] * 0.3:
+    for i, q in enumerate(queries):
+        # the owner's own question is always searched, even when query planning used up the time share (a slow planning
+        # model, e.g. while it was being loaded, used to leave NO search at all: "found nothing", 2026-10-16)
+        if i > 0 and clock() - t0 > b["seconds"] * 0.3:
             notes.append("search stopped early: time budget")
             break
         try:
@@ -193,7 +195,8 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
                 seen.add(u)
                 found.append({**r, "query": q})
     if not found:
-        raise ResearchError("The search found nothing (or the search service is not available).")
+        why = "; ".join(dict.fromkeys(notes))[-240:]
+        raise ResearchError("The search found nothing (or the search service is not available)." + (f" Notes: {why}" if why else ""))
     found.sort(key=lambda r: -rank.authority(r.get("url", "")))         # stable: keeps search order within a tier
 
     pages, failures = [], {}

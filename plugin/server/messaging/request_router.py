@@ -82,6 +82,7 @@ class PluginRouter:
 
     def __init__(self) -> None:
         self._router_task: asyncio.Task[None] | None = None
+        self._inflight: set[asyncio.Task[None]] = set()       # requests being served concurrently
         self._zmq_task: asyncio.Task[None] | None = None
         self._zmq_server: _ZmqIpcServerContract | None = None
         self._shutdown_event: asyncio.Event | None = None
@@ -307,7 +308,11 @@ class PluginRouter:
                 if request is None:
                     continue
 
-                await self._handle_request(request)
+                # in its own task (2026-10-16): awaiting here served one request at a time, so a plugin entry that calls
+                # another plugin while it is itself being called (desktop -> research -> web_search) waited for ever
+                task = asyncio.create_task(self._handle_request_logged(request))
+                self._inflight.add(task)
+                task.add_done_callback(self._inflight.discard)
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
@@ -365,6 +370,14 @@ class PluginRouter:
             return None
 
         return _normalize_mapping(request_obj)
+
+    async def _handle_request_logged(self, request: JsonObject) -> None:
+        try:
+            await self._handle_request(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - one bad request must not end the others
+            logger.warning("Error handling plugin request: err_type={}, err={}", type(exc).__name__, str(exc))
 
     async def _handle_request(self, request: JsonObject) -> None:
         """处理插件间通信请求"""

@@ -41,13 +41,19 @@ def ps(cmd):
 def leaks(args, label):
     with tempfile.TemporaryDirectory() as d:
         rep = Path(d) / "r.json"
-        p = subprocess.run([GITLEAKS, *args, "--no-banner", "--redact", "--report-format", "json", "--report-path", str(rep), "--exit-code", "0"],
+        ignore = ["--gitleaks-ignore-path", str(REPO / "jarvis" / ".gitleaksignore")]   # the repo's reviewed fixture allowlist
+        p = subprocess.run([GITLEAKS, *args, *ignore, "--no-banner", "--redact", "--report-format", "json", "--report-path", str(rep), "--exit-code", "0"],
                            capture_output=True, text=True, timeout=900)
         found = json.loads(rep.read_text(encoding="utf-8") or "[]") if rep.exists() else None
     if found is None:
         return None, f"{label}: gitleaks did not report (exit {p.returncode})"
+    raw = len(found)
+    # compiled caches (__pycache__, untracked, never shipped) are copies of the test fixtures: not counted, but the raw
+    # number is reported too
+    found = [f for f in found if "__pycache__" not in f.get("File", "")]
     files = sorted({f.get("File", "?") for f in found})
-    return len(found), f"{label}: {len(found)} finding(s){' in ' + ', '.join(files[:5]) if files else ''}"
+    return len(found), (f"{label}: {len(found)} finding(s){' in ' + ', '.join(files[:5]) if files else ''}"
+                        + (f" (raw {raw} incl. __pycache__)" if raw != len(found) else ""))
 
 
 def main():
