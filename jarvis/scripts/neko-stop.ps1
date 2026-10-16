@@ -32,4 +32,7 @@ foreach ($p in $priv) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction 
 # 6. the local specialist models (llama-swap and the llama-server it started)
 $local = Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like "D:\jarvis\tools\llama-swap\*" -or $_.ExecutablePath -like "D:\jarvis\tools\llama.cpp\*llama-server.exe" }
 foreach ($p in $local) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; "stopped local model process pid " + $p.ProcessId; $stopped++ } catch { } }
+# 7. the "Hey Neko" listener (with /T its keyword-spotter process goes too)
+$wake = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*wake_listener.py*" }
+foreach ($p in $wake) { & taskkill.exe /PID $p.ProcessId /T /F | Out-Null; "stopped wake listener pid " + $p.ProcessId; $stopped++ }
 if ($stopped -eq 0) { "no N.E.K.O server processes running" }

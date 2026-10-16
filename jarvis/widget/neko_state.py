@@ -20,6 +20,12 @@ CORE = ("N.E.K.O", "memory", "agent", "plugins", "speech", "console")
 COMPLETED_FOR_S = 180
 LISTENING_FOR_S = 4.0
 STATES = ("error", "needs_permission", "speaking", "working", "thinking", "listening", "completed", "wake_listening", "sleeping")
+# The wake listener's own states (jarvis/wake/wake_listener.py) while it handles a command
+WAKE_ACTIVE = {"recording": "Listening…", "transcribing": "Understanding what you said", "submitting": "Starting your task"}
+# The desktop plugin's steps on the PC (plugin/plugins/desktop, activity.json); "completed"/"failed" show through the task
+PC_STEPS = {"inspecting": "Inspecting", "diagnosing": "Diagnosing", "researching": "Researching", "applying_fix": "Applying the fix",
+            "verifying": "Verifying", "waiting_for_permission": "Waiting for your permission", "working": "Working on the PC"}
+ACTIVITY_FOR_S = 120
 
 
 def _approval_text(a: dict) -> str:
@@ -32,7 +38,7 @@ def _approval_text(a: dict) -> str:
 
 
 def decide(status: dict, approvals: list[dict], gateway: dict | None, speech: dict | None, deliverable: dict | None,
-           wake: dict | None = None) -> dict:
+           wake: dict | None = None, activity: dict | None = None) -> dict:
     servers = status.get("servers") or {}
     down = [n for n in CORE if servers.get(n) is False]
     j = status.get("jarvis") or {}
@@ -46,6 +52,15 @@ def decide(status: dict, approvals: list[dict], gateway: dict | None, speech: di
                 "recover": "Approve or deny it with your PIN in the JARVIS console."}
     if speech and speech.get("speaking_estimate"):
         return {"state": "speaking", "detail": "Speaking"}
+    if wake and wake.get("state") in WAKE_ACTIVE:       # "Hey Neko" was heard: that beats a running task (it may be "stop")
+        return {"state": "listening", "detail": WAKE_ACTIVE[wake["state"]]}
+    act = activity or {}
+    if act.get("age_s", 1e9) <= ACTIVITY_FOR_S and act.get("state") in PC_STEPS:   # the desktop plugin's repair workflow
+        label = PC_STEPS[act["state"]]
+        if act["state"] == "waiting_for_permission":
+            return {"state": "needs_permission", "detail": act.get("detail") or label,
+                    "recover": "Approve or deny it with your PIN in the JARVIS console."}
+        return {"state": "working", "detail": (f"{label}: {act['detail']}" if act.get("detail") else label)[:200], "step": act["state"]}
     task = status.get("task") or {}
     if task.get("state") in ("running", "planning"):
         steps = task.get("steps") or []
@@ -69,6 +84,8 @@ def decide(status: dict, approvals: list[dict], gateway: dict | None, speech: di
         best = min(recent, key=lambda r: r["age"])
         best.pop("age")
         return {"state": "completed", **best}
-    if wake and wake.get("enabled") and wake.get("healthy"):
+    if wake and wake.get("enabled") and wake.get("healthy") and wake.get("state") != "paused":
         return {"state": "wake_listening", "detail": "Say “Hey Neko”"}
-    return {"state": "sleeping", "detail": "Click me or type a task" + ("" if wake and wake.get("enabled") else " (wake word off)")}
+    why = (" (wake word paused)" if wake and wake.get("state") == "paused" else
+           f" (wake word not working: {wake.get('detail') or 'restarting'})" if wake and wake.get("enabled") else " (wake word off)")
+    return {"state": "sleeping", "detail": "Click me or type a task" + why}

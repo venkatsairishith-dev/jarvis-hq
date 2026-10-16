@@ -25,6 +25,23 @@ def test_sleeping_by_default_and_wake_listening():
     assert decide()["state"] == "sleeping"
     assert "wake word off" in decide()["detail"]
     assert decide(wake={"enabled": True, "healthy": True})["state"] == "wake_listening"
+    assert "paused" in decide(wake={"enabled": True, "healthy": True, "state": "paused"})["detail"]
+    assert "not working" in decide(wake={"enabled": True, "healthy": False, "state": "error", "detail": "WAKE_WORD_TIMEOUT"})["detail"]
+
+
+def test_pc_repair_steps_show_on_the_icon():
+    act = lambda s, age=5: {"state": s, "detail": "NekoSampleApp", "age_s": age}       # noqa: E731
+    assert ns.decide(status(), [], None, None, None, None, act("diagnosing"))["detail"] == "Diagnosing: NekoSampleApp"
+    assert ns.decide(status(), [], None, None, None, None, act("waiting_for_permission"))["state"] == "needs_permission"
+    assert ns.decide(status(), [], None, None, None, None, act("verifying", age=500))["state"] == "sleeping"   # stale: ignored
+    assert ns.decide(status(), [], None, None, None, None, act("idle"))["state"] == "sleeping"
+
+
+def test_wake_word_heard_shows_listening_even_while_working():
+    running = status(task={"state": "running", "steps": [], "summary": "x"})
+    assert decide(running, wake={"enabled": True, "healthy": True, "state": "recording"}) == {"state": "listening", "detail": "Listening…"}
+    assert decide(wake={"enabled": True, "healthy": True, "state": "transcribing"})["state"] == "listening"
+    assert decide(running, wake={"enabled": True, "healthy": True, "state": "wake_listening"})["state"] == "working"
 
 
 def test_error_beats_everything():

@@ -26,7 +26,7 @@ PORT = 48940
 SERVERS = {"N.E.K.O": "http://127.0.0.1:48911/health", "memory": "http://127.0.0.1:48912/health",
            "agent": "http://127.0.0.1:48915/health", "plugins": "http://127.0.0.1:48916/health",
            "speech": "http://127.0.0.1:48930/health", "console": "http://127.0.0.1:8799/api/owner/state"}   # state: fast; /api/health may be slow
-PLUGINS = ("jarvis_bridge", "main_agent", "doc_tools", "learn_vault", "local_team", "web_search", "deliverables", "research")
+PLUGINS = ("jarvis_bridge", "main_agent", "doc_tools", "learn_vault", "local_team", "web_search", "deliverables", "research", "desktop")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))     # neko_state.py lives next to this file
 MODES = ("chat", "work", "code", "learn")
 MAX_TASK = 2000
@@ -148,6 +148,7 @@ def start_task(task, mode, fetch=fetch_json):
 # ---------- Neko icon: one state from real signals, pushed live ----------
 
 DELIVERABLES_ROOT = os.environ.get("DELIVERABLES_OUT_DIR", r"D:\jarvis\outputs\neko\deliverables")
+WAKE_STATUS = "http://127.0.0.1:48945/status"
 _STATUS_CACHE = {"at": 0.0, "value": None}
 ACTIONS = ("open", "folder", "regenerate", "stop")
 
@@ -164,6 +165,15 @@ def newest_deliverable(root=None):
             "passed": (q.get("qa") or {}).get("passed"), "age_s": int(time.time() - os.path.getmtime(os.path.join(d, "qa.json")))}
 
 
+def pc_activity(path=None):
+    """What the desktop plugin is doing on the PC (inspecting, diagnosing, ...), written by plugin/plugins/desktop."""
+    try:
+        a = json.load(open(path or os.path.join(DATA, "neko", "activity.json"), encoding="utf-8"))
+        return {"state": str(a.get("state") or ""), "detail": str(a.get("detail") or "")[:200], "age_s": time.time() - float(a.get("at") or 0)}
+    except (OSError, ValueError, TypeError):
+        return None
+
+
 def cached_status(fetch=fetch_json, max_age=5.0):
     """The full status (nine probes) at most every few seconds; the fast signals below are read every second."""
     if _STATUS_CACHE["value"] is None or time.time() - _STATUS_CACHE["at"] > max_age:
@@ -174,14 +184,15 @@ def cached_status(fetch=fetch_json, max_age=5.0):
 def neko_state(fetch=fetch_json):
     import neko_state as ns
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         g = pool.submit(fetch, "http://127.0.0.1:48950/health", 1.5)
         sp = pool.submit(fetch, "http://127.0.0.1:48930/activity", 1.5)
         own = pool.submit(fetch, "http://127.0.0.1:8799/api/owner/state", 2.5)
-        gateway, speech, owner = g.result(), sp.result(), own.result()
+        wk = pool.submit(fetch, WAKE_STATUS, 1.0)       # the Hey Neko listener (jarvis/wake); None when it is not running
+        gateway, speech, owner, wake = g.result(), sp.result(), own.result(), wk.result()
     status = cached_status(fetch)
     approvals = (owner or {}).get("approvals") or []
-    out = ns.decide(status, approvals, gateway, speech, newest_deliverable())
+    out = ns.decide(status, approvals, gateway, speech, newest_deliverable(), wake, pc_activity())
     out["time"] = time.strftime("%H:%M:%S")
     return out
 

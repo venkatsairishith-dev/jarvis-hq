@@ -8,7 +8,8 @@
 #   D:\jarvis\tools\uv\uv.exe sync --frozen --python 3.11      # run from the repo root
 param(
   [string]$Venv = "D:\jarvis\tools\neko-venv",
-  [string]$Data = "D:\jarvis\N.E.K.O-data"
+  [string]$Data = "D:\jarvis\N.E.K.O-data",
+  [switch]$NoWake                  # do not start the "Hey Neko" microphone listener
 )
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $py   = Join-Path $Venv "Scripts\python.exe"
@@ -80,6 +81,19 @@ if (-not (Listening 48940) -and (Test-Path $widgetScript)) {
     -RedirectStandardOutput "$logs\widget.out.log" -RedirectStandardError "$logs\widget.err.log" | Out-Null
   foreach ($i in 1..10) { if (Listening 48940) { break }; Start-Sleep 1 }
 }
+# "Hey Neko" (127.0.0.1:48945 status): N.E.K.O's own keyword spotter on the microphone, then local speech recognition, then a
+# main-agent task. Needs the patched sherpa-onnx runtime in $Venv and a provisioned model; skipped with -NoWake. No audio is saved.
+$wakeScript = Join-Path $PSScriptRoot "..\wake\wake_listener.py"
+$wakeModel = Test-Path "D:\jarvis\models\voice\kws\versions\*\tokens.txt"
+$wake = if ($NoWake) { "off (-NoWake)" } elseif (-not $wakeModel) { "off (no model: scripts\provision_wake_word_model.py)" } else { "starting" }
+if (-not $NoWake -and $wakeModel -and -not (Listening 48945) -and (Test-Path $wakeScript)) {
+  Start-Process $py -ArgumentList (Resolve-Path $wakeScript).Path -WorkingDirectory $repo -WindowStyle Hidden `
+    -RedirectStandardOutput "$logs\wake.out.log" -RedirectStandardError "$logs\wake.err.log" | Out-Null
+  foreach ($i in 1..30) { if (Listening 48945) { break }; Start-Sleep 1 }
+}
+if (Listening 48945) {
+  try { $w = Invoke-RestMethod http://127.0.0.1:48945/status -TimeoutSec 5; $wake = "$($w.state)" + $(if ($w.dry_run) { " (dry run)" } else { "" }) } catch { $wake = "listening but not answering" }
+}
 # The agent server (started by the launcher above) hosts the plugin runtime (48916) and routes tasks; the JARVIS plugins live there.
 
 # The startup scan can come up empty, so ask for a rescan and make sure both plugins are running (idempotent).
@@ -88,7 +102,7 @@ if (Listening 48916) {
   try {
     Invoke-RestMethod -Method POST http://127.0.0.1:48916/plugins/refresh -ContentType 'application/json' -Body '{}' -TimeoutSec 60 | Out-Null
     $states = @()
-    foreach ($id in 'jarvis_bridge', 'doc_tools', 'learn_vault', 'local_team', 'web_search', 'deliverables', 'research', 'main_agent') {   # the bridge and the tool plugins first: the main agent calls them
+    foreach ($id in 'jarvis_bridge', 'doc_tools', 'learn_vault', 'local_team', 'web_search', 'deliverables', 'research', 'desktop', 'main_agent') {   # the bridge and the tool plugins first: the main agent calls them
       $p = (Invoke-RestMethod http://127.0.0.1:48916/plugins -TimeoutSec 15).plugins | Where-Object { $_.id -eq $id }
       if ($p -and $p.status -ne 'running') {
         Invoke-RestMethod -Method POST "http://127.0.0.1:48916/plugin/$id/start" -ContentType 'application/json' -Body '{}' -TimeoutSec 60 | Out-Null
@@ -124,6 +138,7 @@ $node = try { (Get-ScheduledTask JarvisNode -ErrorAction Stop).State } catch { "
 "privacy 48950: " + (Listening 48950) + "   (redacts private values before Dahl)"
 "local  8080 : " + (Listening 8080) + "   (local specialist models; load on first use)"
 "agent  48915: " + (Listening 48915) + "   plugins 48916: " + (Listening 48916)
+"wake   48945: $wake   (say `"Hey Neko`"; the Neko icon is the fallback)"
 "plugins: $plugins"
 "jarvis : $jarvis | laptop node task: $node"
 $assets = (Test-Path (Join-Path $repo "static\yui-origin\yui-origin.moc3")) -and (Test-Path (Join-Path $repo "static\react\neko-chat\neko-chat-window.es.js"))
