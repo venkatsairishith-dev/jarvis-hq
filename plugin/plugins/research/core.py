@@ -123,29 +123,39 @@ def check_report(draft: dict, passages: list[dict], verifier: Callable[[str, lis
     for p in passages:
         by_sid.setdefault(p["sid"], []).append(p["text"])
     stats = {"sentences": 0, "cited": 0, "supported": 0, "unsupported": 0, "uncited_facts": 0, "unknown_sources": 0,
-             "checked": verifier is not None}
+             "recited": 0, "checked": verifier is not None}
     moved: list[str] = []
 
-    def keep(text: str, ids: list[str], kind: str) -> bool:
+    def keep(text: str, ids: list[str], kind: str) -> list[str] | None:
+        """The source ids the sentence stands on, or None when it moves to the unconfirmed list. A sentence its own
+        citation does not support is checked against each OTHER source (same checker, same threshold): when one
+        supports it, the citation is corrected to that source ("recited"), otherwise it stays unconfirmed."""
         stats["sentences"] += 1
         if not ids:
             if kind == "fact":
                 stats["uncited_facts"] += 1
                 moved.append(text)
-                return False
-            return True                                   # opinion / recommendation / uncertain text may stand uncited
+                return None
+            return ids                                    # opinion / recommendation / uncertain text may stand uncited
         stats["cited"] += 1
         if any(i not in by_sid for i in ids):
             stats["unknown_sources"] += 1
             moved.append(text)
-            return False
+            return None
         if verifier is None:
-            return True
+            return ids
         ok, _ = verifier(text, [t for i in ids for t in by_sid[i]])
+        if not ok:
+            for other in by_sid:
+                if other not in ids and verifier(text, by_sid[other])[0]:
+                    stats["recited"] += 1
+                    ids, ok = [other], True
+                    break
         stats["supported" if ok else "unsupported"] += 1
         if not ok:
             moved.append(text)
-        return ok
+            return None
+        return ids
 
     def cite(text: str, ids: list[str]) -> str:
         return text + ("" if not ids else " " + "".join(f"[{i}]" for i in dict.fromkeys(ids)))
@@ -158,7 +168,7 @@ def check_report(draft: dict, passages: list[dict], verifier: Callable[[str, lis
         if not isinstance(sec, dict) or not sec.get("heading"):
             continue
         kind = sec.get("kind") if sec.get("kind") in ("fact", "opinion", "uncertain", "recommendation") else "fact"
-        drafted.append((sec, kind, [(t, ids) for t, ids in _points(sec) if keep(t, ids, kind)]))
+        drafted.append((sec, kind, [(t, kept_ids) for t, ids in _points(sec) for kept_ids in [keep(t, ids, kind)] if kept_ids is not None]))
     disputed = _disagreements([(t, ids) for _s, k, pts in drafted if k == "fact" for t, ids in pts])
     for sec, kind, pts in drafted:
         kept = [cite(t, ids) for t, ids in pts if t not in disputed]
@@ -168,7 +178,7 @@ def check_report(draft: dict, passages: list[dict], verifier: Callable[[str, lis
             sections.append({"heading": str(sec["heading"])[:160], "kind": shown(kind), "paragraphs": [], "bullets": kept[:12]})
         else:
             sections.append({"heading": str(sec["heading"])[:160], "kind": shown(kind), "paragraphs": [" ".join(kept)], "bullets": []})
-    summary = " ".join(cite(t, ids) for t, ids in _summary_points(draft) if keep(t, ids, "fact"))
+    summary = " ".join(cite(t, kept_ids) for t, ids in _summary_points(draft) for kept_ids in [keep(t, ids, "fact")] if kept_ids is not None)
     if disputed:
         stats["disagreements"] = len(disputed)
         sections.append({"heading": "Sources disagree", "kind": "uncertain",

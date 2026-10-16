@@ -15,6 +15,10 @@ import numpy as np
 
 MODEL_DIR = os.environ.get("RESEARCH_NLI_DIR", r"D:\jarvis\models\nli\nli-deberta-v3-xsmall")
 ENTAIL_MIN = 0.5
+# A window is one of many tries per passage, so it must be near certain: on the labelled set
+# (tests/fixtures/nli_pairs.json, 36 pairs, 2026-10-16) windows at 0.95 confirmed 18/18 true claims (13/18 without) and
+# accepted 2/18 false ones (1/18 without); at 0.5 they accepted 3/18.
+WINDOW_MIN = 0.95
 MAX_TOKENS = 384
 
 
@@ -63,14 +67,32 @@ def numbers_match(sentence: str, passage: str) -> bool:
     return _numbers(sentence) <= _numbers(passage)
 
 
+_MARK = re.compile(r"\[(?:\d{1,3}|[a-z]|citation needed|note \d+)\]", re.I)    # wiki-style reference markers
+_SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
+
+
+def windows(passage: str) -> list[str]:
+    """The passage's sentences and pairs of neighbouring sentences, reference markers removed. The small checker misses
+    support that sits inside a longer passage (measured 2026-10-16: 0.21 on the whole 700-character passage, 0.99 on the
+    sentence that says it); a window is part of the passage, so what a window entails, the passage says."""
+    sents = [x.strip() for x in _SENT.split(_MARK.sub("", passage or "")) if x.strip()]
+    return sents + [a + " " + b for a, b in zip(sents, sents[1:])] if len(sents) > 1 else []
+
+
 def supported(sentence: str, passages: list[str]) -> tuple[bool, float]:
-    """(supported, best entailment probability) over the passages the sentence cites."""
+    """(supported, best entailment probability) over the passages the sentence cites: each whole passage, then its
+    sentence windows. The numbers in the sentence must appear in the same text that entails it."""
     best, ok = 0.0, False
     for p in passages:
         e = entailment(p, sentence)
         best = max(best, e)
         if e >= ENTAIL_MIN and numbers_match(sentence, p):
             return True, e
+        for w in windows(p):
+            e = entailment(w, sentence)
+            best = max(best, e)
+            if e >= WINDOW_MIN and numbers_match(sentence, w):
+                return True, e
     if len(passages) > 1:                                    # a sentence may combine what two passages say
         joined = " ".join(passages)
         e = entailment(joined, sentence)

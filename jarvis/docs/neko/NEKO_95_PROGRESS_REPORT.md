@@ -353,7 +353,7 @@ Per area (final run):
   - The Dahl key was pasted in chat: revoke it after the build, as planned.
 - **High:**
   - 8 plugin snapshots are stale: the discovery list shows **0 entries** for desktop, research, deliverables, main_agent, jarvis_bridge and the rest until each plugin starts.
-  - The research confirmation rate is about 42% (thin sources).
+  - Research: 72% of cited sentences confirmed live (was ~40%); the checker accepts about 2 in 18 false claims on the labelled set.
   - Plan latency is about 5 s on the laptop GPU.
 - **Medium:**
   - The deep secret scan costs ~0.5 s per new text, and more under load (J-038; J-018 intermittent).
@@ -362,6 +362,22 @@ Per area (final run):
 - **Low:**
   - 4 Linux-only upstream test quirks.
   - trim-1 is a 2-day-old project, pinned and off.
+
+### Continued: proxy bursts and the research claim checker (later the same evening)
+
+- **J-038 fixed (20 concurrent agent calls, p95 20.5 s → about 1 s; 5/5 runs pass).** Two causes, both measured:
+  - the production `llm_proxy.serve()` and the node endpoint used Python's default listen queue of 5, so extra connections were refused and retried by TCP a second later;
+  - every request paid its own gitleaks start-up (~0.5 s). Requests arriving together now share one scan ("group commit"); a lone request is never delayed.
+  - Regression tests: `ServerQueue`, `DeepScanBatch`.
+- **Full benchmark after the fixes:** 547 passed, 0 failed, 25 deferred. Mean of scored dimensions 9.75; routing and reliability now 10.
+  - J-018 (critical, 500 ms) is still intermittent: one gitleaks start-up is 450–500 ms. A keyword prefilter was checked and rejected: lossless, but real prompts nearly always contain gitleaks keywords ("ey", "s.", "sk"), so it would only speed up tests.
+- **Research claim checker:**
+  - The small NLI model rejected plain support inside longer passages: 0.21 for a sentence the passage states word for word, 0.99 on that sentence alone.
+  - It now also checks sentence windows (reference markers removed). A window must reach 0.95, and the numbers must appear in that window.
+  - On a labelled set written before measuring (`research/tests/fixtures/nli_pairs.json`, 36 pairs): true claims confirmed 13/18 → 18/18, false claims accepted 1/18 → 2/18.
+  - The larger models (small, base, sha256 checked) did no better on the remaining false positive ("largest city" when the passage says "largest inland city"), so the 87 MB model stays.
+  - **Live, 5 public questions through Dahl:** confirmed share 38–42% (two earlier runs) → **72%** (60/83). Still 5/5 correct with no fabricated sources; different runs and search results, so indicative.
+  - Citation repair (re-cite to the source that does support a sentence) was added too; it changed 1 citation in 89 live, so wrong citations are not the main problem.
 
 ## What blocks 9.5 (owner actions)
 

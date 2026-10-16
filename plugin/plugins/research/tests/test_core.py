@@ -228,3 +228,40 @@ def test_agreeing_sources_and_unrelated_numbers_are_not_a_disagreement():
                           {"text": "Panel prices fell by 15 percent in 2025, a trade body confirmed.", "sources": ["S3"]},
                           {"text": "Wind farms added 12 gigawatts.", "sources": ["S3"]}])
     assert not [s for s in rep["sections"] if s["heading"] == "Sources disagree"] and "disagreements" not in stats
+
+
+def test_a_wrong_citation_is_corrected_only_when_another_source_really_supports_it():
+    passages = [{"sid": "S1", "text": "The tower was completed in 1889 for the World's Fair."},
+                {"sid": "S2", "text": "The tower is 330 metres tall including antennas."}]
+    says = lambda s, ps: (any(w in p for p in ps for w in ("1889", "330")) and
+                          all(any(n in p for p in ps) for n in __import__("re").findall(r"\d+", s)), 1.0)
+    draft = {"summary": [], "sections": [{"heading": "Facts", "kind": "fact", "points": [
+        {"text": "The tower is 330 metres tall.", "sources": ["S1"]},          # wrong source: S2 says it
+        {"text": "The tower was completed in 1889.", "sources": ["S1"]},       # right source: unchanged
+        {"text": "The tower has 1,665 steps.", "sources": ["S2"]}]}]}          # no source says it: unconfirmed
+    rep, stats = core.check_report(draft, passages, says)
+    facts = [t for s in rep["sections"] if s["kind"] == "fact" for t in s["paragraphs"] + s["bullets"]]
+    text = " ".join(facts)
+    assert "330 metres tall. [S2]" in text and "completed in 1889. [S1]" in text
+    assert stats["recited"] == 1 and stats["supported"] == 2 and stats["unsupported"] == 1
+    assert any("1,665 steps" in b for s in rep["sections"] if s["kind"] == "uncertain" for b in s["bullets"])
+
+
+def test_claim_check_windows_split_sentences_and_drop_reference_markers():
+    from plugin.plugins.research import verify
+    w = verify.windows("Canberra is the capital.[a] It was founded in 1913.[14][15] Sydney is larger.")
+    assert w[:3] == ["Canberra is the capital.", "It was founded in 1913.", "Sydney is larger."]
+    assert "Canberra is the capital. It was founded in 1913." in w and all("[" not in x for x in w)
+    assert verify.windows("One sentence only.") == []
+
+
+@pytest.mark.skipif(not __import__("plugin.plugins.research.verify", fromlist=["available"]).available(),
+                    reason="the NLI model files are not on this machine (RESEARCH_NLI_DIR)")
+def test_claim_checker_on_the_labelled_pairs():
+    """Real model: what the checker confirms on 36 labelled pairs. Tracks both errors; tighten, never loosen."""
+    from pathlib import Path
+    from plugin.plugins.research import verify
+    d = json.loads((Path(__file__).parent / "fixtures" / "nli_pairs.json").read_text(encoding="utf-8"))
+    true_ok = sum(verify.supported(h, [d["passages"][p]])[0] for p, lab, h in d["pairs"] if lab == "yes")
+    false_ok = sum(verify.supported(h, [d["passages"][p]])[0] for p, lab, h in d["pairs"] if lab == "no")
+    assert true_ok >= 17 and false_ok <= 2, (true_ok, false_ok)

@@ -93,7 +93,7 @@ def main():
                          "observed": f"answer word found {correct}; cited {st.get('cited')} supported {st.get('supported')}; "
                                      f"sources {len(spec['sources'])} (fabricated {len(fabricated)}); pages read {cnt['pages_read']} "
                                      f"failed {cnt['pages_failed']}; {out['seconds']} s; notes {out['notes'][:2]}",
-                         "cited": st.get("cited"), "supported": st.get("supported"), "seconds": out["seconds"]})
+                         "cited": st.get("cited"), "supported": st.get("supported"), "recited": st.get("recited", 0), "seconds": out["seconds"]})
             print(("PASS " if ok else "FAIL ") + cid, rows[-1]["observed"][:220], flush=True)
     finally:
         srv.shutdown()
@@ -101,8 +101,10 @@ def main():
         tmp.cleanup()
     cited = sum(r.get("cited") or 0 for r in rows)
     sup = sum(r.get("supported") or 0 for r in rows)
+    rec = sum(r.get("recited") or 0 for r in rows)
     summary = {"pass": sum(r["status"] == "pass" for r in rows), "n": len(rows), "cited": cited, "supported": sup,
-               "supported_share": round(sup / cited, 3) if cited else None}
+               "supported_share": round(sup / cited, 3) if cited else None, "recited": rec,
+               "supported_share_without_repair": round((sup - rec) / cited, 3) if cited else None}
     print(json.dumps(summary))
     out = HERE.parent / "results" / f"live-research-dahl-{time.strftime('%Y%m%d-%H%M%S')}.json"
     out.write_text(json.dumps({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "summary": summary, "cases": rows}, indent=1), encoding="utf-8")

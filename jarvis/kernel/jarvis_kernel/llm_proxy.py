@@ -127,7 +127,7 @@ def _scrub_messages(body: dict):
             found.extend(rules)
     if not todo:
         return body, found, blocked
-    secrets_found = scrub_mod._gitleaks_secrets("\n\n".join(c[k] for c, k, _h in todo))
+    secrets_found = _DEEP_BATCH.scan("\n\n".join(c[k] for c, k, _h in todo), scrub_mod)
     per = [[] for _ in todo]                     # gitleaks rules found in each new text
     # the same rule as scrub(deep=True): a gitleaks finding of 6+ characters is replaced wherever it occurs
     for rule, secret in (secrets_found or []):
@@ -147,6 +147,52 @@ def _scrub_messages(body: dict):
     return body, found, blocked
 
 
+class _DeepBatch:
+    """Group commit for the deep scan. A lone request is scanned at once; requests that arrive while a scan runs share the
+    NEXT run, and under load the first run waits 20 ms for company. Most of a gitleaks run (~0.5 s) is start-up, so 20 concurrent fresh requests used to
+    queue for 6-20 s (bench J-038), and a lone request must not wait for company (bench J-018, 500 ms). Each caller gets
+    the findings of its joint run and replaces only what occurs in its own text; a failed run is None for all in it."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._pending = None                    # the batch the next run will scan: {"texts", "done", "result"}
+        self._running = False
+        self._last = 0.0                        # when the previous request arrived
+
+    LOAD_GAP_S, GATHER_S = 0.1, 0.02            # under load (requests < 100 ms apart) a run waits 20 ms for company
+
+    def scan(self, text: str, scrub_mod):
+        with self._lock:
+            now = time.monotonic()
+            busy, self._last = now - self._last < self.LOAD_GAP_S, now
+            if self._pending is None:
+                self._pending = {"texts": [], "done": threading.Event(), "result": None}
+            mine = self._pending
+            mine["texts"].append(text)
+            runner = not self._running
+            if runner:
+                self._running = True
+        if not runner:
+            mine["done"].wait(120)
+            return mine["result"]
+        if busy:
+            time.sleep(self.GATHER_S)
+        while True:                             # run batches until nobody is waiting
+            with self._lock:
+                b, self._pending = self._pending, None
+                if b is None:
+                    self._running = False
+                    break
+            try:
+                b["result"] = scrub_mod._gitleaks_secrets("\n\n".join(b["texts"]))
+            except Exception:  # noqa: BLE001 - a failed scan is reported as None, exactly like _gitleaks_secrets
+                b["result"] = None
+            finally:
+                b["done"].set()
+        return mine["result"]
+
+
+_DEEP_BATCH = _DeepBatch()
 _DEEP_CACHE: dict = {}
 _DEEP_CACHE_MAX = 4096
 _DEEP_LOCK = threading.Lock()
@@ -942,12 +988,20 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
     return H, tokens
 
 
+class ProxyServer(ThreadingHTTPServer):
+    """The model proxy's HTTP server. Python's default listen queue is 5: a burst of more than five simultaneous agent
+    calls (parallel sub-agents) had the extra connections refused and retried by TCP after about a second (measured in
+    bench J-038: the last requests arrived 1.06 s late). Worker threads never keep the process alive on shutdown."""
+    request_queue_size = 128
+    daemon_threads = True
+
+
 def serve(kernel, providers, port=8790, binds=("127.0.0.1",)):
     """Loopback always; extra binds (e.g. the Tailscale address, for agents in the laptop's WSL box) only when asked."""
     H, _ = make_handler(kernel, providers)
     from .owner import start_ticker
     start_ticker(H.owner_plane)                  # stuck jobs, deadlines, finished lab work: the kernel's own loop
-    servers = [ThreadingHTTPServer((b, port), H) for b in binds]
+    servers = [ProxyServer((b, port), H) for b in binds]
     for s in servers[1:]:
         threading.Thread(target=s.serve_forever, daemon=True).start()
     servers[0].serve_forever()

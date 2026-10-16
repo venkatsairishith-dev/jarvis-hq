@@ -271,3 +271,82 @@ class DeepScanCache(unittest.TestCase):
         for _ in range(2):
             self.lp._scrub_messages({"messages": [{"role": "user", "content": "same text"}]})
         self.assertEqual(len(self.runs), 2)
+
+
+class DeepScanBatch(unittest.TestCase):
+    """Concurrent fresh requests share one gitleaks run, and each still loses only its own secret."""
+    def test_concurrent_requests_share_a_scan_and_stay_redacted(self):
+        from jarvis_kernel import llm_proxy, scrub as scrub_mod
+        real, runs, lock = scrub_mod._gitleaks_secrets, [], threading.Lock()
+        def fake(text):
+            import time as _t
+            _t.sleep(0.3)                                   # gitleaks' start-up cost
+            with lock:
+                runs.append(text)
+            return [("generic-api-key", f"Zq{i:02d}FakeSecretValue") for i in range(12) if f"Zq{i:02d}FakeSecretValue" in text]
+        scrub_mod._gitleaks_secrets = fake
+        llm_proxy._DEEP_CACHE.clear()
+        out = {}
+        def one(i):
+            b, f, _ = llm_proxy._scrub_messages({"messages": [{"role": "user", "content": f"request {i} key Zq{i:02d}FakeSecretValue"}]})
+            out[i] = (json.dumps(b), f)
+        try:
+            th = [threading.Thread(target=one, args=(i,)) for i in range(12)]
+            [t.start() for t in th]; [t.join(10) for t in th]
+        finally:
+            scrub_mod._gitleaks_secrets = real
+            llm_proxy._DEEP_CACHE.clear()
+        self.assertEqual(len(out), 12)
+        self.assertLess(len(runs), 12)                      # shared, not one start-up each
+        for i, (body, f) in out.items():
+            self.assertNotIn(f"Zq{i:02d}FakeSecretValue", body)
+            self.assertIn(f"request {i} key [REDACTED]", body)
+            self.assertIn("gitleaks:generic-api-key", f)
+            for j in range(12):                             # another request's secret never enters this body
+                self.assertNotIn(f"Zq{j:02d}FakeSecretValue", body)
+
+    def test_a_failed_shared_scan_fails_for_everyone_in_it(self):
+        from jarvis_kernel import llm_proxy, scrub as scrub_mod
+        real = scrub_mod._gitleaks_secrets
+        scrub_mod._gitleaks_secrets = lambda text: (_ for _ in ()).throw(RuntimeError("boom"))
+        llm_proxy._DEEP_CACHE.clear()
+        try:
+            b, f, blocked = llm_proxy._scrub_messages({"messages": [{"role": "user", "content": "plain text"}]})
+        finally:
+            scrub_mod._gitleaks_secrets = real
+        self.assertEqual((f, blocked), ([], False))
+        self.assertEqual(llm_proxy._DEEP_CACHE, {})        # nothing cached after a failed scan
+
+
+class ServerQueue(unittest.TestCase):
+    """A burst of simultaneous connections is accepted at once, not refused and retried by TCP a second later."""
+    def test_thirty_simultaneous_connections_are_served_without_tcp_retries(self):
+        import socket
+        import time as _t
+        from jarvis_kernel import llm_proxy, nodes
+        self.assertGreaterEqual(llm_proxy.ProxyServer.request_queue_size, 64)
+        import inspect
+        self.assertIn("ProxyServer(", inspect.getsource(llm_proxy.serve))
+        self.assertIn("ProxyServer(", inspect.getsource(nodes))
+
+        class Slow(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_GET(self):
+                _t.sleep(0.3)
+                self.send_response(200); self.send_header("Content-Length", "2"); self.end_headers(); self.wfile.write(b"ok")
+        s = llm_proxy.ProxyServer(("127.0.0.1", 0), Slow)
+        # serve_forever accepts one connection per loop turn; let the backlog fill before it starts accepting
+        socks = []
+        for _ in range(30):
+            c = socket.create_connection(("127.0.0.1", s.server_address[1]), timeout=5)
+            c.sendall(b"GET / HTTP/1.0\r\n\r\n")
+            socks.append(c)
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+        t0 = _t.perf_counter()
+        try:
+            for c in socks:
+                self.assertTrue(c.recv(64).startswith(b"HTTP/1.0 200"))
+                c.close()
+        finally:
+            s.shutdown()
+        self.assertLess(_t.perf_counter() - t0, 3.0)

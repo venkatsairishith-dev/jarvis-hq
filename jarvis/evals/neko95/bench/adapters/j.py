@@ -109,8 +109,8 @@ class Mock:
                     out = out(body)
                 self._send(200, json.dumps(out).encode())
 
-        self.srv = ThreadingHTTPServer(("127.0.0.1", port), U)
-        self.srv.daemon_threads = True
+        from jarvis_kernel.llm_proxy import ProxyServer       # mock provider: a real provider's queue is not 5 either
+        self.srv = ProxyServer(("127.0.0.1", port), U)
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.srv.server_address[1]}/v1"
 
@@ -157,8 +157,8 @@ class Env:
     def proxy(self, providers):
         from jarvis_kernel.llm_proxy import make_handler
         H, tokens = make_handler(self.k, providers, clock=lambda: self.now[0], owner_hermes=None)
-        s = ThreadingHTTPServer(("127.0.0.1", 0), H)
-        s.daemon_threads = True
+        from jarvis_kernel.llm_proxy import ProxyServer
+        s = ProxyServer(("127.0.0.1", 0), H)                 # the server class llm_proxy.serve() runs in production
         threading.Thread(target=s.serve_forever, daemon=True).start()
         self.servers.append(s)
         self.url = f"http://127.0.0.1:{s.server_address[1]}"

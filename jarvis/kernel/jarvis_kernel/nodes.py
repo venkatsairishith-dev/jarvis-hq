@@ -190,4 +190,5 @@ def make_handler(kernel):
 
 def serve(kernel, bind: str, port: int):
     H, _ = make_handler(kernel)
-    ThreadingHTTPServer((bind, port), H).serve_forever()
+    from .llm_proxy import ProxyServer          # same listen queue: nodes report in bursts after a network blip
+    ProxyServer((bind, port), H).serve_forever()

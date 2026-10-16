@@ -1,0 +1,89 @@
+{
+ "time": "2026-10-16 18:40:05",
+ "summary": {
+  "pass": 5,
+  "n": 5,
+  "cited": 83,
+  "supported": 60,
+  "supported_share": 0.723,
+  "recited": 0,
+  "supported_share_without_repair": 0.723
+ },
+ "cases": [
+  {
+   "id": "R-eiffel",
+   "area": "H",
+   "title": "When was the Eiffel Tower completed and how tall is it?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 17 supported 12; sources 2 (fabricated 0); pages read 3 failed 2; 70.6 s; notes ['query planning skipped (JSONDecodeError)']",
+   "cited": 17,
+   "supported": 12,
+   "recited": 0,
+   "seconds": 70.6
+  },
+  {
+   "id": "R-python",
+   "area": "H",
+   "title": "Who created the Python programming language and when was it first released?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 16 supported 14; sources 3 (fabricated 0); pages read 4 failed 2; 84.8 s; notes []",
+   "cited": 16,
+   "supported": 14,
+   "recited": 0,
+   "seconds": 84.8
+  },
+  {
+   "id": "R-canberra",
+   "area": "H",
+   "title": "What is the capital city of Australia and why was it chosen?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 18 supported 13; sources 3 (fabricated 0); pages read 4 failed 1; 14.0 s; notes []",
+   "cited": 18,
+   "supported": 13,
+   "recited": 0,
+   "seconds": 14.0
+  },
+  {
+   "id": "R-seasons",
+   "area": "H",
+   "title": "What causes the seasons on Earth?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 19 supported 13; sources 4 (fabricated 0); pages read 4 failed 3; 91.2 s; notes []",
+   "cited": 19,
+   "supported": 13,
+   "recited": 0,
+   "seconds": 91.2
+  },
+  {
+   "id": "R-boiling",
+   "area": "H",
+   "title": "At what temperature does water boil at sea level in degrees Fahrenheit?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 13 supported 8; sources 2 (fabricated 0); pages read 4 failed 0; 22.1 s; notes []",
+   "cited": 13,
+   "supported": 8,
+   "recited": 0,
+   "seconds": 22.1
+  }
+ ]
+}
