@@ -51,6 +51,14 @@ def test_fit_size_shrinks_long_text_and_reports_overflow():
     assert size == 14 and not ok
 
 
+def test_text_is_still_measured_to_scale_when_the_font_file_is_missing(monkeypatch):
+    monkeypatch.setattr(deck, "font_path", lambda family, bold=False: None)    # no theme font, no Segoe UI either
+    w12, w24 = deck._width_pt("word " * 10, "Segoe UI", 12), deck._width_pt("word " * 10, "Segoe UI", 24)
+    assert w12 > 50 and 1.8 < w24 / w12 < 2.2                              # was ~25 pt at every size
+    size, ok = deck.fit_size([("word " * 80, 0)] * 6, "Segoe UI", 10, 3, 24, 14)
+    assert size == 14 and not ok                                            # overflow is still reported
+
+
 def test_deck_build_without_external_tools(tmp_path):
     s = spec.deck(demo("deck"))
     out = tmp_path / "d.pptx"

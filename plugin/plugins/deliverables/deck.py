@@ -40,7 +40,9 @@ def rgb(hex6: str) -> RGBColor:
 @lru_cache(maxsize=64)
 def _font(family: str, bold: bool, size10: int):
     path = font_path(family, bold) or font_path("Segoe UI", bold)
-    return ImageFont.truetype(path, size10) if path else ImageFont.load_default()
+    # Without the font file, Pillow's scalable default font at the same size: the bare load_default() is a fixed ~10 px
+    # bitmap whatever the size asked, which made long text "fit" at any size (found on Linux, where Segoe UI is absent).
+    return ImageFont.truetype(path, size10) if path else ImageFont.load_default(size=size10)
 
 
 def _width_pt(text: str, family: str, size: float, bold: bool = False) -> float:
