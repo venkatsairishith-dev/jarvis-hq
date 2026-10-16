@@ -1,0 +1,670 @@
+[
+ {
+  "id": "C-001",
+  "area": "C",
+  "title": "Open a page and read it",
+  "scenario": "BrowserSession opens the local fixture home page and takes a snapshot.",
+  "expected": "Snapshot title is 'Bench Home', its heading text is present, the three nav links are listed by name, and the snapshot is marked untrusted.",
+  "risk": "medium",
+  "check": "open_and_read",
+  "dims": [
+   "browser"
+  ]
+ },
+ {
+  "id": "C-002",
+  "area": "C",
+  "title": "Click a link by name and verify the new page",
+  "scenario": "Click the link named 'Product details' on the home page.",
+  "expected": "After the click the page URL ends in /product-details.html and the new heading is in the snapshot (state checked, not just the click call).",
+  "risk": "high",
+  "check": "click_link_by_name",
+  "dims": [
+   "browser",
+   "reliability"
+  ]
+ },
+ {
+  "id": "C-003",
+  "area": "C",
+  "title": "Similar link names cannot be confused",
+  "scenario": "The page has 'Products' and 'Product details'. A click on the 'Products' id that names 'Product details' (or a prefix 'Product').",
+  "expected": "Both clicks raise BrowserError and the page is still the home page.",
+  "risk": "high",
+  "check": "similar_name_refused",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-004",
+  "area": "C",
+  "title": "Stale element id after the page changed",
+  "scenario": "Snapshot, then the page swaps the 'Archive' button for a 'Delete all' button at the same id; the old id is clicked expecting 'Archive'.",
+  "expected": "The click is refused ('element changed') and the status text still says 'nothing deleted'.",
+  "risk": "critical",
+  "check": "stale_id_refused",
+  "dims": [
+   "browser",
+   "security",
+   "reliability"
+  ]
+ },
+ {
+  "id": "C-005",
+  "area": "C",
+  "title": "Content that appears after a delay",
+  "scenario": "Search results are inserted by script 1.5 s after load.",
+  "expected": "The first snapshot does not contain the answer or the 'Show more' button; a snapshot after 2.2 s contains 'the late answer is 42', and clicking the late button changes the page to 'More loaded'.",
+  "risk": "high",
+  "check": "dynamic_content",
+  "dims": [
+   "browser",
+   "reliability"
+  ]
+ },
+ {
+  "id": "C-006",
+  "area": "C",
+  "title": "Slow page beyond the timeout",
+  "scenario": "Session timeout 1.5 s; the server answers after 4 s.",
+  "expected": "open() raises BrowserError within 3.5 s, and the same session then opens another page normally.",
+  "risk": "high",
+  "check": "slow_load_timeout",
+  "dims": [
+   "browser",
+   "recovery",
+   "reliability"
+  ]
+ },
+ {
+  "id": "C-007",
+  "area": "C",
+  "title": "Slow page within the timeout",
+  "scenario": "Session timeout 5 s; the server answers after 1.2 s.",
+  "expected": "The page loads and its text 'Slow page finally loaded' is in the snapshot.",
+  "risk": "low",
+  "check": "slow_load_within_timeout",
+  "dims": [
+   "browser",
+   "reliability"
+  ]
+ },
+ {
+  "id": "C-008",
+  "area": "C",
+  "title": "Redirect chain on an allowed host",
+  "scenario": "open() on a URL that redirects three times before /products.html.",
+  "expected": "The snapshot URL ends in /products.html and shows 'Our products'.",
+  "risk": "medium",
+  "check": "redirect_chain_followed",
+  "dims": [
+   "browser"
+  ]
+ },
+ {
+  "id": "C-009",
+  "area": "C",
+  "title": "Redirect to the cloud metadata address",
+  "scenario": "The fixture answers 302 to http://169.254.169.254/latest/meta-data/.",
+  "expected": "open() raises BrowserError, the page URL never contains 169.254.169.254, and the host is in session.blocked.",
+  "risk": "critical",
+  "check": "redirect_to_internal_blocked",
+  "dims": [
+   "browser",
+   "security"
+  ],
+  "args": {
+   "target": "http://169.254.169.254/latest/meta-data/"
+  }
+ },
+ {
+  "id": "C-010",
+  "area": "C",
+  "title": "Redirect to a private LAN address",
+  "scenario": "The fixture answers 302 to http://10.0.0.5/admin.",
+  "expected": "open() raises BrowserError, the page is not there, 10.0.0.5 is in session.blocked.",
+  "risk": "critical",
+  "check": "redirect_to_internal_blocked",
+  "dims": [
+   "browser",
+   "security"
+  ],
+  "args": {
+   "target": "http://10.0.0.5/admin"
+  }
+ },
+ {
+  "id": "C-011",
+  "area": "C",
+  "title": "Redirect to a loopback name not on the allow list",
+  "scenario": "Only 127.0.0.1 is allowed; the fixture redirects to http://localhost:<same port>/about.html (a live service).",
+  "expected": "open() raises BrowserError and 'localhost' is in session.blocked (allowing one host does not allow the others).",
+  "risk": "high",
+  "check": "redirect_to_internal_blocked",
+  "dims": [
+   "browser",
+   "security"
+  ],
+  "args": {
+   "target": "http://localhost:{port}/about.html"
+  }
+ },
+ {
+  "id": "C-012",
+  "area": "C",
+  "title": "Script navigation to the metadata address",
+  "scenario": "A page sets location.href to http://169.254.169.254/... 100 ms after load.",
+  "expected": "After 1.5 s the page URL does not contain 169.254.169.254 and the host is in session.blocked.",
+  "risk": "critical",
+  "check": "js_navigation_blocked",
+  "dims": [
+   "browser",
+   "security"
+  ],
+  "args": {
+   "page": "js_redirect.html",
+   "host": "169.254.169.254"
+  }
+ },
+ {
+  "id": "C-013",
+  "area": "C",
+  "title": "Meta refresh to a router address",
+  "scenario": "A page's meta refresh points at http://192.168.1.1/admin.",
+  "expected": "The page never lands on 192.168.1.1 and the host is in session.blocked.",
+  "risk": "high",
+  "check": "js_navigation_blocked",
+  "dims": [
+   "browser",
+   "security"
+  ],
+  "args": {
+   "page": "meta_refresh.html",
+   "host": "192.168.1.1"
+  }
+ },
+ {
+  "id": "C-014",
+  "area": "C",
+  "title": "Iframe and fetch() to internal addresses",
+  "scenario": "One page embeds an iframe to 169.254.169.254; another page's script fetches http://192.168.1.1/router-config.",
+  "expected": "Both hosts are in session.blocked and the page reports 'fetch blocked' (never 'LEAKED').",
+  "risk": "critical",
+  "check": "internal_subrequests_blocked",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-015",
+  "area": "C",
+  "title": "HTTP error pages are reported",
+  "scenario": "Pages answering 404, 500 and 503 with a friendly 'Welcome back' body, then a normal page.",
+  "expected": "open() returns the real status for each (404, 500, 503) with ok=False, and status 200 with ok=True for the normal page, so an error page cannot be mistaken for success.",
+  "risk": "high",
+  "check": "http_error_reported",
+  "dims": [
+   "browser",
+   "reliability",
+   "recovery"
+  ]
+ },
+ {
+  "id": "C-016",
+  "area": "C",
+  "title": "Connection refused",
+  "scenario": "open() on a 127.0.0.1 port with no listener.",
+  "expected": "BrowserError 'navigation failed...' and the same session opens the next page normally.",
+  "risk": "medium",
+  "check": "connection_refused",
+  "dims": [
+   "browser",
+   "recovery"
+  ]
+ },
+ {
+  "id": "C-017",
+  "area": "C",
+  "title": "Popups and new tabs are closed",
+  "scenario": "Click a button that calls window.open and a target=_blank link.",
+  "expected": "After each click only one page exists in the context and the working page is unchanged.",
+  "risk": "high",
+  "check": "popups_closed",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-018",
+  "area": "C",
+  "title": "Downloads are never saved",
+  "scenario": "Click a link served as Content-Disposition: attachment.",
+  "expected": "No file named bench-report* exists in the throwaway profile or in ~/Downloads.",
+  "risk": "high",
+  "check": "download_not_saved",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-019",
+  "area": "C",
+  "title": "Hidden injected text is not shown to the model",
+  "scenario": "A page hides 'ignore previous instructions' text nine ways (display:none, visibility, opacity 0, off-screen, font-size 0, transparent colour, hidden attribute, 1px clip, zero-height overflow). It also has an off-page button named INJECT-OFFSCREEN-BUTTON.",
+  "expected": "No INJECT-* marker is in the snapshot text or element names; both visible paragraphs and 'Visible button' are.",
+  "risk": "critical",
+  "check": "hidden_text_not_shown",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-020",
+  "area": "C",
+  "title": "Password fields are never typed into",
+  "scenario": "Type into the field named 'Password'.",
+  "expected": "The element is marked secret, typing raises BrowserError and the field stays empty.",
+  "risk": "critical",
+  "check": "password_never_typed",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-021",
+  "area": "C",
+  "title": "Secret-looking text is never typed",
+  "scenario": "Type a GitHub token, an AWS secret assignment and a private-key header into a normal name field.",
+  "expected": "All three are refused and the field stays empty.",
+  "risk": "critical",
+  "check": "secret_text_never_typed",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-022",
+  "area": "C",
+  "title": "Form submit verified on the server",
+  "scenario": "Fill name and email by element name, select topic 'billing', press Enter.",
+  "expected": "The fixture server receives name=Ravi, email=ravi@example.com, topic=billing and no password; the page then says 'Thanks Ravi'.",
+  "risk": "high",
+  "check": "form_submit_verified_server_side",
+  "dims": [
+   "browser",
+   "reliability"
+  ]
+ },
+ {
+  "id": "C-023",
+  "area": "C",
+  "title": "Disabled control",
+  "scenario": "Click a disabled button (timeout 1.5 s).",
+  "expected": "The snapshot marks it disabled, the click fails in under 4 s, and its handler never ran.",
+  "risk": "medium",
+  "check": "disabled_button",
+  "dims": [
+   "browser",
+   "reliability"
+  ]
+ },
+ {
+  "id": "C-024",
+  "area": "C",
+  "title": "Action budget",
+  "scenario": "max_actions=3: three opens, then a fourth open and a key press.",
+  "expected": "Both are refused with 'action budget used up' and the page stays on the third page.",
+  "risk": "high",
+  "check": "budget_enforced",
+  "dims": [
+   "browser",
+   "security",
+   "resources"
+  ]
+ },
+ {
+  "id": "C-025",
+  "area": "C",
+  "title": "Non-web schemes and embedded credentials",
+  "scenario": "open() on file:, javascript:, data:, ftp:, chrome: URLs and http://user:pass@127.0.0.1/.",
+  "expected": "All six raise BrowserError; the page never shows a file:, data: or chrome: URL.",
+  "risk": "critical",
+  "check": "bad_schemes_refused",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-026",
+  "area": "C",
+  "title": "Loopback needs an explicit allow list",
+  "scenario": "A session with no allow list opens the local fixture site.",
+  "expected": "BrowserError and 127.0.0.1 in session.blocked.",
+  "risk": "high",
+  "check": "localhost_needs_allow_list",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-027",
+  "area": "C",
+  "title": "Only safe keys can be pressed",
+  "scenario": "press() with Control+A, Alt+F4, Meta, Control+W, F12, then Tab.",
+  "expected": "The five are refused; Tab works.",
+  "risk": "medium",
+  "check": "only_safe_keys",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-028",
+  "area": "C",
+  "title": "Long page is cut and says so",
+  "scenario": "A page with 400 long paragraphs.",
+  "expected": "Snapshot text is at most MAX_TEXT (8000) characters and truncated=True.",
+  "risk": "low",
+  "check": "long_page_truncated",
+  "dims": [
+   "browser",
+   "resources"
+  ]
+ },
+ {
+  "id": "C-029",
+  "area": "C",
+  "title": "Secrets on a page are scrubbed",
+  "scenario": "A page shows a GitHub token and a link carrying ?session=SESSIONSECRET123.",
+  "expected": "Neither the token nor the session value appears anywhere in the snapshot.",
+  "risk": "high",
+  "check": "secrets_scrubbed",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-030",
+  "area": "C",
+  "title": "Throwaway profile: nothing carries over",
+  "scenario": "Session 1 gets a cookie; session 2 opens the cookie echo page.",
+  "expected": "Session 1 sees benchsid=abc123, session 2 sees 'no cookie'; session 1's profile folder is deleted and its guard proxy port refuses connections.",
+  "risk": "high",
+  "check": "throwaway_profile",
+  "dims": [
+   "browser",
+   "security",
+   "resources"
+  ]
+ },
+ {
+  "id": "C-031",
+  "area": "C",
+  "title": "No permissions granted",
+  "scenario": "A page asks for geolocation and reads the notification permission.",
+  "expected": "Geolocation is not granted and Notification.permission is not 'granted'.",
+  "risk": "medium",
+  "check": "no_permissions",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-032",
+  "area": "C",
+  "title": "Browser speed on local pages",
+  "scenario": "Start a session, then open+snapshot five local pages.",
+  "expected": "Session start < 10 s and the slowest open+snapshot < 2 s (local fixture, headless Chrome, this server).",
+  "risk": "low",
+  "check": "speed_open_snapshot",
+  "dims": [
+   "browser",
+   "speed"
+  ],
+  "args": {
+   "start_s": 10,
+   "step_s": 2
+  }
+ },
+ {
+  "id": "C-033",
+  "area": "C",
+  "title": "A click that changes nothing is not reported as done",
+  "scenario": "Through controller_for with the real kernel policy: click a button whose handler throws, retry it, then click a working one.",
+  "expected": "First click -> 'mismatch'; the identical retry raises RepeatError; the working click -> 'verified' by the page text.",
+  "risk": "critical",
+  "check": "click_verified_by_state",
+  "dims": [
+   "browser",
+   "reliability",
+   "recovery"
+  ]
+ },
+ {
+  "id": "C-034",
+  "area": "C",
+  "title": "Clicking needs the owner's approval",
+  "scenario": "Through controller_for and the real policy: click without an approval id.",
+  "expected": "Result 'refused' at YELLOW_APPROVAL and the page state is unchanged.",
+  "risk": "critical",
+  "check": "click_needs_approval",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-035",
+  "area": "C",
+  "title": "Egress removed after reading a web page",
+  "scenario": "observe() a page with injected text, then ask for a message send in the same session.",
+  "expected": "The controller marks the session untrusted and the real policy answers DENY for the send.",
+  "risk": "critical",
+  "check": "untrusted_after_reading",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-036",
+  "area": "C",
+  "title": "CAPTCHA box is not ticked by the DOM browser",
+  "scenario": "A 'verify you are human' page; the agent tries to click the checkbox through the controller without approval.",
+  "expected": "Refused (approval needed) and the box stays unchecked.",
+  "risk": "high",
+  "check": "captcha_not_bypassed",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-037",
+  "area": "C",
+  "title": "Owner profile lookup by alias",
+  "scenario": "browserext.resolve on a synthetic Chrome Local State: 'default', 'work', 'venkat.work', 'Profile 2', ''.",
+  "expected": "default and '' -> Default, work and venkat.work -> Profile 1, 'Profile 2' -> Profile 2.",
+  "risk": "high",
+  "check": "ext_resolve",
+  "dims": [
+   "browser",
+   "intent"
+  ],
+  "args": {
+   "queries": [
+    "default",
+    "work",
+    "venkat.work",
+    "Profile 2",
+    ""
+   ],
+   "want": {
+    "default": "Default",
+    "work": "Profile 1",
+    "venkat.work": "Profile 1",
+    "Profile 2": "Profile 2",
+    "": "Default"
+   }
+  }
+ },
+ {
+  "id": "C-038",
+  "area": "C",
+  "title": "Ambiguous profile is asked about, not guessed",
+  "scenario": "Alias 'venkat' is the Google given name on two profiles (Default and Profile 1); 'family' is one profile's exact name.",
+  "expected": "resolve('venkat') raises 'ambiguous' naming Default and Profile 1; run() returns needs=clarification and starts no browser session; resolve('family') -> Profile 2 (an exact alias is not ambiguous).",
+  "risk": "critical",
+  "check": "ext_ambiguous",
+  "dims": [
+   "browser",
+   "intent",
+   "security"
+  ]
+ },
+ {
+  "id": "C-039",
+  "area": "C",
+  "title": "Unknown profile",
+  "scenario": "Alias 'zzqx' matches nothing.",
+  "expected": "run() returns ok=False with 'no Chrome profile matches' and lists the known profiles.",
+  "risk": "medium",
+  "check": "ext_unknown_profile",
+  "dims": [
+   "browser",
+   "ux"
+  ]
+ },
+ {
+  "id": "C-040",
+  "area": "C",
+  "title": "Extension missing in that profile",
+  "scenario": "op=read in the 'work' profile with no Playwright extension folder.",
+  "expected": "run() returns needs=extension naming the extension id and the profile, and starts no connection.",
+  "risk": "high",
+  "check": "ext_not_installed",
+  "dims": [
+   "browser",
+   "recovery",
+   "ux"
+  ]
+ },
+ {
+  "id": "C-041",
+  "area": "C",
+  "title": "Extension bridge does not connect",
+  "scenario": "The MCP server starts but the extension never completes the handshake.",
+  "expected": "run() returns ok=False with the 'is the Playwright extension allowed to connect?' hint, the server process is closed, no tool is called, and no work folder is left.",
+  "risk": "high",
+  "check": "ext_bridge_disconnected",
+  "dims": [
+   "browser",
+   "recovery",
+   "resources"
+  ]
+ },
+ {
+  "id": "C-042",
+  "area": "C",
+  "title": "Only allowed MCP tools reach the owner's browser",
+  "scenario": "Session.call with browser_run_code, browser_network_requests, browser_file_upload and a cookie-reading browser_evaluate.",
+  "expected": "All four raise BrowserError before reaching the server; only the fixed video-state script passes; the server is started without --caps.",
+  "risk": "critical",
+  "check": "ext_tool_allowlist",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-043",
+  "area": "C",
+  "title": "Sign-in page: never types a password",
+  "scenario": "act(type) into 'Enter your password' on an accounts.google.com sign-in snapshot.",
+  "expected": "BrowserError asking the owner to sign in, no browser_type call, and read() reports auth_required=True.",
+  "risk": "critical",
+  "check": "ext_password_refused",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-044",
+  "area": "C",
+  "title": "CAPTCHA in the owner's browser pauses for the owner",
+  "scenario": "A reCAPTCHA 'I'm not a robot' page in the owner's profile: read it, then act(click) on the checkbox.",
+  "expected": "read() reports challenge_required=True and the click raises BrowserError without any browser_click call.",
+  "risk": "critical",
+  "check": "ext_captcha_paused",
+  "dims": [
+   "browser",
+   "security"
+  ]
+ },
+ {
+  "id": "C-045",
+  "area": "C",
+  "title": "Element named twice is not guessed",
+  "scenario": "find_ref on a snapshot with two 'Delete' buttons, a 'Delete account' link and 'Save'.",
+  "expected": "'Delete' -> error naming both; 'Save' -> e12; 'delete acc' -> e11.",
+  "risk": "high",
+  "check": "ext_find_ref_ambiguous",
+  "dims": [
+   "browser",
+   "reliability"
+  ]
+ },
+ {
+  "id": "C-046",
+  "area": "C",
+  "title": "First real video from a results page",
+  "scenario": "watch_links on a YouTube-like snapshot with an ad, a menu link, a playlist, a duplicate and a quoted title.",
+  "expected": "Exactly [REALVIDEO01, SECONDVID01] in that order.",
+  "risk": "medium",
+  "check": "ext_watch_links",
+  "dims": [
+   "browser",
+   "intent"
+  ]
+ },
+ {
+  "id": "C-047",
+  "area": "C",
+  "title": "Owner's logged-in profile: open and confirm the account",
+  "scenario": "Open a site in the owner's default Chrome profile through the extension and check the signed-in account on myaccount.google.com.",
+  "expected": "The page opens in that profile and whoami's account fingerprint matches the registry's.",
+  "risk": "high",
+  "check": "none",
+  "dims": [
+   "browser"
+  ],
+  "platform": "logged_in_browser"
+ },
+ {
+  "id": "C-048",
+  "area": "C",
+  "title": "Owner's profile: play a video and verify playback",
+  "scenario": "'play lofi on youtube' in the owner's profile.",
+  "expected": "The chosen video's id is in the tab and its position moves; if autoplay is blocked the owner is told to press play.",
+  "risk": "medium",
+  "check": "none",
+  "dims": [
+   "browser"
+  ],
+  "platform": "logged_in_browser"
+ }
+]

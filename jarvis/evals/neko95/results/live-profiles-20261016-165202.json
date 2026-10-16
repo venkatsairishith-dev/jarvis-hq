@@ -1,0 +1,154 @@
+{
+ "time": "2026-10-16 16:52:02",
+ "counts": {
+  "pass": 12,
+  "fail": 0
+ },
+ "cases": [
+  {
+   "id": "CP-001",
+   "area": "C",
+   "title": "Chrome creates four separate profile folders",
+   "risk": "medium",
+   "dims": [
+    "browser"
+   ],
+   "status": "pass",
+   "observed": "folders ['Default', 'Profile 1', 'Profile 2', 'Profile 3']"
+  },
+  {
+   "id": "CP-002",
+   "area": "C",
+   "title": "Registry lists every profile, addresses masked",
+   "risk": "critical",
+   "dims": [
+    "browser",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "4 profiles; full addresses in file: []"
+  },
+  {
+   "id": "CP-003",
+   "area": "C",
+   "title": "Accounts get distinct one-way fingerprints",
+   "risk": "medium",
+   "dims": [
+    "browser",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "{'Default': 'cea1da3af7899fa5', 'Profile 1': '44423a48e6e5b05a', 'Profile 2': '20c7afb0b357fbbb', 'Profile 3': ''}"
+  },
+  {
+   "id": "CP-004",
+   "area": "C",
+   "title": "Each alias resolves to its own profile",
+   "risk": "critical",
+   "dims": [
+    "browser",
+    "intent"
+   ],
+   "status": "pass",
+   "observed": "[('kiran', 'Profile 1', 'Profile 1'), ('Robin work', 'Profile 2', 'Profile 2'), ('rivermoon', 'Default', 'Default'), ('default', 'Default', 'Default'), ('guest test', 'Profile 3', 'Profile 3')]"
+  },
+  {
+   "id": "CP-005",
+   "area": "C",
+   "title": "An ambiguous name asks which profile (never guesses)",
+   "risk": "critical",
+   "dims": [
+    "browser",
+    "intent",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "ambiguous profile 'robin': Robin home (riv***@example.com, Default); Robin work (rob***@example.net, Profile 2) \u2014 which one?"
+  },
+  {
+   "id": "CP-006",
+   "area": "C",
+   "title": "An unknown name is refused with the known profiles",
+   "risk": "high",
+   "dims": [
+    "browser",
+    "intent"
+   ],
+   "status": "pass",
+   "observed": "no Chrome profile matches 'satya'; known: Robin home (riv***@example.com, Default); Kiran (kir***@example.org, Profile 1); Robin work (rob***@example."
+  },
+  {
+   "id": "CP-007",
+   "area": "C",
+   "title": "Errors never show a full account address",
+   "risk": "critical",
+   "dims": [
+    "security",
+    "ux"
+   ],
+   "status": "pass",
+   "observed": "leaked []"
+  },
+  {
+   "id": "CP-008",
+   "area": "C",
+   "title": "Plan for 'open github in Kiran's profile' uses Kiran's folder and checks the account first",
+   "risk": "critical",
+   "dims": [
+    "browser",
+    "planning"
+   ],
+   "status": "pass",
+   "observed": "status ok; steps [('browser', 'whoami', 'Profile 1'), ('open_website', None, 'Profile 1')]"
+  },
+  {
+   "id": "CP-009",
+   "area": "C",
+   "title": "Plan with an ambiguous account asks instead of acting",
+   "risk": "critical",
+   "dims": [
+    "browser",
+    "planning",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "status clarify; question 'Which Chrome account? ambiguous: Robin home (riv***@example.com, Default), Robin work (rob***@exampl'"
+  },
+  {
+   "id": "CP-010",
+   "area": "C",
+   "title": "Each profile is signed in as its own account only",
+   "risk": "critical",
+   "dims": [
+    "browser",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "{'Default': 'signed in as rivermoon', 'Profile 1': 'signed in as kiran', 'Profile 2': 'signed in as robinwork', 'Profile 3': 'signed in as guest'}"
+  },
+  {
+   "id": "CP-011",
+   "area": "C",
+   "title": "Signing out in Kiran's profile leaves the other profiles signed in",
+   "risk": "critical",
+   "dims": [
+    "browser",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "{'Default': 'signed in as rivermoon', 'Profile 1': 'not signed in', 'Profile 2': 'signed in as robinwork', 'Profile 3': 'signed in as guest'}"
+  },
+  {
+   "id": "CP-012",
+   "area": "C",
+   "title": "A User Data folder already in use is reported, not hung on",
+   "risk": "medium",
+   "dims": [
+    "browser",
+    "reliability"
+   ],
+   "status": "pass",
+   "observed": "refused: Error after 0.4 s"
+  }
+ ]
+}

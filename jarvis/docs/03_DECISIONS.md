@@ -417,3 +417,19 @@ Each item below was a real fault or gap seen against the live system, not a theo
   - Re-apply after an upstream merge if upstream has not fixed it.
 - **Node** polls for queued jobs every 1 s (was 3 s). The plugin polls job results every 0.5 s (was 1 s).
 - **Not done:** real-voice tuning, barge-in and echo cancellation (they need the owner's recordings, `neko_voice_owner_record.py`); unattended browser connection (needs the owner to save each profile's token, `save_playwright_token.ps1`); the Project JARVIS doc outside this repo was not updated.
+
+## D29 Context selection off by default; benchmark v2; Linux test server (2026-10-16, owner travelling)
+- **Context selection** (`jarvis_kernel/context_select.py`, wired into `mcpwire.process_result`):
+  - `JARVIS_CONTEXT_SELECT` = `off` (default, unchanged head cut) | `evidence` | `trim1-conservative|balanced|aggressive`.
+  - Every kept line is verbatim and in order; omissions are marked and listed; the input's sha256 is returned.
+  - Selection only changes what a model reads. Policy, approvals, verification and destructive decisions never use it.
+  - Not enabled yet: the measurements are on synthetic fixtures the evidence mode was tuned on (exploratory). Enabling needs
+    a held-out test on real Neko tool output on the laptop.
+- **trim-1**: vendored and pinned (Apache-2.0, LightGBM in Go, no network, checksum-checked model). Alone it kept every
+  answer line on our fixtures but cut only 5.7% (conservative) to 49% (aggressive) and rarely met a budget; as a first pass
+  before "evidence" it added about 50 ms and changed no outcome. Kept available behind the flag, not used by default.
+- **Benchmark v2** (`jarvis/evals/neko95/bench`): versioned cases with scenario, expected result, risk and dims; results
+  under the key "cases", so the frozen v1 scorer and its rules are untouched. Rubric v2 (`rubric_v2.json`) was written
+  before any case ran: 10 x pass rate, capped by failed critical/high cases, deferred critical cases and small samples.
+- **Live tests on the Linux server** use Dahl's public lane only with synthetic data (owner-authorised key, to be revoked),
+  run headless in the test container at low priority (the relative works on this machine), never Claude models.

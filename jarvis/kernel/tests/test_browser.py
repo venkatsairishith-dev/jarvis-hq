@@ -31,6 +31,17 @@ PAGE = """<!doctype html><html><head><title>Test page</title></head><body>
 <a href="/redir">Redirector</a> <img src="http://10.0.0.5/pixel.png">
 </body></html>"""
 
+# Text hidden from a person in ways body.innerText does not leave out (a common way to plant instructions for a model).
+HIDDEN = """<!doctype html><title>Hidden</title><style>.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}</style>
+<p>Shown text one.</p>
+<div style="opacity:0">PLANT-OPACITY</div><div style="position:absolute;left:-9999px">PLANT-OFFPAGE</div>
+<div style="font-size:0">PLANT-FONTSIZE</div><div style="color:transparent">PLANT-TRANSPARENT</div>
+<div class="sr">PLANT-CLIPPED</div><div style="height:0;overflow:hidden">PLANT-ZEROHEIGHT</div>
+<div style="opacity:0"><span style="opacity:1">PLANT-NESTED</span></div>
+<button style="position:absolute;top:-5000px">PLANT-BUTTON</button><button>Shown button</button>
+<div style="font-size:0"><span style="font-size:16px">Shown inline block</span></div>
+<p>Shown text two.</p>"""
+
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -41,6 +52,10 @@ class H(BaseHTTPRequestHandler):
             body, ctype, code, extra = b"data", "application/octet-stream", 200, {"Content-Disposition": "attachment; filename=x.bin"}
         elif self.path == "/redir":
             body, ctype, code, extra = b"", "text/html", 302, {"Location": "http://169.254.169.254/latest/meta-data/"}
+        elif self.path == "/hidden":
+            body, ctype, code, extra = HIDDEN.encode(), "text/html", 200, {}
+        elif self.path == "/gone":
+            body, ctype, code, extra = b"<title>Welcome</title><h1>Welcome back</h1>", "text/html", 404, {}
         else:
             body, ctype, code, extra = PAGE.encode(), "text/html", 200, {}
         self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body)))
@@ -178,6 +193,21 @@ class Live(unittest.TestCase):
         p = self.el("Popup"); self.s.click(p["id"], "Popup"); self.s.page.wait_for_timeout(600)
         self.assertEqual(len(self.s.ctx.pages), 1)
 
+    def test_text_hidden_by_opacity_position_size_colour_or_clipping_is_not_shown(self):
+        self.s.open(self.url + "hidden")
+        snap = self.s.snapshot()
+        names = [e["name"] for e in snap["elements"]]
+        self.assertNotIn("PLANT", snap["text"] + " ".join(names))
+        for shown in ("Shown text one.", "Shown text two.", "Shown inline block"):
+            self.assertIn(shown, snap["text"])
+        self.assertIn("Shown button", names)
+
+    def test_open_reports_the_http_status(self):
+        bad = self.s.open(self.url + "gone")                 # a 404 whose page looks friendly
+        self.assertEqual((bad["status"], bad["ok"]), (404, False))
+        good = self.s.open(self.url)
+        self.assertEqual((good["status"], good["ok"]), (200, True))
+
     def test_only_allowed_keys(self):
         with self.assertRaises(B.BrowserError): self.s.press("Control+A")
         self.s.press("Tab")
@@ -265,6 +295,52 @@ class FailedLaunch(unittest.TestCase):
             s.__exit__(None, None, None)
         pw.stop.assert_called_once(); s.proxy.stop.assert_called_once()
         self.assertFalse(os.path.exists(s.profile))
+
+
+class ExtensionSession(unittest.TestCase):
+    """browserext (the owner's Chrome profiles through the Playwright MCP extension) with a fake MCP server."""
+    class Fake:
+        def __init__(self, fail=False, snap=""):
+            self.fail, self.snap, self.calls, self.closed = fail, snap, [], False
+        def start(self): pass
+        def handshake(self, timeout=60):
+            if self.fail:
+                raise TimeoutError("no answer from the extension")
+        def call(self, tool, args, timeout=45.0):
+            self.calls.append(tool)
+            return {"content": [{"type": "text", "text": self.snap}], "isError": False}
+        def close(self): self.closed = True
+
+    def setUp(self):
+        from jarvis_node import browserext
+        self.X = browserext
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old = os.environ.get("JARVIS_OUTPUTS")
+        os.environ["JARVIS_OUTPUTS"] = self.tmp.name
+        self.prof = {"dir": "Default", "name": "Owner", "account": "own***@example.com"}
+
+    def tearDown(self):
+        if self.old is None: os.environ.pop("JARVIS_OUTPUTS", None)
+        else: os.environ["JARVIS_OUTPUTS"] = self.old
+        self.tmp.cleanup()
+
+    def test_failed_handshake_closes_the_server(self):
+        fake = self.Fake(fail=True)
+        with self.assertRaises(TimeoutError):
+            with self.X.Session(self.prof, session_factory=lambda argv, env=None: fake):
+                pass
+        self.assertTrue(fake.closed)                         # was left running: `with` skips __exit__ when __enter__ fails
+
+    def test_captcha_is_reported_and_never_clicked(self):
+        snap = ("- Page URL: https://shop.example/checkout\n- heading \"Verify you are human\" [ref=e1]\n"
+                "- checkbox \"I'm not a robot\" [ref=e2]\n- button \"Continue\" [ref=e3]")
+        fake = self.Fake(snap=snap)
+        sess = self.X.Session(self.prof, session_factory=lambda argv, env=None: fake)
+        self.assertTrue(self.X.act(sess, "read", "", "", "", self.prof)["challenge_required"])
+        with self.assertRaises(self.X.BrowserError):
+            self.X.act(sess, "click", "", "I'm not a robot", "", self.prof)
+        self.assertNotIn("browser_click", fake.calls)
+        self.assertFalse(self.X.challenge_required("- heading \"Robots in film\" [ref=e1]\n- button \"Read more\" [ref=e2]"))
 
 
 class ProxyUnit(unittest.TestCase):

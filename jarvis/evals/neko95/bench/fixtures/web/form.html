@@ -1,0 +1,11 @@
+<!doctype html><html><head><title>Contact form</title></head><body>
+<h1>Contact form</h1>
+<form action="/submit" method="get">
+<input name="name" id="name" placeholder="Your name">
+<input name="email" id="email" placeholder="Email address">
+<input name="pw" id="pw" type="password" placeholder="Password">
+<select name="topic" id="topic" aria-label="Topic"><option>general</option><option>billing</option><option>support</option></select>
+<button type="submit">Send message</button>
+</form>
+<button id="dis" disabled onclick="document.body.dataset.x='1'">Disabled action</button>
+</body></html>

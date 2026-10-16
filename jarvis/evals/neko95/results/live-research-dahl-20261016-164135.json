@@ -1,0 +1,82 @@
+{
+ "time": "2026-10-16 16:41:35",
+ "summary": {
+  "pass": 5,
+  "n": 5,
+  "cited": 89,
+  "supported": 37,
+  "supported_share": 0.416
+ },
+ "cases": [
+  {
+   "id": "R-eiffel",
+   "area": "H",
+   "title": "When was the Eiffel Tower completed and how tall is it?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 12 supported 6; sources 3 (fabricated 0); pages read 4 failed 3; 75.1 s; notes []",
+   "cited": 12,
+   "supported": 6,
+   "seconds": 75.1
+  },
+  {
+   "id": "R-python",
+   "area": "H",
+   "title": "Who created the Python programming language and when was it first released?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 18 supported 10; sources 3 (fabricated 0); pages read 4 failed 3; 22.5 s; notes []",
+   "cited": 18,
+   "supported": 10,
+   "seconds": 22.5
+  },
+  {
+   "id": "R-canberra",
+   "area": "H",
+   "title": "What is the capital city of Australia and why was it chosen?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 20 supported 8; sources 2 (fabricated 0); pages read 4 failed 1; 55.5 s; notes ['only 8 of 20 cited sentences were supported by their sources; the sources found were thin or off-topic, so most statements are marked unconfirmed']",
+   "cited": 20,
+   "supported": 8,
+   "seconds": 55.5
+  },
+  {
+   "id": "R-seasons",
+   "area": "H",
+   "title": "What causes the seasons on Earth?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 24 supported 6; sources 4 (fabricated 0); pages read 4 failed 1; 97.8 s; notes ['query planning skipped (JSONDecodeError)', 'only 6 of 24 cited sentences were supported by their sources; the sources found were thin or off-topic, so most statements are marked unconfirmed']",
+   "cited": 24,
+   "supported": 6,
+   "seconds": 97.8
+  },
+  {
+   "id": "R-boiling",
+   "area": "H",
+   "title": "At what temperature does water boil at sea level in degrees Fahrenheit?",
+   "risk": "high",
+   "dims": [
+    "research"
+   ],
+   "status": "pass",
+   "observed": "answer word found True; cited 15 supported 7; sources 2 (fabricated 0); pages read 4 failed 2; 198.8 s; notes ['only 7 of 15 cited sentences were supported by their sources; the sources found were thin or off-topic, so most statements are marked unconfirmed']",
+   "cited": 15,
+   "supported": 7,
+   "seconds": 198.8
+  }
+ ]
+}

@@ -167,6 +167,201 @@ Still Windows-only (not faked here): the 16 kernel skips (UI Automation, Win32, 
   - None of them is in Neko code.
 - Mixing every plugin's `tests/` into one pytest session clashes on identical file names (`tests/test_smoke.py`), so plugins are run one by one.
 
+## Autonomous mission on the Linux server (2026-10-16, owner travelling; D29)
+
+**Summary.** The repo now has a 572-case capability benchmark (v2) that drives the real code. Its final run: 546 passed, 1 failed, 25 deferred (Windows or owner hardware).
+- It found and fixed **21 product bugs**, each with a regression test (list below).
+- Live tests ran against **Dahl** (owner-authorised key; synthetic data, public lane only) and against **headless Chrome with four fake profiles**.
+- trim-1 was reviewed, vendored, built and measured. It stays off by default, like the new evidence selector.
+- v1 is unchanged: mean 7.61 (frozen rules, saved laptop results).
+- Neko is **not** "JARVIS-equivalent". The v2 scores below mean "every defined case passed", not general capability.
+- Every test ran headless in the podman container at `nice 19`, 2 CPUs at most, so nothing appeared on the relative's screen. No Claude model was used as a model under test.
+
+### Scorecard v2 (rubric written before any case ran: `bench/rubric_v2.json`; run `results/bench-20261016-173117.json`)
+
+| Dimension | Score | Label | Passed / executed | Deferred | Why not 10 |
+|---|---|---|---|---|---|
+| Intent | 10.0 | verified | 51/51 | 1 | |
+| Planning | 10.0 | verified | 49/49 | 1 | |
+| Desktop control | 9.0 | verified | 32/32 | 5 | critical Windows cases deferred |
+| Browser control | 10.0 | verified | 68/68 | 2 | |
+| Multi-step autonomy | 10.0 | verified | 43/43 | 1 | |
+| Recovery / self-repair | 10.0 | verified | 78/78 | 3 | |
+| Research | 10.0 | verified | 43/43 | 2 | |
+| Memory | 10.0 | verified | 35/35 | 1 | |
+| Tool / provider routing | 9.82 | verified | 56/57 | 0 | J-038 failed |
+| Security | 9.0 | verified | 247/247 | 3 | critical cases deferred (real kill-switch hotkey, real profiles) |
+| Reliability | 9.93 | verified | 135/136 | 0 | J-038 failed |
+| Speed | 9.0 | provisional | 17/18 | 0 | J-038 failed; fewer than 20 cases |
+| Resource efficiency | 10.0 | verified | 54/54 | 2 | |
+| Skill extensibility | 10.0 | verified | 26/26 | 0 | |
+| User experience | 10.0 | verified | 70/70 | 2 | |
+| Voice | 9.0 | provisional | 16/16 offline | 7 | **all physical checks DEFERRED: owner hardware required** |
+
+What the 10s do NOT cover:
+- **The cases are deterministic.** Models are mocked at the model boundary, and the laptop's local decider, vision and voice models were not run.
+- **The benchmark was written by the same team that fixed the bugs.** Its failures were investigated against the code, never "fixed" by changing an expectation.
+- **Real-world rates live elsewhere:**
+  - real Dahl: routing 12/12, research 5/5;
+  - the planning pipeline with a stand-in model: 97/149;
+  - for the production decider, v1 C3 = 8.5 (laptop).
+
+Per area (final run):
+- A 67/67, B 33/33 (+5 deferred), C 46/46 (+2), D 42/42 (+1), E 31/31 (+3);
+- F 29/29 (+1), G 16/16 (+7), H 35/35 (+1), I 16/16 (+2);
+- J 46/47 (+1), K 87/87 (+2), L 26/26, M 23/23, N 33/33, X 16/16.
+
+### Live tests on this server (owner-authorised Dahl key; results in `results/live-*`)
+
+**Model proxy to Dahl, 12/12** (real kernel gateway and proxy, only the 2 enabled Dahl models):
+- 5/5 correct answers; p50 4.07 s, max 5.29 s; first streamed chunk after 0.99 s; 121 tokens per call.
+- A private-lane task never reached Dahl: 503, 0 calls.
+- A fake token in the prompt arrived as `[REDACTED]`.
+- The tool call came back well-formed.
+- The disabled model can't be reached by naming it.
+- The key appears in none of about 23,000 characters of replies, headers, streams and audit rows.
+
+**Research, 5/5 correct on public questions**:
+- Real DuckDuckGo code, real fetching and the real NLI checker (model revision a150876, sha256 checked); Dahl planned and wrote.
+- No fabricated sources.
+- 37 of 89 cited sentences (42%) were confirmed by the checker; the rest are labelled unconfirmed.
+- 22–199 s per run.
+- This matches the laptop's 7/16–11/17: thin sources, not invented ones, are what holds C8 down.
+
+**Fake Chrome profiles, 12/12** (real Chrome "User Data" with 4 made-up profiles, headless):
+- Registry with masked addresses and distinct fingerprints.
+- Each alias resolves to its own profile; "robin" (ambiguous) asks; an unknown name is refused, and no full address appears in any error.
+- The plan for "github in Kiran's profile" checks the account first.
+- Each profile is signed in as itself only; signing out of one leaves the others signed in.
+- A profile store already in use is refused in 0.4 s.
+
+**Planning pipeline with Dahl as a stand-in for the local decider, 97/149** (exploratory; names replaced by made-up ones):
+- Under Dahl's structured-output mode the model returned bare `{"tool": ...}` steps. The run therefore sends the prompt without that mode.
+- The remaining failures are mostly the stand-in's format (31 not JSON) or its own questions.
+- This does **not** measure the production decider (v1 C3 = 8.5 on the laptop).
+
+### trim-1 decision (reproducible: `bench/context_bench.py`, `results/context-*.json`)
+
+- **What it is:** a 712-tree LightGBM line selector in Go: Apache-2.0, no dependencies, no network.
+  - The repo is 2 days old with no CI; its benchmark claims can't be reproduced.
+  - Vendored at f16ff28; model checksum matches the card; its 7 tests pass (incl. bit-for-bit parity with LightGBM).
+- **On 59 synthetic fixtures (development set; the evidence selector was tuned on it, so exploratory):**
+
+| Mode | Answer kept @16 KB | Fits 16 KB | Mean cut | p50 time |
+|---|---|---|---|---|
+| off (today's head cut) | 26/59 | 6/59 | 52% | 0.2 ms |
+| evidence (new, deterministic) | 58/59 | 59/59 | 79% | ~55 ms |
+| trim-1 conservative / balanced / aggressive, alone | 59/59 | 6 / 13 / 33 of 59 | 6% / 16% / 49% | ~50 ms |
+| trim-1 balanced, then evidence | 58/59 | 59/59 | 78% | ~100 ms |
+
+  - At 4 KB: head cut 17/59, evidence 57/59.
+  - Worst cases:
+    - **evidence:** one 180 KB single line, which no verbatim selector can keep, and one paraphrase at 4 KB;
+    - **head cut:** every error in the middle.
+- **Decision:** both stay **off**.
+  - The evidence selector looks clearly better than the head cut, but only on fixtures it was tuned on.
+  - The independent held-out set was never written: its author was stopped when testing on Linux was paused.
+  - trim-1 adds no measured benefit here: it keeps almost everything, and only the budget step cuts.
+  - Next: a held-out test on real Neko tool output on the laptop.
+
+### Fixes (file, regression test)
+
+**Kernel (`jarvis/kernel`):**
+- `nodes.pair`: 10 simultaneous pairings with one code all succeeded. Now atomic. (`test_nodes`)
+- `owner` approve: 30 parallel PIN guesses were all checked. Checks in flight now count against the limit. (`test_owner`)
+- `owner` pc: the kill switch gave a 500; now an honest 503. (`test_owner`)
+- `store`: one damaged approval row broke the owner's lists; now shown as unreadable. (`test_kernel`)
+- `memory.forget`: forgotten text survived in the database's journal file (WAL); now erased (secure_delete + checkpoint). (`test_memory`)
+- `llm_proxy`: the deep scan ran per message (21 s for 40 messages). Now once per request, and old messages aren't rescanned. (`test_llm_proxy`, incl. DeepScanCache)
+- `mcpwire`: the truncation count was off when scrubbing changed the length. (`test_context_select`)
+
+**Desktop (`plugin/plugins/desktop`):**
+- `coordinator`: retried typing and clicks after a "timeout" (double typing). Now only repeat-safe steps retry. (`test_coordinator`)
+- `coordinator`: empty-lock race let 3 of 8 threads "win". (`test_core`)
+- `coordinator`: a stop during an approval wait wasn't reported as stopped. (`test_coordinator`)
+- `coordinator.summary`:
+  - "could not finish" on a requested stop;
+  - "I will continue once approved" (it doesn't);
+  - "Done" while part of the request was dropped. (`test_coordinator`)
+- `missions`: every browser step was treated as safe to repeat on resume. (`test_missions`)
+- `decide`:
+  - typing after "open X and write Y" (H19's case);
+  - two accounts named → ask;
+  - negations and corrections;
+  - built-in sites can't be shadowed;
+  - the steps limit is reported. (`test_decide_rules`)
+- `skills`: shadowing via ".com" names, private hosts, prompt-line injection, promotion gated against an older version. (`test_skills`)
+
+**Other plugins and the node:**
+- `main_agent.planner`: unknown entries were treated as read-only. Now fail closed. (`test_planner`)
+- `jarvis_node/browser.py`:
+  - text hidden by opacity, off-page position, zero size, transparent colour or clipping reached the model;
+  - `open()` hid HTTP error pages. (`test_browser`)
+- `research`:
+  - inline-hidden text;
+  - a fetch dripped byte by byte had no total deadline;
+  - "5" matched inside "15";
+  - **sources disagreeing on a figure** were both shown as verified;
+  - "Verified" shown without the checker. (`research/tests`)
+- `deliverables`:
+  - deck builder: text measured at a fixed tiny size without the theme font;
+  - a stats slide with more than 4 items was silently cut;
+  - missing Edge gave an install hint instead of a plain message. (`deliverables/tests`)
+
+### Test matrix (final run on this server)
+
+| Suite | Passed | Failed | Skipped / deferred |
+|---|---|---|---|
+| Kernel (unittest) | 513 OK | 0 | 16 skipped, all Windows-only (6 collector, 3 repairs, 2 UI Automation, 3 winbackend, 2 Win32 desktop) |
+| Plugin tests (10 plugins, separately) | 600 | 0 | 1 (lifekit) |
+| Wake listener (offline) | 16 | 0 | |
+| Plugin framework (unit + integration, 2 workers) | 4282 | 15 | 5 skipped |
+| Upstream N.E.K.O tests/unit (earlier run, same code base) | 41,978 | 5 | 176 skipped |
+| Benchmark v2 | 546 | 1 (J-038) | 25 deferred |
+| Live: Dahl routing / research / fake profiles | 12 / 5 / 12 | 0 | |
+| Live: planning with a stand-in model (exploratory) | 97 | 52 | |
+
+**What the 15 framework failures are:**
+- **8 are the plugin metadata snapshots:** laptop rebuild; `jarvis/scripts/check_plugin_metadata.py` names each cause.
+- **7 in `test_plugin_layout_migration.py`:**
+  - they fail identically on the committed code with 2 workers, and pass alone (35/35) or with 5 workers;
+  - so they come from how upstream's tests share state across workers, not from these changes.
+
+**What the 5 upstream failures are (all explained):**
+- The metadata snapshots (`test_builtin_plugin_packaged_metadata`).
+- cloudsave read-only tree (POSIX permissions).
+- Knowledge admission: `knowledge/service.py:1017` marks a job "building" before it waits for the write lock, and the test races that.
+- Voice enrollment: `remaining_seconds` differs by microseconds; Windows' 15.6 ms clock hides it.
+- `test_visit_runtime_finalize` (timing-flaky, 1 of 3 runs alone).
+
+### Measurements
+
+- Kernel suite: 444 s on 2 capped cores.
+- Policy and benchmark cases: the speed cases (`dims: speed`) passed, except J-038.
+- **J-038:** 20 concurrent fresh calls through the proxy, p95 20.4 s on 2 cores and 5.9 s on 6. Without the deep scan: 1.1 s and 0.09 s.
+  - The cost is gitleaks' start-up (~0.5 s CPU per new text).
+  - The cache removes it for re-sent conversations, not for 20 brand-new texts.
+- Context selection: evidence about 55 ms on 200 KB, trim-1 about 50 ms per call.
+- Wake state machine: under 5 ms per 40 ms frame.
+- Dahl: p50 4.1 s per short call, first chunk 1.0 s. Stand-in planning: p50 3.75 s, about 1,000 tokens per call. The whole session used under 0.5M Dahl tokens.
+
+### Risks
+
+- **Critical:**
+  - The approval PIN was typed in chat earlier: change it.
+  - The Dahl key was pasted in chat: revoke it after the build, as planned.
+- **High:**
+  - 8 plugin snapshots are stale: the discovery list shows **0 entries** for desktop, research, deliverables, main_agent, jarvis_bridge and the rest until each plugin starts.
+  - The research confirmation rate is about 42% (thin sources).
+  - Plan latency is about 5 s on the laptop GPU.
+- **Medium:**
+  - The deep secret scan costs ~0.5 s per new text under load (J-038).
+  - The context selectors are measured only on synthetic fixtures.
+  - The benchmark was written by the same team that fixed the code.
+- **Low:**
+  - 4 Linux-only upstream test quirks.
+  - trim-1 is a 2-day-old project, pinned and off.
+
 ## What blocks 9.5 (owner actions)
 
 1. **Real voice (C1):**
@@ -182,3 +377,34 @@ Still Windows-only (not faked here): the 16 kernel skips (UI Automation, Win32, 
    - The same run re-checks S-no-false-completion; the typing read-back fix is in.
 7. **C8 research:** the 17:24 run found nothing (search unavailable), and at 18:05 the checker supported 12 of 24 cited sentences. Re-run with the search service up; it needs the laptop's local models.
 8. **C9 perception:** PE-vision-dialog, PE-vision-grounding and PE-observation-vs-inference have never been run into a saved file.
+9. **Revoke the Dahl key** pasted in chat on 16 Oct once the build is done (Dahl account page → API keys). The test server's copy is `/srv/jarvis/home/.jarvis-secrets/` (owner-only); delete that folder too.
+10. **Linux server, only if you want a Windows VM there:** your relative enables **VT-x/VT-d** in the HP BIOS (F10 → Advanced → System Options) at a time that suits him; any new partition needs an admin with a backup first.
+
+### Laptop-return checklist (Windows, PowerShell in `D:\jarvis\hq-neko`, N.E.K.O stopped first)
+
+```powershell
+# 0. bring the commits over (the server repo is a private copy; push stays disabled), then:
+git log --oneline -8
+# 1. security
+python -m jarvis_kernel set-approval-pin            # new PIN (the old one was typed in chat); kernel console
+# revoke the Dahl test key on https://inference.dahl.global/account
+# 2. plugin metadata (moves git-ignored .vscode folders to D:\jarvis\backup, never deletes)
+powershell -ExecutionPolicy Bypass -File jarvis\scripts\rebuild-plugin-metadata.ps1
+D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\scripts\check_plugin_metadata.py     # expect "0 refused"
+git add plugin/plugins/*/plugin.meta.json; git commit -m "Rebuild plugin metadata on Windows"
+# 3. Chrome profiles: per profile, copy the Playwright MCP extension token, then
+powershell -ExecutionPolicy Bypass -File jarvis\scripts\save_playwright_token.ps1 -Profile "Default"   # repeat per profile
+# 4. voice (owner hardware): record, then tune
+D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\tests\neko_voice_owner_record.py
+D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\wake\eval_owner.py
+# 5. Windows-only tests: the 16 kernel skips and the desktop/plugin suites
+cd jarvis\kernel; D:\jarvis\tools\neko-venv\Scripts\python.exe -B -m unittest discover -s tests; cd ..\..
+D:\jarvis\tools\neko-venv\Scripts\python.exe -m pytest plugin\plugins\desktop\tests -q -p no:cacheprovider
+# 6. live re-runs that feed the v1 scorecard, then score
+D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\tests\neko_safety_live.py
+D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\run_plans.py --repeat 5
+D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\score.py --label after-linux-session
+# 7. benchmark v2 on Windows (runs the same 572 cases; Windows-only ones are still listed as deferred)
+D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\bench\bench.py
+D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\bench\scorecard.py
+```

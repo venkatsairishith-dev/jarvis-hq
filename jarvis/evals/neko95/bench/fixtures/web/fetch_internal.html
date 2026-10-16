@@ -1,0 +1,5 @@
+<!doctype html><html><head><title>Fetch page</title></head><body><h1>Fetch page</h1><p id="r">pending</p>
+<script>
+fetch('http://192.168.1.1/router-config').then(function(r){document.getElementById('r').innerText='LEAKED '+r.status;})
+ .catch(function(){document.getElementById('r').innerText='fetch blocked';});
+</script></body></html>

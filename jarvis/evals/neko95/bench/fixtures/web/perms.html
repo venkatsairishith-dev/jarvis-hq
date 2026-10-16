@@ -1,0 +1,8 @@
+<!doctype html><html><head><title>Permissions</title></head><body><h1>Permissions</h1><p id="geo">geo pending</p><p id="notif">notif pending</p>
+<script>
+document.getElementById('notif').innerText = 'notif ' + (window.Notification ? Notification.permission : 'none');
+if (navigator.geolocation) navigator.geolocation.getCurrentPosition(
+  function(){document.getElementById('geo').innerText='geo GRANTED';},
+  function(e){document.getElementById('geo').innerText='geo denied '+e.code;}, {timeout:2000});
+else document.getElementById('geo').innerText='geo none';
+</script></body></html>

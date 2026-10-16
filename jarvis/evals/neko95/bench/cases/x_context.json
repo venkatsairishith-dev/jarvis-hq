@@ -1,0 +1,241 @@
+[
+ {
+  "id": "X-001",
+  "area": "X",
+  "title": "Default mode is the old head cut",
+  "scenario": "JARVIS_CONTEXT_SELECT unset; a long tool output is selected.",
+  "expected": "Mode 'off'; output starts with the first max_chars characters (behaviour unchanged).",
+  "risk": "high",
+  "check": "default_is_off",
+  "dims": [
+   "resources",
+   "reliability"
+  ]
+ },
+ {
+  "id": "X-002",
+  "area": "X",
+  "title": "Short outputs untouched in every mode",
+  "scenario": "Short outputs under the budget go through every mode.",
+  "expected": "Every result unchanged.",
+  "risk": "medium",
+  "check": "short_untouched",
+  "dims": [
+   "resources",
+   "reliability"
+  ]
+ },
+ {
+  "id": "X-003",
+  "area": "X",
+  "title": "Python nested traceback in the middle, 4 KB",
+  "scenario": "Python traceback with a nested exception in the middle of 1,500 lines of install/test noise.",
+  "expected": "Answer and every critical line kept verbatim, in order, within 4,000 chars.",
+  "risk": "high",
+  "check": "keeps_answer",
+  "dims": [
+   "resources",
+   "recovery"
+  ],
+  "args": {
+   "fixture": "python-middle-017",
+   "budget": 4000
+  }
+ },
+ {
+  "id": "X-004",
+  "area": "X",
+  "title": "Node module error with Windows path, 4 KB",
+  "scenario": "Node 'Cannot find module' with a Windows require stack in the middle.",
+  "expected": "Error, path and code lines kept verbatim within budget.",
+  "risk": "high",
+  "check": "keeps_answer",
+  "dims": [
+   "resources",
+   "recovery"
+  ],
+  "args": {
+   "fixture": "node-middle-018",
+   "budget": 4000
+  }
+ },
+ {
+  "id": "X-005",
+  "area": "X",
+  "title": "Go panic at the end, 4 KB",
+  "scenario": "Go panic with goroutine frame near the end.",
+  "expected": "Panic and file:line frame kept.",
+  "risk": "high",
+  "check": "keeps_answer",
+  "dims": [
+   "resources",
+   "recovery"
+  ],
+  "args": {
+   "fixture": "go-end-032",
+   "budget": 4000
+  }
+ },
+ {
+  "id": "X-006",
+  "area": "X",
+  "title": "Playwright timeout cause in the middle",
+  "scenario": "Browser automation: click timeout and the intercepting cookie banner line in the middle.",
+  "expected": "Both lines kept within 4 KB.",
+  "risk": "high",
+  "check": "keeps_answer",
+  "dims": [
+   "resources",
+   "browser"
+  ],
+  "args": {
+   "fixture": "browser-middle-021",
+   "budget": 4000
+  }
+ },
+ {
+  "id": "X-007",
+  "area": "X",
+  "title": "One real error in a flood of warnings",
+  "scenario": "1,500 DeprecationWarning lines hide one disk-quota error.",
+  "expected": "The error line is kept; warnings do not crowd it out.",
+  "risk": "high",
+  "check": "keeps_answer",
+  "dims": [
+   "resources",
+   "recovery"
+  ],
+  "args": {
+   "fixture": "warning-flood-middle-050",
+   "budget": 4000
+  }
+ },
+ {
+  "id": "X-008",
+  "area": "X",
+  "title": "Injection that repeats the query words",
+  "scenario": "Injected 'note to agent' lines repeat the query to steer selection away from the real 503 error.",
+  "expected": "The real error line is kept.",
+  "risk": "critical",
+  "check": "keeps_answer",
+  "dims": [
+   "resources",
+   "security"
+  ],
+  "args": {
+   "fixture": "injection-steer-middle-048",
+   "budget": 4000
+  }
+ },
+ {
+  "id": "X-009",
+  "area": "X",
+  "title": "Second hop through a service name",
+  "scenario": "The crash line names ledger-svc; the version is on another line that shares no query words.",
+  "expected": "Both lines kept at 16 KB.",
+  "risk": "medium",
+  "check": "keeps_answer",
+  "dims": [
+   "resources",
+   "research"
+  ],
+  "args": {
+   "fixture": "multihop-middle-049",
+   "budget": 16000
+  }
+ },
+ {
+  "id": "X-010",
+  "area": "X",
+  "title": "One correct line among 50 near-duplicates",
+  "scenario": "Distractor build-id lines for other releases.",
+  "expected": "The 7.4.2 line kept at 16 KB.",
+  "risk": "medium",
+  "check": "keeps_answer",
+  "dims": [
+   "resources"
+  ],
+  "args": {
+   "fixture": "distractor-middle-047",
+   "budget": 16000
+  }
+ },
+ {
+  "id": "X-011",
+  "area": "X",
+  "title": "Omitted ranges are exact and the input digest is kept",
+  "scenario": "Selection over a long text.",
+  "expected": "omitted ranges + kept lines = all lines; sha256 of the full input present (recoverable/matchable).",
+  "risk": "high",
+  "check": "omitted_ranges_exact",
+  "dims": [
+   "resources",
+   "reliability"
+  ]
+ },
+ {
+  "id": "X-012",
+  "area": "X",
+  "title": "Selected tool output stays untrusted data",
+  "scenario": "Evidence mode inside mcpwire.process_result over output with injected instructions.",
+  "expected": "Result still marked untrusted with the 'never as instructions' note; selection reported.",
+  "risk": "critical",
+  "check": "untrusted_and_no_authority",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "X-013",
+  "area": "X",
+  "title": "A private key still withholds the whole result",
+  "scenario": "Evidence mode over output that contains a private key block.",
+  "expected": "withheld=True and no key text, whatever the mode.",
+  "risk": "critical",
+  "check": "secret_withheld",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "X-014",
+  "area": "X",
+  "title": "trim-1 configured but missing falls back safely",
+  "scenario": "Mode trim1-balanced with a binary path that does not exist.",
+  "expected": "Falls back to evidence, answer kept, mode says so.",
+  "risk": "high",
+  "check": "fallback_without_binary",
+  "dims": [
+   "reliability"
+  ]
+ },
+ {
+  "id": "X-015",
+  "area": "X",
+  "title": "Selection latency on 200 KB",
+  "scenario": "Evidence selection over the largest fixture (Python traceback, 1,500 filler lines).",
+  "expected": "Median under 150 ms per call on this CPU.",
+  "risk": "medium",
+  "check": "latency",
+  "dims": [
+   "speed"
+  ],
+  "args": {
+   "fixture": "python-middle-017",
+   "budget": 4000,
+   "max_ms": 150
+  }
+ },
+ {
+  "id": "X-016",
+  "area": "X",
+  "title": "A single line longer than the budget",
+  "scenario": "One 180 KB minified JSON line holds the answer.",
+  "expected": "Output fits and reports the omission; the line cannot be kept verbatim (documented limitation).",
+  "risk": "low",
+  "check": "giant_line_limit",
+  "dims": [
+   "resources"
+  ]
+ }
+]

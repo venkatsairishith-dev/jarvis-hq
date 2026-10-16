@@ -1,0 +1,154 @@
+{
+ "time": "2026-10-16 16:31:34",
+ "providers": [
+  "dahl-glm",
+  "dahl-minimax"
+ ],
+ "repeat": 5,
+ "counts": {
+  "pass": 12,
+  "fail": 0
+ },
+ "cases": [
+  {
+   "id": "JL-001",
+   "area": "J",
+   "title": "Only the public-lane Dahl entries are in play",
+   "risk": "critical",
+   "dims": [
+    "routing",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "providers ['dahl-glm', 'dahl-minimax'], key file present True"
+  },
+  {
+   "id": "JL-002",
+   "area": "J",
+   "title": "Public task answered correctly through the proxy",
+   "risk": "high",
+   "dims": [
+    "routing",
+    "reliability"
+   ],
+   "status": "pass",
+   "observed": "5/5 correct; statuses [200, 200, 200, 200, 200]"
+  },
+  {
+   "id": "JL-003",
+   "area": "J",
+   "title": "Public-lane latency p50 under 20 s",
+   "risk": "medium",
+   "dims": [
+    "speed",
+    "routing"
+   ],
+   "status": "pass",
+   "observed": "p50 4.07 s, max 5.29 s over 5 calls"
+  },
+  {
+   "id": "JL-004",
+   "area": "J",
+   "title": "Calls are audited with the provider that served them",
+   "risk": "high",
+   "dims": [
+    "routing",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "5 audited dahl calls; providers ['dahl-minimax']"
+  },
+  {
+   "id": "JL-005",
+   "area": "J",
+   "title": "Token usage is reported per call",
+   "risk": "medium",
+   "dims": [
+    "resources"
+   ],
+   "status": "pass",
+   "observed": "total_tokens per call [121, 121, 121, 121, 121]"
+  },
+  {
+   "id": "JL-006",
+   "area": "J",
+   "title": "A private-lane task never goes to Dahl (fails closed)",
+   "risk": "critical",
+   "dims": [
+    "routing",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "status 503; private dahl calls 0"
+  },
+  {
+   "id": "JL-007",
+   "area": "J",
+   "title": "A secret in the prompt is scrubbed before Dahl sees it",
+   "risk": "critical",
+   "dims": [
+    "security",
+    "routing"
+   ],
+   "status": "pass",
+   "observed": "status 200; reply contains the secret: False; reply starts 'the exact string, which is [REDACTED] itself. So repeating that is allowed.\\n\\nBut'"
+  },
+  {
+   "id": "JL-008",
+   "area": "J",
+   "title": "Tool call comes back well-formed",
+   "risk": "high",
+   "dims": [
+    "routing"
+   ],
+   "status": "pass",
+   "observed": "status 200; tool_calls [{\"function\": {\"arguments\": \"{\\\"city\\\": \\\"Lisbon\\\"}\", \"name\": \"get_weather\"}, \"id\": \"chatcmpl-tool-95b18acc60e9136e\", \"type\": \"function\"}, {\"function\": {\"arguments\": \"{\\\"city\\\": \\\"Lisbon\\\"}\", \"name\": "
+  },
+  {
+   "id": "JL-009",
+   "area": "J",
+   "title": "Streaming works; first chunk time measured",
+   "risk": "medium",
+   "dims": [
+    "routing",
+    "speed"
+   ],
+   "status": "pass",
+   "observed": "67 data chunks, first after 0.99 s"
+  },
+  {
+   "id": "JL-010",
+   "area": "J",
+   "title": "A request without a valid agent token is refused (401)",
+   "risk": "critical",
+   "dims": [
+    "security"
+   ],
+   "status": "pass",
+   "observed": "status 401"
+  },
+  {
+   "id": "JL-011",
+   "area": "J",
+   "title": "A disabled model cannot be reached by naming it",
+   "risk": "high",
+   "dims": [
+    "routing",
+    "security"
+   ],
+   "status": "pass",
+   "observed": "status 200; dahl-deepseek calls 0"
+  },
+  {
+   "id": "JL-012",
+   "area": "J",
+   "title": "The provider key appears in no reply, header, stream, error or audit row",
+   "risk": "critical",
+   "dims": [
+    "security"
+   ],
+   "status": "pass",
+   "observed": "searched 23563 characters"
+  }
+ ]
+}

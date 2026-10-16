@@ -1,0 +1,1000 @@
+[
+ {
+  "id": "J-001",
+  "area": "J",
+  "title": "Private task never planned on Dahl (public)",
+  "scenario": "Provider table: dahl (public, priority 0), groq (private), ollama (local). A private task asks for a chain.",
+  "expected": "Chain is exactly [ollama, groq]; dahl absent.",
+  "risk": "critical",
+  "check": "lane_plan",
+  "dims": [
+   "routing",
+   "security"
+  ],
+  "args": {
+   "lane": "private",
+   "providers": [
+    {
+     "name": "dahl",
+     "lane": "public",
+     "priority": 0
+    },
+    {
+     "name": "groq",
+     "lane": "private"
+    },
+    {
+     "name": "ollama",
+     "lane": "local"
+    }
+   ],
+   "want": [
+    "ollama",
+    "groq"
+   ]
+  }
+ },
+ {
+  "id": "J-002",
+  "area": "J",
+  "title": "Only Dahl available: private task fails closed",
+  "scenario": "The only available provider is public Dahl; every private provider is disabled or keyless. A private task is planned.",
+  "expected": "plan() raises RouteError; the lane is never widened to public.",
+  "risk": "critical",
+  "check": "lane_plan",
+  "dims": [
+   "routing",
+   "security"
+  ],
+  "args": {
+   "lane": "private",
+   "providers": [
+    {
+     "name": "dahl",
+     "lane": "public"
+    },
+    {
+     "name": "groq",
+     "lane": "private",
+     "enabled": false
+    },
+    {
+     "name": "cer",
+     "lane": "private",
+     "key_file": "missing"
+    }
+   ],
+   "want": "RouteError"
+  }
+ },
+ {
+  "id": "J-003",
+  "area": "J",
+  "title": "Public task never gets a private provider",
+  "scenario": "A public (test-agent) task with groq private at priority 0 and dahl public at 50.",
+  "expected": "Chain is exactly [dahl].",
+  "risk": "critical",
+  "check": "lane_plan",
+  "dims": [
+   "routing",
+   "security"
+  ],
+  "args": {
+   "lane": "public",
+   "providers": [
+    {
+     "name": "groq",
+     "lane": "private",
+     "priority": 0
+    },
+    {
+     "name": "dahl",
+     "lane": "public"
+    }
+   ],
+   "want": [
+    "dahl"
+   ]
+  }
+ },
+ {
+  "id": "J-004",
+  "area": "J",
+  "title": "Paid or unknown-lane provider never used",
+  "scenario": "Private lane: a paid private provider at priority 0, a provider with lane 'cloud', and one free private provider.",
+  "expected": "Chain is exactly [free]; paid and unknown-lane providers excluded.",
+  "risk": "high",
+  "check": "lane_plan",
+  "dims": [
+   "routing",
+   "security"
+  ],
+  "args": {
+   "lane": "private",
+   "providers": [
+    {
+     "name": "paid",
+     "lane": "private",
+     "paid": true,
+     "priority": 0
+    },
+    {
+     "name": "odd",
+     "lane": "cloud"
+    },
+    {
+     "name": "free",
+     "lane": "private"
+    }
+   ],
+   "want": [
+    "free"
+   ]
+  }
+ },
+ {
+  "id": "J-005",
+  "area": "J",
+  "title": "Missing key file skipped, present key used",
+  "scenario": "Two private providers: one whose key file does not exist, one whose key file is present.",
+  "expected": "Chain is exactly [haskey]; no exception for the missing key.",
+  "risk": "medium",
+  "check": "lane_plan",
+  "dims": [
+   "routing",
+   "reliability"
+  ],
+  "args": {
+   "lane": "private",
+   "providers": [
+    {
+     "name": "nokey",
+     "lane": "private",
+     "key_file": "missing",
+     "priority": 1
+    },
+    {
+     "name": "haskey",
+     "lane": "private",
+     "key": "present",
+     "priority": 2
+    }
+   ],
+   "want": [
+    "haskey"
+   ]
+  }
+ },
+ {
+  "id": "J-006",
+  "area": "J",
+  "title": "Unknown task lane refused",
+  "scenario": "A task arrives with lane 'owner' (not private/public) and every provider available.",
+  "expected": "plan() raises RouteError (no default lane is assumed).",
+  "risk": "high",
+  "check": "lane_plan",
+  "dims": [
+   "routing",
+   "security"
+  ],
+  "args": {
+   "lane": "owner",
+   "providers": [
+    {
+     "name": "l",
+     "lane": "local"
+    },
+    {
+     "name": "p",
+     "lane": "private"
+    }
+   ],
+   "want": "RouteError"
+  }
+ },
+ {
+  "id": "J-007",
+  "area": "J",
+  "title": "Priority order, ties broken local-first then config order",
+  "scenario": "Private lane: b (private, 10), a (private, 10), loc (local, 10), slow (local, 90), purpose filter 'code' with one provider lacking it.",
+  "expected": "Chain is exactly [loc, b, a, slow]; 'nocode' excluded by purpose.",
+  "risk": "medium",
+  "check": "lane_plan",
+  "dims": [
+   "routing"
+  ],
+  "args": {
+   "lane": "private",
+   "purpose": "code",
+   "providers": [
+    {
+     "name": "b",
+     "lane": "private",
+     "priority": 10
+    },
+    {
+     "name": "a",
+     "lane": "private",
+     "priority": 10
+    },
+    {
+     "name": "loc",
+     "lane": "local",
+     "priority": 10
+    },
+    {
+     "name": "slow",
+     "lane": "local",
+     "priority": 90
+    },
+    {
+     "name": "nocode",
+     "lane": "private",
+     "priority": 1,
+     "models": [
+      "chat"
+     ]
+    }
+   ],
+   "want": [
+    "loc",
+    "b",
+    "a",
+    "slow"
+   ]
+  }
+ },
+ {
+  "id": "J-008",
+  "area": "J",
+  "title": "Route explanation codes are truthful",
+  "scenario": "explain() for a private 20k-token request: a small provider (8k), a resting one, dahl public, a paid one, and the owner-preferred one.",
+  "expected": "small has CONTEXT_TOO_SMALL, resting has RESTING_AFTER_ERRORS, dahl LANE_MISMATCH, paid PAID_REFUSED; chosen is the preferred 'big'.",
+  "risk": "medium",
+  "check": "explain_codes",
+  "dims": [
+   "routing",
+   "ux"
+  ],
+  "args": {
+   "lane": "private",
+   "est_tokens": 20000,
+   "rest": {
+    "resting": 25
+   },
+   "preferred": "big",
+   "providers": [
+    {
+     "name": "small",
+     "lane": "private",
+     "max_total_tokens": 8000,
+     "priority": 1
+    },
+    {
+     "name": "resting",
+     "lane": "private",
+     "priority": 2
+    },
+    {
+     "name": "dahl",
+     "lane": "public",
+     "priority": 0
+    },
+    {
+     "name": "paid",
+     "lane": "private",
+     "paid": true
+    },
+    {
+     "name": "other",
+     "lane": "private",
+     "priority": 3
+    },
+    {
+     "name": "big",
+     "lane": "private",
+     "priority": 9
+    }
+   ],
+   "want_codes": {
+    "small": [
+     "CONTEXT_TOO_SMALL"
+    ],
+    "resting": [
+     "RESTING_AFTER_ERRORS"
+    ],
+    "dahl": [
+     "LANE_MISMATCH"
+    ],
+    "paid": [
+     "PAID_REFUSED"
+    ],
+    "big": [
+     "OWNER_PREFERRED"
+    ]
+   },
+   "want_chosen": "big"
+  }
+ },
+ {
+  "id": "J-009",
+  "area": "J",
+  "title": "Gateway call: scrub, lane, private key block",
+  "scenario": "gateway.call() on a private task with a GitHub token in the prompt; Dahl (public) is priority 0, the first private provider answers 500. Then a prompt with a PEM private key.",
+  "expected": "Answer from the 2nd private provider; Dahl gets 0 requests; the token never leaves (sent text has [REDACTED]); the private-key prompt raises RouteError with 0 further requests; audit has no token.",
+  "risk": "critical",
+  "check": "gateway_call_scrub_and_lane",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-010",
+  "area": "J",
+  "title": "Free-model guard refuses a paid model before sending",
+  "scenario": "An OpenRouter-style provider configured with a paid model but pattern ':free$', followed by a free provider.",
+  "expected": "The guarded provider gets 0 requests; the next provider answers; a model_refused audit row exists.",
+  "risk": "high",
+  "check": "gateway_call_free_model_guard",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-011",
+  "area": "J",
+  "title": "Empty reply and unreachable provider fall through",
+  "scenario": "Chain: a provider answering with empty content, one with nothing listening, then a good one. Second call without the good one.",
+  "expected": "First call returns the good answer; second raises RouteError 'all providers failed'; audit classes include ValueError and URLError.",
+  "risk": "high",
+  "check": "gateway_call_empty_and_all_fail",
+  "dims": [
+   "routing",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-012",
+  "area": "J",
+  "title": "Provider timeout honoured in gateway.call",
+  "scenario": "First provider hangs 3 s with timeout_s=1; second answers immediately.",
+  "expected": "Second provider's answer within 2.5 s total.",
+  "risk": "high",
+  "check": "gateway_timeout_falls_through",
+  "dims": [
+   "routing",
+   "recovery",
+   "speed"
+  ],
+  "args": {
+   "max_s": 2.5
+  }
+ },
+ {
+  "id": "J-013",
+  "area": "J",
+  "title": "Token estimate close to measured ratio",
+  "scenario": "A 24k-character prose request (and the same with a 4k-char tool schema).",
+  "expected": "estimate/(chars/4.66) between 1.0 and 1.3 (safe over-estimate, not wildly off); tool schema adds >= 900 tokens; empty request >= 1.",
+  "risk": "medium",
+  "check": "sizing_estimate",
+  "dims": [
+   "routing",
+   "resources"
+  ],
+  "args": {
+   "lo": 1.0,
+   "hi": 1.3
+  }
+ },
+ {
+  "id": "J-014",
+  "area": "J",
+  "title": "Provider refusals classified",
+  "scenario": "Refusals: 413; 400 'maximum context length'; 400 'invalid tool'; 429 'rate limit'; 429 'Request too large ... tokens per minute'; 500; 401.",
+  "expected": "Classes: too_large, too_large, other, rate_limited, too_large, other, other.",
+  "risk": "high",
+  "check": "sizing_classify",
+  "dims": [
+   "routing",
+   "recovery"
+  ],
+  "args": {
+   "cases": [
+    [
+     413,
+     ""
+    ],
+    [
+     400,
+     "This model's maximum context length is 8192"
+    ],
+    [
+     400,
+     "invalid tool schema"
+    ],
+    [
+     429,
+     "rate limit reached"
+    ],
+    [
+     429,
+     "Request too large for model in organization on tokens per min"
+    ],
+    [
+     500,
+     "boom"
+    ],
+    [
+     401,
+     "invalid api key"
+    ]
+   ],
+   "want": [
+    "too_large",
+    "too_large",
+    "other",
+    "rate_limited",
+    "too_large",
+    "other",
+    "other"
+   ]
+  }
+ },
+ {
+  "id": "J-015",
+  "area": "J",
+  "title": "Rate-limit rest times",
+  "scenario": "Retry-After '20'; Retry-After '999999'; Retry-After 'soon' with no text; daily quota text; nothing.",
+  "expected": "Rests 20, 21600 (6 h cap), 60, 3600, 60.",
+  "risk": "medium",
+  "check": "sizing_cooldown",
+  "dims": [
+   "routing",
+   "recovery"
+  ],
+  "args": {
+   "cases": [
+    [
+     "20",
+     ""
+    ],
+    [
+     "999999",
+     ""
+    ],
+    [
+     "soon",
+     ""
+    ],
+    [
+     null,
+     "free-models-per-day limit"
+    ],
+    [
+     null,
+     ""
+    ]
+   ],
+   "want": [
+    20,
+    21600,
+    60,
+    3600,
+    60
+   ]
+  }
+ },
+ {
+  "id": "J-016",
+  "area": "J",
+  "title": "Fit and answer-budget arithmetic",
+  "scenario": "An 8000 total-token provider and a 120k input provider; requests of 6000/7500/100k/130k tokens.",
+  "expected": "8000-total fits 6000 not 7500, answer budget 2000 for 6000 in; 120k fits 100k not 130k; lane context 120000; small lane reported as 64000.",
+  "risk": "medium",
+  "check": "sizing_fit_budget",
+  "dims": [
+   "routing",
+   "resources"
+  ]
+ },
+ {
+  "id": "J-017",
+  "area": "J",
+  "title": "Summary calls detected and checked",
+  "scenario": "A Hermes compression call (and the same with tools); summary replies cut at the cap, too short, complete, malformed.",
+  "expected": "Detected only without tools; cut->truncated, short->empty, complete ok, malformed->no choices.",
+  "risk": "medium",
+  "check": "sizing_summary",
+  "dims": [
+   "routing",
+   "reliability"
+  ]
+ },
+ {
+  "id": "J-018",
+  "area": "J",
+  "title": "Proxy: primary success relayed, key added",
+  "scenario": "An agent call through the real llm_proxy to a mock primary.",
+  "expected": "HTTP 200 with the provider body unchanged; the provider got the proxy's key and configured model; neither key nor agent token in the audit; < 500 ms.",
+  "risk": "critical",
+  "check": "proxy_primary_success",
+  "dims": [
+   "routing",
+   "security",
+   "speed"
+  ],
+  "args": {
+   "max_ms": 500
+  }
+ },
+ {
+  "id": "J-019",
+  "area": "J",
+  "title": "Proxy: 429 falls back and the primary rests",
+  "scenario": "Primary answers 429 with Retry-After 20 on the first call; a same-lane fallback answers. A second call inside 20 s, a third after.",
+  "expected": "Calls 1-2 answered by the fallback, primary asked once during its rest; after 21 s the primary answers again.",
+  "risk": "high",
+  "check": "proxy_429_fallback_and_rest",
+  "dims": [
+   "routing",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-020",
+  "area": "J",
+  "title": "Proxy: every provider rate limited",
+  "scenario": "The only provider of the public lane answers 429 Retry-After 45; the agent calls twice.",
+  "expected": "Both calls get 429 with Retry-After <= 45; the second is answered without asking the provider again.",
+  "risk": "high",
+  "check": "proxy_all_rate_limited",
+  "dims": [
+   "routing",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-021",
+  "area": "J",
+  "title": "Proxy: provider timeout falls back",
+  "scenario": "Primary hangs 3 s with timeout_s=1; fallback answers.",
+  "expected": "HTTP 200 from the fallback within 2.5 s; the timeout is audited for the primary.",
+  "risk": "high",
+  "check": "proxy_timeout_fallback",
+  "dims": [
+   "routing",
+   "recovery",
+   "speed"
+  ],
+  "args": {
+   "max_s": 2.5
+  }
+ },
+ {
+  "id": "J-022",
+  "area": "J",
+  "title": "Proxy: malformed JSON summary rejected",
+  "scenario": "A context-compression call; the primary answers 200 with HTML/invalid JSON; the fallback returns a 400-char summary.",
+  "expected": "HTTP 200 with the fallback's summary; the broken body is never passed on.",
+  "risk": "high",
+  "check": "proxy_malformed_summary",
+  "dims": [
+   "routing",
+   "reliability"
+  ]
+ },
+ {
+  "id": "J-023",
+  "area": "J",
+  "title": "Proxy: malformed normal reply does not break it",
+  "scenario": "A normal call whose provider returns invalid JSON, then a normal call.",
+  "expected": "The bytes are relayed as-is (proxy never parses normal replies) and the next call gets HTTP 200.",
+  "risk": "medium",
+  "check": "proxy_malformed_plain_then_healthy",
+  "dims": [
+   "routing",
+   "reliability"
+  ]
+ },
+ {
+  "id": "J-024",
+  "area": "J",
+  "title": "Proxy: 401 key failure, echoing error page",
+  "scenario": "The primary rejects its key with 401 and echoes the Authorization header in its error body; a fallback exists. Then the bad provider alone.",
+  "expected": "With fallback: HTTP 200. Alone: HTTP 502 mentioning 401. No configured key appears in either reply or the audit.",
+  "risk": "critical",
+  "check": "proxy_401_fallback_no_key_leak",
+  "dims": [
+   "routing",
+   "security",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-025",
+  "area": "J",
+  "title": "Proxy: three keys never leak",
+  "scenario": "Three providers with distinct synthetic keys: 429, 500, success, streaming, then all failing.",
+  "expected": "No key in any reply body, header or audit row; each provider only ever received its own key.",
+  "risk": "critical",
+  "check": "proxy_keys_never_leak_anywhere",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-026",
+  "area": "J",
+  "title": "Proxy: provider down then recovers",
+  "scenario": "Primary has nothing listening; fallback answers. The primary comes up; a call during the 30 s rest; a call after it.",
+  "expected": "Fallback answers while down and during the rest (primary asked 0 times); after 31 s the primary answers.",
+  "risk": "high",
+  "check": "proxy_down_then_recovery",
+  "dims": [
+   "routing",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-027",
+  "area": "J",
+  "title": "Proxy: one same-provider retry on 5xx",
+  "scenario": "Primary returns 500 'error parsing tool call' once, then succeeds; another provider is configured.",
+  "expected": "HTTP 200 from the primary's second sample; primary asked 2x, the other 0x.",
+  "risk": "medium",
+  "check": "proxy_5xx_retry_same_once",
+  "dims": [
+   "routing",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-028",
+  "area": "J",
+  "title": "Proxy: context too large answered fast",
+  "scenario": "A ~50k-token request; the lane's providers accept 8k total and 32k input.",
+  "expected": "HTTP 413 code context_length_exceeded in < 1000 ms; no provider is called.",
+  "risk": "high",
+  "check": "proxy_context_too_large_fast",
+  "dims": [
+   "routing",
+   "resources",
+   "speed"
+  ],
+  "args": {
+   "max_ms": 1000
+  }
+ },
+ {
+  "id": "J-029",
+  "area": "J",
+  "title": "Proxy: too-small provider skipped",
+  "scenario": "A ~15k-token request; the priority-1 provider holds 8k total, the next 128k.",
+  "expected": "HTTP 200 from the big provider; small asked 0x; an agent_model_skipped audit names it.",
+  "risk": "high",
+  "check": "proxy_small_provider_skipped",
+  "dims": [
+   "routing",
+   "resources"
+  ]
+ },
+ {
+  "id": "J-030",
+  "area": "J",
+  "title": "Proxy: upstream size refusals give 413",
+  "scenario": "Both providers refuse for size (413 'Request too large', 400 'maximum context length').",
+  "expected": "Agent gets 413 context_length_exceeded (not 502); each provider asked exactly once.",
+  "risk": "high",
+  "check": "proxy_upstream_size_refusals_413",
+  "dims": [
+   "routing",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-031",
+  "area": "J",
+  "title": "Proxy: client disconnect mid-stream",
+  "scenario": "The agent opens a slow streamed call (400 chunks, 20 ms apart) and closes its socket after the first bytes.",
+  "expected": "The upstream's writes fail within 6 s (the proxy stopped relaying and closed the upstream), and the next call gets HTTP 200.",
+  "risk": "high",
+  "check": "proxy_client_disconnect",
+  "dims": [
+   "routing",
+   "reliability",
+   "resources"
+  ],
+  "args": {
+   "max_s": 6
+  }
+ },
+ {
+  "id": "J-032",
+  "area": "J",
+  "title": "Proxy: owner token never reaches Dahl",
+  "scenario": "Dahl is public priority 0; the only private provider is down. The owner's private token sends bank/API-key text; a public test token sends a GitHub token.",
+  "expected": "Owner call fails (502/503) with Dahl asked 0 times; lab call reaches Dahl with the token, API key and card digits absent.",
+  "risk": "critical",
+  "check": "proxy_lane_binding_dahl",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-033",
+  "area": "J",
+  "title": "Proxy: model preference stays in lane",
+  "scenario": "The public agent tries to prefer private groq; the owner's agent tries to prefer public Dahl, then private cerebras.",
+  "expected": "Cross-lane preferences refused (400); cerebras accepted and serves the next call; groq and Dahl get 0 calls.",
+  "risk": "high",
+  "check": "proxy_prefer_stays_in_lane",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-034",
+  "area": "J",
+  "title": "Proxy: non-agent tokens make no model calls",
+  "scenario": "Dashboard, owner-console, invalid and runner tokens call /v1/chat/completions.",
+  "expected": "403, 403, 401, and 403/404; the provider gets 0 requests.",
+  "risk": "high",
+  "check": "proxy_non_agent_tokens",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-035",
+  "area": "J",
+  "title": "Proxy: per-agent rate limit and kill switch",
+  "scenario": "One agent makes PER_MINUTE+1 calls in a minute, one after a minute, then the kill switch is set.",
+  "expected": "First PER_MINUTE calls 200, the next 429, after 61 s 200, killed 503 with 0 upstream requests.",
+  "risk": "high",
+  "check": "proxy_rate_limit_and_kill",
+  "dims": [
+   "routing",
+   "resources",
+   "security"
+  ]
+ },
+ {
+  "id": "J-036",
+  "area": "J",
+  "title": "Proxy: context length advertised per lane",
+  "scenario": "Private lane has 8k and 131072 providers; public lane only an 8k one. Agents read /v1/models.",
+  "expected": "Private reports 131072; public reports the 64000 agent minimum.",
+  "risk": "medium",
+  "check": "proxy_models_context",
+  "dims": [
+   "routing",
+   "resources"
+  ]
+ },
+ {
+  "id": "J-037",
+  "area": "J",
+  "title": "Proxy: 40-message history overhead",
+  "scenario": "A 40-message conversation (a normal long agent session) through the proxy to an instant mock provider.",
+  "expected": "HTTP 200 in < 2000 ms total (proxy overhead: scrubbing, sizing, audit).",
+  "risk": "high",
+  "check": "proxy_long_history_latency",
+  "dims": [
+   "routing",
+   "speed",
+   "resources"
+  ],
+  "args": {
+   "n": 40,
+   "max_ms": 2000
+  }
+ },
+ {
+  "id": "J-038",
+  "area": "J",
+  "title": "Proxy: 20 parallel calls",
+  "scenario": "Two agents send 20 concurrent calls to a mock with 50 ms latency.",
+  "expected": "20/20 HTTP 200; p95 latency < 1500 ms.",
+  "risk": "medium",
+  "check": "proxy_concurrent_load",
+  "dims": [
+   "routing",
+   "reliability",
+   "speed"
+  ],
+  "args": {
+   "p95_ms": 1500
+  }
+ },
+ {
+  "id": "J-039",
+  "area": "J",
+  "title": "Local team routing order",
+  "scenario": "Requests: python error (rules), percentage (rules), ambiguous with Jev 0.8 'math', Jev 0.4 + router 'code', Jev down + router garbage.",
+  "expected": "code/rules, math/rules, math/jev, code/router, general/default.",
+  "risk": "medium",
+  "check": "team_route",
+  "dims": [
+   "routing"
+  ],
+  "args": {
+   "cases": [
+    [
+     "fix this python traceback in my script",
+     null,
+     "general",
+     [
+      "code",
+      "rules"
+     ]
+    ],
+    [
+     "what is 15% of 240",
+     null,
+     "general",
+     [
+      "math",
+      "rules"
+     ]
+    ],
+    [
+     "help me split the dinner bill fairly",
+     [
+      "math",
+      0.8
+     ],
+     "general",
+     [
+      "math",
+      "jev"
+     ]
+    ],
+    [
+     "my laptop app keeps freezing on startup",
+     [
+      "general",
+      0.4
+     ],
+     "code",
+     [
+      "code",
+      "router"
+     ]
+    ],
+    [
+     "tell me something nice",
+     null,
+     "banana",
+     [
+      "general",
+      "default"
+     ]
+    ]
+   ]
+  }
+ },
+ {
+  "id": "J-040",
+  "area": "J",
+  "title": "RAM guard before loading a local model",
+  "scenario": "6 GB free: load general (5.5 GB) and code (1.8 GB); general already loaded at 2 GB free; owner override NEKO_MODEL_RAM_GB_GENERAL=2.",
+  "expected": "general refused with a message naming 5.5 GB; code ok; loaded ok; override ok.",
+  "risk": "high",
+  "check": "team_memory_guard",
+  "dims": [
+   "resources"
+  ]
+ },
+ {
+  "id": "J-041",
+  "area": "J",
+  "title": "Low RAM: nothing sent to the local model",
+  "scenario": "psutil reports 3 GB free and no model is loaded; ask_local('general').",
+  "expected": "TeamError 'Not enough free memory'; 0 model calls.",
+  "risk": "high",
+  "check": "team_ask_local_refuses_low_memory",
+  "dims": [
+   "resources",
+   "reliability"
+  ]
+ },
+ {
+  "id": "J-042",
+  "area": "J",
+  "title": "ask_local input limits and reasoning strip",
+  "scenario": "Empty task, task over MAX_TASK, unknown specialist; then a math answer wrapped in <think>.",
+  "expected": "Three TeamErrors with 0 model calls; the answer is 'Final: 42' with left_this_pc False.",
+  "risk": "medium",
+  "check": "team_ask_local_limits",
+  "dims": [
+   "routing",
+   "reliability"
+  ]
+ },
+ {
+  "id": "J-043",
+  "area": "J",
+  "title": "Adviser only through the privacy gateway",
+  "scenario": "advise() with Dahl's direct URL, the local llama-swap URL, an empty URL and a look-alike path; then the gateway URL.",
+  "expected": "All four refused with 0 requests; exactly one request, to 127.0.0.1:48950.",
+  "risk": "critical",
+  "check": "team_adviser_needs_gateway",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-044",
+  "area": "J",
+  "title": "Adviser use policy in solve()",
+  "scenario": "use_adviser never; auto with Jev 'direct 0.9'; auto with Jev down; always with an adviser that times out.",
+  "expected": "0, 0, 1 adviser calls respectively; the failing adviser gives a local answer with note 'adviser skipped'.",
+  "risk": "medium",
+  "check": "team_solve_adviser_policy",
+  "dims": [
+   "routing",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-045",
+  "area": "J",
+  "title": "Placeholders: Dahl never sees the password",
+  "scenario": "local_team.advise() through the REAL privacy gateway (detector replaced by redactor.py's cue-word pattern; Presidio not in the image) to a mock Dahl that streams the plan with [PASSWORD_1] split across chunks.",
+  "expected": "Dahl's request has [PASSWORD_1] and not the password; the returned plan has the real password restored; the caller's key is passed through.",
+  "risk": "critical",
+  "check": "privacy_placeholders_roundtrip",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-046",
+  "area": "J",
+  "title": "Placeholders restored in content and tool calls",
+  "scenario": "Same password twice in one message, non-streamed; the mock answers using the placeholder in content and a tool-call argument.",
+  "expected": "Dahl sees [PASSWORD_1] twice (one placeholder per value) and never the value; content and tool arguments come back with the real value.",
+  "risk": "high",
+  "check": "privacy_nonstream_restore_and_tools",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-047",
+  "area": "J",
+  "title": "Privacy gateway fallback uses its own key",
+  "scenario": "Dahl answers 429; the fallback provider has its own key file and model. Two calls.",
+  "expected": "Both calls answered by the fallback with its own key and model (caller's Dahl key not sent there) and no password; Dahl, which carries the caller's key, is tried first on each call (2x, by design).",
+  "risk": "high",
+  "check": "privacy_fallback_own_key",
+  "dims": [
+   "routing",
+   "security",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-048",
+  "area": "J",
+  "title": "GPU/VRAM fit of local models on the laptop",
+  "scenario": "On the owner's laptop (4 GB GPU, 1.2 GB used by apps) llama-swap loads the decider and specialists; measure VRAM spill and tokens/s.",
+  "expected": "Measured VRAM use and tokens/s per model recorded; no model load pushes free RAM under the 1.5 GB reserve.",
+  "risk": "medium",
+  "check": "none",
+  "dims": [
+   "resources"
+  ],
+  "platform": "owner_hardware"
+ }
+]

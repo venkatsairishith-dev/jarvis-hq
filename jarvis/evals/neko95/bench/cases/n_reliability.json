@@ -1,0 +1,434 @@
+[
+ {
+  "id": "N-001",
+  "area": "N",
+  "title": "One approval, many simultaneous users",
+  "scenario": "16 threads authorize the same approved action at the same instant.",
+  "expected": "Exactly one allowed; no errors; audit chain verifies.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "one_approval_many_threads",
+  "args": {
+   "threads": 16
+  },
+  "repeat": 3
+ },
+ {
+  "id": "N-002",
+  "area": "N",
+  "title": "Approve and deny race",
+  "scenario": "20 times, the owner's approve and deny for the same approval arrive at the same instant.",
+  "expected": "Exactly one decision wins each time; a denied approval never runs; chain verifies.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "approve_deny_race",
+  "args": {
+   "trials": 20
+  }
+ },
+ {
+  "id": "N-003",
+  "area": "N",
+  "title": "Duplicate approval and denial events",
+  "scenario": "approve, approve, deny on one approval; deny, deny, approve on another (retried messages).",
+  "expected": "Only the first decision counts ([T,F,F,T,F,F]); final states approved/denied; each refused repeat audited.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "duplicate_decisions"
+ },
+ {
+  "id": "N-004",
+  "area": "N",
+  "title": "Concurrent approval requests",
+  "scenario": "20 threads each request 5 different approvals.",
+  "expected": "100 distinct ids, 100 pending rows, 100 request rows, chain verifies.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "concurrent_requests"
+ },
+ {
+  "id": "N-005",
+  "area": "N",
+  "title": "One pairing code raced by many nodes",
+  "scenario": "10 times, 10 threads trade the same one-time pairing code at once.",
+  "expected": "Exactly one token per code, every time.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "concurrent_pairing",
+  "args": {
+   "trials": 10
+  }
+ },
+ {
+  "id": "N-006",
+  "area": "N",
+  "title": "PIN guesses in parallel respect the limit",
+  "scenario": "30 wrong PINs for one approval are sent at the same instant over the owner plane.",
+  "expected": "No more than PIN_TRIES (5) guesses are actually checked; the rest are refused 429.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "concurrent_wrong_pins"
+ },
+ {
+  "id": "N-007",
+  "area": "N",
+  "title": "Audit with two connections and many threads",
+  "scenario": "Two Kernel instances on the same folder, 8 threads, 25 appends each.",
+  "expected": "Chain verifies with exactly 200 events.",
+  "risk": "critical",
+  "dims": [
+   "reliability"
+  ],
+  "check": "audit_two_connections"
+ },
+ {
+  "id": "N-008",
+  "area": "N",
+  "title": "Audit with concurrent writer processes",
+  "scenario": "4 separate processes append 60 audit rows each at the same time.",
+  "expected": "Chain verifies with exactly 240 events; all exit 0.",
+  "risk": "critical",
+  "dims": [
+   "reliability"
+  ],
+  "check": "audit_many_processes",
+  "args": {
+   "procs": 4
+  }
+ },
+ {
+  "id": "N-009",
+  "area": "N",
+  "title": "Process killed in the middle of audit writes",
+  "scenario": "A writer process is SIGKILLed while appending in a tight loop.",
+  "expected": "The chain verifies afterwards and the next append works.",
+  "risk": "critical",
+  "dims": [
+   "reliability"
+  ],
+  "check": "crash_mid_append"
+ },
+ {
+  "id": "N-010",
+  "area": "N",
+  "title": "Process dies inside a transaction",
+  "scenario": "A process writes an approval and its audit row in one transaction, then exits before commit.",
+  "expected": "Neither row exists afterwards; chain verifies.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "crash_inside_tx"
+ },
+ {
+  "id": "N-011",
+  "area": "N",
+  "title": "Corrupt state database",
+  "scenario": "state.db is replaced with random bytes.",
+  "expected": "Kernel refuses to start (DatabaseError) and leaves the file untouched.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "corrupt_db"
+ },
+ {
+  "id": "N-012",
+  "area": "N",
+  "title": "Half-truncated state database",
+  "scenario": "state.db with 400 audit rows is cut to half its size.",
+  "expected": "Either the kernel refuses to open it or verify() with the anchor fails; never 'ok'.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "truncated_db"
+ },
+ {
+  "id": "N-013",
+  "area": "N",
+  "title": "Connector allowlist cut off mid-write",
+  "scenario": "connectors.local.json holds half a JSON document.",
+  "expected": "Read as empty; a connector job is not_configured; nothing starts.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "corrupt_node_config"
+ },
+ {
+  "id": "N-014",
+  "area": "N",
+  "title": "Projects allowlist corrupt",
+  "scenario": "projects.json holds half a JSON document and a project_check job arrives.",
+  "expected": "The job returns ok=false with an error class; no crash.",
+  "risk": "medium",
+  "dims": [
+   "reliability"
+  ],
+  "check": "corrupt_projects"
+ },
+ {
+  "id": "N-015",
+  "area": "N",
+  "title": "Damaged JSON rows do not break the owner plane",
+  "scenario": "A job row with broken params/result, an audit row with broken payload and one approval with broken JSON.",
+  "expected": "Job view 200 with result None; events 200; state 200 and still lists the good approval.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "corrupt_rows_owner"
+ },
+ {
+  "id": "N-016",
+  "area": "N",
+  "title": "Database full during an approved action",
+  "scenario": "SQLite hits its size limit (max_page_count) before an approved action is authorized; then space is freed.",
+  "expected": "authorize raises (not allowed); chain verifies; after space returns a GREEN action is allowed and the chain still verifies.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "disk_full_sqlite"
+ },
+ {
+  "id": "N-017",
+  "area": "N",
+  "title": "Deep scrub with no usable temp folder",
+  "scenario": "TMPDIR points to a missing folder (as on a full or broken disk) and a token goes through scrub(deep=True).",
+  "expected": "No crash; the built-in pass still redacts the token.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "scrub_no_tempdir"
+ },
+ {
+  "id": "N-018",
+  "area": "N",
+  "title": "Node output save on a full disk",
+  "scenario": "The node saves an output while open() fails with ENOSPC.",
+  "expected": "Result ok=false, error 'OSError'; no partial file left.",
+  "risk": "medium",
+  "dims": [
+   "reliability"
+  ],
+  "check": "node_output_enospc"
+ },
+ {
+  "id": "N-019",
+  "area": "N",
+  "title": "Repeated kill and resume",
+  "scenario": "50 kill/resume cycles with an action attempted in each state.",
+  "expected": "Refused every time killed, allowed every time resumed; 50 kill and 50 resume rows; chain verifies.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "kill_resume_cycles",
+  "args": {
+   "cycles": 50
+  }
+ },
+ {
+  "id": "N-020",
+  "area": "N",
+  "title": "Kill switch under load",
+  "scenario": "8 threads authorize in a loop; the owner kills the switch mid-way.",
+  "expected": "No action that began after kill() returned is allowed; chain verifies.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "kill_during_load",
+  "repeat": 2
+ },
+ {
+  "id": "N-021",
+  "area": "N",
+  "title": "Write lock held by a live process",
+  "scenario": "Another process holds the SQLite write lock for 1.5 s.",
+  "expected": "The kernel waits and the audit append succeeds (no 'database is locked').",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "lock_held_by_live_process"
+ },
+ {
+  "id": "N-022",
+  "area": "N",
+  "title": "Write lock left by a crashed process",
+  "scenario": "A process takes the write lock, writes, and is SIGKILLed.",
+  "expected": "The next writer proceeds within 5 s; its uncommitted row is gone; chain verifies.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "lock_from_dead_process"
+ },
+ {
+  "id": "N-023",
+  "area": "N",
+  "title": "Stale running command after restart",
+  "scenario": "An owner command was 'running' when the kernel stopped.",
+  "expected": "On restart it is failed with a 'restarted' error; the gate is free.",
+  "risk": "medium",
+  "dims": [
+   "reliability"
+  ],
+  "check": "stale_commands"
+ },
+ {
+  "id": "N-024",
+  "area": "N",
+  "title": "Stuck and abandoned jobs after a clock jump",
+  "scenario": "A queued and a running job; the clock moves past both TTLs; then the node reports late.",
+  "expected": "Queued -> expired, running -> failed; the late result is not accepted.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "stuck_jobs_sweep"
+ },
+ {
+  "id": "N-025",
+  "area": "N",
+  "title": "PIN lockout survives the clock going back",
+  "scenario": "Five wrong PINs, then the system clock is set back an hour.",
+  "expected": "Still 429 (fail safe); after the window really passes, the right PIN works.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "pin_lock_clock_back"
+ },
+ {
+  "id": "N-026",
+  "area": "N",
+  "title": "Clock jump expires approvals",
+  "scenario": "An approved action is used after the kernel's clock jumps forward past the TTL.",
+  "expected": "Refused with 'approval expired'; history shows expired.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "approval_clock_jump"
+ },
+ {
+  "id": "N-027",
+  "area": "N",
+  "title": "Malformed MCP tool results",
+  "scenario": "process_result gets None, a list, str, int, bytes, content as dict/int/str, junk items, a non-dict resource, string isError, a set in structuredContent.",
+  "expected": "No exception; every output is JSON-serialisable and marked untrusted.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "invalid_results"
+ },
+ {
+  "id": "N-028",
+  "area": "N",
+  "title": "Huge MCP tool result",
+  "scenario": "A 5 MB text result.",
+  "expected": "Truncated to about 16,000 characters, flagged truncated, in under 15 s including the gitleaks pass.",
+  "risk": "medium",
+  "dims": [
+   "reliability",
+   "speed"
+  ],
+  "check": "huge_result"
+ },
+ {
+  "id": "N-029",
+  "area": "N",
+  "title": "Binary and control characters in tool text",
+  "scenario": "Text with NUL, ANSI escapes, a lone surrogate and PNG header bytes.",
+  "expected": "No crash; result JSON-serialisable and untrusted.",
+  "risk": "medium",
+  "dims": [
+   "reliability"
+  ],
+  "check": "binary_text"
+ },
+ {
+  "id": "N-030",
+  "area": "N",
+  "title": "Duplicate, foreign and oversized job results",
+  "scenario": "The node reports a job twice, another node reports it, and a 200 KB result arrives for another job.",
+  "expected": "First accepted only; others refused; oversized stored as 'result too large'.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "job_results"
+ },
+ {
+  "id": "N-031",
+  "area": "N",
+  "title": "Malformed requests to the node endpoint",
+  "scenario": "Bad JSON, empty and oversized bodies, a JSON list, a string action, a bad job result and binary garbage, then a valid request.",
+  "expected": "Each malformed one 4xx (bad job result accepted:false); the server keeps serving.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "node_http_malformed"
+ },
+ {
+  "id": "N-032",
+  "area": "N",
+  "title": "Guard proxy survives garbage connections",
+  "scenario": "Empty, garbage, missing-port, bad-port and 20 KB NUL requests to the browser guard proxy.",
+  "expected": "Still answers the next request (403 for a loopback target).",
+  "risk": "medium",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "guardproxy_garbage"
+ },
+ {
+  "id": "N-033",
+  "area": "N",
+  "title": "Overlapping calls to one connector",
+  "scenario": "A second call arrives while the first connector call is still running.",
+  "expected": "The overlap gets 429 busy; first and later calls 200; the server saw 2 calls.",
+  "risk": "medium",
+  "dims": [
+   "reliability"
+  ],
+  "check": "connector_busy"
+ }
+]

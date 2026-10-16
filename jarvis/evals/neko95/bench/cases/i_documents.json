@@ -1,0 +1,338 @@
+[
+ {
+  "id": "I-001",
+  "area": "I",
+  "title": "Demo deck and report specs are valid",
+  "scenario": "The shipped demo deck (10 slides, 5 sources) and report (4 sections).",
+  "expected": "Both pass the spec check.",
+  "risk": "medium",
+  "check": "spec_ok",
+  "dims": [
+   "resources"
+  ]
+ },
+ {
+  "id": "I-002",
+  "area": "I",
+  "title": "Unknown slide layout refused",
+  "scenario": "A slide with layout 'nope'.",
+  "expected": "SpecError naming the allowed layouts.",
+  "risk": "medium",
+  "check": "spec_refused",
+  "dims": [
+   "reliability"
+  ],
+  "args": {
+   "spec": {
+    "title": "x",
+    "slides": [
+     {
+      "layout": "nope",
+      "title": "a"
+     }
+    ]
+   },
+   "msg": "layout must be"
+  }
+ },
+ {
+  "id": "I-003",
+  "area": "I",
+  "title": "Citation of a source that is not listed refused",
+  "scenario": "A bullet cites [S9] with no S9 in sources.",
+  "expected": "SpecError: not listed (no dangling citation reaches the deck).",
+  "risk": "high",
+  "check": "spec_refused",
+  "dims": [
+   "research"
+  ],
+  "args": {
+   "spec": {
+    "title": "x",
+    "slides": [
+     {
+      "title": "a",
+      "bullets": [
+       "see [S9]"
+      ]
+     }
+    ]
+   },
+   "msg": "not listed"
+  }
+ },
+ {
+  "id": "I-004",
+  "area": "I",
+  "title": "javascript: source link refused",
+  "scenario": "A source URL 'javascript:alert(1)'.",
+  "expected": "SpecError: only http(s) links.",
+  "risk": "critical",
+  "check": "spec_refused",
+  "dims": [
+   "security"
+  ],
+  "args": {
+   "spec": {
+    "title": "x",
+    "sources": [
+     {
+      "id": "S1",
+      "title": "t",
+      "url": "javascript:alert(1)"
+     }
+    ],
+    "slides": [
+     {
+      "title": "a"
+     }
+    ]
+   },
+   "msg": "http"
+  }
+ },
+ {
+  "id": "I-005",
+  "area": "I",
+  "title": "Chart values that do not match labels refused",
+  "scenario": "A chart with 1 label and 2 values.",
+  "expected": "SpecError before building.",
+  "risk": "medium",
+  "check": "spec_refused",
+  "dims": [
+   "reliability"
+  ],
+  "args": {
+   "spec": {
+    "title": "x",
+    "slides": [
+     {
+      "layout": "chart",
+      "title": "c",
+      "chart": {
+       "labels": [
+        "a"
+       ],
+       "series": [
+        {
+         "values": [
+          1,
+          2
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "msg": "values for"
+  }
+ },
+ {
+  "id": "I-006",
+  "area": "I",
+  "title": "A stats slide with more than 4 items is refused, not silently cut",
+  "scenario": "A 'stats' slide with 6 items (the layout has 4 cards).",
+  "expected": "SpecError explaining the limit.",
+  "risk": "high",
+  "check": "spec_refused",
+  "dims": [
+   "reliability",
+   "ux"
+  ],
+  "args": {
+   "spec": {
+    "title": "x",
+    "slides": [
+     {
+      "layout": "stats",
+      "title": "s",
+      "items": [
+       {
+        "value": "1",
+        "label": "a"
+       },
+       {
+        "value": "1",
+        "label": "a"
+       },
+       {
+        "value": "1",
+        "label": "a"
+       },
+       {
+        "value": "1",
+        "label": "a"
+       },
+       {
+        "value": "1",
+        "label": "a"
+       },
+       {
+        "value": "1",
+        "label": "a"
+       }
+      ]
+     }
+    ]
+   },
+   "msg": "at most 4"
+  }
+ },
+ {
+  "id": "I-007",
+  "area": "I",
+  "title": "Deck builds without external tools, all text fits, file intact",
+  "scenario": "Build the demo deck with python-pptx only.",
+  "expected": "11 slides (10 + sources), every text box fits, zip integrity OK, native charts present, under 10 s.",
+  "risk": "high",
+  "check": "deck_builds",
+  "dims": [
+   "resources",
+   "speed"
+  ],
+  "args": {
+   "max_s": 10
+  }
+ },
+ {
+  "id": "I-008",
+  "area": "I",
+  "title": "Source links are clickable and notes are written",
+  "scenario": "The built demo deck.",
+  "expected": "Every source URL is a hyperlink relationship; speaker-notes parts exist.",
+  "risk": "medium",
+  "check": "deck_links_and_notes",
+  "dims": [
+   "research",
+   "ux"
+  ]
+ },
+ {
+  "id": "I-009",
+  "area": "I",
+  "title": "Too much text is reported, never silently clipped",
+  "scenario": "A bullets slide with 12 sixty-word bullets.",
+  "expected": "Refused by the spec check or reported as not fitting by the build.",
+  "risk": "high",
+  "check": "overflow_reported",
+  "dims": [
+   "ux",
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-010",
+  "area": "I",
+  "title": "Report HTML escapes script and event handlers",
+  "scenario": "A paragraph containing <script> and an onerror attribute.",
+  "expected": "Escaped text; no executable markup in the report.",
+  "risk": "critical",
+  "check": "html_escapes",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "I-011",
+  "area": "I",
+  "title": "Citations in the report link to the source list",
+  "scenario": "The demo report.",
+  "expected": "Citation markers are links to the sources section.",
+  "risk": "medium",
+  "check": "html_citations_link",
+  "dims": [
+   "research",
+   "ux"
+  ]
+ },
+ {
+  "id": "I-012",
+  "area": "I",
+  "title": "Report prints to PDF with nothing off the page and QA passes (Chrome stand-in)",
+  "scenario": "The demo report HTML printed by headless Chrome (same engine as Edge).",
+  "expected": "No words outside the page area; check_report passes.",
+  "risk": "high",
+  "check": "report_pdf_qa",
+  "dims": [
+   "resources",
+   "ux"
+  ]
+ },
+ {
+  "id": "I-013",
+  "area": "I",
+  "title": "Only made files can be opened; path tricks refused",
+  "scenario": "Paths with '..', absolute system files, and a .exe inside the output folder.",
+  "expected": "All refused; the tool's own PDF accepted; job folder under the output root with a safe name.",
+  "risk": "critical",
+  "check": "outputs_only",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "I-014",
+  "area": "I",
+  "title": "Same title never overwrites an earlier deliverable",
+  "scenario": "Three jobs with the same title in the same second.",
+  "expected": "Three distinct folders.",
+  "risk": "high",
+  "check": "unique_job_dirs",
+  "dims": [
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-015",
+  "area": "I",
+  "title": "Missing Microsoft Edge is said plainly",
+  "scenario": "Printing a report on a machine without Edge.",
+  "expected": "ToolError naming Edge, no install command from a third party.",
+  "risk": "medium",
+  "check": "missing_edge_honest",
+  "dims": [
+   "ux",
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-016",
+  "area": "I",
+  "title": "Missing OfficeCLI: animation is not claimed",
+  "scenario": "Animating a deck when OfficeCLI is absent.",
+  "expected": "ToolError; no success reported.",
+  "risk": "high",
+  "check": "missing_officecli_honest",
+  "dims": [
+   "ux",
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-017",
+  "area": "I",
+  "title": "PDF printed by the laptop's Microsoft Edge",
+  "scenario": "Edge prints the report with headers/footers.",
+  "expected": "Laptop check.",
+  "risk": "medium",
+  "check": "none",
+  "dims": [
+   "resources"
+  ],
+  "platform": "windows"
+ },
+ {
+  "id": "I-018",
+  "area": "I",
+  "title": "Animations validated by OfficeCLI and shown in PowerPoint",
+  "scenario": "OfficeCLI adds transitions/entrances; PowerPoint slideshow starts.",
+  "expected": "Laptop check.",
+  "risk": "medium",
+  "check": "none",
+  "dims": [
+   "ux"
+  ],
+  "platform": "windows"
+ }
+]

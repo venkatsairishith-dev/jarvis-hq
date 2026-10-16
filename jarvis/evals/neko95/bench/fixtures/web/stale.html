@@ -1,0 +1,5 @@
+<!doctype html><html><head><title>Stale elements</title></head><body>
+<h1>Stale elements</h1><p id="status">nothing deleted</p>
+<div id="box"><button onclick="document.getElementById('status').innerText='archived'">Archive</button></div>
+<button onclick="document.getElementById('box').innerHTML='<button onclick=&quot;document.getElementById(\'status\').innerText=\'deleted\'&quot;>Delete all</button>'">Swap</button>
+</body></html>

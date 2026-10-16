@@ -1,0 +1,8 @@
+<!doctype html><html><head><title>Dynamic results</title></head><body>
+<h1>Search results</h1><div id="out">Loading results...</div>
+<script>
+setTimeout(function () {
+  document.getElementById('out').innerHTML = '<p>Result one: the late answer is 42.</p><button id="more" onclick="this.innerText=\'More loaded\'">Show more</button>';
+}, 1500);
+</script>
+</body></html>

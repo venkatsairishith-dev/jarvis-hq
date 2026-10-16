@@ -1,0 +1,858 @@
+[
+ {
+  "id": "L-001",
+  "area": "L",
+  "title": "'Done' lists only what was checked",
+  "scenario": "Two-step task (open notepad, type hello); both agents succeed and both checks pass. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'completed'; the summary starts 'Done:' and names both checked results (window appeared, text read back).",
+  "risk": "high",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_app",
+     "app": "notepad",
+     "post": "a window for notepad appeared"
+    },
+    {
+     "tool": "type_text",
+     "app": "notepad",
+     "target": "",
+     "text": "hello",
+     "post": "the field in notepad contains the typed text (read back)"
+    }
+   ],
+   "status": "completed",
+   "summary_contains": [
+    "Done:",
+    "appeared",
+    "read back"
+   ]
+  }
+ },
+ {
+  "id": "L-002",
+  "area": "L",
+  "title": "A failed second step is never reported as done",
+  "scenario": "Step 1 opens notepad; step 2 typing fails (the node could not read the text back). PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'failed'; summary starts 'I could not finish', names step 2 (type_text) and the reason; does not say 'Done'.",
+  "risk": "critical",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_app",
+     "app": "notepad",
+     "post": "a window for notepad appeared"
+    },
+    {
+     "tool": "type_text",
+     "app": "notepad",
+     "target": "",
+     "text": "hello",
+     "post": "the field in notepad contains the typed text (read back)"
+    }
+   ],
+   "results": {
+    "type_text": [
+     {
+      "ok": false,
+      "error": "the typed text was not found in the field"
+     }
+    ]
+   },
+   "status": "failed",
+   "summary_contains": [
+    "could not finish",
+    "step 2",
+    "type_text",
+    "not found"
+   ],
+   "summary_not_contains": [
+    "Done"
+   ]
+  }
+ },
+ {
+  "id": "L-003",
+  "area": "L",
+  "title": "Agent 'ok' without the observed result is not done",
+  "scenario": "The browser agent reports ok, but the window opened in another Chrome profile. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'failed'; the summary does not say 'Done'.",
+  "risk": "critical",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "reliability",
+   "browser"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_website",
+     "profile": "Default",
+     "url": "https://example.com/",
+     "post": "a Chrome window of profile Default shows the page"
+    }
+   ],
+   "results": {
+    "open_website": [
+     {
+      "ok": true,
+      "profile": "Profile 2",
+      "verified": "window"
+     }
+    ]
+   },
+   "status": "failed",
+   "summary_not_contains": [
+    "Done"
+   ]
+  }
+ },
+ {
+  "id": "L-004",
+  "area": "L",
+  "title": "Uncertainty is said out loud",
+  "scenario": "open_website passes, but the profile button showed only a display name (account not proven). PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'completed' and the summary contains 'not certain' with the reason.",
+  "risk": "high",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_website",
+     "profile": "Default",
+     "url": "https://example.com/",
+     "post": "a Chrome window of profile Default shows the page"
+    }
+   ],
+   "results": {
+    "open_website": [
+     {
+      "ok": true,
+      "profile": "Default",
+      "verified": "window",
+      "profile_name_matches": false
+     }
+    ]
+   },
+   "status": "completed",
+   "summary_contains": [
+    "not certain",
+    "display name"
+   ]
+  }
+ },
+ {
+  "id": "L-005",
+  "area": "L",
+  "title": "A crashed agent is an honest failure",
+  "scenario": "The desktop agent raises an exception in step 1. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'failed'; summary 'I could not finish' naming step 1; the PC lock is released.",
+  "risk": "high",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "recovery"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_app",
+     "app": "notepad",
+     "post": "a window for notepad appeared"
+    }
+   ],
+   "results": {
+    "open_app": [
+     "raise"
+    ]
+   },
+   "status": "failed",
+   "summary_contains": [
+    "could not finish",
+    "step 1"
+   ]
+  }
+ },
+ {
+  "id": "L-006",
+  "area": "L",
+  "title": "Cancellation is visible and stops the next step",
+  "scenario": "The owner presses stop after step 1 of 2. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'cancelled', summary 'Stopped.', only step 1's agent ran, progress ends 'idle'.",
+  "risk": "critical",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "autonomy"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_app",
+     "app": "notepad",
+     "post": "a window for notepad appeared"
+    },
+    {
+     "tool": "type_text",
+     "app": "notepad",
+     "target": "",
+     "text": "hello",
+     "post": "the field in notepad contains the typed text (read back)"
+    }
+   ],
+   "cancel_after": 1,
+   "status": "cancelled",
+   "calls": [
+    "open_app"
+   ],
+   "summary_contains": [
+    "Stopped"
+   ],
+   "summary_not_contains": [
+    "Done"
+   ],
+   "progress_ends_idle": true
+  }
+ },
+ {
+  "id": "L-007",
+  "area": "L",
+  "title": "An owner 'stop' request is confirmed, not reported as a failure",
+  "scenario": "The owner says 'stop'; the plan is the single stop step and the stop agent succeeds. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'stopped' and the summary confirms it stopped; it does not say 'could not finish'.",
+  "risk": "medium",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "autonomy"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "stop"
+    }
+   ],
+   "request": "stop",
+   "status": "stopped",
+   "summary_contains": [
+    "stop"
+   ],
+   "summary_not_contains": [
+    "could not finish"
+   ]
+  }
+ },
+ {
+  "id": "L-008",
+  "area": "L",
+  "title": "Permission wait: the prompt names the action",
+  "scenario": "core.Pc submits a click the kernel wants approved and the owner does not answer in time (console calls are fixtures).",
+  "expected": "Progress text says 'Approve in the JARVIS console with your PIN: click Buy now'; the result is waiting_for_permission and 'how' names the console and the approval id.",
+  "risk": "high",
+  "check": "pc_permission",
+  "dims": [
+   "ux",
+   "security"
+  ],
+  "args": {
+   "what": "click Buy now",
+   "state": "waiting_for_permission",
+   "shown_contains": [
+    "Approve",
+    "PIN",
+    "click Buy now"
+   ],
+   "how_contains": [
+    "JARVIS console",
+    "a1b2c3d4e5f60718"
+   ]
+  }
+ },
+ {
+  "id": "L-009",
+  "area": "L",
+  "title": "Permission wait without a caller label shows the kernel's reason",
+  "scenario": "Same, but the caller gave no description of the action.",
+  "expected": "Progress text still says why: it contains the kernel's reason ('rule browser.click').",
+  "risk": "medium",
+  "check": "pc_permission",
+  "dims": [
+   "ux",
+   "security"
+  ],
+  "args": {
+   "what": "",
+   "state": "waiting_for_permission",
+   "shown_contains": [
+    "Approve",
+    "browser.click"
+   ]
+  }
+ },
+ {
+  "id": "L-010",
+  "area": "L",
+  "title": "Stop during an approval wait is reported as stopped",
+  "scenario": "The owner presses stop while an action waits for approval (console calls are fixtures).",
+  "expected": "Result state 'cancelled' with 'stopped by the owner ... nothing was done', not 'still waiting'.",
+  "risk": "high",
+  "check": "pc_permission",
+  "dims": [
+   "ux",
+   "autonomy",
+   "security"
+  ],
+  "args": {
+   "stop_first": true,
+   "state": "cancelled",
+   "error_contains": [
+    "stopped by the owner",
+    "nothing was done"
+   ]
+  }
+ },
+ {
+  "id": "L-011",
+  "area": "L",
+  "title": "Waiting-for-approval summary says what and does not over-promise",
+  "scenario": "A task ends because step 1 (a browser click) waits for the owner's PIN; the coordinator returns. Nothing resumes it by itself: the 'how' text tells the owner to ask Neko to continue. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'waiting_for_permission'; the summary names the waiting action (browser click) and does not claim 'I will continue once it is approved'.",
+  "risk": "high",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "security"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "browser",
+     "action": "click",
+     "profile": "Default",
+     "target": "Buy now",
+     "text": "",
+     "post": "x"
+    }
+   ],
+   "results": {
+    "browser": [
+     {
+      "ok": false,
+      "state": "waiting_for_permission",
+      "approval_id": "a1b2",
+      "how": "Approve it in the JARVIS console, then ask Neko to continue with approval_id a1b2."
+     }
+    ]
+   },
+   "status": "waiting_for_permission",
+   "summary_contains": [
+    "click"
+   ],
+   "summary_not_contains": [
+    "I will continue once"
+   ]
+  }
+ },
+ {
+  "id": "L-012",
+  "area": "L",
+  "title": "The console approval shows what, risk, why and expiry",
+  "scenario": "The real kernel records an approval for a browser click on a shop's cart page.",
+  "expected": "pending_approvals() shows tool/op/target exactly, level YELLOW_APPROVAL or RED, a non-empty reason, seconds left > 0 and a digest prefix.",
+  "risk": "high",
+  "check": "kernel_approval",
+  "dims": [
+   "ux",
+   "security"
+  ],
+  "args": {
+   "tool": "browser",
+   "op": "click",
+   "target": "https://shop.example/cart",
+   "params": {
+    "selector": "Buy now"
+   }
+  }
+ },
+ {
+  "id": "L-013",
+  "area": "L",
+  "title": "The approval prompt never shows a secret",
+  "scenario": "The action to approve carries an API-key-like string in its parameters (synthetic).",
+  "expected": "The pending approval is shown, but the secret string is not in it.",
+  "risk": "critical",
+  "check": "kernel_approval",
+  "dims": [
+   "ux",
+   "security"
+  ],
+  "args": {
+   "tool": "browser",
+   "op": "type",
+   "target": "https://example.com/settings",
+   "params": {
+    "text": "sk-ant-api03-SYNTHETICbenchKEY0000000000000000000000"
+   },
+   "secret": "sk-ant-api03-SYNTHETICbenchKEY0000000000000000000000"
+  }
+ },
+ {
+  "id": "L-014",
+  "area": "L",
+  "title": "Busy: the answer says what to do",
+  "scenario": "A second PC task starts while another (alive) task holds the lock. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'busy'; the summary names the running task and says to stop it first or wait; no agent ran.",
+  "risk": "medium",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_app",
+     "app": "notepad",
+     "post": "a window for notepad appeared"
+    }
+   ],
+   "lock_held": true,
+   "status": "busy",
+   "calls": [],
+   "summary_contains": [
+    "another PC task",
+    "20261016-120000-bbbbbb",
+    "stop it first or wait"
+   ]
+  }
+ },
+ {
+  "id": "L-015",
+  "area": "L",
+  "title": "Time budget: the answer says where it stopped",
+  "scenario": "A two-step task whose clock passes the 600 s budget before step 2. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'failed'; summary says the time budget of 600 s was used up before step 2; step 2 never ran.",
+  "risk": "medium",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "resources"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "check_pc",
+     "check": "disk",
+     "app": "",
+     "post": "the disk check returned data"
+    },
+    {
+     "tool": "open_app",
+     "app": "notepad",
+     "post": "a window for notepad appeared"
+    }
+   ],
+   "tick": 250,
+   "budget_s": 600,
+   "status": "failed",
+   "calls": [
+    "check_pc"
+   ],
+   "summary_contains": [
+    "time budget",
+    "600",
+    "step 2"
+   ]
+  }
+ },
+ {
+  "id": "L-016",
+  "area": "L",
+  "title": "Progress shows planning, each step and the retry",
+  "scenario": "A one-step open_website task whose first try times out (transient) and second try passes. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "Progress messages include 'Deciding what to do', 'browser agent: step 1 of 1 (open_website)', 'retrying step 1 once' and end with 'idle'; status completed.",
+  "risk": "medium",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "recovery"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_website",
+     "profile": "Default",
+     "url": "https://example.com/",
+     "post": "a Chrome window of profile Default shows the page"
+    }
+   ],
+   "results": {
+    "open_website": [
+     {
+      "ok": false,
+      "error": "timeout talking to the browser"
+     },
+     {
+      "ok": true,
+      "profile": "Default",
+      "verified": "window",
+      "profile_name_matches": true
+     }
+    ]
+   },
+   "status": "completed",
+   "progress_contains": [
+    "Deciding what to do",
+    "step 1 of 1 (open_website)",
+    "retrying step 1 once"
+   ],
+   "progress_ends_idle": true
+  }
+ },
+ {
+  "id": "L-017",
+  "area": "L",
+  "title": "A dropped, unsupported part is not hidden by 'Done'",
+  "scenario": "'delete all files in my downloads folder and open it': the decider dropped an unknown 'delete_files' step (recorded in plan.problems) and only opened the folder, which passed. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "The summary does not just say 'Done': it says that part of the request (the delete) was not done.",
+  "risk": "high",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "reliability",
+   "security"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_file",
+     "name": "downloads",
+     "folder": "",
+     "post": "the file or folder opened"
+    }
+   ],
+   "problems": [
+    "unknown tool 'delete_files'"
+   ],
+   "status": "completed",
+   "summary_contains": [
+    "delete"
+   ]
+  }
+ },
+ {
+  "id": "L-018",
+  "area": "L",
+  "title": "A clarification is one short question",
+  "scenario": "The decider asked 'Which Chrome account? ambiguous: ...'. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real.",
+  "expected": "status 'needs_clarification'; the summary is the question itself, ends with '?' or '.', and no agent ran.",
+  "risk": "medium",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "intent"
+  ],
+  "args": {
+   "plan": [],
+   "plan_status": "clarify",
+   "question": "Which Chrome account? ambiguous: Venkat (ven***, Default), Venkat (ris***, Profile 1).",
+   "status": "needs_clarification",
+   "calls": [],
+   "summary_contains": [
+    "Which Chrome account?"
+   ]
+  }
+ },
+ {
+  "id": "L-019",
+  "area": "L",
+  "title": "Mission explanation: what was done, found and where",
+  "scenario": "A finished research mission record (research with a summary and a file, then open_output).",
+  "expected": "explain() says '2 of 2 steps done and checked', gives the findings from the research summary and the file path; no 'Not finished'.",
+  "risk": "medium",
+  "check": "mission_explain",
+  "dims": [
+   "ux",
+   "research"
+  ],
+  "args": {
+   "record": {
+    "status": "completed",
+    "steps": [
+     {
+      "tool": "research",
+      "passed": true,
+      "result": {
+       "summary": "Heat pumps cut running costs by 30-50% in mild climates [1].",
+       "file": "D:\\out\\heat.pptx"
+      }
+     },
+     {
+      "tool": "open_output",
+      "passed": true,
+      "result": {
+       "opened": "heat.pptx"
+      }
+     }
+    ]
+   },
+   "summary_contains": [
+    "2 of 2 steps done and checked",
+    "Findings: Heat pumps",
+    "File: D:\\out\\heat.pptx"
+   ],
+   "summary_not_contains": [
+    "Not finished"
+   ]
+  }
+ },
+ {
+  "id": "L-020",
+  "area": "L",
+  "title": "Mission explanation never counts unchecked steps",
+  "scenario": "A mission stopped after re-plans: research passed, open_output reported ok but its check failed.",
+  "expected": "explain() says '1 of 2 steps done and checked' and 'Not finished:' with the error.",
+  "risk": "high",
+  "check": "mission_explain",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "record": {
+    "status": "failed",
+    "error": "step open_output failed after 2 re-plans: no window showing it was seen",
+    "steps": [
+     {
+      "tool": "research",
+      "passed": true,
+      "result": {
+       "summary": "s",
+       "file": "D:\\out\\a.pdf"
+      }
+     },
+     {
+      "tool": "open_output",
+      "passed": false,
+      "result": {
+       "ok": true
+      }
+     }
+    ]
+   },
+   "summary_contains": [
+    "1 of 2 steps done and checked",
+    "Not finished:",
+    "no window"
+   ]
+  }
+ },
+ {
+  "id": "L-021",
+  "area": "L",
+  "title": "Main agent: failure text names every failed step",
+  "scenario": "Main-agent plan s1 (search) fails, s2 (think) depends on it and is not executed (executor results are fixtures).",
+  "expected": "run_state 'failed'; final text starts 'I could not finish this' and names s1 with its error and s2 as not executed.",
+  "risk": "high",
+  "check": "main_final",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "plugin",
+     "ref": "web_search:search"
+    },
+    {
+     "id": "s2",
+     "deps": [
+      "s1"
+     ]
+    }
+   ],
+   "results": [
+    {
+     "id": "s1",
+     "outcome": "failure",
+     "error": "web_search:search failed: search service unavailable"
+    },
+    {
+     "id": "s2",
+     "outcome": "not_executed",
+     "error": "a step it needed did not finish"
+    }
+   ],
+   "state": "failed",
+   "summary_contains": [
+    "I could not finish this",
+    "s1",
+    "search service unavailable",
+    "s2",
+    "not executed"
+   ]
+  }
+ },
+ {
+  "id": "L-022",
+  "area": "L",
+  "title": "Main agent: partial results say not everything worked",
+  "scenario": "Two independent steps: s1 succeeds with text, s2 fails.",
+  "expected": "run_state 'partial'; the text includes s1's result and 'Not everything worked: s2'.",
+  "risk": "high",
+  "check": "main_final",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "steps": [
+    {
+     "id": "s1"
+    },
+    {
+     "id": "s2"
+    }
+   ],
+   "results": [
+    {
+     "id": "s1",
+     "text": "Rome is the capital."
+    },
+    {
+     "id": "s2",
+     "outcome": "failure",
+     "error": "model timeout"
+    }
+   ],
+   "state": "partial",
+   "summary_contains": [
+    "Rome is the capital",
+    "Not everything worked",
+    "s2"
+   ]
+  }
+ },
+ {
+  "id": "L-023",
+  "area": "L",
+  "title": "Main agent: an unknown side effect asks the owner",
+  "scenario": "A send step's result is unknown (timed out after being sent) and is held.",
+  "expected": "run_state 'held'; the text says it could not confirm, did not retry and asks the owner to check.",
+  "risk": "critical",
+  "check": "main_final",
+  "dims": [
+   "ux",
+   "reliability",
+   "autonomy"
+  ],
+  "args": {
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "plugin",
+     "ref": "wechat_integration:send_message",
+     "goal": "send the message to mom"
+    }
+   ],
+   "results": [
+    {
+     "id": "s1",
+     "outcome": "unknown",
+     "error": "timed out",
+     "held": true
+    }
+   ],
+   "state": "held",
+   "summary_contains": [
+    "Needs your attention",
+    "did not retry",
+    "send the message to mom",
+    "check"
+   ]
+  }
+ },
+ {
+  "id": "L-024",
+  "area": "L",
+  "title": "Main agent: Stop is visible everywhere",
+  "scenario": "The owner presses Stop while step 1 of a two-step run is working (model and helpers are fixtures; the plugin's run, stop and status entries are real).",
+  "expected": "stop_task stopped=true; run_status state 'cancelled', s2 'not_executed' with error 'cancelled'; the chat message says it stopped.",
+  "risk": "critical",
+  "check": "main_cancel",
+  "dims": [
+   "ux",
+   "autonomy"
+  ],
+  "args": {}
+ },
+ {
+  "id": "L-025",
+  "area": "L",
+  "title": "Main agent: status shows per-step progress and resumability",
+  "scenario": "A two-step run whose save step fails (vault not bound).",
+  "expected": "run_status has state 'partial', resumable true, and per step agent/goal/state/effect/error/attempts/held/waited; the chat message names the failed step and why.",
+  "risk": "medium",
+  "check": "main_status",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "fail_step": "s2",
+   "state": "partial",
+   "resumable": true,
+   "summary_contains": [
+    "s2",
+    "not bound"
+   ]
+  }
+ },
+ {
+  "id": "L-026",
+  "area": "L",
+  "title": "Main agent: refusals say what to do",
+  "scenario": "run_task while another task runs, with an empty task, with an unknown mode; resume_run while busy.",
+  "expected": "Each returns Err; busy says it is still working and to stop it first or wait; empty says there is no task; the mode error lists the modes.",
+  "risk": "medium",
+  "check": "main_refusals",
+  "dims": [
+   "ux"
+  ],
+  "args": {
+   "want": {
+    "busy": [
+     "still working",
+     "stop"
+    ],
+    "empty": [
+     "no task"
+    ],
+    "mode": [
+     "chat",
+     "work"
+    ],
+    "resume_busy": [
+     "still working"
+    ]
+   }
+  }
+ }
+]

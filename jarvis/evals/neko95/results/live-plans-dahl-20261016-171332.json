@@ -1,0 +1,1223 @@
+{
+ "time": "2026-10-16 17:13:32",
+ "model": "Dahl public lane (substitute for the local decider)",
+ "repeat": 1,
+ "summary": {
+  "plan_cases": {
+   "pass": 6,
+   "n": 9,
+   "rule_path": 0
+  },
+  "dev": {
+   "pass": 40,
+   "n": 70,
+   "rule_path": 17
+  },
+  "holdout": {
+   "pass": 20,
+   "n": 30,
+   "rule_path": 6
+  },
+  "holdout2": {
+   "pass": 31,
+   "n": 40,
+   "rule_path": 25
+  }
+ },
+ "latency_p50_s": 3.750548367999727,
+ "tokens_total": 113272,
+ "cases": [
+  {
+   "id": "plan_cases:P-play-not-just-open",
+   "set": "plan_cases",
+   "status": "pass",
+   "runs": 3,
+   "rule_path": false,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "plan_cases:P-type-not-just-open",
+   "set": "plan_cases",
+   "status": "pass",
+   "runs": 3,
+   "rule_path": false,
+   "observed": " | tools ['open_app', 'type_text'] status ok"
+  },
+  {
+   "id": "plan_cases:P-account-verify-step",
+   "set": "plan_cases",
+   "status": "fail",
+   "runs": 3,
+   "rule_path": false,
+   "observed": "status clarify: What platform is your RiverMoon account on? (e.g., Twitch, Discord, Steam, Twitter) | tools [] status clarify"
+  },
+  {
+   "id": "plan_cases:P-postconditions-present",
+   "set": "plan_cases",
+   "status": "pass",
+   "runs": 3,
+   "rule_path": false,
+   "observed": " | tools ['open_app', 'type_text'] status ok"
+  },
+  {
+   "id": "plan_cases:P-google-account",
+   "set": "plan_cases",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which Google service do you want to open - Gmail, Google Drive, YouTube, or something else? | tools [] status clarify"
+  },
+  {
+   "id": "plan_cases:P-error-on-screen",
+   "set": "plan_cases",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which app or window has the error you want me to fix? | tools [] status clarify"
+  },
+  {
+   "id": "plan_cases:P-pdf-no-topic",
+   "set": "plan_cases",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "plan_cases:P-pdf-with-topic",
+   "set": "plan_cases",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['research'] status ok"
+  },
+  {
+   "id": "plan_cases:P-file-not-site",
+   "set": "plan_cases",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_file'] status ok"
+  },
+  {
+   "id": "dev:A01",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_app'] status ok"
+  },
+  {
+   "id": "dev:A02",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_app'] status ok"
+  },
+  {
+   "id": "dev:A03",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_app'] status ok"
+  },
+  {
+   "id": "dev:A04",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "dev:A05",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "dev:A06",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A07",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: What platform is your RiverMoon account on? (e.g., Twitch, Discord, Steam, Twitter) | tools [] status clarify"
+  },
+  {
+   "id": "dev:A08",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['browser', 'open_website'] status ok"
+  },
+  {
+   "id": "dev:A09",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback != clarify | tools [] status fallback"
+  },
+  {
+   "id": "dev:A10",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which Chrome account? no Chrome profile matches 'logicmesh server'. | tools [] status clarify"
+  },
+  {
+   "id": "dev:A11",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "dev:A12",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "dev:A13",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['browser', 'play_media'] status ok"
+  },
+  {
+   "id": "dev:A14",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['research'] status ok"
+  },
+  {
+   "id": "dev:A15",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['research'] status ok"
+  },
+  {
+   "id": "dev:A16",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['research'] status ok"
+  },
+  {
+   "id": "dev:A17",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A18",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A19",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['stop'] status ok"
+  },
+  {
+   "id": "dev:A20",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['stop'] status ok"
+  },
+  {
+   "id": "dev:A21",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A22",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback != clarify | tools [] status fallback"
+  },
+  {
+   "id": "dev:A23",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "dev:A24",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A25",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A26",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: What is the name of the sample app you're referring to, and what error message does it show? | tools [] status clarify"
+  },
+  {
+   "id": "dev:A27",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['troubleshoot'] status ok"
+  },
+  {
+   "id": "dev:A28",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['check_pc'] status ok"
+  },
+  {
+   "id": "dev:A29",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['check_pc'] status ok"
+  },
+  {
+   "id": "dev:A30",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A31",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A32",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "dev:A33",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: What would you like to name the file you're saving in Notepad? | tools [] status clarify"
+  },
+  {
+   "id": "dev:A34",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_app', 'type_text'] status ok"
+  },
+  {
+   "id": "dev:A35",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['window'] status ok"
+  },
+  {
+   "id": "dev:A36",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A37",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['window'] status ok"
+  },
+  {
+   "id": "dev:A38",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which app are you looking at? Please tell me the name of the app or sample app. | tools [] status clarify"
+  },
+  {
+   "id": "dev:A39",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A40",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which web page would you like me to read? Please provide the URL or website name. | tools [] status clarify"
+  },
+  {
+   "id": "dev:A41",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A42",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A43",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A44",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "dev:A45",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "tool browser != play_media | tools ['browser', 'type_text', 'browser'] status ok"
+  },
+  {
+   "id": "dev:A46",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_app', 'type_text'] status ok"
+  },
+  {
+   "id": "dev:A47",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which file? | tools ['check_pc'] status clarify"
+  },
+  {
+   "id": "dev:A48",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['browser', 'open_website'] status ok"
+  },
+  {
+   "id": "dev:A49",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A50",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "dev:A51",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "dev:A52",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_file'] status clarify"
+  },
+  {
+   "id": "dev:A53",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['answer'] status ok"
+  },
+  {
+   "id": "dev:A54",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "dev:A55",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['answer'] status ok"
+  },
+  {
+   "id": "dev:A56",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "dev:A57",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A58",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A59",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['check_pc'] status ok"
+  },
+  {
+   "id": "dev:A60",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A61",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "dev:A62",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "dev:A63",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "dev:A64",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "dev:A65",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['research'] status ok"
+  },
+  {
+   "id": "dev:A66",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_website', 'play_media'] status ok"
+  },
+  {
+   "id": "dev:A67",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which browser tab or website should I scroll down on? | tools [] status clarify"
+  },
+  {
+   "id": "dev:A68",
+   "set": "dev",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which app should I press Enter in? | tools [] status clarify"
+  },
+  {
+   "id": "dev:A69",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "dev:A70",
+   "set": "dev",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "holdout:H01",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_app'] status ok"
+  },
+  {
+   "id": "holdout:H02",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_app'] status ok"
+  },
+  {
+   "id": "holdout:H03",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "holdout:H04",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout:H05",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout:H06",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "holdout:H07",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "holdout:H08",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "holdout:H09",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['research'] status ok"
+  },
+  {
+   "id": "holdout:H10",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['answer'] status ok"
+  },
+  {
+   "id": "holdout:H11",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['stop'] status ok"
+  },
+  {
+   "id": "holdout:H12",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['stop'] status ok"
+  },
+  {
+   "id": "holdout:H13",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout:H14",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout:H15",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout:H16",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout:H17",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which app? | tools [] status clarify"
+  },
+  {
+   "id": "holdout:H18",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "holdout:H19",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_app', 'type_text'] status ok"
+  },
+  {
+   "id": "holdout:H20",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['window'] status ok"
+  },
+  {
+   "id": "holdout:H21",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['window'] status ok"
+  },
+  {
+   "id": "holdout:H22",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout:H23",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status clarify: Which page or website should I press the sign in button on? And which account/profile if there are multiple? | tools [] status clarify"
+  },
+  {
+   "id": "holdout:H24",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['browser'] status ok"
+  },
+  {
+   "id": "holdout:H25",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_app', 'window'] status ok"
+  },
+  {
+   "id": "holdout:H26",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "holdout:H27",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "holdout:H28",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['check_pc'] status ok"
+  },
+  {
+   "id": "holdout:H29",
+   "set": "holdout",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['research'] status ok"
+  },
+  {
+   "id": "holdout:H30",
+   "set": "holdout",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "check ['app_info'] | tools ['check_pc'] status ok"
+  },
+  {
+   "id": "holdout2:K01",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_app'] status ok"
+  },
+  {
+   "id": "holdout2:K02",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_app'] status ok"
+  },
+  {
+   "id": "holdout2:K03",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_app'] status ok"
+  },
+  {
+   "id": "holdout2:K04",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_app'] status ok"
+  },
+  {
+   "id": "holdout2:K05",
+   "set": "holdout2",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": true,
+   "observed": "tool open_website != open_app | tools ['open_website'] status ok"
+  },
+  {
+   "id": "holdout2:K06",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "holdout2:K07",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "holdout2:K08",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "holdout2:K09",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "holdout2:K10",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "holdout2:K11",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "holdout2:K12",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "holdout2:K13",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "holdout2:K14",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "holdout2:K15",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "holdout2:K16",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "holdout2:K17",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "holdout2:K18",
+   "set": "holdout2",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout2:K19",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "holdout2:K20",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "holdout2:K21",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['press_key'] status ok"
+  },
+  {
+   "id": "holdout2:K22",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['window'] status ok"
+  },
+  {
+   "id": "holdout2:K23",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['window'] status ok"
+  },
+  {
+   "id": "holdout2:K24",
+   "set": "holdout2",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout2:K25",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['check_pc'] status ok"
+  },
+  {
+   "id": "holdout2:K26",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools ['check_pc'] status ok"
+  },
+  {
+   "id": "holdout2:K27",
+   "set": "holdout2",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout2:K28",
+   "set": "holdout2",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout2:K29",
+   "set": "holdout2",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout2:K30",
+   "set": "holdout2",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout2:K31",
+   "set": "holdout2",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout2:K32",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_app', 'type_text'] status ok"
+  },
+  {
+   "id": "holdout2:K33",
+   "set": "holdout2",
+   "status": "fail",
+   "runs": 1,
+   "rule_path": false,
+   "observed": "status fallback: [\"the model's answer was not JSON\"] | tools [] status fallback"
+  },
+  {
+   "id": "holdout2:K34",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": true,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "holdout2:K35",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "holdout2:K36",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_file'] status ok"
+  },
+  {
+   "id": "holdout2:K37",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools [] status clarify"
+  },
+  {
+   "id": "holdout2:K38",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['open_website'] status ok"
+  },
+  {
+   "id": "holdout2:K39",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['play_media'] status ok"
+  },
+  {
+   "id": "holdout2:K40",
+   "set": "holdout2",
+   "status": "pass",
+   "runs": 1,
+   "rule_path": false,
+   "observed": " | tools ['press_key'] status ok"
+  }
+ ]
+}
