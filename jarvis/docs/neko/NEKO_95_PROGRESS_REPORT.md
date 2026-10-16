@@ -344,7 +344,7 @@ Per area (final run):
   - The cache removes it for re-sent conversations, not for 20 brand-new texts.
 - Context selection: evidence about 55 ms on 200 KB, trim-1 about 50 ms per call.
 - Wake state machine: under 5 ms per 40 ms frame.
-- Dahl: p50 4.1 s per short call, first chunk 1.0 s. Stand-in planning: p50 3.75 s, about 1,000 tokens per call. The whole session used under 0.5M Dahl tokens.
+- Dahl: p50 4.1 s per short call, first chunk 1.0 s. Stand-in planning: p50 3.75 s, about 1,000 tokens per call. Dahl tokens: 221,795 recorded for the two complete planning runs; the stopped first run, the 5 research runs and the routing checks were not counted (an estimate, not a measurement: well under 0.3M more).
 
 ### Risks
 
