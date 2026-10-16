@@ -119,6 +119,47 @@ The rootless podman image `neko-test` (`~/neko-test/Containerfile`, outside the 
 
 Still Windows-only (not faked here): the 16 kernel skips (UI Automation, Win32, Windows paths), Chrome profiles, microphone.
 
+### Round 2: the whole test estate on Linux
+
+**The image now installs from `uv.lock`.**
+- Before, it compiled `pyproject.toml` afresh, so it tested different versions from the laptop (starlette 1.8.0 instead of 1.3.1, pydantic 2.14.1 instead of 2.13.5). Three static-file tests hung for 300 s on that.
+- It also has Node 24.22.0, the rest of the dev group, `python-pptx`/`pdfplumber` (pinned), and a `neko-plugin` launcher. Its environment matches `run-upstream-tests.ps1`.
+- Rebuild: `~/neko-test/sync-and-build.sh`. Recipe copy: `jarvis/scripts/neko-test/`.
+- Run as a normal user on a throw-away overlay: `podman run --rm --userns=keep-id -e HOME=/tmp -v ~/hq-neko:/src:O neko-test …`. As root, permission tests fail.
+
+| Suite (lock-based image, normal user) | Result |
+|---|---|
+| Kernel | 483 run, OK, 16 skipped (Windows-only) |
+| Each plugin's own tests (10 plugins, run separately) | 544 passed, 1 skipped, 0 failed |
+| Plugin framework (`plugin/tests/unit` + `integration`) | 4289 passed, **8 failed** (snapshots, below) |
+| Upstream `tests/unit` (5 workers, 7 min) | 41,978 passed, **5 failed** (below) |
+
+**Fixed in code:**
+- **deliverables: the slide "fits" check.**
+  - Without the theme font file it measured with Pillow's fixed 10 px bitmap, at any size, so 480 words "fit" a 10 × 3 in box and overflow went unreported.
+  - It now uses the scalable default font at the asked size.
+  - A test forces the missing-font path and fails on the old code.
+- **Settings forms** (`config.schema.json`, 8 languages) for desktop, research, deliverables and local_team. Upstream #3193 requires one for every bundled plugin.
+- **web_search test.**
+  - Since upstream #2927, a throttle wait over 3 s fails fast as "busy", so the old total-timeout test tested that instead.
+  - It now uses a 2 s wait, so the total timeout must really cut a coordinator wait.
+  - A new test covers the fail-fast path.
+
+**Not fixed, with reasons:**
+- **Plugin metadata snapshots (`plugin.meta.json`), 8 plugins: need the laptop.**
+  - Snapshots are Windows probe results; rebuilding here would stamp them as Linux builds.
+  - research, deliverables, local_team (and desktop, which has none) changed after their snapshot. Upstream warns the host may then show **zero entries** for the plugin until it rescans, so its UI actions can fail.
+  - doc_tools, jarvis_bridge, learn_vault and main_agent list gitignored `.vscode` files, so they are valid only on the laptop.
+  - At home: delete those 4 plugins' `.vscode` folders, then for each of the 8 run `uv run neko-plugin build <plugin> --keep-staging` and copy the staged `plugin.meta.json` back into `plugin/plugins/<plugin>/`.
+  - I left upstream's fingerprint rule alone: it may only skip folders that both packers drop, and upstream's lifekit tracks `.vscode` in git.
+- **4 upstream tests that fail only on Linux:**
+  - cloudsave clearing a read-only tree (POSIX permissions);
+  - knowledge admission (`building` vs `queued`, a timing race);
+  - voice enrollment equality (`remaining_seconds` differs by microseconds; Windows' 15.6 ms clock hides it);
+  - `test_visit_runtime_finalize`, timing-flaky (failed 1 of 3 runs alone).
+  - None of them is in Neko code.
+- Mixing every plugin's `tests/` into one pytest session clashes on identical file names (`tests/test_smoke.py`), so plugins are run one by one.
+
 ## What blocks 9.5 (owner actions)
 
 1. **Real voice (C1):**
