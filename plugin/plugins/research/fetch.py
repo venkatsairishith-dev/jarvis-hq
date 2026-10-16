@@ -2,7 +2,7 @@
 
 Pages are untrusted. Only http(s) on ports 80/443; every address the name resolves to must be public (no loopback,
 private, link-local or reserved ranges, checked again on each redirect); at most 3 redirects, 1.5 MB, 15 s. Scripts,
-styles, navigation and forms are dropped. Results are cached on disk for a day so repeated research is cheaper.
+styles, navigation, forms and inline-hidden text are dropped. Results are cached on disk for a day so repeated research is cheaper.
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from lxml import etree
 from lxml import html as lhtml
 
 CACHE = Path(os.environ.get("RESEARCH_CACHE_DIR", r"D:\jarvis\cache\research"))
@@ -62,12 +63,18 @@ _OPENER = urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler({
 
 
 def _get(url: str) -> tuple[str, bytes, str]:
+    # TIMEOUT is the whole fetch (redirects and body), not only each socket wait: a server that drips the page out
+    # slowly would otherwise hold a research run for as long as it likes.
+    deadline = time.monotonic() + TIMEOUT
     for _ in range(MAX_REDIRECTS + 1):
         check_url(url)
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
                                                    "Accept-Language": "en;q=0.9"})
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise FetchError("page took too long")
         try:
-            r = _OPENER.open(req, timeout=TIMEOUT)
+            r = _OPENER.open(req, timeout=left)
         except urllib.error.HTTPError as e:
             if e.code in (301, 302, 303, 307, 308) and e.headers.get("Location"):
                 url = urllib.parse.urljoin(url, e.headers["Location"])
@@ -79,11 +86,29 @@ def _get(url: str) -> tuple[str, bytes, str]:
             ctype = r.headers.get("Content-Type", "")
             if "html" not in ctype and "text/plain" not in ctype:
                 raise FetchError(f"not a web page ({ctype.split(';')[0] or 'unknown type'})")
-            body = r.read(MAX_BYTES + 1)
-            if len(body) > MAX_BYTES:
-                body = body[:MAX_BYTES]
-            return r.geturl(), body, ctype
+            body = b""
+            try:
+                while len(body) <= MAX_BYTES:
+                    if time.monotonic() > deadline:
+                        raise FetchError("page took too long")
+                    chunk = r.read1(65536)
+                    if not chunk:
+                        break
+                    body += chunk
+            except (TimeoutError, OSError) as e:
+                raise FetchError(type(e).__name__) from None
+            return r.geturl(), body[:MAX_BYTES], ctype
     raise FetchError("too many redirects")
+
+
+_HIDDEN_STYLE = re.compile(r"display:none|visibility:hidden|opacity:0*(?:\.0+)?(?:;|$)|font-size:0+(?:\.0+)?(?:px|pt|em|rem|%)?(?:;|$)"
+                           r"|(?:left|top|right):-\d{3,}|text-indent:-\d{3,}")
+
+
+def _hidden(el) -> bool:
+    if el.get("hidden") is not None or (el.get("aria-hidden") or "").lower() == "true" or el.tag == "template":
+        return True
+    return bool(_HIDDEN_STYLE.search(re.sub(r"\s+", "", (el.get("style") or "").lower())))
 
 
 _DATE_META = ("article:published_time", "og:published_time", "date", "dc.date", "dcterms.date", "pubdate",
@@ -97,6 +122,11 @@ def extract(body: bytes, ctype: str, url: str) -> dict:
     doc = lhtml.fromstring(body)
     for bad in doc.xpath("//" + " | //".join(DROP)):
         bad.drop_tree()
+    # Text a reader cannot see is a common place to plant instructions for a model: drop elements hidden by attribute
+    # or inline style. (Hiding done by a stylesheet class cannot be seen without a CSS engine; that text stays data.)
+    for bad in [el for el in doc.iter(etree.Element) if _hidden(el)]:
+        if bad.getparent() is not None:
+            bad.drop_tree()
     title = (doc.xpath("string(//meta[@property='og:title']/@content)") or doc.xpath("string(//title)") or url).strip()
     date = ""
     for name in _DATE_META:

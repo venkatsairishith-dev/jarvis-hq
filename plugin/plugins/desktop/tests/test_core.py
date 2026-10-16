@@ -66,6 +66,30 @@ def test_denied_and_never_answered():
     assert r["state"] == "waiting_for_permission" and r["approval_id"] == "a1" and "PIN" in r["how"]
 
 
+def test_stop_while_an_approval_is_pending_is_cancelled():
+    """Bench B-024 (2026-10-16): the owner's stop during the approval wait came back as 'waiting_for_permission'."""
+    c = FakeConsole(approve_after=10 ** 6)
+    p = pc(c)
+    orig = c.__call__
+
+    def call(method, name, body=None, timeout=0):
+        if name == "state" and c.polls >= 1:
+            p.stopped = True                               # the owner pressed stop while it waited
+        return orig(method, name, body, timeout)
+    p.call = call
+    r = p.run({"op": "repair", "action": "edit_file", "target": "x", "args": {}}, 30)
+    assert r["state"] == "cancelled" and not [b for m, n, b in c.calls if n == "pc" and b.get("approval_id")]
+
+
+def test_a_dll_that_is_present_is_only_a_hypothesis(tmp_path):
+    """Bench E-012 (2026-10-16): with the DLL in the program folder the cause still read 'a required library is missing'."""
+    (tmp_path / "NekoRuntime140.dll").write_bytes(b"MZ")
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": ["NekoRuntime140.dll was not found."]}], [], [], app_dir=str(tmp_path))
+    assert not d["verified"] and "hypothesis" in d["cause"]
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": ["NekoRuntime140.dll was not found."]}], [], [], app_dir=str(tmp_path / "none"))
+    assert d["verified"] and "hypothesis" not in d["cause"]
+
+
 def test_a_job_that_never_finishes_is_cancelled():
     c = FakeConsole(finish_after=10 ** 6)
     r = pc(c).run({"op": "diag", "check": "processes"}, 5)

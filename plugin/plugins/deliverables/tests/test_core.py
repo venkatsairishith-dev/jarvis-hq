@@ -120,3 +120,29 @@ def test_new_job_dir_never_reuses(tmp_path, monkeypatch):
     monkeypatch.setattr(tools, "OUT_ROOT", tmp_path)
     a, b = tools.new_job_dir("Same Title"), tools.new_job_dir("Same Title")
     assert a != b and a.is_dir() and b.is_dir()
+
+
+def test_a_stats_slide_with_more_than_four_items_is_refused_not_cut():
+    s = {"title": "x", "slides": [{"layout": "stats", "title": "s", "items": [{"value": str(i), "label": f"l{i}"} for i in range(6)]}]}
+    with pytest.raises(spec.SpecError, match="at most 4"):
+        spec.deck(s)
+    four = {"title": "x", "slides": [{"layout": "stats", "title": "s", "items": [{"value": str(i), "label": f"l{i}"} for i in range(4)]}]}
+    assert len(spec.deck(four)["slides"][0]["items"]) == 4
+
+
+def test_missing_edge_is_reported_plainly(monkeypatch):
+    import playwright.sync_api as psa
+
+    class NoEdge:
+        def __enter__(self):
+            class C:
+                def launch(self, **kw):
+                    raise RuntimeError("Chromium distribution 'msedge' is not found. Run \"npx playwright install msedge\"")
+            return type("P", (), {"chromium": C()})()
+
+        def __exit__(self, *e):
+            return False
+    monkeypatch.setattr(psa, "sync_playwright", NoEdge)
+    with pytest.raises(tools.ToolError, match="Microsoft Edge could not be started") as e:
+        report.print_pdf("<p>x</p>", "x.pdf", "t")
+    assert "npx" not in str(e.value)

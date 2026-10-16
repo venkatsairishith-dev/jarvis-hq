@@ -97,6 +97,26 @@ def sentences(text: str) -> list[str]:
     return [s.strip() for s in SENT.split(text or "") if s.strip()]
 
 
+_FIG = re.compile(r"\d[\d,.]*")
+_WORDS = re.compile(r"[a-z]{3,}")
+
+
+def _disagreements(points: list[tuple[str, list[str]]]) -> dict[str, list[str]]:
+    """Fact sentences that say the same thing with DIFFERENT numbers from DIFFERENT sources ("prices fell 15 percent" [S2]
+    vs "prices fell 40 percent" [S3]). Both are only as good as their own source, so neither may stand as the confirmed
+    figure. Same wording = at least 70% of the words of the shorter sentence shared, numbers removed."""
+    out: dict[str, list[str]] = {}
+    for i, (a, ia) in enumerate(points):
+        na, wa = set(_FIG.findall(a)), set(_WORDS.findall(_FIG.sub(" ", a.lower())))
+        for b, ib in points[i + 1:]:
+            nb, wb = set(_FIG.findall(b)), set(_WORDS.findall(_FIG.sub(" ", b.lower())))
+            if not na or not nb or na == nb or set(ia) == set(ib) or not wa or not wb:
+                continue
+            if len(wa & wb) >= 0.7 * min(len(wa), len(wb)) and (na - nb) and (nb - na):
+                out[a], out[b] = ia, ib
+    return out
+
+
 def check_report(draft: dict, passages: list[dict], verifier: Callable[[str, list[str]], tuple[bool, float]] | None) -> tuple[dict, dict]:
     """Keep supported sentences; move unsupported or uncited factual sentences to a labelled section. Returns (report, stats)."""
     by_sid: dict[str, list[str]] = {}
@@ -131,18 +151,30 @@ def check_report(draft: dict, passages: list[dict], verifier: Callable[[str, lis
         return text + ("" if not ids else " " + "".join(f"[{i}]" for i in dict.fromkeys(ids)))
 
     sections = []
+    # Without a checker nothing was verified: a "fact" section must not carry the report's "Verified" badge.
+    shown = (lambda k: k) if verifier is not None else (lambda k: "" if k == "fact" else k)
+    drafted = []
     for sec in draft.get("sections") or []:
         if not isinstance(sec, dict) or not sec.get("heading"):
             continue
         kind = sec.get("kind") if sec.get("kind") in ("fact", "opinion", "uncertain", "recommendation") else "fact"
-        kept = [cite(t, ids) for t, ids in _points(sec) if keep(t, ids, kind)]
+        drafted.append((sec, kind, [(t, ids) for t, ids in _points(sec) if keep(t, ids, kind)]))
+    disputed = _disagreements([(t, ids) for _s, k, pts in drafted if k == "fact" for t, ids in pts])
+    for sec, kind, pts in drafted:
+        kept = [cite(t, ids) for t, ids in pts if t not in disputed]
         if not kept:
             continue
         if kind == "recommendation" or len(kept) > 3:     # advice and longer lists read better as bullets
-            sections.append({"heading": str(sec["heading"])[:160], "kind": kind, "paragraphs": [], "bullets": kept[:12]})
+            sections.append({"heading": str(sec["heading"])[:160], "kind": shown(kind), "paragraphs": [], "bullets": kept[:12]})
         else:
-            sections.append({"heading": str(sec["heading"])[:160], "kind": kind, "paragraphs": [" ".join(kept)], "bullets": []})
+            sections.append({"heading": str(sec["heading"])[:160], "kind": shown(kind), "paragraphs": [" ".join(kept)], "bullets": []})
     summary = " ".join(cite(t, ids) for t, ids in _summary_points(draft) if keep(t, ids, "fact"))
+    if disputed:
+        stats["disagreements"] = len(disputed)
+        sections.append({"heading": "Sources disagree", "kind": "uncertain",
+                         "paragraphs": ["Different sources give different figures for the same point; each is shown with its "
+                                        "source, and none of them is treated as confirmed."],
+                         "bullets": [cite(t, ids) for t, ids in disputed.items()][:12]})
     if moved:
         sections.append({"heading": "Statements that could not be confirmed from the sources", "kind": "uncertain",
                          "paragraphs": ["These came up while writing but the cited sources did not clearly support them, "
@@ -248,7 +280,11 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
         snippet = re.sub(r"(?s)<think>.*?</think>", "", raw or "").strip()[:160]
         raise ResearchError(f"The writer did not return a readable report (it began: {snippet!r}).")
     report, stats = check_report(draft, passages, verifier)
-    if stats["cited"] and stats["supported"] < stats["cited"] / 2:
+    if verifier is None and stats["cited"]:
+        notes.append("the claim checker is not available, so the cited sentences were NOT checked against their sources")
+    if stats.get("disagreements"):
+        notes.append(f"the sources disagree on {stats['disagreements']} statements; they are listed under 'Sources disagree'")
+    if verifier is not None and stats["cited"] and stats["supported"] < stats["cited"] / 2:
         notes.append(f"only {stats['supported']} of {stats['cited']} cited sentences were supported by their sources; "
                      "the sources found were thin or off-topic, so most statements are marked unconfirmed")
     cited = {i for sec in report["sections"] for t in sec["paragraphs"] + sec["bullets"] for i in CITE.findall(t)} | set(CITE.findall(report["summary"]))

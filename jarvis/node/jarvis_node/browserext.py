@@ -191,8 +191,14 @@ class Session:
             self.s = session_factory(argv, env=env)
 
     def __enter__(self):
-        self.s.start()
-        self.s.handshake(timeout=60)                    # the owner may have to allow the connection in the extension
+        try:
+            self.s.start()
+            self.s.handshake(timeout=60)                # the owner may have to allow the connection in the extension
+        except BaseException:
+            # `with` never calls __exit__ when __enter__ fails: without this the MCP server process (and its connection
+            # to the owner's Chrome) stayed running after a refused or timed-out handshake.
+            self.__exit__(None, None, None)
+            raise
         return self
 
     def __exit__(self, *a):
@@ -298,6 +304,20 @@ def auth_required(snapshot: str, url: str = "") -> bool:
     return has_password or (sign_in and any(r == "textbox" for r, _, _ in els))
 
 
+# A human check (CAPTCHA, "verify you are human", Cloudflare/hCaptcha/reCAPTCHA widgets). Neko never solves, clicks or
+# types into one: the owner does it in the visible browser, then asks again.
+CHALLENGE = re.compile(r"(?i)\b(?:re|h)?captcha\b|not a robot|verify (?:that )?you(?:'re| are) (?:a )?human|are you (?:a )?(?:robot|human)"
+                       r"|security challenge|human verification|cloudflare turnstile")
+CHALLENGE_HOSTS = ("google.com/recaptcha", "recaptcha.net", "hcaptcha.com", "challenges.cloudflare.com")
+
+
+def challenge_required(snapshot: str, url: str = "") -> bool:
+    """Does this page show a human check (CAPTCHA) that only the owner may answer?"""
+    if any(h in (url or "") for h in CHALLENGE_HOSTS) or any(h in (snapshot or "") for h in CHALLENGE_HOSTS):
+        return True
+    return any(CHALLENGE.search(n) for _r, n, _ref in elements(snapshot))
+
+
 def save_local(kind: str, text: str) -> str:
     d = local_result_dir()
     os.makedirs(d, exist_ok=True)
@@ -395,6 +415,7 @@ def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | N
         t = sess.call("browser_snapshot", {}) if op == "read" else sess.call("browser_find", {"text": target})
         meta = page_meta(t)
         return {"ok": True, **meta, "chars": len(t), "auth_required": auth_required(t, meta.get("url", "")),
+                "challenge_required": challenge_required(t, meta.get("url", "")),
                 "local_result": save_local("page", t), "note": "the page text stayed on this laptop (local_result)"}
     if op == "tabs":
         t = sess.call("browser_tabs", {"action": "list"})
@@ -403,6 +424,9 @@ def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | N
         ref = target
         if not REF.match(target or ""):
             snap = sess.call("browser_snapshot", {})
+            if CHALLENGE.search(target) and challenge_required(snap, page_meta(snap).get("url", "")):
+                raise BrowserError("this page asks for a human check (CAPTCHA): Neko does not answer it; please complete it "
+                                   "yourself in the browser, then ask again")
             if op == "type" and auth_required(snap, page_meta(snap).get("url", "")) and re.search(r"(?i)password", target):
                 raise BrowserError("Neko does not type into sign-in or password fields: please sign in yourself")
             ref = find_ref(snap, target, CLICKABLE if op == "click" else TYPABLE)

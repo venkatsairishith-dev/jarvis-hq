@@ -227,3 +227,15 @@ def test_the_browser_helper_is_offered_only_when_the_request_points_at_the_web()
         assert needs_web(web), web
         assert any(c.kind == "browser" for c in filter_for_task(full, web)), web
     assert [c.kind for c in filter_for_task(full, "plain task")] == [c.kind for c in full if c.kind != "browser"]
+
+
+def test_side_effects_of_real_entries_fail_closed():
+    """Benchmark v2 A-066: entries whose names are not plain reads were classed as safe to retry (toggle_* would undo
+    itself, call_tool/gateway_invoke run anything). Unknown verbs now count as side effects."""
+    from plugin.plugins.main_agent.planner import effect_of
+    for ref in ("music_pusher:toggle_schedule_task", "mcp_adapter:call_tool", "mcp_adapter:gateway_invoke", "music_pusher:skip_current_track",
+                "wechat_integration:logout", "jukebox_controller:control_jukebox", "proactive_controller:command", "deliverables:make_presentation"):
+        assert effect_of("plugin", ref) == "non_idempotent", ref
+    for ref in ("web_search:search", "web_search:search_summary", "proactive_controller:get_state", "local_team:team_status",
+                "jarvis_bridge:task_result", "learn_vault:search_notes"):
+        assert effect_of("plugin", ref) == "none", ref

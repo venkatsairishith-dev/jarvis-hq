@@ -7,9 +7,11 @@ Safety properties (each has a test):
   credentials, and no localhost, private, link-local or Tailscale addresses (so a web page cannot make this
   browser reach the user's own network). Hostnames are resolved and every returned address is checked.
 - page text and element names are scrubbed for secrets and are UNTRUSTED input (the caller marks the session)
-- hidden elements and hidden text are not shown to the model; password fields can be seen but never typed into
+- hidden elements and hidden text (display/visibility, opacity 0, off-page, tiny or transparent, clipped) are not
+  shown to the model; password fields can be seen but never typed into
 - clicks and typing must name the element they expect (name must match), so a stale id cannot hit another element
 - an action budget per session; one page only
+- open() reports the HTTP status, so an error page is never taken for the page asked for
 """
 import json
 import os
@@ -90,11 +92,13 @@ JS_ELEMENTS = """
 (max) => {
   const sel = 'a[href],button,input,select,textarea,[role=button],[role=link]';
   const out = []; let n = 0;
+  const de = document.documentElement, W = Math.max(de.scrollWidth, innerWidth), H = Math.max(de.scrollHeight, innerHeight);
   for (const el of document.querySelectorAll(sel)) {
     const r = el.getBoundingClientRect(); const st = getComputedStyle(el);
     if (r.width < 2 || r.height < 2 || st.visibility === 'hidden' || st.display === 'none') continue;
     if (el.checkVisibility && !el.checkVisibility({checkOpacity: true, opacityProperty: true, checkVisibilityCSS: true, visibilityProperty: true})) continue;
     if (el.closest('[aria-hidden=true]')) continue;
+    if (r.right + scrollX <= 0 || r.bottom + scrollY <= 0 || r.left + scrollX >= W || r.top + scrollY >= H) continue;   // off-page
     if (n >= max) break;
     el.setAttribute('data-jarvis-id', String(n));
     const type = (el.getAttribute('type') || '').toLowerCase();
@@ -107,6 +111,61 @@ JS_ELEMENTS = """
 }
 """
 
+
+# Visible text of the page. body.innerText already leaves out display:none and visibility:hidden, but not text that is
+# hidden in other ways (opacity 0, off the page, font-size ~0, transparent colour, clipped to nothing by an ancestor):
+# all common ways to plant instructions for a model. Those text nodes are blanked while innerText is read, then restored.
+JS_TEXT = r"""
+() => {
+  const body = document.body;
+  if (!body) return '';
+  const de = document.documentElement, W = Math.max(de.scrollWidth, innerWidth), H = Math.max(de.scrollHeight, innerHeight);
+  const cache = new Map();
+  const css = e => { let s = cache.get(e); if (!s) { s = getComputedStyle(e); cache.set(e, s); } return s; };
+  const alpha0 = c => { const m = /rgba?\(([^)]*)\)/.exec(c || ''); if (!m) return c === 'transparent';
+                        const p = m[1].split(/[\s,\/]+/).filter(Boolean); return p.length >= 4 && parseFloat(p[3]) === 0; };
+  const area = (l, t, r, b) => Math.max(0, r - l) * Math.max(0, b - t);
+  const hidden = node => {
+    const p = node.parentElement;
+    if (!p) return false;
+    const cs = css(p);
+    if (p.checkVisibility && !p.checkVisibility({checkOpacity: true, opacityProperty: true})) return true;
+    if (!p.checkVisibility && parseFloat(cs.opacity) === 0) return true;
+    if (parseFloat(cs.fontSize) < 2 || alpha0(cs.color)) return true;
+    const rg = document.createRange(); rg.selectNodeContents(node);
+    const rs = Array.from(rg.getClientRects()).filter(r => r.width > 0 && r.height > 0);
+    if (!rs.length) return false;                       // not laid out: innerText decides
+    let total = 0, onPage = 0;
+    for (const r of rs) {
+      total += area(r.left, r.top, r.right, r.bottom);
+      onPage += area(Math.max(r.left + scrollX, 0), Math.max(r.top + scrollY, 0), Math.min(r.right + scrollX, W), Math.min(r.bottom + scrollY, H));
+    }
+    if (onPage < total * 0.25) return true;             // positioned off the page
+    for (let a = p; a && a !== de; a = a.parentElement) {
+      const s = css(a);
+      if (/^rect\(0px,? 0px,? 0px,? 0px\)$/.test(s.clip || '')) return true;
+      if (!/hidden|clip/.test(s.overflowX + ' ' + s.overflowY)) continue;
+      const b = a.getBoundingClientRect();
+      let vis = 0;
+      for (const r of rs) vis += area(Math.max(r.left, b.left), Math.max(r.top, b.top), Math.min(r.right, b.right), Math.min(r.bottom, b.bottom));
+      if (vis < total * 0.25) return true;              // clipped away by an ancestor (zero height, 1px boxes)
+    }
+    return false;
+  };
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  const blank = [];
+  let n = 0;
+  for (let t = walker.nextNode(); t && n < 20000; t = walker.nextNode()) {
+    if (!t.data.trim()) continue;
+    n++;
+    const tag = t.parentElement ? t.parentElement.tagName : '';
+    if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') continue;
+    if (hidden(t)) blank.push([t, t.data]);
+  }
+  for (const [t] of blank) t.data = '';
+  try { return body.innerText; } finally { for (const [t, d] of blank) t.data = d; }
+}
+"""
 
 class BrowserSession:
     def __init__(self, channel="chrome", headless=True, allow_hosts=(), max_actions=30, timeout_ms=20000, egress_proxy=None, local_guard=False):
@@ -224,20 +283,24 @@ class BrowserSession:
         if self.page.url.startswith("chrome-error://"):
             self._reset()
         try:
-            self.page.goto(url, wait_until="domcontentloaded")
+            resp = self.page.goto(url, wait_until="domcontentloaded")
         except Exception as e:
             self._reset()
             raise BrowserError("navigation failed: " + type(e).__name__) from None
         if not self._allowed(self.page.url):          # a redirect landed somewhere forbidden
             self._reset()
             raise BrowserError("redirected to a blocked address")
+        # The HTTP status of the page that loaded: a 404 or 500 page can look like a normal page ("Welcome back"),
+        # so the caller must be able to tell it apart. None when the browser reports no response (same-page jump).
+        status = resp.status if resp is not None else None
+        return {"url": scrub(self.page.url.split("#")[0])[0][:200], "status": status, "ok": status is None or status < 400}
 
     def snapshot(self, max_text=MAX_TEXT, max_elements=MAX_ELEMENTS) -> dict:
         els = self.page.evaluate(JS_ELEMENTS, max_elements)
         for e in els:
             e["name"] = scrub(e["name"])[0]
             e["href"] = scrub(e["href"])[0] if e["href"] else None
-        text = scrub(self.page.inner_text("body"))[0][:max_text]     # inner_text = visible text only
+        text = scrub(self.page.evaluate(JS_TEXT) or "")[0][:max_text]     # visible text only (see JS_TEXT)
         return {"url": scrub(self.page.url.split("#")[0])[0][:200], "title": scrub(self.page.title())[0][:120], "text": text,
                 "elements": els, "untrusted": True, "truncated": len(text) >= max_text}
 

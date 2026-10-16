@@ -51,6 +51,71 @@ def test_transient_failure_is_retried_once_only(tmp_path):
     assert len(calls) == 2 and rec["status"] == "failed" and rec["steps"][0]["attempts"] == 2
 
 
+def test_a_step_that_may_already_have_acted_is_not_retried_on_a_timeout(tmp_path):
+    """Bench B-010/E-029 (2026-10-16): a 'timed out' typing or repair step was retried, so the text could be typed twice."""
+    for step in ({"tool": "type_text", "app": "notepad", "text": "Dear sir"}, {"tool": "troubleshoot", "app": "NekoSampleApp"},
+                 {"tool": "browser", "action": "click", "target": "Send", "profile": "Default"}):
+        calls = []
+        rec = coord(tmp_path, {step["tool"]: lambda s: calls.append(1) or {"ok": False, "error": "no result within 60 s; timed out"}}).run("x", plan(step))
+        assert len(calls) == 1 and rec["status"] == "failed", step
+    calls = []                                             # a read-only browser step is still retried once
+    rec = coord(tmp_path, {"browser": lambda s: calls.append(1) or {"ok": False, "error": "timed out"}}).run(
+        "x", plan({"tool": "browser", "action": "whoami", "profile": "Default"}))
+    assert len(calls) == 2
+
+
+def test_open_file_needs_an_observed_window(tmp_path):
+    """Bench B-004 (2026-10-16): open_file fell through to 'the action reported success' although the node said no window
+    showing the file appeared (verified='unconfirmed')."""
+    step = {"tool": "open_file", "name": "report.docx"}
+    rec = coord(tmp_path, {"open_file": lambda s: {"ok": True, "opened": "Documents\\report.docx", "verified": "unconfirmed",
+                                                   "note": "no window titled like 'report' appeared"}}).run("x", plan(step))
+    assert rec["status"] == "failed" and "Done" not in C.summary(rec)
+    rec = coord(tmp_path, {"open_file": lambda s: {"ok": True, "opened": "Documents\\report.docx", "verified": "verified"}}).run("x", plan(step))
+    assert rec["status"] == "completed"
+
+
+def test_a_stop_during_a_step_is_reported_as_cancelled(tmp_path):
+    """Bench B-019 (2026-10-16): the owner's stop while a job ran ended the task as 'failed'."""
+    flag = {"stop": False}
+
+    def running(s):
+        flag["stop"] = True
+        return {"ok": False, "state": "cancelled", "error": "the job was cancelled"}
+    rec = coord(tmp_path, {"type_text": running}, cancelled=lambda: flag["stop"]).run("x", plan({"tool": "type_text", "app": "notepad", "text": "x"}))
+    assert rec["status"] == "cancelled" and C.summary(rec) == "Stopped." and rec["steps"][0]["attempts"] == 1
+
+
+def test_lock_race_has_one_winner_and_a_lock_being_written_is_not_stale(tmp_path):
+    """Bench B-014 (2026-10-16): 8 threads, 3 winners: a lock file created but not yet written read as pid 0 (dead) and
+    was taken over."""
+    import threading
+    lock = tmp_path / "lock"
+    lock.write_text("", encoding="utf-8")                  # just created by another task, content not written yet
+    with pytest.raises(C.Busy):
+        C.acquire("t-new", lock)
+    old = __import__("time").time() - C.UNWRITTEN_GRACE_S - 5
+    os.utime(lock, (old, old))                             # a writer that died between create and write long ago
+    C.acquire("t-new", lock)
+    assert C.current_task(lock) == "t-new"
+    C.release("t-new", lock)
+    for _ in range(5):
+        won, gate = [], threading.Barrier(8)
+
+        def go(i):
+            gate.wait()
+            try:
+                C.acquire(f"t{i}", lock)
+                won.append(i)
+            except C.Busy:
+                pass
+        th = [threading.Thread(target=go, args=(i,)) for i in range(8)]
+        [t.start() for t in th]
+        [t.join(10) for t in th]
+        assert len(won) == 1 and C.current_task(lock) == f"t{won[0]}"
+        C.release(f"t{won[0]}", lock)
+
+
 def test_refusals_and_denials_are_not_retried(tmp_path):
     calls = []
 
@@ -289,3 +354,22 @@ def test_fast_path_handles_one_simple_command_and_nothing_else():
     # a follow-up with context goes to the model even when its words look simple
     with pytest.raises(AssertionError, match="model was asked"):
         D.decide("open notepad", PROFILES, post=no_model, context="type hi")
+
+
+def test_summary_confirms_a_requested_stop():
+    assert C.summary({"status": "stopped", "steps": [{"tool": "stop", "result": {"ok": True}}]}) == "Stopped, as you asked."
+
+
+def test_summary_while_waiting_names_the_action_and_does_not_promise_to_resume():
+    rec = {"status": "waiting_for_permission", "approval_id": "a1",
+           "steps": [{"n": 1, "tool": "browser", "args": {"action": "click", "target": "Buy now"}}]}
+    s = C.summary(rec)
+    assert "browser click Buy now" in s and "ask me to continue" in s and "a1" in s
+    assert "I will continue once" not in s
+
+
+def test_summary_says_which_part_was_not_done():
+    rec = {"status": "completed", "plan": {"problems": ["unknown tool 'delete_files'"]},
+           "steps": [{"tool": "open_file", "passed": True, "checked": "downloads opened"}]}
+    s = C.summary(rec)
+    assert s.startswith("Done: downloads opened.") and "Not done: unknown tool 'delete_files'" in s

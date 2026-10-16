@@ -104,6 +104,13 @@ _WRITE_VERB = re.compile(
     r"install|run|exec|execute|click|type|record|submit|book|pay|buy|order|clear|reset|move|rename|copy|enable|disable|schedule)(_|$)")
 
 
+# Entries whose name says they only read. Anything else is treated as able to change something (fail closed): an entry
+# called toggle_*, call_tool, gateway_invoke, skip_*, logout or command must never be retried blindly.
+_READ_VERB = re.compile(
+    r"(^|_)(get|list|read|search|find|query|status|check|describe|lookup|look|view|preview|count|ask|summary|research|"
+    r"inspect|poll|overview|result|recent|state|progress|info|availability)(_|$)")
+
+
 def effect_of(kind: str, ref: str = "") -> str:
     """Whether running a step twice could do something twice. Decided from what the step is, never from the model."""
     if kind == "think":
@@ -111,7 +118,9 @@ def effect_of(kind: str, ref: str = "") -> str:
     if kind in ("browser", "computer", "jarvis"):
         return "non_idempotent"
     entry = str(ref).split(":", 1)[-1].lower()
-    return "non_idempotent" if _WRITE_VERB.search(entry) else "none"
+    if _WRITE_VERB.search(entry):
+        return "non_idempotent"
+    return "none" if _READ_VERB.search(entry) else "non_idempotent"
 
 
 def _clip(text: Any, n: int) -> str:

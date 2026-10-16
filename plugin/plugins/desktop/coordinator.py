@@ -34,6 +34,15 @@ AGENT = {"open_website": "browser", "play_media": "browser", "browser": "browser
          "type_text": "desktop", "press_key": "desktop", "open_file": "desktop", "check_pc": "desktop",
          "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator"}
 TRANSIENT = re.compile(r"(?i)timeout|timed out|connection failed|not answering|temporarily|busy")
+# Steps that change nothing when run twice (open, focus, read, check). Typing, keys, clicks, playing, repairs and
+# research are not: a failure reported as a timeout may come after they already acted, so they are never re-run blindly.
+REPEAT_SAFE = {"open_website", "open_app", "window", "check_pc", "open_file"}
+REPEAT_SAFE_BROWSER = {"read", "find", "tabs", "whoami"}
+
+
+def repeat_safe(step: dict) -> bool:
+    t = step.get("tool")
+    return t in REPEAT_SAFE or (t == "browser" and step.get("action") in REPEAT_SAFE_BROWSER)
 
 
 class Busy(Exception):
@@ -67,6 +76,53 @@ def _alive(pid: int) -> bool:
         return True
 
 
+UNWRITTEN_GRACE_S = 30          # a lock file still empty after this long belongs to a writer that died mid-create
+
+
+def _held(path: Path) -> dict:
+    try:
+        held = json.loads(path.read_text(encoding="utf-8"))
+        return held if isinstance(held, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _stale(held: dict, path: Path, budget: float) -> bool:
+    if not held:
+        # Empty or half-written: another task created the file a moment ago and is writing it (bench B-014: 8 threads,
+        # 3 "won", because an empty lock read as pid 0 = dead). Only an old unwritten file is a dead writer's leftover.
+        try:
+            return time.time() - path.stat().st_mtime > UNWRITTEN_GRACE_S
+        except OSError:
+            return True
+    return not _alive(held.get("pid", 0)) or time.time() - float(held.get("at", 0)) > budget + 60
+
+
+def _take_over(path: Path, held: dict) -> None:
+    """Remove a stale lock, but only the very lock judged stale and only one taker at a time: two takers that both read
+    the stale lock must not remove each other's fresh one."""
+    guard = path.with_name(path.name + ".takeover")
+    try:
+        os.close(os.open(str(guard), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        try:
+            if time.time() - guard.stat().st_mtime > UNWRITTEN_GRACE_S:      # a taker that died: clear its guard
+                guard.unlink()
+        except OSError:
+            pass
+        return
+    try:
+        if _held(path) == held:
+            path.unlink()
+    except OSError:
+        pass
+    finally:
+        try:
+            guard.unlink()
+        except OSError:
+            pass
+
+
 def acquire(task_id: str, path: Path = LOCK, budget: float = TOTAL_BUDGET_S) -> None:
     """One PC task at a time. A lock whose owner died, or that outlived its time budget, is taken over (and said so)."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,17 +133,10 @@ def acquire(task_id: str, path: Path = LOCK, budget: float = TOTAL_BUDGET_S) -> 
             os.close(fd)
             return
         except FileExistsError:
-            try:
-                held = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                held = {}
-            stale = not _alive(held.get("pid", 0)) or time.time() - float(held.get("at", 0)) > budget + 60
-            if not stale:
-                raise Busy(f"another PC task is running ({held.get('task')}); stop it first or wait")
-            try:
-                path.unlink()
-            except OSError:
-                pass
+            held = _held(path)
+            if not _stale(held, path, budget):
+                raise Busy(f"another PC task is running ({held.get('task') or 'starting'}); stop it first or wait")
+            _take_over(path, held)
     raise Busy("the PC task lock could not be taken")
 
 
@@ -127,6 +176,11 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
     if t == "open_app":
         return r.get("verified") == "verified", f"a window for {r.get('opened')} {'appeared' if r.get('verified') == 'verified' else 'was not seen'}", \
             "" if r.get("verified") == "verified" else str(r.get("note") or "")
+    if t == "open_file":                                   # the node looks for a window showing the file or folder
+        seen = r.get("verified") == "verified"
+        return seen, f"{r.get('opened') or step.get('name')} " + ("opened (a window showing it appeared)" if seen else
+                                                                "was sent to open, but no window showing it was seen"), \
+            "" if seen else str(r.get("note") or "")
     if t == "browser" and step.get("action") == "whoami":
         seen = r.get("seen")
         seen = ", ".join(map(str, seen)) if isinstance(seen, (list, tuple)) else seen
@@ -265,14 +319,18 @@ class Coordinator:
                         res = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:160]}"}
                     passed, checked, unc = verify(step, res)
                     entry.update(result=_slim(res), passed=passed, checked=checked, uncertainty=unc, finished=self.clock())
-                    transient = not passed and TRANSIENT.search(str(res.get("error") or "")) and res.get("state") not in ("waiting_for_permission", "denied")
-                    if transient and entry["attempts"] <= MAX_RETRIES and not self.cancelled():
+                    transient = not passed and TRANSIENT.search(str(res.get("error") or "")) and res.get("state") not in (
+                        "waiting_for_permission", "denied", "cancelled")
+                    if transient and repeat_safe(step) and entry["attempts"] <= MAX_RETRIES and not self.cancelled():
                         self.on_progress("working", f"{who} agent: retrying step {i} once ({str(res.get('error'))[:60]})")
                         continue
                     break
                 if res.get("state") == "waiting_for_permission":
                     rec.update(status="waiting_for_permission", approval_id=res.get("approval_id"), how=res.get("how"))
                     break
+                if not passed and (res.get("state") == "cancelled" or self.cancelled()):
+                    rec.update(status="cancelled", error=f"stopped by the owner during step {i} ({step['tool']})")
+                    break                                  # the owner's stop, not a failure of the step
                 if not passed:
                     rec.update(status="failed" if res.get("state") != "denied" else "denied",
                                error=f"step {i} ({step['tool']}): {unc or checked}"[:300])
@@ -305,11 +363,21 @@ def summary(rec: dict) -> str:
     if st == "completed":
         done = "; ".join(s["checked"] for s in rec["steps"] if s.get("passed"))
         unc = (" (not certain: " + "; ".join(rec.get("uncertain") or []) + ")") if rec.get("uncertain") else ""
-        return f"Done: {done}{unc}."
+        # parts of the request the plan had to leave out (an unknown or unsupported step) were NOT done: say so
+        dropped = [p for p in (rec.get("plan") or {}).get("problems") or [] if p]
+        left = (" Not done: " + "; ".join(dropped)[:200] + ".") if dropped else ""
+        return f"Done: {done}{unc}.{left}"
     if st == "needs_clarification":
         return rec.get("question") or "Could you say a bit more?"
+    if st == "stopped":
+        return "Stopped, as you asked."
     if st == "waiting_for_permission":
-        return "This needs your approval in the JARVIS console (PIN); I will continue once it is approved."
+        # nothing resumes the task by itself: name what waits and what the owner does next
+        last = (rec.get("steps") or [{}])[-1]
+        args = last.get("args") or {}
+        what = " ".join(str(x) for x in (last.get("tool"), args.get("action"), args.get("target") or args.get("app") or args.get("site")) if x)
+        return (f"This needs your approval first{': ' + what if what else ''}. Approve it in the JARVIS console with your PIN, "
+                f"then ask me to continue" + (f" (approval {rec['approval_id']})" if rec.get("approval_id") else "") + ".")
     if st == "busy":
         return rec.get("error", "Another PC task is running.")
     if st == "not_a_pc_task":

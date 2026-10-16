@@ -46,9 +46,21 @@ def entailment(premise: str, hypothesis: str) -> float:
     return float(p[1])
 
 
+_NUM = re.compile(r"(?<![\d.])\d+(?:\.\d+)*")
+
+
+def _numbers(text: str) -> set[str]:
+    """Whole numbers in a text ('1,500' -> 1500, '3.50' == '3.5'; '3.11.9' stays a version string)."""
+    out = set()
+    for n in _NUM.findall(re.sub(r"(?<=\d),(?=\d{3}\b)", "", text or "")):
+        out.add(repr(float(n)) if n.count(".") <= 1 else n)
+    return out
+
+
 def numbers_match(sentence: str, passage: str) -> bool:
-    flat = passage.replace(",", "")
-    return all(n.rstrip(".") in flat for n in re.findall(r"\d[\d,.]*", sentence.replace(",", "")))
+    """Every number in the sentence is a number in the passage. Compared as whole numbers: '5' inside '15' or '2025'
+    used to count as a match, so a sentence could change a figure and still pass."""
+    return _numbers(sentence) <= _numbers(passage)
 
 
 def supported(sentence: str, passages: list[str]) -> tuple[bool, float]:

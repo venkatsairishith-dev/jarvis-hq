@@ -197,8 +197,14 @@ def render_html(spec: dict) -> tuple[str, Theme]:
 
 def print_pdf(html: str, path: str, title: str) -> None:
     from playwright.sync_api import sync_playwright
+
+    from .tools import ToolError
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="msedge", headless=True)
+        try:
+            browser = p.chromium.launch(channel="msedge", headless=True)
+        except Exception as e:  # noqa: BLE001 - Playwright's own text suggests an install command; say what is missing
+            raise ToolError(f"Microsoft Edge could not be started to print the PDF ({type(e).__name__}); "
+                            "it is needed for reports") from None
         try:
             ctx = browser.new_context(java_script_enabled=False)
             ctx.route("**/*", lambda route: route.continue_() if route.request.url.startswith(("data:", "about:")) else route.abort())

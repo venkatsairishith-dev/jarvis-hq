@@ -30,8 +30,8 @@ def eng(tmp_path):
 def ok_agent(log, tool):
     def fn(step):
         log.append((tool, step.get("app") or step.get("query") or step.get("text") or ""))
-        if tool == "open_app":
-            return {"ok": True, "verified": "verified", "opened": step.get("app")}
+        if tool in ("open_app", "open_file"):              # the node reports the window it saw for an open
+            return {"ok": True, "verified": "verified", "opened": step.get("app") or step.get("name")}
         if tool == "research":
             return {"ok": True, "summary": "three checked findings", "file": "D:\\out\\deck.pptx", "qa_passed": True}
         return {"ok": True}
@@ -148,6 +148,33 @@ def test_an_interrupted_unsafe_step_is_not_repeated_but_a_safe_one_is(eng):
     t = M._act(mid, {"tool": "type_text", "app": "notepad", "text": "x"}, 0)
     o = M._act(mid, {"tool": "open_app", "app": "notepad"}, 0)
     assert t["interrupted"] and not t["ok"] and calls == ["open"] and o["ok"]
+
+
+def test_an_interrupted_browser_click_is_not_repeated_but_a_read_is(eng):
+    """Bench D-015 (2026-10-16): every browser step counted as safe to repeat, so a 'click Send' that was running when the
+    process died would have been clicked again after the restart."""
+    calls = []
+    eng.agents = {"browser": lambda s: (calls.append(s["action"]), {"ok": True, "matches": True})[1]}
+    mid = "m-test-browser"
+    click = {"tool": "browser", "action": "click", "target": "Send", "profile": "Default"}
+    who = {"tool": "browser", "action": "whoami", "profile": "Default"}
+    for step in (click, who):
+        M._q("insert into effects (key, mission, tool, state, result, at) values (?,?,?,?,?,?)",
+             (f"{mid}:{M._sig(step)}:0", mid, "browser", "started", "{}", 0))
+    c, w = M._act(mid, click, 0), M._act(mid, who, 0)
+    assert c["interrupted"] and not c["ok"] and w["ok"] and calls == ["whoami"]
+
+
+def test_explain_tells_what_stayed_uncertain_and_how_to_approve(eng):
+    """Bench D-009/D-011 (2026-10-16): explain() dropped the uncertainty of passed steps and, for a mission waiting for
+    the owner, gave no approval id ('Not finished: waiting_for_permission')."""
+    rec = {"status": "waiting_for_permission", "approval_id": "ap-42", "steps": [
+        {"n": 1, "tool": "play_media", "passed": True, "result": {}, "uncertainty": "Windows' media session did not confirm the title"},
+        {"n": 2, "tool": "type_text", "passed": False, "result": {}, "uncertainty": ""}]}
+    ex = M.explain(rec)
+    assert ex.startswith("1 of 2 steps") and "did not confirm the title" in ex and "ap-42" in ex and "PIN" in ex
+    ex = M.explain(dict(rec, status="failed", error="the re-plan had no further steps"))
+    assert "Not finished: the re-plan had no further steps" in ex and "Not certain" in ex
 
 
 CHILD = textwrap.dedent("""

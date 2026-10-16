@@ -19,6 +19,7 @@ import json
 import re
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 from . import coordinator as coord
@@ -51,29 +52,50 @@ def _audit(root: Path, what: str):
         f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {what}\n")
 
 
+PRIVATE_HOST = re.compile(r"^(localhost|127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|\.(local|internal|lan|home|localhost)$", re.I)
+
+
+def _site_key(name: str) -> str:
+    """The name as the decider looks it up (decide.resolve_site): without 'website/site/the' and a '.com' ending."""
+    low = re.sub(r"(?i)\b(website|site|web site|the)\b", "", name).strip()
+    return " ".join(low.removesuffix(".com").split())
+
+
 def check(change: dict, builtin_sites: dict) -> dict:
     """Validate a proposed change; returns the normalized content or raises SkillError."""
     if not isinstance(change, dict) or not change or set(change) - ALLOWED:
         raise SkillError(f"a proposal may only contain {sorted(ALLOWED)}")
+    sites, examples = change.get("sites") or {}, change.get("examples") or []
+    if not isinstance(sites, dict) or not isinstance(examples, list):
+        raise SkillError("sites must be a mapping of name -> address and examples a list")
     out = {"sites": {}, "examples": []}
-    for name, url in (change.get("sites") or {}).items():
+    for name, url in sites.items():
         n = " ".join(str(name).lower().split())
         if not re.fullmatch(r"[a-z0-9][a-z0-9 .'-]{1,40}", n):
             raise SkillError(f"bad site name {name!r}")
-        if n in builtin_sites:
+        if n in builtin_sites or _site_key(n) in builtin_sites:
             raise SkillError(f"'{n}' is built in and cannot be replaced")
-        if not re.fullmatch(r"https://[a-z0-9.-]+\.[a-z]{2,}(/[\w./%?=&-]*)?", str(url), re.I) or re.search(
-                r"(?i)localhost|127\.|192\.168\.|10\.|file:|javascript:|data:", str(url)):
+        if re.search(r"\.[a-z]{2,}$", n):               # "gmail.com" is an address the owner says outright; it opens itself
+            raise SkillError(f"'{n}' is a web address, not a name; it cannot point somewhere else")
+        host = (urllib.parse.urlsplit(str(url)).hostname or "") if isinstance(url, str) else ""
+        if not re.fullmatch(r"https://[a-z0-9.-]+\.[a-z]{2,}(/[\w./%?=&-]*)?", str(url), re.I) or not host or PRIVATE_HOST.search(host):
             raise SkillError(f"site {name!r} must be a public https address")
         out["sites"][n] = str(url)
-    for ex in (change.get("examples") or [])[:MAX_EXAMPLES]:
-        req, plan = str(ex.get("request", "")).strip(), ex.get("plan")
-        if not req or len(req) > 200 or not isinstance(plan, dict) or not isinstance(plan.get("steps"), list):
+    from . import decide
+    fields = set(decide.SCHEMA["properties"]["steps"]["items"]["properties"])
+    for ex in examples[:MAX_EXAMPLES]:
+        if not isinstance(ex, dict):
             raise SkillError("an example needs a short request and a plan {'steps': [...]}")
-        from . import decide
+        req, plan = str(ex.get("request", "")).strip(), ex.get("plan")
+        if not req or len(req) > 200 or not isinstance(plan, dict) or not isinstance(plan.get("steps"), list) or not plan["steps"]:
+            raise SkillError("an example needs a short request and a plan {'steps': [...]}")
+        if re.search(r"[\x00-\x1f\x7f\u2028\u2029]", req):     # a line break would add a line (a rule) to the decider's prompt
+            raise SkillError("an example request must be one plain line")
         for st in plan["steps"]:
-            if st.get("tool") not in decide.TOOLS:
-                raise SkillError(f"an example uses an unknown tool {st.get('tool')!r}")
+            if not isinstance(st, dict) or st.get("tool") not in decide.TOOLS:
+                raise SkillError(f"an example uses an unknown tool {st.get('tool') if isinstance(st, dict) else st!r}")
+            if set(st) - fields:
+                raise SkillError(f"an example step has fields the decider does not have: {sorted(set(st) - fields)}")
         out["examples"].append({"request": req, "plan": plan})
     if not out["sites"] and not out["examples"]:
         raise SkillError("the proposal is empty")
@@ -156,6 +178,8 @@ def promote(ver: str, root: Path = ROOT) -> str:
         raise SkillError(f"{ver} has not been through the regression gate") from None
     if not rep.get("passed") or rep.get("sha256") != meta["sha256"]:
         raise SkillError(f"{ver} did not pass the gate (or changed since)")
+    if rep.get("base") != reg.get("active"):              # the gate compared it with another active version
+        raise SkillError(f"{ver} was gated against {rep.get('base')}, but {reg.get('active')} is active now; run the gate again")
     load(ver, root)                                       # hash check
     reg["history"].append(reg.get("active"))
     reg["active"] = ver

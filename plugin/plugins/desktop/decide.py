@@ -197,16 +197,45 @@ def account_from_text(request: str, profiles: list[dict]) -> str | None:
     """The account the owner NAMED in the request, read deterministically: the longest known profile alias among its
     words (one word, or two or three run together: "Venkat AMV" -> venkatamv), or the name after "profile/account
     called". None when no account is named. The model's own account field is only a fallback."""
-    text = re.sub(r"(?i)'s\b", "", request or "")
-    called = re.search(r"(?i)\b(?:profile|account)\s+(?:called|named)\s+([\w.-]+)", text)
+    called = re.search(r"(?i)\b(?:profile|account)\s+(?:called|named)\s+([\w.-]+)", re.sub(r"(?i)'s\b", "", request or ""))
     if called:
         return called.group(1)
-    words = [_norm(w) for w in re.split(r"[^A-Za-z0-9.@-]+", text) if w]
-    grams = {w for w in words} | {a + b for a, b in zip(words, words[1:])} | {a + b + c for a, b, c in zip(words, words[1:], words[2:])}
-    aliases = {_norm(a) for p in profiles for a in (p.get("say") or p.get("aliases") or []) if len(_norm(a)) >= 4}
-    aliases.discard("default")
-    hits = sorted((g for g in grams if g in aliases), key=len, reverse=True)
-    return hits[0] if hits else None
+    hits, clash, corrected = _account_mentions(request, profiles)
+    if not hits:
+        return None
+    if not clash:
+        return max(hits, key=lambda h: len(h[1]))[1]         # one account (or aliases of one profile): the longest name
+    return hits[-1][1] if corrected else None              # "X, no wait, Y" -> Y; two accounts and no correction -> ask
+
+
+CORRECTION = re.compile(r"(?i)\bno\s*,|\b(no wait|wait|actually|instead|i mean|i meant|rather|sorry|scratch that|make (?:that|it))\b")
+NEGATED = ("not", "instead of", "rather than")
+
+
+def _account_mentions(request: str, profiles: list[dict]) -> tuple[list[tuple[int, str]], bool, bool]:
+    """Every account alias the owner named, in order: [(word position, alias)], whether they point at different profiles
+    (a clash), and whether the request corrects itself ("no wait", "instead", "actually"). A name inside a longer one
+    ("Venkat" in "Venkat AMV") and a name the owner negated ("not VenkatAMV", "instead of Satish") do not count."""
+    text = re.sub(r"(?i)'s\b", "", request or "")
+    words = [w for w in (_norm(x) for x in re.split(r"[^A-Za-z0-9.@-]+", text)) if w]
+    owners: dict[str, set] = {}
+    for p in profiles:
+        for a in p.get("say") or p.get("aliases") or []:
+            if len(_norm(a)) >= 4 and _norm(a) != "default":
+                owners.setdefault(_norm(a), set()).add(p.get("profile"))
+    spans = [(i, i + n, "".join(words[i:i + n])) for n in (1, 2, 3) for i in range(len(words) - n + 1) if "".join(words[i:i + n]) in owners]
+    spans = [s for s in spans if not any(o[0] <= s[0] and s[1] <= o[1] and o[1] - o[0] > s[1] - s[0] for o in spans)]
+    spans = [s for s in spans if not (words[max(0, s[0] - 1):s[0]] == ["not"] or " ".join(words[max(0, s[0] - 2):s[0]]) in NEGATED)]
+    spans.sort()
+    hits = [(s[0], s[2]) for s in spans]
+    common = set.intersection(*(owners[h[1]] for h in hits)) if hits else set()
+    return hits, bool(hits) and not common, bool(CORRECTION.search(request or ""))
+
+
+def accounts_clash(request: str, profiles: list[dict]) -> list[str]:
+    """The account names when the owner named two different accounts for one request without correcting themselves."""
+    hits, clash, corrected = _account_mentions(request, profiles)
+    return sorted({h[1] for h in hits}) if clash and not corrected else []
 
 
 MEDIA_SAID = [("nexttrack", r"\b(next (song|track)|skip( the| this)?( song| track)?)\b"), ("prevtrack", r"\bprevious (song|track)\b"),
@@ -256,12 +285,12 @@ def resolve_site(site: str) -> str | None:
     low = re.sub(r"(?i)\b(website|site|web site|the)\b", "", s.lower()).strip()
     if low in SITES:
         return SITES[low]
+    key = low.removesuffix(".com").strip()
+    if key in SITES:                                         # "gmail.com" is the built-in gmail, whatever a version says
+        return SITES[key]
     learned = overlay().get("sites") or {}
     if low in learned:                                       # added by a promoted version (built-in names always win)
         return learned[low]
-    key = low.removesuffix(".com").strip()
-    if key in SITES:
-        return SITES[key]
     if re.search(r"\.(txt|pdf|docx?|pptx?|xlsx?|csv|md|png|jpe?g|gif|exe|msi|py|zip|log|json|wav|mp[34])$", low):
         return None                                           # a file name, not a website
     if re.match(r"^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d{1,5})?(/\S*)?$", low, re.I):
@@ -280,11 +309,20 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
         data = json.loads(raw)
     except ValueError:
         return Plan([], "fallback", problems=["the model's answer was not JSON"], raw=raw)
+    if not isinstance(data, dict) or not isinstance(data.get("steps") or [], list):
+        return Plan([], "fallback", problems=["the model's answer was not a plan"], raw=raw)
     named = account_from_text(request, profiles)
+    clash = accounts_clash(request, profiles)
     steps, problems = [], []
     if MAKE_DOC.search(request) and not TOPIC.search(request):          # "create a pdf and open it": about what?
         return Plan([], "clarify", question="What should it be about?", problems=["no topic for the document"], raw=raw)
-    for s in (data.get("steps") or [])[:MAX_STEPS]:
+    given = data.get("steps") or []
+    if len(given) > MAX_STEPS:                                            # never cut the owner's request silently
+        problems.append(f"the plan had {len(given)} steps; only the first {MAX_STEPS} are used")
+    for s in given[:MAX_STEPS]:
+        if not isinstance(s, dict):
+            problems.append("a step was not an object")
+            continue
         tool = s.get("tool")
         if tool not in TOOLS:
             problems.append(f"unknown tool {tool!r}")
@@ -293,6 +331,9 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
             tool, s = "open_website", dict(s, site=s.get("app"))          # "open youtube" is a site, not a Start-menu app
         out = {"tool": tool}
         if tool in ("open_website", "play_media", "browser"):
+            if clash:                                     # "gmail in Satish's profile and youtube in VenkatAMV": never guess one
+                return Plan(steps, "clarify", question=f"You named more than one account ({', '.join(clash)}). Which one should I use?",
+                            problems=["more than one account named"], raw=raw)
             phrase = named or ("" if str(s.get("account") or "").strip().lower() in NO_ACCOUNT else s.get("account", ""))
             folder, why = resolve_account(phrase, profiles)
             if folder is None:
@@ -324,6 +365,9 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
                 key = said_key
             if (not app or _vague(app)) and tool in ("troubleshoot", "window") and re.search(r"(?i)\b(screen|this error|the error|that error|popup|pop-up|dialog)\b", request):
                 app = ACTIVE                                  # the window showing the error, found at run time
+            earlier = [st["app"] for st in steps if st.get("app") and st["app"] != ACTIVE]
+            if (not app or _vague(app)) and earlier and tool != "troubleshoot" and not (tool == "press_key" and key in KEY_WORDS):
+                app = earlier[-1]                             # "open calculator then minimize it": the app this plan opened
             if (not app or _vague(app)) and not (tool == "press_key" and key in KEY_WORDS):
                 return Plan(steps, "clarify", question="Which app?", problems=["no app"], raw=raw)
             out["app"] = "" if _vague(app) else app[:80]
@@ -414,29 +458,46 @@ POST = {"open_website": "a Chrome window of profile {profile} shows the page",
         "open_output": "a window showing the file Neko made appeared",
         "stop": "the running work stopped"}
 TYPE_SAID = re.compile(r"(?i)\b(?:(?:type|write|enter)\s+[\"']?(.+?)[\"']?\s+(?:in|into|on)|put\s+[\"']?(.+?)[\"']?\s+into)\s+"
-                       r"(?:the\s+|my\s+)?([A-Za-z][\w.+-]*(?:\s[A-Za-z][\w.+-]*)?)\s*(?:app|window)?\s*[.!]?$")
+                       r"(?:the\s+|my\s+)?([A-Za-z][\w.+-]*(?:\s[A-Za-z][\w.+-]*)?)\s*(?:app|window)?"
+                       r"(?:\s*,?\s+(?:and|then)\s+.*)?\s*[.!]?$")         # "... into wordpad and save it": the rest is other steps
+OPEN_TYPE = re.compile(r"(?i)^\W*(?:please\s+)?(?:open|launch|start)\b.*?\b(?:and|then)\s+(?:then\s+)?(?:type|write|enter)\s+"
+                       r"[\"']?(.+?)[\"']?\s*[.!]?$")                  # "open wordpad and write dear sir"
+POLITE = re.compile(r"(?i)[\s,]+(?:please|for me|now|thanks|thank you)\W*$")
+
+
+def _clean_app(app: str) -> str:
+    """'wordpad please' / 'wordpad app' / 'wordpad.' -> 'wordpad': only the app's name reaches the typing step."""
+    return re.sub(r"(?i)\s+(?:app|application|window|please|now)$", "", app.strip()).rstrip(".!?,").strip()
 GO_SITE = re.compile(r"(?i)\b(?:go to|open|visit)\s+(?:my\s+|the\s+)?([A-Za-z0-9.-]+(?:\.[a-z]{2,})?(?:\s(?:maps|account|drive|calendar|music))?)\b")
 MAKE_DOC = re.compile(r"(?i)\b(create|make|write|generate|build|prepare)\b.{0,30}\b(pdf|report|document|slides?|deck|presentation|ppt)\b")
+WHEN = r"(?:today|tomorrow|tonight|later|now|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|this week|the weekend)\b"
 TOPIC = re.compile(r"(?i)\b(about|on|regarding|covering|of|for|explaining|comparing|research(?:ing)?|summari[sz]e|compare|explain|"
-                   r"look up|find out)\s+(?!it\b|that\b|this\b|me\b|them\b)\w{3,}")
+                   r"look up|find out)\s+(?!it\b|that\b|this\b|me\b|them\b|" + WHEN + r")\w{3,}")      # "a deck for tomorrow": when, not what
 
 
 def complete_plan(steps: list[dict], request: str, profiles: list[dict]) -> list[dict]:
     """Deterministic completion of what the owner said outright but the model left out (measured omissions, 2026-10-16):
     'write X into WordPad' needs a typing step; 'go to youtube' on an account is opening the site, not reading a page;
     naming an account means checking that account before acting (opening a profile is not proof of who is signed in)."""
-    m = TYPE_SAID.search(request or "")
-    said, app = ((m.group(1) or m.group(2) or "").strip(), m.group(3).strip()) if m else ("", "")
+    said_req = POLITE.sub("", request or "")
+    m = TYPE_SAID.search(said_req)
+    said, app = ((m.group(1) or m.group(2) or "").strip(), _clean_app(m.group(3))) if m else ("", "")
     if m and (app.lower() in SITES or resolve_site(app)):   # "put on some music on youtube" is not typing into an app
         m = None
     if m and not any(st["tool"] == "type_text" for st in steps):
         # no "open the app" step is added: at run time the typing step opens the app only if no window of it exists
-        # (a second window would make it unclear where the text goes)
-        steps.append({"tool": "type_text", "app": app, "target": "", "text": said})
+        # (a second window would make it unclear where the text goes). It goes right after the step that opens that
+        # app, so "... and save it" saves the typed text, not an empty document.
+        at = next((i + 1 for i, st in enumerate(steps) if st["tool"] == "open_app" and _norm(st.get("app")) == _norm(app)), len(steps))
+        steps.insert(at, {"tool": "type_text", "app": app, "target": "", "text": said})
     elif m:
         for st in steps:
             if st["tool"] == "type_text" and not st.get("text"):
                 st["text"] = said
+    o = None if m else OPEN_TYPE.search(said_req)
+    opened = [st for st in steps if st["tool"] == "open_app"]
+    if o and opened and not any(st["tool"] == "type_text" for st in steps):   # "open wordpad and write dear sir"
+        steps.insert(steps.index(opened[-1]) + 1, {"tool": "type_text", "app": opened[-1]["app"], "target": "", "text": o.group(1).strip()})
     # the first "go to / open / visit X" whose X is a known site ("open my VenkatAMV account and go to youtube" -> youtube)
     hit = next(((g.group(1), u) for g in GO_SITE.finditer(request or "") for u in [resolve_site(g.group(1))] if u), None)
     url = hit[1] if hit else None
@@ -502,6 +563,8 @@ def fast_path(request: str, profiles: list[dict]) -> Plan | None:
     r = re.sub(r"(?i)^(?:hey neko[, ]*|neko[, ]*|please |can you |could you |would you )+", "", (request or "").strip()).strip(" .!?")
     r = re.sub(r"(?i)\s+(?:please|for me|now)$", "", r)
     if not r or len(r) > 60 or FAST_BLOCK.search(r):
+        return None
+    if _account_mentions(r, profiles)[0]:                  # "play despacito as VenkatAMV": an account named by its alias
         return None
     low = r.lower()
     steps = None

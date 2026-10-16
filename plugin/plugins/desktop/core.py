@@ -113,6 +113,9 @@ class Pc:
         if r.get("status") == "needs_approval":
             aid = r["approval_id"]
             if not self.wait_approval(aid, what or r.get("reason", "")):
+                if self.stopped:                       # the owner said stop while it waited: stopped, not "still waiting"
+                    return {"state": "cancelled", "approval_id": aid,
+                            "result": {"ok": False, "error": "stopped by the owner before the approval; nothing was done"}}
                 return {"state": "waiting_for_permission", "approval_id": aid, "level": r.get("level"), "reason": r.get("reason"),
                         "how": "Approve it in the JARVIS console (http://127.0.0.1:8799) with your PIN, then ask Neko to continue "
                                f"with approval_id {aid}."}
@@ -200,7 +203,9 @@ def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = N
     if not out["cause"] and dll:
         name = dll.group(1) or dll.group(2)
         found = _dll_present(name, out.get("app_dir"))
-        out.update(cause=f"a required library is missing: {name}", verified=not found, dependency=name)
+        out.update(cause=f"a required library is missing: {name}" + (" (a hypothesis: a copy is present, so the error may be about "
+                                                                      "a different copy or version)" if found else ""),
+                   verified=not found, dependency=name)
         out["evidence"].append(f"{name} {'is present after all (the error may be about a different copy)' if found else 'is in neither the program folder nor the system path'}")
     elif not out["cause"] and mod:
         out.update(cause=f"a required Python module is missing: {mod.group(1)} (a hypothesis until its environment is checked)",

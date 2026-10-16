@@ -31,7 +31,7 @@ MAX_STEPS = 20
 MAX_REPLANS = 2
 BUDGET_S = 30 * 60
 LOOP_REPEATS = 3
-SAFE_TO_REPEAT = {"open_website", "open_app", "window", "check_pc", "open_file", "browser"}   # repeating changes nothing
+SAFE_TO_REPEAT = coord.REPEAT_SAFE      # repeating changes nothing; browser steps only for read/find/tabs/whoami (coord.repeat_safe)
 
 
 class _Engine:
@@ -103,7 +103,7 @@ def _act(mid: str, step: dict, occurrence: int) -> dict:
     if rows and rows[0][0] == "done" and json.loads(rows[0][1]).get("ok"):
         return dict(json.loads(rows[0][1]), replayed=True)            # already happened: report it, do not act again
     # a recorded FAILURE did not happen: a re-plan may try it again (the loop check still stops endless retries)
-    if rows and rows[0][0] == "started" and step["tool"] not in SAFE_TO_REPEAT:
+    if rows and rows[0][0] == "started" and not coord.repeat_safe(step):
         return {"ok": False, "interrupted": True,
                 "error": f"the {step['tool']} step was interrupted mid-way and may already have acted; "
                          "not repeated so nothing happens twice. Check it and tell me to continue."}
@@ -217,7 +217,13 @@ def explain(rec: dict) -> str:
             parts.append("Findings: " + str(r["summary"])[:600])
         if r.get("path") or r.get("file"):
             parts.append(f"File: {r.get('path') or r.get('file')}")
-    if rec.get("status") != "completed":
+    unsure = [f"step {s.get('n')} ({s['tool']}): {s['uncertainty']}" for s in done if s.get("uncertainty")]
+    if unsure:                                   # passed, but not everything about it could be confirmed: say so
+        parts.append("Not certain: " + "; ".join(unsure))
+    if rec.get("status") == "waiting_for_permission":
+        parts.append(f"Not finished: waiting for your approval in the JARVIS console (approval {rec.get('approval_id')}); "
+                     "approve it with your PIN, then start the mission again")
+    elif rec.get("status") != "completed":
         parts.append(f"Not finished: {rec.get('error') or rec.get('status')}")
     return ". ".join(parts)
 

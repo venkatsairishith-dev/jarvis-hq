@@ -156,6 +156,8 @@ def deck(spec: Any) -> dict:
             raise SpecError(f"{n}: a table slide needs a table")
         if layout in ("timeline", "stats") and not s["items"]:
             raise SpecError(f"{n}: a {layout} slide needs items")
+        if layout == "stats" and len(s["items"]) > 4:     # the layout has room for four cards; more were silently dropped
+            raise SpecError(f"{n}: a stats slide shows at most 4 items ({len(s['items'])} given); split them over two slides")
         texts += [s["title"], s["subtitle"], s["quote"], s["notes"]] + [b["text"] for b in s["bullets"] + s["left"] + s["right"]] \
             + [it["text"] for it in s["items"]]
         out["slides"].append(s)
