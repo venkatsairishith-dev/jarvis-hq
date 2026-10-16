@@ -36,11 +36,14 @@ class Nodes:
         return code
 
     def pair(self, code: str, name: str):
-        r = self.k.db.execute("SELECT expires, used FROM pair_codes WHERE h=?", (_hash(code),)).fetchone()
-        if not r or r[1] or r[0] < time.time() or not name or len(name) > 64:
+        # One atomic statement checks and consumes the code: of several nodes racing with the same code only one gets
+        # rowcount 1 (a SELECT then UPDATE let 10 simultaneous pairings all succeed; bench N-005, 2026-10-16).
+        ok_name = isinstance(name, str) and 0 < len(name) <= 64
+        cur = self.k.db.execute("UPDATE pair_codes SET used=1 WHERE h=? AND used=0 AND expires>=?",
+                                (_hash(code), time.time())) if ok_name else None
+        if cur is None or cur.rowcount != 1:
             self.k.audit.append("pair_refused", {"name": name[:64] if isinstance(name, str) else ""})
             return None
-        self.k.db.execute("UPDATE pair_codes SET used=1 WHERE h=?", (_hash(code),))
         token = secrets.token_urlsafe(32)
         self.k.db.execute("INSERT OR REPLACE INTO nodes VALUES (?,?,?,?,0)", (name, _hash(token), time.time(), "{}"))
         self.k.db.commit()

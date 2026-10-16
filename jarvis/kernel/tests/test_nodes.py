@@ -49,6 +49,27 @@ class T(unittest.TestCase):
         self.assertEqual(self.n.report(tok, STATE), "laptop")
         self.assertIsNone(self.n.report("bad-token", STATE))
 
+    def test_one_pairing_code_raced_by_many_nodes_gives_one_token(self):
+        # bench N-005: SELECT-then-UPDATE let several simultaneous pairings trade the same one-time code
+        for trial in range(5):
+            code = self.n.new_code()
+            barrier, toks = threading.Barrier(10), []
+
+            def go(i):
+                barrier.wait()
+                t = self.n.pair(code, f"n{trial}-{i}")
+                if t:
+                    toks.append(t)
+            th = [threading.Thread(target=go, args=(i,)) for i in range(10)]
+            [t.start() for t in th]; [t.join() for t in th]
+            self.assertEqual(len(toks), 1)
+
+    def test_a_bad_name_does_not_burn_the_code(self):
+        code = self.n.new_code()
+        self.assertIsNone(self.n.pair(code, ""))
+        self.assertIsNone(self.n.pair(code, "x" * 65))
+        self.assertTrue(self.n.pair(code, "laptop"))
+
     def test_expired_code_refused(self):
         code = self.n.new_code(ttl=-1)
         self.assertIsNone(self.n.pair(code, "laptop"))

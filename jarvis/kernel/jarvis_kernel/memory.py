@@ -40,6 +40,10 @@ class Memories:
         self.k = kernel
         kernel.db.execute("CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY, owner TEXT, scope TEXT, kind TEXT, text TEXT, "
                           "version INT, state TEXT, created REAL, updated REAL, history TEXT)")
+        # Erasure must reach the disk: SQLite otherwise leaves a rewritten row's old bytes in the page's free space, and the
+        # WAL keeps every earlier page image until a checkpoint (found by the v2 benchmark: a forgotten text was still in
+        # state.db-wal). secure_delete zeroes freed space; forget() checkpoints and truncates the WAL.
+        kernel.db.execute("PRAGMA secure_delete=ON")
 
     # ---- reads ----
     def get(self, owner, mid, include_deleted=False):
@@ -138,8 +142,10 @@ class Memories:
         after = self.get(owner, mid, include_deleted=True)       # read the store again: gone, and no text left behind
         if not after or after["state"] != "deleted" or after["text"] != "":
             raise MemoryError("the entry could not be forgotten")
+        # copy the zeroed pages into the main file and empty the WAL; busy (another reader) means old page images may remain
+        busy = self.k.db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
         return {"forgotten": {k: cur[k] for k in ("id", "kind", "text", "version")}, "verified": self.get(owner, mid) is None,
-                "erased": True}
+                "erased": not (busy and busy[0])}
 
     # ---- lessons: candidates are not rendered into any session until they pass the gate (state 'candidate', not 'active')
     AUTHORITY = re.compile(r"(?i)\b(approve|approval|ignore (the )?(rules|instructions|policy)|disable|bypass|skip (the )?(verification|check|approval)|"

@@ -363,6 +363,37 @@ class Plane(unittest.TestCase):
         self.assertEqual(self.call("POST", "/v1/jarvis/owner/command", {"text": "hello"})[0], 503)
         self.assertEqual(self.call("POST", "/v1/jarvis/owner/resume", {})[0], 404)               # resume is console-only
 
+    def test_a_pc_job_while_killed_is_an_honest_503(self):
+        # bench K-038: Owner.pc let Killed escape, so the owner got a 500 "Killed" logged as an internal error
+        self.assertEqual(self.call("POST", "/v1/jarvis/owner/kill", {})[0], 200)
+        code, r = self.call("POST", "/v1/jarvis/owner/pc", {"op": "media"})
+        self.assertEqual(code, 503)
+        self.assertIn("kill switch", r["error"])
+        self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0], 0)
+
+    def test_parallel_wrong_pins_cannot_exceed_the_limit(self):
+        # bench N-006: the slow PIN check let 30 simultaneous guesses all be checked before any failure was counted
+        from jarvis_kernel.owner import OwnerError, PIN_TRIES
+        self.plane.set_pin("correct horse")
+        d, aid = self.k.request(Action("fs", "write", "notes/x.md"))
+        barrier, codes = threading.Barrier(20), []
+
+        def guess(i):
+            barrier.wait()
+            try:
+                self.plane.approve(aid, aid, f"guess-{i:03d}")
+            except OwnerError as e:
+                codes.append(e.code)
+        th = [threading.Thread(target=guess, args=(i,)) for i in range(20)]
+        [t.start() for t in th]; [t.join() for t in th]
+        checked = self.k.db.execute("SELECT COUNT(*) FROM audit WHERE kind='owner_approve_bad_pin'").fetchone()[0]
+        self.assertLessEqual(checked, PIN_TRIES)
+        self.assertEqual(codes.count(403), checked)
+        self.assertEqual(codes.count(429), 20 - checked)
+        with self.assertRaises(OwnerError) as cm:            # still locked for the right PIN, as for sequential guesses
+            self.plane.approve(aid, aid, "correct horse")
+        self.assertEqual(cm.exception.code, 429)
+
     def test_history_is_never_announced_only_work_that_ends_after_start(self):
         old = self.T.create("hermes", "private", "r", "an old task")
         self.k.db.execute("INSERT INTO jobs(id,node,kind,params,state,created,expires,owner,notified) VALUES (?,?,?,?,?,?,?,?,1)",

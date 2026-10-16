@@ -190,5 +190,18 @@ class TestKill(Base):
         self.assertIsNone(aid)
 
 
+    def test_a_damaged_approval_row_does_not_hide_the_others(self):
+        # bench N-015: one approval row with broken JSON made pending_approvals() (and the owner's state page) fail
+        _, good = self.k.request(Action("fs", "write", "notes/ok.md"))
+        _, bad = self.k.request(Action("fs", "write", "notes/bad.md"))
+        self.k.db.execute("UPDATE approvals SET action='{half' WHERE id=?", (bad,))
+        ids = {p["id"]: p for p in self.k.pending_approvals()}
+        self.assertIn(good, ids)
+        self.assertEqual(ids[bad]["action"], {"unreadable": True})
+        self.assertEqual(self.k.approval_info(bad)["action"], {"unreadable": True})
+        self.k.deny(bad)
+        self.assertTrue(any(h["id"] == bad for h in self.k.approval_history()))
+
+
 if __name__ == "__main__":
     unittest.main()

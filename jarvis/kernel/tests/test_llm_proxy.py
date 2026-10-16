@@ -98,6 +98,26 @@ class P(unittest.TestCase):
         sent = json.dumps(self.seen[-1][1])
         for bad in ("gho_abc", "hunter2", "sk-abcdefghij"): self.assertNotIn(bad, sent)
 
+    def test_deep_scan_runs_once_per_request_not_once_per_message(self):
+        # gitleaks is a subprocess (~0.5 s each): per message, a 40-message agent call took 21 s before the provider was asked
+        from jarvis_kernel import scrub as scrub_mod
+        runs = []
+        real = scrub_mod._gitleaks_secrets
+        scrub_mod._gitleaks_secrets = lambda text: runs.append(text) or [("generic-api-key", "Zq9vLk2mPx7")]
+        try:
+            self.proxy([self.good()])
+            msgs = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"turn {i}"} for i in range(20)]
+            msgs[3]["content"] = "the service secret is Zq9vLk2mPx7"
+            msgs.append({"role": "assistant", "content": None, "tool_calls": [{"id": "c", "type": "function",
+                         "function": {"name": "f", "arguments": "{\"k\": \"Zq9vLk2mPx7\"}"}}]})
+            self.call({"messages": msgs})
+        finally:
+            scrub_mod._gitleaks_secrets = real
+        self.assertEqual(len(runs), 1)
+        sent = json.dumps(self.seen[-1][1])
+        self.assertNotIn("Zq9vLk2mPx7", sent); self.assertEqual(sent.count("[REDACTED]"), 2)
+        self.assertIn("turn 19", sent)
+
     def test_private_key_blocks_the_request(self):
         self.proxy([self.good()])
         with self.assertRaises(urllib.error.HTTPError) as cm: self.call({"messages": [{"role": "user", "content": "-----BEGIN OPENSSH PRIVATE KEY-----\nabc"}]})
@@ -216,3 +236,38 @@ class P(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeepScanCache(unittest.TestCase):
+    """A conversation re-sent on every call is deep-scanned once per new text, and the cache never weakens redaction."""
+    def setUp(self):
+        from jarvis_kernel import llm_proxy, scrub as scrub_mod
+        self.lp, self.sm = llm_proxy, scrub_mod
+        self.real = scrub_mod._gitleaks_secrets
+        llm_proxy._DEEP_CACHE.clear()
+        self.runs = []
+        def fake(text):
+            self.runs.append(text)
+            return [("generic-api-key", "Qx7FakeSecretValue9")] if "Qx7FakeSecretValue9" in text else []
+        scrub_mod._gitleaks_secrets = fake
+
+    def tearDown(self):
+        self.sm._gitleaks_secrets = self.real
+        self.lp._DEEP_CACHE.clear()
+
+    def test_old_messages_are_not_rescanned_and_stay_redacted(self):
+        hist = [{"role": "user", "content": "my token is Qx7FakeSecretValue9 please keep it"}]
+        b1, f1, _ = self.lp._scrub_messages({"messages": [dict(m) for m in hist]})
+        self.assertNotIn("Qx7FakeSecretValue9", json.dumps(b1)); self.assertIn("gitleaks:generic-api-key", f1)
+        hist.append({"role": "assistant", "content": "ok"}); hist.append({"role": "user", "content": "next question"})
+        b2, f2, _ = self.lp._scrub_messages({"messages": [dict(m) for m in hist]})
+        self.assertNotIn("Qx7FakeSecretValue9", json.dumps(b2)); self.assertIn("gitleaks:generic-api-key", f2)
+        self.assertEqual(len(self.runs), 2)
+        self.assertNotIn("Qx7FakeSecretValue9", self.runs[1])         # the second scan read only the new texts
+        self.assertNotIn("Qx7FakeSecretValue9", json.dumps(list(self.lp._DEEP_CACHE.values())))
+
+    def test_a_failed_scan_is_not_cached(self):
+        self.sm._gitleaks_secrets = lambda text: self.runs.append(text) or None
+        for _ in range(2):
+            self.lp._scrub_messages({"messages": [{"role": "user", "content": "same text"}]})
+        self.assertEqual(len(self.runs), 2)

@@ -166,5 +166,16 @@ class Operations(unittest.TestCase):
         self.assertEqual(unknown["error_class"], "unknown_tool")
 
 
+class ResultShapes(unittest.TestCase):
+    def test_malformed_content_is_handled_as_untrusted_data(self):
+        # bench N-027: content as a dict or a number raised TypeError inside process_result
+        for res in ({"content": {"type": "text", "text": "x"}}, {"content": 5}, {"content": "hello"}, {"content": None},
+                    {"content": [None, 3, {"type": "text", "text": "ok"}]}):
+            out = W.process_result(res)
+            self.assertTrue(out["untrusted"], res)
+            json.dumps(out)
+        self.assertEqual(W.process_result({"content": [None, {"type": "text", "text": "ok"}]})["text"], "ok")
+
+
 if __name__ == "__main__":
     unittest.main()

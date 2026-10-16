@@ -21,6 +21,16 @@ class Killed(Exception):
     pass
 
 
+def _action_json(s) -> dict:
+    """An approval's stored action for display. A damaged row shows as unreadable instead of failing the whole list (one
+    bad row made the owner's state page answer 500; bench N-015). What an approval is bound to is its digest, not this."""
+    try:
+        a = json.loads(s)
+        return a if isinstance(a, dict) else {"unreadable": True}
+    except (TypeError, ValueError):
+        return {"unreadable": True}
+
+
 class _Rows:
     """A statement's result, read in full while the connection was held: safe to use after another thread moves on."""
     def __init__(self, cur, rows):
@@ -144,7 +154,7 @@ class Kernel:
         r = self.db.execute("SELECT action, level, state, expires FROM approvals WHERE id=?", (aid,)).fetchone()
         if not r:
             return None
-        return {"action": json.loads(r[0]), "level": NAMES[r[1]], "state": r[2], "seconds_left": round(r[3] - time.time())}
+        return {"action": _action_json(r[0]), "level": NAMES[r[1]], "state": r[2], "seconds_left": round(r[3] - time.time())}
 
     def approve(self, aid: str) -> bool:
         """Human step. The CLI only calls this after a real-console confirmation. Atomic: pending -> approved once."""
@@ -180,7 +190,7 @@ class Kernel:
                                "ORDER BY expires DESC LIMIT ?", (now, limit)).fetchall()
         out = []
         for i, lv, a, e, why, h in rows:
-            act = json.loads(a)
+            act = _action_json(a)
             out.append({"id": i, "level": NAMES[lv], "action": act, "seconds_left": round(e - now), "reason": why or "", "digest": (h or "")[:12],
                         "truncated": self._truncated(act)})
         return out
@@ -196,7 +206,7 @@ class Kernel:
             state = st if st != "pending" else "expired"
             if st == "approved" and e < now:
                 state = "expired"
-            act = json.loads(a)
+            act = _action_json(a)
             out.append({"id": i, "level": NAMES[lv], "state": state, "at": dec or e, "job": job, "reason": why or "",
                         "action": {"tool": act.get("tool"), "op": act.get("op"), "target": str(act.get("target", ""))[:120], "lane": act.get("lane")}})
         return out

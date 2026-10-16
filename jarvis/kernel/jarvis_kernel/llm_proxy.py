@@ -83,28 +83,88 @@ class AgentTokens:
 
 
 def _scrub_messages(body: dict):
-    """Scrub every text the agent sends to a model. Returns (body, findings, blocked)."""
-    found, blocked = [], False
+    """Scrub every text the agent sends to a model. Returns (body, findings, blocked).
 
-    def clean(s):
+    The built-in pass runs per text; the deep pass (gitleaks, a subprocess) runs ONCE over all of them. Measured
+    2026-10-16 on the Linux test image: one gitleaks run costs ~0.5 s, and running it per message made a 40-message
+    agent call take 21 s before the provider was even asked."""
+    from . import scrub as scrub_mod
+    found, blocked = [], False
+    slots = []                                   # (container, key) of every text, after the built-in pass
+
+    def clean(container, key):
         nonlocal blocked
-        c, f, b = scrub(s, deep=True)
+        c, f, b = scrub(container[key], deep=False)
         found.extend(f)
         blocked = blocked or b
-        return c
+        container[key] = c
+        slots.append((container, key))
 
     for m in body.get("messages") or []:
         if isinstance(m.get("content"), str):
-            m["content"] = clean(m["content"])
+            clean(m, "content")
         elif isinstance(m.get("content"), list):
             for part in m["content"]:
                 if isinstance(part, dict) and isinstance(part.get("text"), str):
-                    part["text"] = clean(part["text"])
+                    clean(part, "text")
         for tc in m.get("tool_calls") or []:
             fn = tc.get("function") or {}
             if isinstance(fn.get("arguments"), str):
-                fn["arguments"] = clean(fn["arguments"])
+                clean(fn, "arguments")
+    if blocked or not slots:
+        return body, found, blocked
+    # Agents send their whole conversation on every call: a text already deep-scanned is taken from the cache (keyed by
+    # its digest, holding the REDACTED text, never a secret), so gitleaks only reads what is new. A failed scan caches
+    # nothing. Measured 2026-10-16: 20 concurrent fresh calls on 2 cores, p95 20 s with a scan each.
+    todo = []
+    for c, k in slots:
+        h = hashlib.sha256(c[k].encode("utf-8", "surrogatepass")).hexdigest()
+        hit = _deep_cache_get(h)
+        if hit is None:
+            todo.append((c, k, h))
+        else:
+            c[k], rules = hit
+            found.extend(rules)
+    if not todo:
+        return body, found, blocked
+    secrets_found = scrub_mod._gitleaks_secrets("\n\n".join(c[k] for c, k, _h in todo))
+    per = [[] for _ in todo]                     # gitleaks rules found in each new text
+    # the same rule as scrub(deep=True): a gitleaks finding of 6+ characters is replaced wherever it occurs
+    for rule, secret in (secrets_found or []):
+        if len(secret) < 6:
+            continue
+        hit = False
+        for n, (c, k, _h) in enumerate(todo):
+            if secret in c[k]:
+                c[k] = c[k].replace(secret, "[REDACTED]")
+                per[n].append("gitleaks:" + rule)
+                hit = True
+        if hit:
+            found.append("gitleaks:" + rule)
+    if secrets_found is not None:
+        for n, (c, k, h) in enumerate(todo):
+            _deep_cache_put(h, (c[k], per[n]))
     return body, found, blocked
+
+
+_DEEP_CACHE: dict = {}
+_DEEP_CACHE_MAX = 4096
+_DEEP_LOCK = threading.Lock()
+
+
+def _deep_cache_get(h: str):
+    with _DEEP_LOCK:
+        v = _DEEP_CACHE.pop(h, None)
+        if v is not None:
+            _DEEP_CACHE[h] = v                    # most recently used last
+        return v
+
+
+def _deep_cache_put(h: str, v) -> None:
+    with _DEEP_LOCK:
+        _DEEP_CACHE[h] = v
+        while len(_DEEP_CACHE) > _DEEP_CACHE_MAX:
+            _DEEP_CACHE.pop(next(iter(_DEEP_CACHE)))
 
 
 OWNER_REQUEST_TOKENS = 12000       # what a command from the owner costs the model before it has said anything (measured: 10.6k to 11k)

@@ -68,7 +68,9 @@ class Owner:
         self._current = None            # id of the command whose agent call holds `busy`
         self._released = set()          # commands the owner stopped waiting on: their gate was handed back already
         self.bad_pins = []
-        self.node = "laptop"      # the node PC jobs are queued for (set from the kernel's output node)
+        self._pin_lock = threading.Lock()   # guards bad_pins and _pin_checking (PIN checks in flight)
+        self._pin_checking = 0
+        self.node = "laptop"     # the node PC jobs are queued for (set from the kernel's output node)
         self.lane_wait = None     # lane -> seconds until a model provider may be asked again (set by the gateway)
         self.routes = {}          # (method, name) -> fn(body, query) -> (code, reply); other modules register theirs here
         kernel.db.execute("CREATE TABLE IF NOT EXISTS owner_commands(id TEXT PRIMARY KEY, ts REAL, source TEXT, text TEXT, "
@@ -264,15 +266,27 @@ class Owner:
         if str(confirm or "") != aid:
             raise OwnerError("type the approval id again to confirm", 400)
         now = self.clock()
-        self.bad_pins = [t for t in self.bad_pins if now - t < PIN_WINDOW]
-        if len(self.bad_pins) >= PIN_TRIES:
-            raise OwnerError("too many wrong PINs; approving over HTTP rests for a few minutes", 429)
-        r = self.k.db.execute("SELECT value FROM owner_config WHERE key='approval_pin'").fetchone()
-        if not r:
-            raise OwnerError("no approval PIN is set: run `python3 -m jarvis_kernel set-approval-pin` at the kernel console, "
-                             "or approve there with `approve <id>`", 403)
-        if not _check_pin(str(pin or ""), r[0]):
-            self.bad_pins.append(now)
+        # The limit counts checks still running too: the PBKDF2 check is slow, so parallel guesses used to all pass the
+        # count before any failure was recorded (30 simultaneous guesses were all checked; bench N-006, 2026-10-16).
+        with self._pin_lock:
+            self.bad_pins = [t for t in self.bad_pins if now - t < PIN_WINDOW]
+            if len(self.bad_pins) + self._pin_checking >= PIN_TRIES:
+                raise OwnerError("too many wrong PINs; approving over HTTP rests for a few minutes", 429)
+            self._pin_checking += 1
+        good = False
+        try:
+            r = self.k.db.execute("SELECT value FROM owner_config WHERE key='approval_pin'").fetchone()
+            if not r:
+                good = True                       # nothing was guessed: not a wrong PIN
+                raise OwnerError("no approval PIN is set: run `python3 -m jarvis_kernel set-approval-pin` at the kernel console, "
+                                 "or approve there with `approve <id>`", 403)
+            good = _check_pin(str(pin or ""), r[0])
+        finally:
+            with self._pin_lock:
+                self._pin_checking -= 1
+                if not good:
+                    self.bad_pins.append(now)
+        if not good:
             self.k.audit.append("owner_approve_bad_pin", {"id": aid})
             raise OwnerError("wrong PIN", 403)
         info = self.k.approval_info(aid)
@@ -459,6 +473,7 @@ class Owner:
         comes back as {"status": "needs_approval", "approval_id"}: approve it with the PIN, then send the same request again
         with that approval_id (it is bound to exactly this action and used once)."""
         from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, action_for
+        from .store import Killed
         op = str(body.get("op", ""))
         target, path = str(body.get("target", ""))[:80], str(body.get("path", ""))[:200]
         s = lambda k, n: str(body.get(k) or "")[:n]       # noqa: E731
@@ -506,6 +521,8 @@ class Owner:
             jid = self.jobs.create(self.node, kind, params, approval_id=aid, owner=None, lane="private", owner_direct=True)
         except JobError as e:
             raise OwnerError(str(e)[:160], 403)
+        except Killed:                  # an honest 503 like command(), not a 500 "Killed" logged as an internal error
+            raise OwnerError("the kill switch is on", 503) from None
         self.k.audit.append("owner_pc", {"op": op, "job": jid})
         return {"job": jid, "kind": kind, "node": self.node, "status": "queued"}
 

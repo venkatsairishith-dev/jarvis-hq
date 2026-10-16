@@ -78,3 +78,28 @@ class Budget(TT.Base):
         for _ in range(LP.ACTIONS_PER_HOUR):
             self.post("/v1/jarvis/actions", {"tool": "memory", "op": "add", "target": f"note {_}", "params": {}}, self.owner)
         self.assertEqual(self.post("/v1/jarvis/actions", {"tool": "memory", "op": "add", "target": "one more", "params": {}}, self.owner)[0], 429)
+
+
+class Erasure(unittest.TestCase):
+    def test_a_forgotten_text_is_gone_from_the_database_files(self):
+        # bench F-008: the row was blanked but the text stayed in state.db-wal (and freed page space keeps old bytes)
+        import tempfile
+        from jarvis_kernel.memory import Memories
+        from jarvis_kernel.store import Kernel
+        with tempfile.TemporaryDirectory() as d:
+            k = Kernel(os.path.join(d, "k"))
+            try:
+                m = Memories(k)
+                marker = "ZEBRA-HINT-" + os.urandom(4).hex()
+                e = m.add("hermes", f"my pet hint is {marker}", "fact")
+                m.update("hermes", e["id"], f"my pet hint is {marker} (corrected)", 1)
+                m.add("hermes", "an unrelated preference that stays", "preference")
+                r = m.forget("hermes", e["id"])
+                self.assertTrue(r["verified"] and r["erased"])
+                for name in os.listdir(k.dir):
+                    if name.startswith("state.db"):
+                        with open(os.path.join(k.dir, name), "rb") as f:
+                            self.assertFalse(marker.encode() in f.read(), f"forgotten text still in {name}")
+                self.assertEqual([x["text"] for x in m.list("hermes")], ["an unrelated preference that stays"])
+            finally:
+                k.db.close()
