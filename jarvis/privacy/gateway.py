@@ -281,6 +281,9 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                         tried.append(f"{prov['name']}: no key file")
                         continue
                     hdrs["Authorization"] = f"Bearer {key}"
+                    # Groq's Cloudflare front refuses Python's default user agent (error 1010, seen live); a fallback
+                    # must not depend on what the caller happened to send.
+                    hdrs["User-Agent"] = "neko-privacy-gateway/1.0"
                     data = json.dumps({**body, "model": prov["model"]}, ensure_ascii=False).encode("utf-8")
                 req = urllib.request.Request(prov["base_url"] + self._path(), data=data, headers=hdrs,
                                              method="POST" if data is not None else "GET")

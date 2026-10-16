@@ -201,7 +201,8 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
     with ThreadPoolExecutor(max_workers=6) as pool:
         for r, res in zip(cand, pool.map(lambda r: _try(fetch, r["url"]), cand)):
             if isinstance(res, dict) and len(pages) < b["pages"]:
-                pages.append({**res, "search_title": r.get("title", ""), "snippet": r.get("snippet", "")})
+                pages.append({**res, "search_title": r.get("title", ""), "snippet": r.get("snippet", ""),
+                              "found_by": r.get("found_by", "")})
             elif not isinstance(res, dict):
                 failures[res] = failures.get(res, 0) + 1
     if not pages:
@@ -219,7 +220,7 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
         sid_of[i] = f"S{n}"
         host = urlsplit(pg["url"]).netloc.removeprefix("www.")
         sources.append({"id": f"S{n}", "title": (pg["title"] or pg["search_title"] or host)[:200], "url": pg["url"],
-                        "date": pg["date"], "publisher": "", "host": host})
+                        "date": pg["date"], "publisher": "", "host": host, "found_by": pg.get("found_by", "")})
     for p in passages:
         p["sid"] = sid_of[p["page"]]
 

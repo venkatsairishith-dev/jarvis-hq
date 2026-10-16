@@ -15,6 +15,7 @@ import urllib.request
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr
 
 from . import core, fetch, verify
+from . import search as searchmod
 from .core import ResearchError
 
 LOCAL = "http://127.0.0.1:8080/v1/chat/completions"
@@ -94,14 +95,20 @@ class ResearchPlugin(NekoPluginBase):
                              open_after: bool = False, **_):
         loop = asyncio.get_running_loop()
 
-        def search(q: str, n: int) -> list[dict]:
+        def web_search(q: str, n: int) -> list[dict]:
             fut = asyncio.run_coroutine_threadsafe(
                 self.plugins.call_entry_json("web_search:search", {"query": q, "max_results": n}, timeout=40.0), loop)
             res = fut.result(60)
             if isinstance(res, Err):
-                raise ResearchError(f"search failed: {str(getattr(res, 'error', res))[:120]}")
+                raise searchmod.SearchError(f"web_search failed: {str(getattr(res, 'error', res))[:120]}")
             data = res.value.get("data", res.value) if isinstance(res.value, dict) else {}
             return [r for r in (data.get("results") or []) if isinstance(r, dict) and r.get("url")]
+
+        search_notes: list[str] = []
+
+        def search(q: str, n: int) -> list[dict]:
+            secondary = searchmod.tavily_search if searchmod.tavily_key() else None
+            return searchmod.merged_search(q, n, web_search, secondary, search_notes)
 
         def work() -> dict:
             notes: list[str] = []
@@ -114,7 +121,8 @@ class ResearchPlugin(NekoPluginBase):
             out = core.run(question, depth=depth, search=search, fetch=fetch.fetch, plan_llm=_plan, write_llm=_writer(notes),
                            verifier=verify.supported if verify.available() else None, redact=redact,
                            fallback_llm=lambda s, u: _local_llm(s, u, max_tokens=2500))
-            out["notes"] = notes + out["notes"]
+            out["notes"] = notes + list(dict.fromkeys(search_notes)) + out["notes"]
+            out["search_providers"] = ["web_search"] + (["tavily"] if searchmod.tavily_key() else [])
             record = out.pop("record")
             folder = None
             if deliverable in ("report", "presentation"):
