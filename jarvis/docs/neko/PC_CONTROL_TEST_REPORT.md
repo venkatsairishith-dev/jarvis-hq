@@ -15,7 +15,7 @@
 | D. Diagnosis and recovery (live, sample-app copies) | verified cause vs hypothesis, minimal fix, apply with backup, verify, rollback, failed repair, admin refusal, missing dependency, tampered backup | **14/14** [diagnosis-20261016-130737] | 14/14 | approval SIMULATED here; the real PIN path is in section 3 |
 | E. Coordination (unit) | lock, retries (transient only), verification, approval wait, budget, cancel, routing, crash containment, queued and running cancel | **21/21** | 22/22 | |
 | F. Privacy and security (unit + live scan) | owner_direct vs agents, consequential words and keys, denials, digest binding, allowlists, redaction (27 gateway tests), leak scan of logs, records and outputs | 48/49 [suite-20261016-131228] | **50/50** | The failure was real (screen text left behind); fixed with a 10-minute sweep |
-| **Total** | | 219/225 | **222/225 + 1 not tested** | No regressions after the fixes |
+| **Total** | | 219/225 | **224/227 + 1 not tested** (final run [suite-20261016-144424], E grew to 24) | No regressions after the fixes |
 
 Server-side kernel suite after deploy: **476 tests OK** (42 Windows-only skipped) on hermes-agent-vm.
 
@@ -34,14 +34,14 @@ Server-side kernel suite after deploy: **476 tests OK** (42 Windows-only skipped
 | A playlist, menu link or Short taken for a video | found → fixed | Live failures became regression tests (a real results-page fixture). |
 | Approval PIN configured | **PASS** | Kernel reports `pin_set=True`; checked without the PIN. |
 | Emergency stop: engage → actions refused | **PASS** | Kill switch on → PC action refused. |
-| Emergency stop: lift | **BLOCKED** | Lifting needs a person to type RESUME at the kernel console. The guided window is waiting. JARVIS is stopped until then. |
-| Protected action waits → approved with the real PIN → runs → verified → rolled back | **BLOCKED** | Needs the owner's PIN entry (guided test step 2); the same path passed with a simulated approval (D03–D05). |
+| Emergency stop: lift | **PASS** | The owner typed RESUME at the kernel console (lifted after 9 s, 14:14). |
+| Protected action waits → approved with the real PIN → runs → verified → rolled back | **PASS** | The troubleshooter held the edit (approval e2dcc0d3…), the owner approved with the PIN in the console, the fix was applied with a backup, the app restarted without its error, then the backup was put back [guided-owner-test.json]. |
 | Denied approval does not run | **PASS** (live, before the stop) | "Buy now" and alt+f4 held as YELLOW_APPROVAL; denied → nothing ran. Guided step 3 repeats it with the troubleshooter. |
-| Coordinator through the kernel (12 real requests, `neko_coordinator_live.py`) | **BLOCKED** | Kill switch on. |
+| Coordinator through the kernel (12 real requests, `neko_coordinator_live.py`) | **PASS after 2 fixes** | First run 10/12 [coordinator-20261016-142843]. G07 failed because a trailing "answer" step had no agent. G03 was only "reported" typing: in the Windows-MCP comparison, Neko's typing gave 0/5 without an error. Both fixed: answer steps are dropped, and typed text is read back from the field. Re-run through the kernel: typing verified ("hello from neko" in Notepad); a Kalyani song played, verified on the first attempt, then paused. |
 | Cancellation (queued job) | **PASS** | cancelled before start; running-job kill unit-tested with a real process. |
 | "Hey Neko": listener, model, microphone | **PASS** | listening, healthy, 0 false wakes in about 3 hours of room audio (counts 0). |
-| "Hey Neko" with the owner's voice (5 + 2 near misses + cancel) | **BLOCKED** | Needs the owner to speak (guided step 4). |
-| Windows-MCP vs Neko UIA (5 rounds) | **NOT TESTED (inconclusive)** | Visual Studio Code hung ("Not Responding" ghost in front) during the runs; to be repeated. |
+| "Hey Neko" with the owner's voice (5 + 2 near misses + cancel) | **NOT TESTED / open** | The guided step ran: 0/5 wakes, 0/2 near misses, no cancel. The room stayed near the noise floor (about −49 dBFS) during the prompts, so most likely nobody spoke. The step now records the loudest second per attempt; re-run with `neko_guided_owner_test.py 4`. |
+| Windows-MCP vs Neko UIA (5 rounds) | **PARTIAL** | Healthy-desktop run [windows-mcp-20261016-1429*]: snapshot median 0.99 s (Windows-MCP) vs 0.72 s (Neko). Typing: Windows-MCP 1/5 (its snapshot did not list Notepad's field in 4 rounds); Neko 0/5 with no error, run right after it. Neko alone afterwards: 3/3, and typing now verifies itself. Explicit Deny with the troubleshooter: not pressed (no decision recorded); explicit denials passed earlier. |
 | Vision computer-use model | **NOT TESTED** | Not installed: no case needed it (see the benchmark). |
 
 ## 3. Measured metrics

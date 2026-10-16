@@ -58,6 +58,24 @@ public class FW { [DllImport("user32.dll")] public static extern IntPtr GetForeg
 """
 
 
+READBACK = FIND + r"""
+Add-Type @'
+using System; using System.Text; using System.Runtime.InteropServices;
+public class RB { [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, StringBuilder l); }
+'@
+Start-Sleep -Milliseconds 200
+$have = $null; $v = $null
+if ($el.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$v)) { $have = $v.Current.Value }
+if (-not $have -and $el.Current.NativeWindowHandle -ne 0) {
+  $sb = New-Object System.Text.StringBuilder 65536
+  [void][RB]::SendMessage([IntPtr]$el.Current.NativeWindowHandle, 0x000D, [IntPtr]65536, $sb)   # WM_GETTEXT
+  $have = $sb.ToString()
+}
+if (-not $have -or -not $have.Contains($env:JARVIS_UI_TEXT)) { throw 'text not in field' }
+"""
+REASONS = REASONS + ("text not in field",)
+
+
 def _split(target: str):
     proc, _, elem = target.partition("|")
     if not _SAFE.match(proc) or not elem or len(elem) > 120 or "\n" in elem:
@@ -99,6 +117,9 @@ def type_text(target, params):
     # Edit controls show up as Pane) is typed into with keys, which only go to the foreground window
     _run(FOCUS, {"JARVIS_UI_PROC": proc})
     _run(TYPE, {"JARVIS_UI_PROC": proc, "JARVIS_UI_ELEM": elem, "JARVIS_UI_TEXT": text})
+    # "typed" means the text is in the field now: read it back (value pattern, else the control's own window text).
+    # Only yes/no leaves this machine. A live run on 2026-10-16 reported success while nothing had arrived.
+    _run(READBACK, {"JARVIS_UI_PROC": proc, "JARVIS_UI_ELEM": elem, "JARVIS_UI_TEXT": text})
 
 
 # ---- 2026-10-16: focus, keys, scroll and (last resort) a click at a point, for the owner's direct requests ----------

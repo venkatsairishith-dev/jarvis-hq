@@ -167,6 +167,15 @@ def test_media_key_the_owner_named_wins():
     assert p.steps[0]["key"] == "ctrl+s"                       # an app shortcut is left alone
 
 
+def test_a_trailing_answer_step_is_the_report_not_a_step():
+    """Live 2026-10-16 (G07): "play a Kalyani song and tell me when it is playing" planned play_media + answer; the
+    answer step had no agent and the whole task failed although the song played."""
+    p = D.validate(json.dumps({"steps": [{"tool": "play_media", "query": "Kalyani song"}, {"tool": "answer"}]}), PROFILES,
+                   "play a Kalyani song and tell me when it is playing")
+    assert [s["tool"] for s in p.steps] == ["play_media"]
+    assert [s["tool"] for s in D.validate(json.dumps({"steps": [{"tool": "answer"}]}), PROFILES, "what is 2+2").steps] == ["answer"]
+
+
 def test_decision_resolution_rules():
     assert D.resolve_account("", PROFILES)[0] == "Default"
     assert D.resolve_account("VenkatAMV", PROFILES)[0] == "Profile 1"

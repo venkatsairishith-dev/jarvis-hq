@@ -1,0 +1,22 @@
+{
+ "repeats": 5,
+ "phases": "separate (Windows-MCP first, then Neko), a fresh Notepad each round",
+ "windows_mcp": {
+  "snapshot_median_s": 0.99,
+  "type_median_s": 1.54,
+  "type_success": "1/5",
+  "failures": [
+   "round 1: Notepad's text field not in its snapshot",
+   "round 2: Notepad's text field not in its snapshot",
+   "round 3: Notepad's text field not in its snapshot",
+   "round 4: Notepad's text field not in its snapshot"
+  ],
+  "start_s": 2.7
+ },
+ "neko_uia": {
+  "snapshot_median_s": 0.72,
+  "type_median_s": 1.88,
+  "type_success": "0/5",
+  "failures": []
+ }
+}

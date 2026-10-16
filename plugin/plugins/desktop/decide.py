@@ -312,6 +312,9 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
     browser_after = any(st["tool"] in ("play_media", "browser") for st in steps)
     steps = [st for st in steps if not (st["tool"] == "open_website" and browser_after
                                          and (not st["url"] or "youtube.com" in st["url"]))]
+    # "... and tell me when it is playing": the coordinator's report is the answer; an answer step after real steps adds nothing
+    if any(st["tool"] != "answer" for st in steps):
+        steps = [st for st in steps if st["tool"] != "answer"]
     if any(st["tool"] == "open_website" and not st["url"] for st in steps):
         return Plan(steps, "clarify", question="Which website should I open?", problems=["no site"], raw=raw)
     if not steps:

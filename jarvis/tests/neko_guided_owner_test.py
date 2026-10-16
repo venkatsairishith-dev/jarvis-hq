@@ -106,11 +106,17 @@ def step3():
     save()
 
 
+PEAK = {"dbfs": -120.0}
+
+
 def wait_change(key, before, secs):
+    """Wait for a counter to rise; meanwhile keep the loudest second heard (did the owner speak, and how loudly?)."""
+    PEAK["dbfs"] = -120.0
     t0 = time.time()
     while time.time() - t0 < secs:
         time.sleep(0.5)
         s = wake()
+        PEAK["dbfs"] = max(PEAK["dbfs"], float((s.get("audio") or {}).get("last_s_dbfs") or -120.0))
         if (s.get("counts") or {}).get(key, 0) > before:
             return s
     return wake()
@@ -132,16 +138,16 @@ def step4():
             while time.time() - t0 < 40 and wake().get("state") != "wake_listening":
                 time.sleep(0.5)
         s = wake()
-        attempts.append({"attempt": i, "woke": woke, "last": s.get("last"),
+        attempts.append({"attempt": i, "woke": woke, "last": s.get("last"), "loudest_s_dbfs": PEAK["dbfs"],
                          "task_started": (s.get("counts") or {}).get("tasks_started", 0) > c0.get("tasks_started", 0)})
-        print("   ->", "WOKE" if woke else "did not wake", (s.get("last") or {}).get("what") if woke else "", flush=True)
+        print("   ->", "WOKE" if woke else "did not wake", (s.get("last") or {}).get("what") if woke else "", f"(loudest second {PEAK['dbfs']:.0f} dBFS)", flush=True)
         time.sleep(4)
     near = []
     for i in range(1, 3):
         c0 = wake().get("counts") or {}
         say(f"Near miss {i} of 2 — say now:   Hey Nico")
         s = wait_change("detections", c0.get("detections", 0), 12)
-        near.append({"attempt": i, "woke": (s.get("counts") or {}).get("detections", 0) > c0.get("detections", 0)})
+        near.append({"attempt": i, "woke": (s.get("counts") or {}).get("detections", 0) > c0.get("detections", 0), "loudest_s_dbfs": PEAK["dbfs"]})
         if near[-1]["woke"]:                              # do not start a task from a near miss: cancel it
             jget("http://127.0.0.1:48945/cancel", method="POST", body={}, timeout=5)
         print("   ->", "woke (false wake)" if near[-1]["woke"] else "stayed asleep", flush=True)
