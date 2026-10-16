@@ -516,7 +516,7 @@ def dedup_urls(a):
 
 def tavily_key_hygiene(a):
     """Tavily is called with the key only in the request header; errors never contain it; refusals are not retried."""
-    secret = "tvly-SYNTHETIC-BENCH-KEY-000"
+    secret = "tvly-SYNTHETIC-BENCH-KEY-000"  # gitleaks:allow (synthetic test value)
     seen = {}
 
     class Resp:

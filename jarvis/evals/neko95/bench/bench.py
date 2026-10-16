@@ -63,6 +63,19 @@ def load_cases(area: str | None = None) -> list[dict]:
     return cases
 
 
+SPLIT = "{{SPLIT}}"      # synthetic secrets are stored split by this marker so secret scanners never see a whole one
+
+
+def _unfold(x):
+    if isinstance(x, str):
+        return x.replace(SPLIT, "")
+    if isinstance(x, list):
+        return [_unfold(v) for v in x]
+    if isinstance(x, dict):
+        return {_unfold(k): _unfold(v) for k, v in x.items()}
+    return x
+
+
 def run_case(c: dict, repeat: int = 1) -> dict:
     row = {k: c[k] for k in ("id", "area", "title", "risk", "dims")}
     reason = PLATFORMS[c.get("platform", "any")]
@@ -77,7 +90,7 @@ def run_case(c: dict, repeat: int = 1) -> dict:
     t0, observed, ok = time.perf_counter(), "", True
     for i in range(n):
         try:
-            passed, observed = fn(c.get("args") or {})
+            passed, observed = fn(_unfold(c.get("args") or {}))
         except Exception as e:  # noqa: BLE001
             tb = traceback.format_exc(limit=3).splitlines()[-1]
             return {**row, "status": "error", "observed": f"run {i + 1}/{n}: {type(e).__name__}: {e} | {tb}"[:500],

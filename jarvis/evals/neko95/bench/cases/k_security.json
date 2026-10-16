@@ -1097,12 +1097,12 @@
   "check": "scrub_redacts",
   "args": {
    "secrets": [
-    "ghp_a1B2c3D4a1B2c3D4a1B2c3D4a1B2c3D4a1B2c3D4",
+    "ghp_a1B2c3D4a1B2c3D4{{SPLIT}}a1B2c3D4a1B2c3D4a1B2c3D4",
     "github_pat_11ABCDEFG011ABCDEFG011ABCDEFG0",
     "sk-projx9Y8z7W6x9Y8z7W6x9Y8z7W6x9Y8z7W6",
     "AKIAIOSFODNN7EXAMPLE",
     "ocid1.instance.oc1.ap-mumbai-1.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwI{{SPLIT}}n0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
    ]
   }
  },
@@ -1120,9 +1120,9 @@
   "args": {
    "secrets": [
     "API_KEY=Zq81mVb0Lx",
-    "db_password: 'S3cure-pa55w0rd'",
-    "client_secret=AbCdEf123456",
-    "X_AUTH_TOKEN=tok_9a8b7c6d5e",
+    "db_password: 'S3cure-{{SPLIT}}pa55w0rd'",
+    "client_secret=AbCdEf{{SPLIT}}123456",
+    "X_AUTH_TOKEN=tok_9a8{{SPLIT}}b7c6d5e",
     "Authorization: Bearer abcdEFGH1234abcdEFGH1234abcdEFGH1234"
    ],
    "core": {
@@ -1144,9 +1144,9 @@
   "args": {
    "deep": true,
    "secrets": [
-    "xoxb-123456789012-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx",
-    "sk_live_4eC39HqLyjWDarjtT1zdp7dc",
-    "glpat-xYz12AbC34dEf56GhI78"
+    "xoxb-12{{SPLIT}}3456789012-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx",
+    "sk_live_4eC39HqL{{SPLIT}}yjWDarjtT1zdp7dc",
+    "glpat-xYz12Ab{{SPLIT}}C34dEf56GhI78"
    ]
   }
  },

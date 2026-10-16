@@ -279,7 +279,7 @@ def secret_refused(a):
 def secret_refused_on_update(a):
     with store() as (k, m):
         e = m.add(OWNER, "My wifi network is called HomeNet", "fact")
-        err = _raises(lambda: m.update(OWNER, e["id"], "My wifi PASSWORD=Tr0ub4dor-and-3", 1))
+        err = _raises(lambda: m.update(OWNER, e["id"], "My wifi PASSWORD=Tr0ub4dor-and-3", 1))  # gitleaks:allow (synthetic test value)
         cur = m.get(OWNER, e["id"])
         ok = err and cur["version"] == 1 and "Tr0ub4dor" not in json.dumps(cur)
         return ok, f"update refused: {err!r}; entry still v{cur['version']} {cur['text']!r}"

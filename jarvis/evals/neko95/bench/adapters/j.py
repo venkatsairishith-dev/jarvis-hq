@@ -586,7 +586,7 @@ def proxy_lane_binding_dahl(a):
         priv = e.mock("groq", [{"status": 503}])
         toks = e.proxy([P("dahl", "public", dahl.url, priority=0), P("groq", "private", priv.url, priority=1)])
         owner, lab = toks.issue("hermes", "private"), toks.issue("lab", "public")
-        private_text = "Owner's bank note: account 4111 1111 1111 1111, API_KEY=SYNTHsecret12345"
+        private_text = "Owner's bank note: account 4111 1111 1111 1111, API_KEY=SYNTHsecret12345"  # gitleaks:allow (synthetic test value)
         c1, _, b1 = e.post(owner, msg(private_text))
         dahl_after_owner = len(dahl.posts())
         c2, _, b2 = e.post(lab, msg("public question, token ghp_" + "Z" * 30))

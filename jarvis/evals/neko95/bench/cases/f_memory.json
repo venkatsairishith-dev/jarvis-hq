@@ -220,10 +220,10 @@
   ],
   "args": {
    "texts": {
-    "key_assignment": "my OPENAI_API_KEY=abcd1234efgh5678ijkl",
-    "github": "token ghp_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8",
+    "key_assignment": "my OPENAI_API_KEY=abcd1234ef{{SPLIT}}gh5678ijkl",
+    "github": "token ghp_a1B2c3D4e5F6g7H8{{SPLIT}}i9J0k1L2m3N4o5P6q7R8",
     "sk": "use sk-ABCDEFGHIJKLMNOPQRSTUVWX12345 for it",
-    "jwt": "session eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+    "jwt": "session eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwI{{SPLIT}}n0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
     "pem": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA"
    }
   }

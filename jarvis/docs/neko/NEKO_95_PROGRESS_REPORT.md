@@ -169,7 +169,7 @@ Still Windows-only (not faked here): the 16 kernel skips (UI Automation, Win32, 
 
 ## Autonomous mission on the Linux server (2026-10-16, owner travelling; D29)
 
-**Summary.** The repo now has a 572-case capability benchmark (v2) that drives the real code. Its final run: 546 passed, 1 failed, 25 deferred (Windows or owner hardware).
+**Summary.** The repo now has a 572-case capability benchmark (v2) that drives the real code. Synthetic secrets in its cases are stored split by a `{{SPLIT}}` marker that the runner removes, so secret scans of the tree stay clean. Its final run: 546 passed, 1 failed, 25 deferred (Windows or owner hardware).
 - It found and fixed **21 product bugs**, each with a regression test (list below).
 - Live tests ran against **Dahl** (owner-authorised key; synthetic data, public lane only) and against **headless Chrome with four fake profiles**.
 - trim-1 was reviewed, vendored, built and measured. It stays off by default, like the new evidence selector.
@@ -339,6 +339,7 @@ Per area (final run):
 - Kernel suite: 444 s on 2 capped cores.
 - Policy and benchmark cases: the speed cases (`dims: speed`) passed, except J-038.
 - **J-038:** 20 concurrent fresh calls through the proxy, p95 20.4 s on 2 cores and 5.9 s on 6. Without the deep scan: 1.1 s and 0.09 s.
+- **J-018 (critical, limit 500 ms) is intermittent:** it failed 1 of 5 runs at 508 ms. One gitleaks run needs 450–500 ms just to start (rule compilation), whatever the flags. A routing score of 9.82 is therefore one unlucky run away from the 6.0 cap.
   - The cost is gitleaks' start-up (~0.5 s CPU per new text).
   - The cache removes it for re-sent conversations, not for 20 brand-new texts.
 - Context selection: evidence about 55 ms on 200 KB, trim-1 about 50 ms per call.
@@ -355,7 +356,7 @@ Per area (final run):
   - The research confirmation rate is about 42% (thin sources).
   - Plan latency is about 5 s on the laptop GPU.
 - **Medium:**
-  - The deep secret scan costs ~0.5 s per new text under load (J-038).
+  - The deep secret scan costs ~0.5 s per new text, and more under load (J-038; J-018 intermittent).
   - The context selectors are measured only on synthetic fixtures.
   - The benchmark was written by the same team that fixed the code.
 - **Low:**

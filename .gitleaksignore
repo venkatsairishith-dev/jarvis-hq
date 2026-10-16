@@ -4,3 +4,34 @@
 08aef133698ea678f3bb075fc4cb084b46121b38:kernel/tests/test_telegram.py:generic-api-key:350
 5b1c517415a1f0c416f5f06e746794be0042071e:bench/scrub_probe.py:generic-api-key:25
 5b1c517415a1f0c416f5f06e746794be0042071e:bench/scrub_probe.py:private-key:32
+# Reviewed synthetic fixtures of benchmark v2 (checked by hand 2026-10-16): xkcd 'Tr0ub4dor', the 4111 test card, 'tvly-SYNTHETIC-BENCH-KEY-000',
+# the jwt.io example token, Stripe's public documentation sample key, and patterned fakes (ghp_a1b2..., xoxb-123456..., AbCdEf123456)
+# used by the redaction and memory cases. Commit fingerprints for history scans, file fingerprints for working-tree scans.
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/adapters/h.py:generic-api-key:519
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/f_memory.json:generic-api-key:223
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/f_memory.json:github-pat:224
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/f_memory.json:jwt:226
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/adapters/f.py:generic-api-key:282
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/adapters/j.py:generic-api-key:589
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/k_security.json:github-pat:1100
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/k_security.json:stripe-access-token:1148
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/k_security.json:jwt:1105
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/k_security.json:gitlab-pat:1149
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/k_security.json:slack-bot-token:1147
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/k_security.json:generic-api-key:1123
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/k_security.json:generic-api-key:1124
+37a5213649b8f267d1b9b915297cf66811d674d8:jarvis/evals/neko95/bench/cases/k_security.json:generic-api-key:1125
+jarvis/evals/neko95/bench/adapters/f.py:generic-api-key:282
+jarvis/evals/neko95/bench/cases/f_memory.json:github-pat:224
+jarvis/evals/neko95/bench/cases/f_memory.json:generic-api-key:223
+jarvis/evals/neko95/bench/cases/f_memory.json:jwt:226
+jarvis/evals/neko95/bench/adapters/h.py:generic-api-key:519
+jarvis/evals/neko95/bench/adapters/j.py:generic-api-key:589
+jarvis/evals/neko95/bench/cases/k_security.json:gitlab-pat:1149
+jarvis/evals/neko95/bench/cases/k_security.json:generic-api-key:1123
+jarvis/evals/neko95/bench/cases/k_security.json:generic-api-key:1124
+jarvis/evals/neko95/bench/cases/k_security.json:generic-api-key:1125
+jarvis/evals/neko95/bench/cases/k_security.json:slack-bot-token:1147
+jarvis/evals/neko95/bench/cases/k_security.json:jwt:1105
+jarvis/evals/neko95/bench/cases/k_security.json:github-pat:1100
+jarvis/evals/neko95/bench/cases/k_security.json:stripe-access-token:1148
