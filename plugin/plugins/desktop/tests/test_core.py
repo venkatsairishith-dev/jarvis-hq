@@ -1,7 +1,10 @@
 """Desktop plugin logic without servers: the approval round trip, waiting and cancelling jobs, local results read once
 and deleted, and a diagnosis that is verified only against the file the error names."""
 import json
+import os
 import socket
+import subprocess
+import sys
 
 import pytest
 
@@ -117,10 +120,14 @@ def test_port_in_use_is_verified_against_the_real_listener_and_a_free_port_is_pr
     assert not d["verified"] and "hypothesis" in d["cause"]          # released since: not claimed
 
 
+# The same disk checks on the drive this OS really has: C: on Windows, / elsewhere (the Linux test image).
+DRIVE = "C:" if os.name == "nt" else "/"
+
+
 def test_disk_space_and_service_down_are_checked_not_assumed():
-    d = core.diagnose([{"dialog": True, "title": "x", "texts": ["There is not enough space on the disk: it needs 999999999 MB on C:, which has 1 MB free."]}], [], [])
-    assert d["verified"] and d["fix"] is None and d["needs_mb"] == 999999999 and d["drive"] == "C:"
-    d = core.diagnose([{"dialog": True, "title": "x", "texts": ["There is not enough space on the disk: it needs 1 MB on C:, which has 0 MB free."]}], [], [])
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": [f"There is not enough space on the disk: it needs 999999999 MB on {DRIVE}, which has 1 MB free."]}], [], [])
+    assert d["verified"] and d["fix"] is None and d["needs_mb"] == 999999999 and d["drive"] == DRIVE
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": [f"There is not enough space on the disk: it needs 1 MB on {DRIVE}, which has 0 MB free."]}], [], [])
     assert not d["verified"] and "hypothesis" in d["cause"]          # the drive really has space: the claim is not trusted
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
@@ -128,3 +135,38 @@ def test_disk_space_and_service_down_are_checked_not_assumed():
     s.close()
     d = core.diagnose([{"dialog": True, "title": "x", "texts": [f"Could not connect to the service at 127.0.0.1:{port} (connection refused)."]}], [], [])
     assert d["verified"] and "nothing is listening" in d["cause"] and d["fix"] is None
+
+
+def test_named_file_is_found_in_windows_and_posix_paths_but_not_in_urls():
+    find = lambda t: (m.group(1) if (m := core.FILE_IN_TEXT.search(t)) else None)
+    assert find(r"File: C:\Users\me\app\config.json.") == r"C:\Users\me\app\config.json"
+    assert find("File: /home/me/app/config.json.") == "/home/me/app/config.json"
+    assert find("see https://example.com/app/config.json for help") is None
+    assert find("relative/config.json or ~/x.json") is None
+
+
+def test_low_space_on_a_drive_that_does_not_exist_is_not_verified():
+    drive = "Q:" if os.name != "nt" else "/no/such/mount"      # absent on this OS either way
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": [f"There is not enough space on the disk: it needs 5 MB on {drive}"]}], [], [])
+    assert not d["verified"] and "hypothesis" in d["cause"] and "None" not in d["cause"] and "could not be checked" in d["cause"]
+
+
+def test_a_dead_owner_is_not_alive_but_a_running_one_is():
+    from plugin.plugins.desktop import coordinator as C
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    assert C._alive(os.getpid()) and not C._alive(p.pid) and not C._alive(0)
+
+
+def test_a_crashed_tasks_lock_is_taken_over_but_a_live_ones_is_not(tmp_path):
+    from plugin.plugins.desktop import coordinator as C
+    lock = tmp_path / "pc_task.lock"
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    lock.write_text(json.dumps({"task": "crashed", "pid": p.pid, "at": __import__("time").time()}), encoding="utf-8")
+    C.acquire("next", lock)                                         # owner is gone: taken over
+    assert C.current_task(lock) == "next"
+    with pytest.raises(C.Busy):
+        C.acquire("third", lock)                                    # owner (this process) is alive: refused
+    C.release("next", lock)
+    assert not lock.exists()

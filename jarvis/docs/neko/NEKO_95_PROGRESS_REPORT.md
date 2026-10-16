@@ -86,6 +86,39 @@ Scores come only from saved results, through `jarvis/evals/neko95/score.py` unde
 - **Strict per-tool output schema:** built behind a switch; to be measured.
 - **One UI step end to end** (plugin → console → kernel on Oracle → node → Windows → result): measured in round 3. Node job polling went from 3 s to 1 s and plugin polling from 1 s to 0.5 s.
 
+## Linux test container (2026-10-16 evening, relative's server, owner away)
+
+The rootless podman image `neko-test` (`~/neko-test/Containerfile`, outside the repo) now has pytest-asyncio, pytest-randomly and pytest-xdist, plus **Google Chrome** (Playwright `install --with-deps chrome`) and **gitleaks 8.30.1** (sha256 checked).
+
+| Suite | Before | After |
+|---|---|---|
+| Kernel (`unittest discover`) | 469 run, **9 errors**, 21 skipped | **483 run, OK, 16 skipped** (all Windows-only) |
+| Desktop plugin (pytest, seed 20260731) | 49 passed, **4 failed** | **57 passed** |
+
+**What the failures were:**
+- **Kernel, 9 errors (test_browser): a real bug, exposed by a missing Chrome.**
+  - `BrowserSession.__enter__` started Playwright, then the launch failed (no Chrome), and Playwright was never stopped.
+  - Its loop stayed "running", so every later session in that process failed with "Sync API inside the asyncio loop". The temp profile and guard proxy leaked too.
+  - On the laptop the same would happen after any failed launch, until the node restarts.
+  - Fix: a failed launch cleans up everything. `__exit__` stops Playwright even if closing the browser fails.
+  - Chrome added to the image. Tests: `FailedLaunch` (2), which fail on the old code.
+- **Desktop, 3 failures (troubleshooter):**
+  - the named-file finder knew only `C:\` paths, and the disk check only drive letters;
+  - it now also reads absolute POSIX paths (never the path inside a URL) and `on /mount`;
+  - a drive that does not exist says "could not be checked" instead of "None MB".
+  - The Windows cases are unchanged; the disk test uses `C:` on Windows and `/` on Linux.
+- **Desktop, 1 failure (mission resume after a crash):**
+  - `coordinator._alive()` used only the Windows API, so off Windows every lock owner looked alive and a crashed task's lock was never taken over;
+  - it now uses psutil off Windows (a zombie counts as dead; unsure counts as alive).
+  - The Windows path is unchanged.
+- **New tests, each failing on the old code:**
+  - the path finder (Windows, POSIX and URL cases);
+  - a missing drive;
+  - `_alive` for a dead, a live and a 0 PID;
+  - lock takeover from a dead owner, refused for a live one.
+
+Still Windows-only (not faked here): the 16 kernel skips (UI Automation, Win32, Windows paths), Chrome profiles, microphone.
+
 ## What blocks 9.5 (owner actions)
 
 1. **Real voice (C1):**

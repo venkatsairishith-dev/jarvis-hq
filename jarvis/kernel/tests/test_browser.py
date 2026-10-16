@@ -232,6 +232,41 @@ class Lifecycle(unittest.TestCase):
             self.assertIn("localtest.me", s.blocked)
 
 
+@unittest.skipUnless(HAVE_PW, "playwright not installed in this Python")
+class FailedLaunch(unittest.TestCase):
+    """A browser that cannot start must leave nothing behind (found on Linux without Chrome: one failed launch left
+    Playwright's loop running and every later session in the process failed with "Sync API inside the asyncio loop")."""
+    def test_failed_launch_cleans_up_and_next_session_can_start(self):
+        made = []
+        real_mkdtemp = B.tempfile.mkdtemp
+        def spy(*a, **k):
+            made.append(real_mkdtemp(*a, **k)); return made[-1]
+        import unittest.mock as m
+        for _ in range(2):    # twice: the second attempt must fail the same honest way, not with the loop error
+            with m.patch.object(B.tempfile, "mkdtemp", spy):
+                s = B.BrowserSession(channel="no-such-browser-channel", local_guard=True)
+                with self.assertRaises(Exception) as cm:
+                    s.__enter__()
+            self.assertNotIn("asyncio loop", str(cm.exception))
+            self.assertFalse(os.path.exists(made[-1]))           # throwaway profile deleted
+            import socket
+            with self.assertRaises(OSError):                       # guard proxy stopped
+                socket.create_connection(("127.0.0.1", s.proxy.port), timeout=2)
+        from playwright.sync_api import sync_playwright
+        sync_playwright().start().stop()                           # Playwright is usable again in this process
+
+    def test_exit_stops_playwright_even_if_closing_the_browser_fails(self):
+        import unittest.mock as m
+        s = B.BrowserSession(local_guard=True)
+        s.proxy, s.profile = m.Mock(), tempfile.mkdtemp(prefix="jarvis-prof-")
+        s.ctx = m.Mock(); s.ctx.close.side_effect = RuntimeError("browser crashed")
+        s._pw = pw = m.Mock()
+        with self.assertRaises(RuntimeError):
+            s.__exit__(None, None, None)
+        pw.stop.assert_called_once(); s.proxy.stop.assert_called_once()
+        self.assertFalse(os.path.exists(s.profile))
+
+
 class ProxyUnit(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -130,16 +130,22 @@ class BrowserSession:
             proxy_url = self.egress_proxy or load_egress_proxy()
             verify_egress(proxy_url)        # refuses to run unless the checkpoint is reachable AND denies the metadata address
         self.profile = tempfile.mkdtemp(prefix="jarvis-prof-")
-        self._pw = sync_playwright().start()
-        self.page = None
-        self.ctx = self._pw.chromium.launch_persistent_context(
-            self.profile, channel=self.channel, headless=self.headless, accept_downloads=False, permissions=[],
-            service_workers="block", proxy={"server": proxy_url, "bypass": "<-loopback>"},
-            args=["--disable-extensions", "--disable-sync", "--no-first-run", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
-        self.ctx.route("**/*", self._route)       # early refusal; the proxy is what actually guarantees it
-        self.page = self.ctx.new_page()
-        self.page.set_default_timeout(self.timeout_ms)
-        self.ctx.on("page", lambda p: self._close_extra())   # no popups or extra windows
+        self._pw, self.ctx, self.page = None, None, None
+        try:
+            self._pw = sync_playwright().start()
+            self.ctx = self._pw.chromium.launch_persistent_context(
+                self.profile, channel=self.channel, headless=self.headless, accept_downloads=False, permissions=[],
+                service_workers="block", proxy={"server": proxy_url, "bypass": "<-loopback>"},
+                args=["--disable-extensions", "--disable-sync", "--no-first-run", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
+            self.ctx.route("**/*", self._route)       # early refusal; the proxy is what actually guarantees it
+            self.page = self.ctx.new_page()
+            self.page.set_default_timeout(self.timeout_ms)
+            self.ctx.on("page", lambda p: self._close_extra())   # no popups or extra windows
+        except BaseException:
+            # A failed launch (e.g. Chrome missing) must not leave Playwright's loop running: that loop would make every
+            # later session in this process fail with "Sync API inside the asyncio loop". Profile and proxy go too.
+            self.__exit__(None, None, None)
+            raise
         return self
 
     def _close_extra(self):
@@ -152,12 +158,17 @@ class BrowserSession:
 
     def __exit__(self, *exc):
         try:
-            self.ctx.close()
-            self._pw.stop()
+            if self.ctx is not None:
+                self.ctx.close()
         finally:
-            if self.proxy:
-                self.proxy.stop()
-            shutil.rmtree(self.profile, ignore_errors=True)
+            try:
+                if self._pw is not None:
+                    self._pw.stop()       # always, even if closing the browser failed (else the loop stays running)
+                    self._pw = None
+            finally:
+                if self.proxy:
+                    self.proxy.stop()
+                shutil.rmtree(self.profile, ignore_errors=True)
 
     @property
     def blocked(self):

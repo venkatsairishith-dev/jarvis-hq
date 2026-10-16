@@ -164,7 +164,8 @@ def profiles(path: Path = PROFILES) -> list[dict]:
 
 
 # ---------------------------------------------------------------- diagnosis (local)
-FILE_IN_TEXT = re.compile(r"([A-Za-z]:\\[^\s\"'<>|*?]+\.(?:json|ini|cfg|conf|config|xml|ya?ml|toml|txt))", re.I)
+# A Windows path (C:\...) or an absolute POSIX path (/...; not the path part of a URL such as http://x/a.json).
+FILE_IN_TEXT = re.compile(r"((?:[A-Za-z]:\\|(?<![\w:/.~-])/)[^\s\"'<>|*?]+\.(?:json|ini|cfg|conf|config|xml|ya?ml|toml|txt))", re.I)
 NUMBER_TYPO = re.compile(r"^(\d+)[^\d\s,}\]]+(\d*)$")
 
 
@@ -224,7 +225,7 @@ def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = N
 PORT_IN_USE = re.compile(r"(?i)\bport (\d{2,5}) is already in use|address already in use[^\d]{0,40}(\d{2,5})|"
                          r"only one usage of each socket address[^\d]{0,60}(\d{2,5})")
 NO_SPACE = re.compile(r"(?i)not enough space on the disk|disk is full|there is not enough space")
-NEEDS_SPACE = re.compile(r"(?i)needs (\d+) ?MB on ([A-Z]):")
+NEEDS_SPACE = re.compile(r"(?i)needs (\d+) ?MB on (?:([A-Z]):|(/[^\s,;:]*))")
 REFUSED = re.compile(r"(?i)(?:could not connect|connection refused|no connection could be made)[^\n]{0,80}?"
                      r"\b(127\.0\.0\.1|localhost):(\d{2,5})|\b(127\.0\.0\.1|localhost):(\d{2,5})\b[^\n]{0,40}connection refused")
 
@@ -279,7 +280,13 @@ def _system_causes(joined: str, out: dict):
         return
     if NO_SPACE.search(joined):
         n = NEEDS_SPACE.search(joined)
-        drive = (n.group(2) + ":\\") if n else (out.get("app_dir") or "C:\\")[:3]
+        if n and n.group(2):
+            drive, label = n.group(2).upper() + ":\\", n.group(2).upper() + ":"
+        elif n and n.group(3):
+            drive = label = n.group(3)                       # a POSIX mount point or folder
+        else:
+            where = out.get("app_dir") or ("C:\\" if os.name == "nt" else "/")
+            drive, label = (where[:3], where[:2]) if re.match(r"[A-Za-z]:", where) else (where, where)
         try:
             free_mb = psutil.disk_usage(drive).free // 2**20
         except OSError:
@@ -287,12 +294,13 @@ def _system_causes(joined: str, out: dict):
         need = int(n.group(1)) if n else None
         if free_mb is not None and need is not None:
             ok = free_mb < need
-            out.update(verified=ok, cause=f"{drive[:2]} has {free_mb} MB free and the program needs {need} MB" if ok else
-                       f"the program reports low space, but {drive[:2]} has {free_mb} MB free (it needs {need}): a hypothesis",
-                       drive=drive[:2], free_mb=free_mb, needs_mb=need)
+            out.update(verified=ok, cause=f"{label} has {free_mb} MB free and the program needs {need} MB" if ok else
+                       f"the program reports low space, but {label} has {free_mb} MB free (it needs {need}): a hypothesis",
+                       drive=label, free_mb=free_mb, needs_mb=need)
         else:
-            out.update(cause=f"the program reports low disk space; {drive[:2]} has {free_mb} MB free: a hypothesis", drive=drive[:2])
-        out["evidence"].append(f"free-space check of {drive[:2]}: {free_mb} MB")
+            have = f"{free_mb} MB free" if free_mb is not None else "free space that could not be checked"
+            out.update(cause=f"the program reports low disk space; {label} has {have}: a hypothesis", drive=label)
+        out["evidence"].append(f"free-space check of {label}: " + (f"{free_mb} MB" if free_mb is not None else "not possible (no such drive)"))
         out["advice"] = "free space on that drive (the owner decides what to delete) or move the program's data elsewhere"
         return
     m = REFUSED.search(joined)

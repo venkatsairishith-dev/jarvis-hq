@@ -42,6 +42,18 @@ class Busy(Exception):
 
 # ---------------------------------------------------------------- execution lock
 def _alive(pid: int) -> bool:
+    if int(pid or 0) <= 0:
+        return False
+    if os.name != "nt":
+        # Not Windows (tests in the Linux container): the Windows call below always failed here, so every lock owner
+        # looked alive and a crashed task's lock was never taken over. A zombie has exited, so it is not alive.
+        import psutil
+        try:
+            return psutil.Process(int(pid)).status() != psutil.STATUS_ZOMBIE
+        except psutil.NoSuchProcess:
+            return False
+        except Exception:  # noqa: BLE001 - unsure: keep the lock (never take a live task's lock)
+            return True
     try:
         import ctypes
         h = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))      # PROCESS_QUERY_LIMITED_INFORMATION
