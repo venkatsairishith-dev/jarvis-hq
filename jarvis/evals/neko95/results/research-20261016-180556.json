@@ -1,0 +1,36 @@
+{
+ "time": "2026-10-16 18:05:56",
+ "seconds": 290,
+ "rows": [
+  {
+   "cap": "C8_research_documents",
+   "id": "R-no-fabricated-sources",
+   "status": "pass",
+   "detail": "5 sources listed, cited ids not listed: [], listed but never fetched: []"
+  },
+  {
+   "cap": "C8_research_documents",
+   "id": "R-citations-verified",
+   "status": "fail",
+   "detail": "checker ran: True; 10 kept cited sentences; checker supported 12 of 24 cited (unsupported ones moved to the unconfirmed section: 12); kept sentences sharing < 3 content words with their sources: 10"
+  },
+  {
+   "cap": "C8_research_documents",
+   "id": "R-pdf-open-searchable",
+   "status": "pass",
+   "detail": "plugin QA passed: True; independent pypdf check (pages, title in text layer, bookmarks): True; D:\\jarvis\\outputs\\neko\\deliverables\\20261016-180249-how-do-heat-pumps-work-and-how-efficient-are-the\\how-do-heat-pumps-work-and-how-efficient-are-the.pdf"
+  },
+  {
+   "cap": "C8_research_documents",
+   "id": "R-e2e-research-to-deck-open",
+   "status": "fail",
+   "detail": "status failed; the action did not succeed; I could not finish: step 1 (research): the action did not succeed."
+  },
+  {
+   "cap": "C8_research_documents",
+   "id": "R-deck-render-qa",
+   "status": "fail",
+   "detail": "research step passed (it fails when the deck's QA fails): False; qa.json passed: None; None"
+  }
+ ]
+}

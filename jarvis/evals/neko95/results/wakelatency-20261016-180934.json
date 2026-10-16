@@ -1,0 +1,19 @@
+{
+ "time": "2026-10-16 18:09:34",
+ "rows": [
+  {
+   "cap": "C11_performance",
+   "id": "L-wake-to-listen",
+   "status": "pass",
+   "slo": true,
+   "detail": "keyword end -> detection, real-time feed: p50 0.215 s, max 0.291 s over 10 detections (0 clips not detected); audio-time lag [-0.2, -0.2, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08]; synthetic clip (timing only)"
+  },
+  {
+   "cap": "C1_voice",
+   "id": "V-wake-latency",
+   "status": "pass",
+   "slo": true,
+   "detail": "keyword end -> detection, real-time feed: p50 0.215 s, max 0.291 s over 10 detections (0 clips not detected); audio-time lag [-0.2, -0.2, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08]; synthetic clip (timing only)"
+  }
+ ]
+}

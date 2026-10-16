@@ -41,7 +41,7 @@ def ps(cmd):
 def leaks(args, label):
     with tempfile.TemporaryDirectory() as d:
         rep = Path(d) / "r.json"
-        ignore = ["--gitleaks-ignore-path", str(REPO / "jarvis" / ".gitleaksignore")]   # the repo's reviewed fixture allowlist
+        ignore = ["--gitleaks-ignore-path", str(REPO / ".gitleaksignore")]   # reviewed fake fixtures (fingerprints)
         p = subprocess.run([GITLEAKS, *args, *ignore, "--no-banner", "--redact", "--report-format", "json", "--report-path", str(rep), "--exit-code", "0"],
                            capture_output=True, text=True, timeout=900)
         found = json.loads(rep.read_text(encoding="utf-8") or "[]") if rep.exists() else None
@@ -81,7 +81,9 @@ def main():
             f"unverified step: {bad or 'none'} (of {len(list(TASKS.glob(today + '-*.json')))} task records)")
     # 2. secrets
     results = []
-    for args, label in ((["git", str(REPO)], "committed history"),
+    # history: this project's own commits (author satish.flex07): upstream N.E.K.O's public history holds 531 key-shaped
+    # strings in tutorial data by other authors, not leaks from this project (counted 2026-10-16)
+    for args, label in ((["git", str(REPO), "--log-opts=--author=satish.flex07@gmail.com"], "committed history (this project's commits)"),
                         (["dir", str(REPO / "jarvis")], "working tree jarvis/"),
                         (["dir", str(REPO / "plugin")], "working tree plugin/"),
                         (["dir", str(REPO / "jarvis" / "evals" / "neko95" / "results")], "neko95 results"),

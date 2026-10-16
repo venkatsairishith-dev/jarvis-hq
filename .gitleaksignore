@@ -1,0 +1,6 @@
+# Reviewed fake fixtures in this project's own commits (gitleaks fingerprints), checked by hand 2026-10-16:
+# kernel/tests/test_telegram.py: hk_SECRETVALUE_123, a FAKE key proving real keys never reach error messages
+# bench/scrub_probe.py: values generated at run time by a seeded random function (templates only in the source)
+08aef133698ea678f3bb075fc4cb084b46121b38:kernel/tests/test_telegram.py:generic-api-key:350
+5b1c517415a1f0c416f5f06e746794be0042071e:bench/scrub_probe.py:generic-api-key:25
+5b1c517415a1f0c416f5f06e746794be0042071e:bench/scrub_probe.py:private-key:32

@@ -1,0 +1,43 @@
+{
+ "time": "2026-10-16 18:01:06",
+ "goal": "research how home solar panels work and what they cost, make slides, open them and explain what you found",
+ "record": {
+  "mission": "m20261016-174840-888008",
+  "goal": "research how home solar panels work and what they cost, make slides, open them and explain what you found",
+  "status": "failed",
+  "replans": 2,
+  "steps": [
+   {
+    "n": 1,
+    "tool": "research",
+    "passed": false,
+    "checked": "the action did not succeed",
+    "uncertainty": ""
+   },
+   {
+    "n": 2,
+    "tool": "research",
+    "passed": false,
+    "checked": "presentation made but no window showing it appeared",
+    "uncertainty": "D:\\jarvis\\outputs\\neko\\deliverables\\20261016-175625-how-home-solar-panels-work-and-what-they-cost\\how-home-solar-panels-work-and-what-they-cost.pptx"
+   },
+   {
+    "n": 3,
+    "tool": "research",
+    "passed": false,
+    "checked": "the presentation failed its quality checks",
+    "uncertainty": "D:\\jarvis\\outputs\\neko\\deliverables\\20261016-180019-how-home-solar-panels-work-and-what-they-cost\\how-home-solar-panels-work-and-what-they-cost.pptx"
+   }
+  ],
+  "error": "step research failed after 2 re-plans: D:\\jarvis\\outputs\\neko\\deliverables\\20261016-180019-how-home-solar-panels-work-and-what-they-cost\\how-home-solar-panels-work-and-what-they-cost.pptx",
+  "explain": "0 of 3 steps done and checked. Not finished: step research failed after 2 re-plans: D:\\jarvis\\outputs\\neko\\deliverables\\20261016-180019-how-home-solar-panels-work-and-what-they-cost\\how-home-solar-panels-work-and-what-they-cost.pptx"
+ },
+ "rows": [
+  {
+   "cap": "C6_missions",
+   "id": "M-research-deck-open-explain",
+   "status": "fail",
+   "detail": "status failed; steps [('research', False), ('research', False), ('research', False)]; research check: the action did not succeed; 747 s; error: step research failed after 2 re-plans: D:\\jarvis\\outputs\\neko\\deliverables\\20261016-180019-how-home-solar-panels-work-and-what-they-cost\\how-home-solar-panels-work-and-what-they-cost.pptx"
+  }
+ ]
+}

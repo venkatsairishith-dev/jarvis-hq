@@ -73,6 +73,10 @@ def main():
         row("PE-vision-grounding", False, "a Calculator is already open (maybe the owner's): not touched")
         hits, tried, inferred_ok = 0, 0, False
     else:
+        for _ in range(20):                                   # a Calculator closed just before can linger as a frame
+            if sum(w["title"] == "Calculator" for w in windows.list_windows()) == 0:
+                break
+            time.sleep(0.5)
         W.launch("calc", {})
         windows.wait_for(lambda w: w["title"] == "Calculator", timeout=10)
         time.sleep(2)

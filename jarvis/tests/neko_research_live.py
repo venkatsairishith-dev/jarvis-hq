@@ -64,10 +64,11 @@ def main():
                                                   for x in (s.get("paragraphs") or []) + (s.get("bullets") or [])]
         cited = []
         for part in text_parts:
-            for sent in re.split(r"(?<=[.!?\]])\s+", part):
-                ids = re.findall(r"\[(\w+)\]", sent)
-                if ids:
-                    cited.append((re.sub(r"\s*\[\w+\]", "", sent), ids))
+            # "... cycle. [S1][S2] Next ...": the brackets FOLLOW their sentence's full stop
+            for sent, brackets in re.findall(r"([^\[\]]+?)\s*((?:\[\w+\]\s*)+)", part):
+                ids = re.findall(r"\[(\w+)\]", brackets)
+                if ids and sent.strip():
+                    cited.append((sent.strip(), ids))
         unknown = sorted({i for _, ids in cited for i in ids if i not in listed})
         unfetched = sorted(i for i in listed if i not in passages)
         row(rows, "R-no-fabricated-sources", not unknown and not unfetched and listed,

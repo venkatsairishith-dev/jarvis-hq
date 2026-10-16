@@ -91,8 +91,49 @@ def soffice_to_pdf(src: Path, outdir: Path, timeout: float = 300) -> Path:
     return pdf
 
 
+FIT_APPS = {".pptx": ("powerpnt", "soffice", "simpress", "pptview"), ".docx": ("winword", "soffice", "swriter", "wordpad"),
+            ".pdf": ("msedge", "acrord", "acrobat", "sumatra", "chrome", "firefox")}
+
+
+def _has_app(ext: str) -> bool:
+    """Is the program Windows would use for this type one that can show it? On this PC .pptx was mapped to Notepad:
+    "open the deck" showed it as binary text (2026-10-16). A type with no fitting program goes to the fallback."""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        n = ctypes.c_uint(1024)
+        buf = ctypes.create_unicode_buffer(1024)
+        hr = ctypes.windll.shlwapi.AssocQueryStringW(0, 2, ext, "open", buf, ctypes.byref(n))   # ASSOCSTR_EXECUTABLE
+        if hr != 0 or not buf.value:
+            return False
+        exe = os.path.basename(buf.value).lower()
+        return any(a in exe for a in FIT_APPS.get(ext, (exe,)))
+    except Exception:  # noqa: BLE001
+        return True                                                                          # unknown: let the shell try
+
+
 def open_file(p: Path) -> None:
-    os.startfile(str(p))  # noqa: S606 - a path checked by inside_outputs()
+    """The owner's default app; if Windows has none for this type (this PC had no .pptx app: decks "opened" into
+    nothing, 2026-10-16), the tools that are installed here: LibreOffice for decks/documents, Edge for PDF/HTML."""
+    ext = p.suffix.lower()
+    if _has_app(ext):
+        try:
+            os.startfile(str(p))  # noqa: S606 - a path checked by inside_outputs()
+            return
+        except OSError:
+            pass
+    if ext in (".pptx", ".docx") and os.path.isfile(SOFFICE):
+        quiet_profile()
+        profile = "file:///" + LO_PROFILE.replace("\\", "/")
+        subprocess.Popen([SOFFICE, f"-env:UserInstallation={profile}", "--norestore", str(p)],
+                         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+        return
+    edge = _edge_path()
+    if ext in (".pdf", ".html", ".png", ".md") and edge:
+        subprocess.Popen([edge, str(p)], creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+        return
+    raise ToolError(f"no program on this PC opens {ext} files")
 
 
 def show_in_folder(p: Path) -> None:
