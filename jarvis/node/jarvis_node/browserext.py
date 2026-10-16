@@ -58,6 +58,13 @@ def mask(email: str) -> str:
     return re.sub(r"^(.{3}).*(@.*)$", r"\1***\2", email) if "@" in (email or "") else ""
 
 
+def account_id(email: str) -> str:
+    """A one-way fingerprint of an account address: tells apart accounts whose masks look the same (ven***@gmail.com)
+    without keeping the address."""
+    import hashlib
+    return hashlib.sha256(("neko-account:" + (email or "").strip().lower()).encode()).hexdigest()[:16] if email else ""
+
+
 def build_registry(local_state_path=None, path=REGISTRY) -> dict:
     """Read only profile.info_cache names from Chrome's Local State and write the alias registry."""
     with open(local_state_path or os.path.join(USER_DATA, "Local State"), encoding="utf-8") as f:
@@ -70,8 +77,8 @@ def build_registry(local_state_path=None, path=REGISTRY) -> dict:
         default = bool(account) and account.lower().startswith(DEFAULT_ACCOUNT.lower() + "@")
         if default:
             aliases.add("default")
-        profiles.append({"dir": folder, "name": str(i.get("name") or "")[:40], "account": mask(account), "default": default,
-                         "aliases": sorted(a for a in aliases if a)})
+        profiles.append({"dir": folder, "name": str(i.get("name") or "")[:40], "account": mask(account), "account_id": account_id(account),
+                         "default": default, "aliases": sorted(a for a in aliases if a)})
     reg = {"built": time.strftime("%Y-%m-%d %H:%M:%S"), "profiles": profiles}
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -82,9 +89,12 @@ def build_registry(local_state_path=None, path=REGISTRY) -> dict:
 def load_registry(path=REGISTRY) -> dict:
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
+            reg = json.load(f)
+        if all("account_id" in p for p in reg.get("profiles", [])):
+            return reg
     except (OSError, ValueError):
-        return build_registry(path=path)
+        pass
+    return build_registry(path=path)                     # missing, unreadable or from before account fingerprints
 
 
 def resolve(alias: str, reg=None) -> dict:
@@ -135,8 +145,8 @@ def open_plain(profile: dict, url: str) -> dict:
     return {"ok": True, "opened": url, "profile": profile["dir"], "account": profile["account"], "via": "chrome --profile-directory",
             "window": (w or {}).get("title", "")[:120], "verified": "window" if w else "unconfirmed",
             "profile_name_shown": shown, "profile_name_matches": bool(shown) and shown.lower() == profile["name"].lower(),
-            "note": f"opened in the {profile['name']} profile; page reading and playback checks need the Playwright extension"
-                    if not extension_ready(profile) else None, "host": want}
+            "note": f"opened in the {profile['name']} profile" + ("" if extension_ready(profile) else
+                    "; page reading and playback checks need the Playwright extension"), "host": want}
 
 
 def extension_ready(profile: dict) -> bool:
@@ -154,10 +164,14 @@ class Session:
         if os.path.isfile(TOKEN_FILE):
             with open(TOKEN_FILE, encoding="utf-8") as f:
                 env["PLAYWRIGHT_MCP_EXTENSION_TOKEN"] = f.read().strip()
-        argv = [NODE, MCP_CLI, "--extension", "--profile-dir-name", profile["dir"], "--image-responses", "omit"]
+        # Playwright MCP writes the pages' console logs into its working folder: give it a private one, deleted on exit
+        self.work = os.path.join(local_result_dir(), f"playwright-{os.getpid()}-{secrets.token_hex(3)}")
+        argv = [NODE, MCP_CLI, "--extension", "--profile-dir-name", profile["dir"], "--image-responses", "omit",
+                "--output-dir", self.work]
         if session_factory is None:                     # the real server, started through runtime so a cancel kills it
             from .mcpclient import StdioSession
-            self.s = StdioSession(argv, env=env, popen=runtime.popen)
+            os.makedirs(self.work, exist_ok=True)
+            self.s = StdioSession(argv, env=env, cwd=self.work, popen=runtime.popen)
         else:
             self.s = session_factory(argv, env=env)
 
@@ -168,6 +182,8 @@ class Session:
 
     def __exit__(self, *a):
         self.s.close()
+        import shutil
+        shutil.rmtree(self.work, ignore_errors=True)    # page console logs are page content: not kept
 
     def call(self, tool: str, args: dict, timeout=45.0) -> str:
         if tool not in ALLOWED_TOOLS:
@@ -195,18 +211,21 @@ def page_meta(text: str) -> dict:
 
 def watch_links(snapshot: str) -> list:
     """Video results in a YouTube results snapshot: [(name, ref, /watch url)], ads and Shorts skipped."""
-    out, last = [], None
+    out, last, prev = [], None, ""
     for line in (snapshot or "").splitlines():
-        m = re.search(r'- link "([^"]+)" \[ref=([^\]]+)\]', line)
+        m = re.search(r"""- '?link "(.+?)" \[ref=([^\]]+)\]""", line)   # titles with a colon come quoted: - 'link "A: B" [ref=..]'
         if m:
-            last = (m.group(1), m.group(2))
+            # a search result's title is the link right under its heading; menu and guide links are not results
+            last = (m.group(1), m.group(2)) if "- heading" in prev else None
+            prev = line
             continue
+        prev = line
         u = re.search(r"/url:\s*\"?(/watch\?v=[A-Za-z0-9_-]{6,})", line)
-        if u and last:
+        if u and last and "list=" not in line:          # a playlist starts with some other video: one chosen video only
             name = last[0]
             if not re.search(r"(?i)\b(sponsored|ad\b)", name):
                 out.append((name, last[1], u.group(1)))
-            last = None
+        last = None                                     # a link's address is its very next line, or it has none of its own
     seen, uniq = set(), []
     for n, r, u in out:
         if u not in seen:
@@ -226,6 +245,7 @@ def save_local(kind: str, text: str) -> str:
 
 def _video(sess) -> dict:
     t = sess.call("browser_evaluate", {"function": VIDEO_STATE})
+    t = t.split("### Result", 1)[-1].split("\n###", 1)[0]      # only the result block (the code echo has braces too)
     m = re.search(r"\{.*\}", t, re.S)
     try:
         return json.loads(m.group(0)) if m else {}
@@ -237,8 +257,12 @@ def play(sess, query: str) -> dict:
     """Search YouTube, open the first real video, and check that it is playing (position moving). If the page will not
     start it, say so: the owner presses play (site rules: no forced playback tricks)."""
     sess.call("browser_navigate", {"url": "https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(query)})
-    snap = sess.call("browser_snapshot", {})
-    vids = watch_links(snap)
+    vids = []
+    for _ in range(4):                                 # results render after the page "loads": wait until videos are listed
+        sess.call("browser_wait_for", {"time": 2})
+        vids = watch_links(sess.call("browser_snapshot", {}))
+        if vids:
+            break
     if not vids:
         return {"ok": False, "error": "no video results found on the YouTube results page", "query": query}
     name, _ref, href = vids[0]
@@ -252,20 +276,29 @@ def play(sess, query: str) -> dict:
     sess.call("browser_wait_for", {"time": 2})
     v2 = _video(sess)
     moving = (not v2.get("paused") and not v2.get("none") and float(v2.get("position_s") or 0) > float(v1.get("position_s") or 0))
-    return {"ok": moving, "chose": name[:160], "url": v2.get("url") or "", "title": v2.get("title") or "", "playing": moving,
-            "position_s": v2.get("position_s"), "muted": v2.get("muted"), "verified_by": "the page's video element (position moving)",
-            "error": None if moving else "the video opened but did not start playing: press play (the site or browser blocked autoplay)"}
+    want_id = re.search(r"v=([A-Za-z0-9_-]{6,})", href).group(1)
+    got = re.search(r"v=([A-Za-z0-9_-]{6,})", v2.get("url") or "")
+    same = bool(got) and got.group(1) == want_id                  # the video playing is the one chosen, not another tab's
+    ok = moving and same
+    return {"ok": ok, "chose": name[:160], "url": v2.get("url") or "", "title": v2.get("title") or "", "playing": moving,
+            "same_video": same, "position_s": v2.get("position_s"), "muted": v2.get("muted"),
+            "verified_by": "the page's video element: same video id as the chosen result, position moving",
+            "error": None if ok else ("a different video is in this tab than the one chosen" if moving and not same else
+                                      "the video opened but did not start playing: press play (the site or browser blocked autoplay)")}
 
 
 def whoami(sess, profile: dict) -> dict:
     """The account the visible browser is signed in to, from the Google Account page itself (masked)."""
     sess.call("browser_navigate", {"url": "https://myaccount.google.com/"})
     snap = sess.call("browser_snapshot", {})
-    emails = sorted({e.lower() for e in EMAIL.findall(snap)})
+    found = EMAIL.findall(snap)
+    emails = list(dict.fromkeys(e.lower() for e in found))            # page order: the signed-in account comes first
     shown = [mask(e) for e in emails][:3]
-    expected = profile["account"]
+    expected, want = profile["account"], profile.get("account_id") or ""
+    ids = [account_id(e) for e in emails]
     return {"ok": bool(emails), "profile": profile["dir"], "expected": expected, "seen": shown,
-            "matches": bool(expected) and expected in shown, "verified_by": "myaccount.google.com in the visible browser",
+            "matches": bool(want) and want in ids, "first_is_expected": bool(ids) and ids[0] == want,
+            "verified_by": "myaccount.google.com in the visible browser (compared by account fingerprint, not by the mask)",
             "error": None if emails else "no account shown (signed out, or the page did not load)"}
 
 
@@ -276,7 +309,9 @@ def run(p: dict, session_factory=None) -> dict:
     except BrowserError as e:
         return {"ok": False, "error": str(e), "needs": "clarification"}
     ready = extension_ready(prof) or session_factory is not None
-    if op == "open" and not ready:
+    if op == "open" and session_factory is None:
+        # opening needs no extension: Chrome's own --profile-directory puts it in that profile's window, and the page
+        # then exists for the extension's connect prompt (which lists the profile's tabs)
         return open_plain(prof, url)
     if not ready:
         return {"ok": False, "error": f"the Playwright extension is not installed in the {prof['name']} profile ({prof['dir']}); "

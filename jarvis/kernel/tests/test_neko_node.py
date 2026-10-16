@@ -140,6 +140,8 @@ class Profiles(unittest.TestCase):
         self.assertIn("ven***@gmail.com", text)
         d = [p for p in self.reg["profiles"] if p["dir"] == "Default"][0]
         self.assertTrue(d["default"] and "default" in d["aliases"])
+        self.assertEqual(d["account_id"], browserext.account_id("VenkatGamingGem17@gmail.com"))   # fingerprint, case-insensitive
+        self.assertNotIn("venkatgaminggem17@", text)
 
     def test_resolve(self):
         self.assertEqual(browserext.resolve("default", self.reg)["dir"], "Default")
@@ -155,14 +157,29 @@ class Profiles(unittest.TestCase):
 
 SNAPSHOT = """- Page URL: https://www.youtube.com/results?search_query=kalyani+song
 - Page Title: kalyani song - YouTube
-- link "Sponsored: Buy headphones" [ref=e10]:
-  - /url: /watch?v=AAAAAAAAAAA
+- link "Test new features" [ref=e9]:
+  - /url: /watch?v=MENUMENUMEN
+- heading [level=3] [ref=e9b]:
+  - link "Sponsored: Buy headphones" [ref=e10]:
+    - /url: /watch?v=AAAAAAAAAAA
 - link "Shorts" [ref=e11]:
   - /url: /shorts/xyz
-- link "Kalyani Raga Song - Full Video by Music Co 2 years ago 5 minutes" [ref=e12]:
-  - /url: /watch?v=abcdefghijk
-- link "Another Kalyani song" [ref=e13]:
-  - /url: "/watch?v=zzzzzzzzzzz&pp=x"
+- link [aria-hidden] [ref=e11b] [cursor=pointer]:
+  - /url: /watch?v=abcdefghijk&pp=x
+- heading [level=3] [ref=e11c]:
+  - link "Kalyani Raga Song - Full Video by Music Co 2 years ago 5 minutes" [ref=e12]:
+    - /url: /watch?v=abcdefghijk&pp=x
+- heading [level=3] [ref=e12b]:
+  - link "Another Kalyani song" [ref=e13]:
+    - /url: "/watch?v=zzzzzzzzzzz&pp=x"
+- heading "Kalyani Ragam" [level=3] [ref=e14]:
+  - link "Kalyani Ragam" [ref=e15]:
+    - /url: /watch?v=PLAYLISTFIR&list=PLxyz
+- heading [level=3] [ref=e15b]:
+  - 'link "Beauty of Kalyani: violin" [ref=e15c]':
+    - /url: /watch?v=08TB4UTADG8&pp=x
+- link [aria-hidden] [ref=e17]:
+  - /url: /watch?v=WRONGWRONGW
 """
 
 
@@ -192,14 +209,28 @@ class FakeMcp:
             self.pos += args.get("time", 1)
         if name == "browser_evaluate":
             v = {"paused": self.paused, "position_s": self.pos, "title": "Kalyani Raga Song - YouTube", "url": "https://www.youtube.com/watch?v=abcdefghijk"}
-            return {"content": [{"type": "text", "text": "### Result\n" + json.dumps(v)}]}
+            return {"content": [{"type": "text", "text": "### Result\n" + json.dumps(v) + "\n### Ran Playwright code\n```js\n"
+                                 "await page.evaluate('() => { const v = 1; return {x: 1}; }');\n```"}]}   # the real reply shape
         return {"content": [{"type": "text", "text": "- Page URL: https://example.org/\n- Page Title: Example"}]}
 
 
 class Browser(unittest.TestCase):
     def test_watch_links_skip_ads_and_shorts(self):
         links = browserext.watch_links(SNAPSHOT)
-        self.assertEqual([u for _, _, u in links], ["/watch?v=abcdefghijk", "/watch?v=zzzzzzzzzzz"])
+        # no menu link, ad, Short, playlist or address borrowed from a neighbour; a quoted title (colon) is read
+        self.assertEqual([u for _, _, u in links], ["/watch?v=abcdefghijk", "/watch?v=zzzzzzzzzzz", "/watch?v=08TB4UTADG8"])
+        self.assertEqual(links[-1][0], "Beauty of Kalyani: violin")
+
+    def test_real_youtube_results_page(self):
+        """A real results snapshot (2026-10-16, results part only): the first pick is a single video, not the playlist
+        "Kalyani Ragam" whose first video is another raga (the live failure), and not a Short."""
+        snap = open(os.path.join(HERE, "fixtures", "youtube_results_2026-10-16.txt"), encoding="utf-8").read()
+        links = browserext.watch_links(snap)
+        name, _, url = links[0]
+        self.assertEqual(url, "/watch?v=b3cAxBu0pC8")                  # "Raga Kalyani (Nidhichaala Sukhama) - MS Subbulakshmi"
+        self.assertIn("Kalyani", name)
+        self.assertNotIn("/watch?v=Wrc7gWINYXA", [u for _, _, u in links])   # the playlist's first video (Charukesi)
+        self.assertIn("/watch?v=08TB4UTADG8", [u for _, _, u in links])      # the quoted-title video is read
 
     def test_play_is_verified_by_the_moving_video_position(self):
         FakeMcp.calls = []

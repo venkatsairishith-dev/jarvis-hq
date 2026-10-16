@@ -79,7 +79,8 @@ class DesktopPlugin(NekoPluginBase):
         input_schema={"type": "object", "properties": {
             "query": {"type": "string", "description": "What to search for on YouTube"},
             "profile": {"type": "string", "default": "default", "description": PROFILE_HELP}}, "required": ["query"]},
-        timeout=180, llm_result_fields=["state", "ok", "chose", "title", "playing", "position_s", "verified_by", "error", "needs"],
+        timeout=180, llm_result_fields=["state", "ok", "chose", "title", "playing", "same_video", "position_s", "verified_by",
+                                        "windows_media", "error", "needs"],
     )
     async def play_youtube(self, query: str = "", profile: str = "default", **_):
         pc = self._pc()
@@ -118,14 +119,25 @@ class DesktopPlugin(NekoPluginBase):
             "text": {"type": "string", "description": "Text to type, or the key to press"},
             "approval_id": {"type": "string", "description": "Only to continue after the owner approved"}}, "required": ["action"]},
         timeout=360, llm_result_fields=["state", "ok", "title", "url", "chars", "clicked", "typed_chars", "pressed", "seen", "expected",
-                                        "matches", "tabs", "paused", "position_s", "error", "needs", "approval_id", "how"],
+                                        "matches", "first_is_expected", "tabs", "paused", "position_s", "error", "needs", "approval_id", "how",
+                                        "page", "page_note"],
     )
     async def run_browser_action(self, action: str = "read", profile: str = "default", target: str = "", text: str = "",
                                  approval_id: str = "", **_):
         body = {"op": "browser", "action": action, "profile": profile, "target": target, "text": text}
         if approval_id:
             body["approval_id"] = approval_id
-        return await self._one(body, 120, f"{action} {target}"[:120])
+        try:
+            res = await self._run(self._pc(), body, 120, f"{action} {target}"[:120])
+        except core.DesktopError as e:
+            return Err(SdkError(str(e)))
+        page = core.take_local((res.get("result") or {}).get("local_result"))      # read once, deleted at once
+        out = _brief(res)
+        if page and core.screen_text_allowed():                                    # the owner allowed page text to reach the model
+            out["page"] = str(page)[:6000]
+        elif page:
+            out["page_note"] = "the page text stayed on this laptop (set NEKO_SCREEN_TEXT_TO_MODEL=1 to let the model read pages)"
+        return Ok(out)
 
     @plugin_entry(
         id="run_pc_action",

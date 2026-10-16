@@ -19,7 +19,7 @@ models:
   # It is a hybrid reasoning model: callers pass chat_template_kwargs {"enable_thinking": false} for quick answers.
   ling-tiny:
     cmd: ${server} -m ${models}\Ling-3.0-tiny-Q4_K_M.gguf -ngl 99 --n-cpu-moe 16 -c 8192 -np 1
-    aliases: [general, local-general]
+    aliases: [general, local-general, decider-ling, decider]
     ttl: 300
   # Code: Qwen2.5-Coder 1.5B Instruct (Apache-2.0)
   qwen-coder-1.5b:
@@ -31,6 +31,13 @@ models:
     cmd: ${server} -m ${models}\Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
     aliases: [math, maths, local-math]
     ttl: 300
+  # PC-task decision model candidates (2026-10-16, jarvis/evals/pc_control/eval_decision.py). "decider" is the chosen one.
+  decider-qwen3-1.7b:
+    cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-1.7B-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
+    ttl: 300
+  decider-qwen3-4b:
+    cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-4B-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
+    ttl: 300
   # No separate router model: the generalist routes (one grammar-limited word, thinking off). SmolLM2-360M was tried and
   # dropped: 203 tokens/s, but it sorted only 5-6 of 12 requests correctly (plugin/plugins/local_team/core.py).
 
@@ -39,4 +46,4 @@ groups:
   specialists:
     swap: true
     exclusive: true
-    members: [ling-tiny, qwen-coder-1.5b, qwen-math-1.5b]
+    members: [ling-tiny, qwen-coder-1.5b, qwen-math-1.5b, decider-qwen3-1.7b, decider-qwen3-4b]
