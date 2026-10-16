@@ -251,6 +251,61 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **Measured and rejected.** GLiNER-PII base: on the same set, fewer secrets found at a usable false-alarm level than small plus Jev. Whole-message reading: surrounding text lowers GLiNER's scores, so it reads sentence by sentence.
 - **Seen live.** MiniMax spent its whole 2,000-token budget deliberating whether a password-related task was allowed. The adviser prompt now says to think briefly and that placeholders are the owner's own data. A budget spent on reasoning is reported instead of silently ignored.
 
+## D27 Neko's hands on the PC: the kernel decides, the node acts, screen text stays local (Neko phase 6, 2026-10-16)
+- **Owner decision (2026-10-16):** use the owner's EXISTING Chrome profiles (no Neko profile); ordinary actions without
+  repeated approval; safeguards stay for elevated, destructive, sensitive and consequential actions; never bypass UAC.
+- **One gateway:** every action is a kernel job queued by the owner plane (`Owner.pc`), so the kernel's policy, audit,
+  kill switch and approvals cover all of it. New kinds: `browser_ext`, `diag`, `repair`, `media_state`; UI ops focus, key,
+  scroll, click_at.
+- **`owner_direct`:** a flag only `Owner.pc` sets (nodes and agents cannot). It lowers ordinary ui/browser actions from
+  approval to YELLOW_AUTO. The flag is part of the approval digest.
+  - Raised back to approval: clicks or typing whose words could pay, send, delete, install, sign in or out, or accept;
+    risky keys (alt+f4, ctrl+w, delete); Enter in a chat app, or in a browser field that is not a search box.
+  - Every old refusal still wins: secrets, password managers, wallets and banks, internal addresses.
+  - Agents and the public lane keep the approval floor. The existing tests stay as they were.
+- **Approvals:** `needs_approval` returns an approval id. The owner approves with the PIN in the console, and the same
+  request is sent again with that id; the approval is bound to that action and account, and used once. The desktop
+  plugin waits for the approval and continues by itself.
+- **Browser:** Microsoft's Playwright MCP 0.0.83 with `--extension --profile-dir-name`, plus a profile registry
+  (aliases and masked accounts only).
+  - The node calls only an allowlist of tools, and in pages only one fixed script (video state).
+  - Storage, cookie and code tools are never enabled.
+  - Without the extension, `open` uses `chrome --profile-directory`.
+  - YouTube playback is verified by the video's position moving, plus Windows media sessions as a second witness.
+  - If the page will not start playback, Neko opens the video and says "press play".
+- **Repairs:** `edit_file` (approval; backup first; exact single match; verified on disk); `restore` (auto: the safe
+  direction, itself undoable); `restart_app` (graceful only, never forced); `install` (winget, the normal UAC prompt).
+  - Not offered: elevated commands, registry, services, uninstall, anything that disables a protection.
+  - Any settings.json stays console-only (existing rule).
+- **Privacy:** window and page text is written by the node to `outputs\neko-local`, and only a summary goes to the server.
+  The plugin reads the file once and deletes it. The main agent gets a diagnosis, not the screen text, unless the owner
+  sets `NEKO_SCREEN_TEXT_TO_MODEL=1`. Screenshots are never taken by this flow.
+- **Cancel:** `job/cancel`. The node reports every 3 s while busy, and `runtime.cancel` kills the process tree of the
+  job. The kill switch now also stops the job in hand.
+- **Rejected:** a fake desktop interface; free-form PowerShell from a model; a dedicated browser profile (owner).
+
+## D26 "Hey Neko": N.E.K.O's own keyword spotter, as a standalone local listener (Neko phase 5, 2026-10-16)
+- **Runtime:** N.E.K.O's `SherpaWakeWordDetector` requires the patched sherpa-onnx `1.13.8+neko.kws2`. It was built with
+  upstream's own script, using the VS 2022 Build Tools that were already installed, so nothing was installed on C:.
+  - The fix was `UCRTContentRoot` set to the x86 Windows Kits for the build only; the registry was not changed.
+  - Model: upstream's pinned zh-en 3M bundle, via its provisioning script, on D:.
+- **Why standalone:** N.E.K.O's activation is tied to its browser voice session and voiceprint. `jarvis/wake/wake_listener.py`
+  runs this flow: microphone → detector → Silero VAD → local speech recognition (48930) → widget `/api/task` → back to
+  listening.
+  - Cancel: say "cancel" or "never mind"; say "Hey Neko, stop" while a task runs; or POST /cancel.
+  - Detections are ignored while Neko speaks.
+  - No audio is saved, and the log holds no words.
+- **Keywords:** phone tokens, configurable with `NEKO_WAKE_WORD_KEYWORDS_FILE`. "nee-ko" is kept because the English
+  voice says it that way, so "Hey Nico" also wakes it.
+- **Measured** (synthetic voices, threshold 0.25):
+  - English: 15 of 15 clean clips, faster and slower; Hindi voice: 10 of 10; Telugu voice: weak.
+  - No false alarm on ordinary sentences; only on the near-misses "Hey Nico" and "Hey Mekko".
+  - 10 minutes of live microphone: 0 false wakes.
+  - Speaker-to-microphone loopback at this volume, with speech about 10 dB over the noise: 2 of 3, then 0 of 3.
+  - An automatic gain in front of the detector made it worse and was removed. The command, not the detector input, is
+    gain-adjusted from the wake word's level.
+- **Not yet proven:** the owner's own voice. That is the remaining test (operations).
+
 ## D25 Measured improvement: evaluations and feedback (Neko phase 7, part 1, 2026-10-16)
 - **Scorecard:** `jarvis/evals/neko_evals.py` scores the small models and pipelines on fixed labelled sets and saves each run.
   - It compares each run with the last one; a drop exits 1.

@@ -22,7 +22,18 @@ $cond = New-Object System.Windows.Automation.OrCondition(
 $el = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
 if (-not $el) { throw 'no element' }
 """
-CLICK = FIND + "($el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()\n"
+CLICK = FIND + r"""
+$pat = $null
+if ($el.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pat)) { $pat.Invoke() }
+elseif ($el.Current.ClassName -eq 'Button' -and $el.Current.NativeWindowHandle -ne 0) {
+  # a classic Win32 button (MessageBox OK) without UIA's Invoke: its own click message, still by element, not by position
+  Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class BM { [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l); }
+'@
+  [void][BM]::PostMessage([IntPtr]$el.Current.NativeWindowHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+} else { throw 'does not support Invoke' }
+"""
 TYPE = FIND + r"""
 $pat = $null
 if ($el.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pat) -and -not $el.Current.IsPassword) {
@@ -55,9 +66,8 @@ def _split(target: str):
 
 
 def _run(script, env):
-    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True,
-                       encoding="utf-8", timeout=30, env={**os.environ, **env},
-                       creationflags=0x08000000 if os.name == "nt" else 0)  # CREATE_NO_WINDOW: no flashing console
+    from . import runtime                                  # stoppable: a cancelled job kills this PowerShell
+    r = runtime.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], timeout=30, env={**os.environ, **env})
     if r.returncode:
         # Only fixed reason codes raised by our own scripts are passed on; other error text could contain screen content.
         text = (r.stderr or "") + (r.stdout or "")
@@ -88,4 +98,128 @@ def type_text(target, params):
     _run(TYPE, {"JARVIS_UI_PROC": proc, "JARVIS_UI_ELEM": elem, "JARVIS_UI_TEXT": text})
 
 
-BACKEND = {"launch": launch, "click": click, "type": type_text}
+# ---- 2026-10-16: focus, keys, scroll and (last resort) a click at a point, for the owner's direct requests ----------
+WIN32 = r"""
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class W32 {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint f, int dx, int dy, int data, UIntPtr extra);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+}
+'@
+"""
+FOCUS = WIN32 + r"""
+$ErrorActionPreference='Stop'
+$p = Get-Process -Name $env:JARVIS_UI_PROC | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if (-not $p) { throw 'no window' }
+$h = $p.MainWindowHandle
+if ([W32]::IsIconic($h)) { [void][W32]::ShowWindow($h, 9) }
+[W32]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [W32]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)   # lets a background process take the foreground
+[void][W32]::SetForegroundWindow($h)
+Start-Sleep -Milliseconds 300
+$fpid = 0; [void][W32]::GetWindowThreadProcessId([W32]::GetForegroundWindow(), [ref]$fpid)
+if ($fpid -ne $p.Id) { throw 'target is not the foreground window' }
+"""
+KEY = FOCUS + r"""
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.SendKeys]::SendWait($env:JARVIS_UI_KEYS)
+"""
+MEDIA_KEY = WIN32 + r"""
+$vk = [byte]([int]$env:JARVIS_UI_VK)
+[W32]::keybd_event($vk, 0, 0, [UIntPtr]::Zero); [W32]::keybd_event($vk, 0, 2, [UIntPtr]::Zero)
+"""
+SCROLL = FOCUS + r"""
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+$root = [System.Windows.Automation.AutomationElement]::FromHandle($h)
+$el = $root
+if ($env:JARVIS_UI_ELEM) {
+  $cond = New-Object System.Windows.Automation.OrCondition(
+    (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $env:JARVIS_UI_ELEM)),
+    (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $env:JARVIS_UI_ELEM)))
+  $el = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+  if (-not $el) { throw 'no element' }
+}
+$pat = $null
+$amount = if ($env:JARVIS_UI_DIR -eq 'up') { [System.Windows.Automation.ScrollAmount]::LargeDecrement } else { [System.Windows.Automation.ScrollAmount]::LargeIncrement }
+if ($el.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$pat)) {
+  $pat.Scroll([System.Windows.Automation.ScrollAmount]::NoAmount, $amount)                   # structured first
+} else {
+  $r = New-Object W32+RECT; [void][W32]::GetWindowRect($h, [ref]$r)                           # then the mouse wheel over the window
+  [void][W32]::SetCursorPos([int](($r.L + $r.R) / 2), [int](($r.T + $r.B) / 2))
+  $d = if ($env:JARVIS_UI_DIR -eq 'up') { 360 } else { -360 }
+  [W32]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero)
+}
+"""
+CLICK_AT = FOCUS + r"""
+$r = New-Object W32+RECT; [void][W32]::GetWindowRect($h, [ref]$r)
+$x = $r.L + [int]$env:JARVIS_UI_X; $y = $r.T + [int]$env:JARVIS_UI_Y
+if ($x -ge $r.R -or $y -ge $r.B) { throw 'point outside the window' }
+[void][W32]::SetCursorPos($x, $y)
+[W32]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero); [W32]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+"""
+REASONS = REASONS + ("point outside the window",)
+SENDKEYS = {"enter": "{ENTER}", "tab": "{TAB}", "esc": "{ESC}", "escape": "{ESC}", "space": " ", "backspace": "{BS}",
+            "delete": "{DEL}", "up": "{UP}", "down": "{DOWN}", "left": "{LEFT}", "right": "{RIGHT}", "home": "{HOME}",
+            "end": "{END}", "pageup": "{PGUP}", "pagedown": "{PGDN}", **{f"f{i}": "{F%d}" % i for i in range(1, 13)}}
+MODS = {"ctrl": "^", "alt": "%", "shift": "+"}
+MEDIA_KEYS = {"playpause": 0xB3, "nexttrack": 0xB0, "prevtrack": 0xB1, "stop": 0xB2, "volumeup": 0xAF, "volumedown": 0xAE, "mute": 0xAD}
+
+
+def sendkeys(chord: str) -> str:
+    """'ctrl+shift+t' -> '^+t'. Only named keys, letters and digits: never raw SendKeys syntax from a request."""
+    parts = chord.strip().lower().split("+")
+    *mods, key = parts
+    if any(m not in MODS for m in mods) or len(set(mods)) != len(mods):
+        raise ValueError("bad key")
+    if key in SENDKEYS:
+        k = SENDKEYS[key]
+    elif re.fullmatch(r"[a-z0-9]", key):
+        k = key
+    else:
+        raise ValueError("bad key")
+    return "".join(MODS[m] for m in mods) + k
+
+
+def _proc(target):
+    proc = target.partition("|")[0].strip()
+    if not _SAFE.match(proc):
+        raise ValueError("bad target")
+    return proc
+
+
+def focus(target, params):
+    _run(FOCUS, {"JARVIS_UI_PROC": _proc(target)})
+
+
+def key(target, params):
+    chord = str(params.get("text", "")).strip().lower()
+    if chord in MEDIA_KEYS:                                # media keys go to whatever is playing: no window needed
+        return _run(MEDIA_KEY, {"JARVIS_UI_VK": str(MEDIA_KEYS[chord])})
+    _run(KEY, {"JARVIS_UI_PROC": _proc(target), "JARVIS_UI_KEYS": sendkeys(chord)})
+
+
+def scroll(target, params):
+    proc, _, elem = target.partition("|")
+    direction = str(params.get("text", "down"))
+    if direction not in ("up", "down"):
+        raise ValueError("bad direction")
+    _run(SCROLL, {"JARVIS_UI_PROC": _proc(proc), "JARVIS_UI_ELEM": elem[:120], "JARVIS_UI_DIR": direction})
+
+
+def click_at(target, params):
+    proc, _, point = target.partition("|")
+    m = re.fullmatch(r"(\d{1,5}),(\d{1,5})", point)
+    if not m:
+        raise ValueError("bad point")
+    _run(CLICK_AT, {"JARVIS_UI_PROC": _proc(proc), "JARVIS_UI_X": m.group(1), "JARVIS_UI_Y": m.group(2)})
+
+
+BACKEND = {"launch": launch, "click": click, "type": type_text, "focus": focus, "key": key, "scroll": scroll, "click_at": click_at}

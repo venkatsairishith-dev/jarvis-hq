@@ -381,3 +381,26 @@ Source of the list: Playa-Cyrene/Cyrene-Agent (MIT, Electron/TypeScript). What w
 - **Feedback:** the 👍/👎 buttons on the Neko icon's Done state write `<data>\neko\feedback.jsonl` (rating, the file, an optional note).
   - Read it when changing prompts or models. Nothing changes automatically.
   - Prompt and model changes go through git and must not make `neko_evals.py` worse.
+
+## "Hey Neko" and PC control (added 2026-10-16, D26, D27)
+**Wake word (Windows, neko-venv):** `neko-start.ps1` starts `jarvis\wake\wake_listener.py` (status http://127.0.0.1:48945/status); `-NoWake` skips it, `neko-stop.ps1` stops it.
+- Say "Hey Neko", wait for the chime, then the command. "Cancel" / "never mind" cancels; "Hey Neko, stop" stops a running task. POST /pause turns the microphone off for it; /resume turns it back on.
+- No audio is saved; `<data>\logs\wake_listener.log` holds states and timings only.
+- Tuning: `NEKO_WAKE_WORD_THRESHOLD` (default 0.25), `NEKO_WAKE_WORD_KEYWORDS_FILE` (one phone line per row, e.g. `HH EY1 N EH1 K OW0 @hey_neko`).
+- Checks: `python jarvis\wake\eval_wake.py` (synthetic voices), `jarvis\wake\loopback_test.py` (plays clips through the speakers, dry run), `command_cut_check.py`.
+- **Owner's spoken test:** with the stack running, say "Hey Neko, what is the time?" five times from where you usually sit, and "Hey Nico" twice. Then read `counts` and `audio` at the status URL: detections, and the loudest second (`max_s_dbfs`). If it misses, lower the threshold to 0.2 or speak closer; if it false-wakes, raise it to 0.3.
+- Rebuilding the runtime (only after a sherpa-onnx change): `scripts\wake_word\build_wake_word_runtime.ps1` with `$env:UCRTContentRoot='C:\Program Files (x86)\Windows Kits\10\'` for that shell; output on D:.
+
+**Approval PIN (owner only, once):** in a Windows terminal on the laptop, run
+`ssh -t -i D:\jarvis-secrets\ssh\jarvis_vm_ed25519 ubuntu@100.125.91.51 "cd ~/jarvis/kernel && python3 -m jarvis_kernel set-approval-pin"`
+and type the PIN there (6 to 64 characters; it is stored as a salted hash). The JARVIS console at http://127.0.0.1:8799 then shows "Approval PIN: set" and approves YELLOW actions with it. RED stays at the kernel console. Never put the PIN in a file, a chat or a log.
+
+**Playwright extension (owner, per Chrome profile):** in the Default profile and in the VenkatAMV profile (Profile 1), open `https://chromewebstore.google.com/detail/mmlmfjhmonkocbjadbfplnigmagldckm` (Microsoft's Playwright extension; check the publisher is Microsoft) and add it.
+- Without the extension, Neko can only open pages there (`chrome --profile-directory`).
+- Optional: copy the connection token the extension shows into `D:\jarvis-secrets\playwright\extension-token.txt`. Without it, Chrome asks you to allow each connection.
+- The profile registry is `<data>\neko\browser_profiles.json`: aliases and masked accounts, rebuilt from Chrome's profile list when missing. "Venkat" fits four profiles, so Neko asks which one; "VenkatAMV" is Profile 1.
+
+**Repairs:** backups are in `<data>\repair-backups\<id>` (the file and its manifest). "Undo" is `repair restore <id>` (it runs at once and is itself undoable).
+- Sample app for the checks: `jarvis\tests\neko_sample_app\build.ps1` builds it with a broken config and a Start-menu shortcut "Neko Tests\Neko Sample App"; `-Remove` deletes both.
+
+**Cancel:** `POST /api/owner/job/cancel {"id": ...}` (console), or the plugin's `stop_pc_job`. The node kills what the job started within about 3 s.

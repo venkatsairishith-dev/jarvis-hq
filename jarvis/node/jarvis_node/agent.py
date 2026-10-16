@@ -66,19 +66,27 @@ def run(url, name, once=False, collect_every=60, beat=15, poll=3, clock=time.tim
         token = fh.read().strip()
     state, last_collect, last_report, killed = {}, 0.0, None, False
     worker = None
+    from . import runtime
     from .paths import jarvis_home
     from .watch import Watcher, load_watches
     watcher = Watcher(load_watches(), os.path.join(jarvis_home(), "cache", "node-watch-state.json"))
     while True:
         try:
             now = clock()
-            if once or last_report is None or now - last_report >= beat:
+            busy = bool(worker is not None and worker.is_alive())
+            # while a job runs, report at every poll: that is how a cancel from the owner reaches it within seconds
+            if once or last_report is None or now - last_report >= beat or busy:
                 if now - last_collect >= collect_every or not state:
                     state, last_collect = collect(), now
                     state["watches"] = watcher.names()
-                r = _post(url, "/report", {"state": state, "busy": bool(worker is not None and worker.is_alive())}, token)
+                r = _post(url, "/report", {"state": state, "busy": busy}, token)
                 last_report = now
                 killed = bool(r.get("killed"))
+                for jid in r.get("cancel") or []:
+                    if runtime.cancel(jid):
+                        print("cancelled job", jid, file=sys.stderr)
+                if killed and busy:                          # the kill switch stops the job in hand too
+                    runtime.cancel(runtime.current())
                 if killed:
                     state, last_collect = {}, 0.0  # kernel kill switch on: stop collecting until it is lifted
                     print("kernel kill switch is on; paused", file=sys.stderr)

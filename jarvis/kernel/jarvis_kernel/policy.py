@@ -41,7 +41,7 @@ RULES = [
     ("models", "prefer", YELLOW_AUTO),
     ("ui", "snapshot|list_windows", GREEN),
     ("ui", "screenshot", YELLOW_AUTO),     # the owner's own side at once; a lab agent needs approval (raised in decide below)
-    ("ui", "launch|focus|click|type|key|scroll", YELLOW_APPROVAL),
+    ("ui", "launch|focus|click|type|key|scroll|click_at", YELLOW_APPROVAL),
     # Opening things on the laptop (2026-10-10): the owner's own agent (private lane) at once; a lab agent (public
     # lane) only with the owner's approval and never a folder listing (raised in decide below).
     ("pc", "open_app|open_folder|open_file|list_folder", YELLOW_AUTO),
@@ -62,6 +62,14 @@ RULES = [
     # Connectors (2026-10-11): the OWNER'S risk class for the tool decides (decide below); a plain call is at most YELLOW_AUTO.
     ("connector", "list|describe|manage|result", GREEN),
     ("connector", "call", YELLOW_AUTO),
+    # Neko's PC control (owner decision 2026-10-16): the owner's own requests run ordinary actions at once (owner_direct,
+    # decide below); playing media in the browser is ordinary. Read-only diagnostics of the owner's PC are GREEN for the
+    # owner's side. Repairs change the PC: approval, except putting a backed-up file back (the safe direction).
+    ("browser", "play", YELLOW_AUTO),
+    ("media", "state", GREEN),
+    ("diag", "processes|app_errors|crashes|services|disk|network|app_info|window_text", GREEN),
+    ("repair", "restore", YELLOW_AUTO),
+    ("repair", "restart_app|edit_file|install", YELLOW_APPROVAL),
     ("money", "*", RED),
     ("delete", "*", RED),
     ("credential", "*", RED),
@@ -92,6 +100,17 @@ SECRET_PATTERNS = re.compile(
 LOG_TAMPER = re.compile(r"(^|/)(auth\.log|syslog|secure|wtmp|btmp|lastlog|\.bash_history|\.zsh_history|consolehost_history\.txt|journal)(/|$)", re.I)
 WRITE_OPS = re.compile(r"write|edit|delete|remove|rename|move|commit|truncate|overwrite|append|chmod|rm\b", re.I)
 SECRET_COMPONENTS = {".jarvis", ".jarvis-kernel", "secrets.env", "keys.json", "protected.json", "id_ed25519", "id_rsa"}
+# What the owner may ask for directly without an approval each time (owner_direct): looking, opening, clicking, typing,
+# keys, scrolling. A click or key whose words could pay, send, delete, install, sign out or accept is raised back to approval.
+ORDINARY_OPS = {"ui": {"launch", "focus", "click", "type", "key", "scroll", "click_at"},
+                "browser": {"click", "type", "select", "press"}}
+CONSEQUENTIAL = re.compile(
+    r"\b(pay|payment|buy|purchase|order|checkout|check out|place order|subscribe|donate|send|post|publish|share|tweet|reply|"
+    r"comment|submit|confirm|delete|remove|erase|trash|wipe|format|uninstall|install|sign ?out|log ?out|sign ?in|log ?in|"
+    r"unsubscribe|transfer|withdraw|deposit|accept|agree|allow|grant|authori[sz]e|reset|upload|download|save card|add card|"
+    r"change password|close account|deactivate)\b", re.I)
+MESSAGING_APPS = re.compile(r"whatsapp|telegram|slack|teams|discord|outlook|thunderbird|signal|skype|messenger|mail\b", re.I)
+RISKY_KEYS = {"alt+f4", "ctrl+w", "ctrl+shift+w", "delete", "shift+delete", "ctrl+shift+delete", "ctrl+d", "ctrl+enter", "ctrl+shift+enter"}
 
 
 def _name(s) -> str:
@@ -184,11 +203,12 @@ class Action:
     params: dict = field(default_factory=dict)
     lane: str = "private"
     untrusted_session: bool = False  # session already read web/files from outside
+    # Set only by the owner plane (Owner.pc) for what the owner asked for: never read from a node or agent request.
+    owner_direct: bool = False
 
     def digest(self) -> str:
-        blob = json.dumps(
-            [_name(self.tool), _name(self.op), self.target, self.params, self.lane], sort_keys=True, separators=(",", ":"), default=str
-        )
+        parts = [_name(self.tool), _name(self.op), self.target, self.params, self.lane] + (["owner_direct"] if self.owner_direct else [])
+        blob = json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str)
         return hashlib.sha256(blob.encode()).hexdigest()
 
     def describe(self, limit: int = 200) -> dict:
@@ -244,6 +264,17 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
     """Return the final decision. `suggested` is a model's opinion: it can only raise the level."""
     tool, op = _name(a.tool), _name(a.op)
     level, reason = _rule_level(tool, op)
+    if (a.owner_direct and op in ORDINARY_OPS.get(tool, ()) and _name(a.lane) == "private" and not a.untrusted_session
+            and level == YELLOW_APPROVAL):
+        level, reason = YELLOW_AUTO, "the owner asked for this directly (ordinary PC or browser action)"
+        words = " ".join(_leaves(a.target, [], False) + _leaves(a.params, [], False))
+        key = _name((a.params or {}).get("text", "")) if op in ("key", "press") else ""
+        if CONSEQUENTIAL.search(words):
+            level, reason = YELLOW_APPROVAL, "this could pay, send, delete, install, sign in or out, or accept something: the owner approves it"
+        elif key in RISKY_KEYS or (key == "enter" and (MESSAGING_APPS.search(words) or (tool == "browser" and "search" not in words.lower()))):
+            level, reason = YELLOW_APPROVAL, "this key can close, delete or send: the owner approves it"
+    if tool in ("diag", "media") and _name(a.lane) == "public" and level < YELLOW_APPROVAL:
+        level, reason = YELLOW_APPROVAL, "a lab agent reading the owner's PC state needs the owner's approval (it reaches a public-lane model)"
     leaves = _leaves(a.target, []) + _leaves(a.params, [])
     forms = [f for lf in leaves for f in _canon(lf)]
     vals = [v for v in _leaves(a.target, [], False) + _leaves(a.params, [], False) if v]
@@ -251,7 +282,7 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         forms += [f for j in ("", "/") for f in _canon(j.join(group))]
     if _is_secret_path(forms):
         level, reason = DENY, "touches a secrets path"
-    if tool in ("fs", "config", "git", "delete", "service") and WRITE_OPS.search(op) and level < RED:
+    if tool in ("fs", "config", "git", "delete", "service", "repair") and WRITE_OPS.search(op) and level < RED:
         pieces = {c.strip("'\"()[]{},;:<>") for f in forms for c in re.split(r"[/\s]+", f)}
         if pieces & SAFETY_COMPONENTS:
             level, reason = RED, "changes the rules, hooks or settings the agents run under (console only)"

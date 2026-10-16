@@ -227,7 +227,24 @@ def _verify_open(result: dict, params: dict, lister=None, before=None, timeout=6
 
 
 def run_job(job: dict, projects: dict = None) -> dict:
-    """Run one job. Unknown kinds are refused."""
+    """Run one job. Unknown kinds are refused. While it runs, runtime knows its id, so the owner can cancel it: every
+    process it started is killed and the result says cancelled (2026-10-16)."""
+    from . import runtime
+    runtime.begin(job.get("id"))
+    try:
+        result = _run_job(job, projects)
+    except runtime.Cancelled:
+        result = {}
+    finally:
+        was_cancelled = runtime.cancelled()
+        runtime.end()
+    if was_cancelled:
+        return {"ok": False, "cancelled": True, "error": "cancelled by the owner; everything it had started was stopped",
+                "partial": {k: v for k, v in (result or {}).items() if k in ("backup", "changed", "opened")}}
+    return result
+
+
+def _run_job(job: dict, projects: dict = None) -> dict:
     kind, params = job.get("kind"), job.get("params") or {}
     try:
         if kind == "project_check":
@@ -258,6 +275,21 @@ def run_job(job: dict, projects: dict = None) -> dict:
         if kind == "connector_op":               # a local MCP server the owner allowed on this machine (connectors.py)
             from .connectors import handle
             return handle(params)
+        if kind == "browser_ext":                # the owner's existing Chrome profiles (browserext.py)
+            from .browserext import run as browser_run
+            return browser_run(params)
+        if kind == "diag":                       # read-only checks (diag.py)
+            from .diag import run as diag_run
+            return diag_run(params)
+        if kind == "repair":                     # approved repairs, backup first (repair.py)
+            from .repair import run as repair_run
+            return repair_run(params)
+        if kind == "media_state":                # what Windows is playing (media.py)
+            from .media import state
+            return state(params)
         return {"ok": False, "error": "unknown job kind"}
     except Exception as e:   # report the kind of failure only
+        from .runtime import Cancelled
+        if isinstance(e, Cancelled):
+            raise
         return {"ok": False, "error": type(e).__name__}

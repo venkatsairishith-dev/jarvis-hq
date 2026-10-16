@@ -452,11 +452,16 @@ class Owner:
     # ---------- the owner's own PC (deterministic, kernel-authorized jobs for the laptop node) ----------
     def pc(self, body: dict):
         """Queue one fixed kind of job for the laptop node on the owner's behalf: open an app, folder or document, list a
-        folder, list the windows, read one window's accessibility tree, take a screenshot, check a project. The kernel's
-        job validator and policy still decide; the node answers with what it actually observed."""
-        from .jobs import JobError, PC_OPS
+        folder, list the windows, read one window's accessibility tree, take a screenshot, check a project; and (2026-10-16)
+        a UI action, a browser action in one of the owner's existing Chrome profiles, a read-only diagnostic, a repair with
+        a backup first, or what the PC is playing. The kernel's job validator and policy still decide; the node answers
+        with what it actually observed. Ordinary actions run at once (owner_direct); one that needs the owner's approval
+        comes back as {"status": "needs_approval", "approval_id"}: approve it with the PIN, then send the same request again
+        with that approval_id (it is bound to exactly this action and used once)."""
+        from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, action_for
         op = str(body.get("op", ""))
         target, path = str(body.get("target", ""))[:80], str(body.get("path", ""))[:200]
+        s = lambda k, n: str(body.get(k) or "")[:n]       # noqa: E731
         if op in PC_OPS:
             kind, params = "pc_open", {"agent": "owner", "op": op, "target": target, "path": path}
         elif op == "windows":
@@ -467,14 +472,48 @@ class Owner:
             kind, params = "screenshot", {}
         elif op == "project_check":
             kind, params = "project_check", {"project": target}
+        elif op == "ui" and body.get("action") in UI_OPS:
+            kind, params = "ui_action", {"agent": "owner", "op": body["action"], "target": s("target", 120), "text": s("text", 500)}
+        elif op == "browser" and body.get("action") in BROWSER_OPS:
+            kind, params = "browser_ext", {"profile": s("profile", 32).lower() or "default", "op": body["action"], "url": s("url", 2000),
+                                           "target": s("target", 300), "text": s("text", 500)}
+        elif op == "diag" and body.get("check") in DIAG_OPS:
+            kind, params = "diag", {"op": body["check"], "target": target}
+        elif op == "repair" and body.get("action") in REPAIR_OPS:
+            args = body.get("args") if isinstance(body.get("args"), dict) else {}
+            kind, params = "repair", {"op": body["action"], "target": s("target", 260), "args": args}
+        elif op == "media":
+            kind, params = "media_state", {}
         else:
-            raise OwnerError("op must be open_app, open_folder, open_file, list_folder, windows, snapshot, screenshot or project_check")
+            raise OwnerError("op must be open_app, open_folder, open_file, list_folder, windows, snapshot, screenshot, project_check, "
+                             "ui (action: " + "|".join(sorted(UI_OPS)) + "), browser (action: " + "|".join(sorted(BROWSER_OPS)) +
+                             "), diag (check: " + "|".join(sorted(DIAG_OPS)) + "), repair (action: " + "|".join(sorted(REPAIR_OPS)) +
+                             ") or media")
+        aid = str(body.get("approval_id") or "")[:40] or None
         try:
-            jid = self.jobs.create(self.node, kind, params, owner=None, lane="private")
+            if aid is None and kind in ("ui_action", "browser_ext", "diag", "repair", "media_state"):
+                from .jobs import _check_params
+                _check_params(kind, params)
+                a = action_for(kind, params, "private", untrusted=False, owner_direct=True)
+                d, aid = self.k.request(a)
+                if d.denied:
+                    raise OwnerError("refused by policy: " + d.reason[:160], 403)
+                if aid:
+                    self.k.audit.append("owner_pc_needs_approval", {"op": op, "kind": kind, "approval": aid})
+                    return {"status": "needs_approval", "approval_id": aid, "level": d.name, "reason": d.reason[:200],
+                            "action": a.describe(600), "how": "approve it in the JARVIS console with your PIN, then send the same "
+                                                              "request again with this approval_id"}
+            jid = self.jobs.create(self.node, kind, params, approval_id=aid, owner=None, lane="private", owner_direct=True)
         except JobError as e:
             raise OwnerError(str(e)[:160], 403)
         self.k.audit.append("owner_pc", {"op": op, "job": jid})
-        return {"job": jid, "kind": kind, "node": self.node}
+        return {"job": jid, "kind": kind, "node": self.node, "status": "queued"}
+
+    def cancel_job(self, jid: str):
+        """Stop one PC job (no PIN: stopping is the safe direction)."""
+        out = self.jobs.cancel(str(jid or "")[:40])
+        self.k.audit.append("owner_job_cancel", {"id": out["id"], "state": out["state"]})
+        return out
 
     def job(self, jid: str):
         r = self.k.db.execute("SELECT id, node, kind, state, created, finished, result, owner FROM jobs WHERE id=?", (str(jid)[:40],)).fetchone()
@@ -646,6 +685,8 @@ class Owner:
                     return 200, self.task_control(str(body.get("id", "")), str(body.get("op", "")))
                 if name == "pc":
                     return 202, self.pc(body)
+                if name == "job/cancel":
+                    return 200, self.cancel_job(body.get("id"))
                 if name == "stop_all":
                     return 200, self.stop_all()
                 if name == "kill":

@@ -25,3 +25,8 @@ def home_for(subsystem_root: str, env_home: str | None = None) -> str:
 def jarvis_home() -> str:
     subsystem_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     return home_for(subsystem_root, os.environ.get("JARVIS_HOME", "").strip() or None)
+
+
+def local_result_dir() -> str:
+    """outputs\\neko-local: results that must stay on this laptop (screen text, page text). Read once by the Neko plugin."""
+    return os.path.join(os.path.realpath(os.environ.get("JARVIS_OUTPUTS") or os.path.join(jarvis_home(), "outputs")), "neko-local")

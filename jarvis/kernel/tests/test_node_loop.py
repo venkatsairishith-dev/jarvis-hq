@@ -77,6 +77,42 @@ class Loop(unittest.TestCase):
         calls, _ = self.run_loop(40, once=True)
         self.assertEqual([p for p, _ in calls], ["/report"])
 
+    def test_a_cancel_reaches_the_running_job_at_the_next_poll(self):
+        """While a job runs the node reports at every poll, and a cancel listed by the kernel stops that job."""
+        import threading
+        from jarvis_node import runtime
+        release, cancelled, t, calls = threading.Event(), [], [1000.0], []
+
+        def post(url, path, obj, token=None):
+            calls.append((path, t[0], obj.get("busy")))
+            if path == "/report":
+                return {"killed": False, "cancel": ["j1"] if obj.get("busy") and t[0] >= 1006 else []}
+            if path == "/jobs/next":
+                return {"job": {"id": "j1"} if not any(p == "/jobs/next" for p, *_ in calls[:-1]) else None}
+            return {}
+
+        def sleep(s):
+            t[0] += s
+            if t[0] >= 1030 or release.is_set():
+                raise Stop
+
+        tmp = tempfile.mkdtemp()
+        tok = os.path.join(tmp, "tok")
+        open(tok, "w").write("t")
+        with mock.patch.object(agent, "_post", post), mock.patch.object(agent, "TOKEN_FILE", tok), \
+                mock.patch.object(agent, "collect", lambda: {"host": "test"}), \
+                mock.patch.object(agent, "_do_job", lambda url, token, job: release.wait(10)), \
+                mock.patch.object(agent, "_watch_cycle", lambda *a, **k: None), \
+                mock.patch.object(runtime, "cancel", lambda jid: (cancelled.append(jid), release.set(), True)[-1]):
+            try:
+                agent.run("http://x", "laptop", clock=lambda: t[0], sleep=sleep, beat=15, poll=3)
+            except Stop:
+                pass
+        release.set()
+        self.assertEqual(cancelled[:1], ["j1"])
+        busy_reports = [tt for p, tt, b in calls if p == "/report" and b]
+        self.assertLessEqual(busy_reports[0] - 1000, 6)                # reported at the poll cadence while busy, not every 15 s
+
 
 if __name__ == "__main__":
     unittest.main()

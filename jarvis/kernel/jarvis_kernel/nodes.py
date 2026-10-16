@@ -131,10 +131,11 @@ def make_handler(kernel):
                     name = nodes.report(auth[7:] if auth.startswith("Bearer ") else "", data.get("state", {}))
                     if not name:
                         return self._json(401, {"error": "unauthorized"})
+                    from .jobs import Jobs
                     if data.get("busy") is False:            # the node itself says it has no job in hand
-                        from .jobs import Jobs
                         Jobs(kernel).fail_orphans(name)
-                    return self._json(200, {"ok": True, "killed": kernel.killed()})
+                    # running jobs the owner asked to stop: the node kills what they started and reports them cancelled
+                    return self._json(200, {"ok": True, "killed": kernel.killed(), "cancel": Jobs(kernel).cancels_for(name)})
                 if self.path in ("/jobs/next", "/jobs/result"):
                     auth = self.headers.get("Authorization", "")
                     name = nodes.identify(auth[7:] if auth.startswith("Bearer ") else "")
@@ -146,7 +147,7 @@ def make_handler(kernel):
                     if self.path == "/jobs/next":
                         if kernel.killed():
                             return self._json(200, {"job": None, "killed": True})
-                        return self._json(200, {"job": jobs.next_for(name)})
+                        return self._json(200, {"job": jobs.next_for(name), "cancel": jobs.cancels_for(name)})
                     res = data.get("result")
                     ok = isinstance(data.get("id"), str) and isinstance(res, dict) and jobs.finish(name, data["id"], res)
                     return self._json(200, {"accepted": bool(ok)})

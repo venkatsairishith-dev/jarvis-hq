@@ -14,8 +14,15 @@ NAME = re.compile(r"^[A-Za-z0-9_.-]{1,40}$")
 # Output files: a plain name with a known text extension (no folders, no hidden files). The node re-checks the same rule.
 OUTPUT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,79}\.(md|txt|html|json|csv|log|py)$")
 MAX_OUTPUT = 200_000    # characters per saved output
-UI_OPS = {"launch", "click", "type"}
+UI_OPS = {"launch", "click", "type", "focus", "key", "scroll", "click_at"}
 PC_OPS = {"open_app", "open_folder", "open_file", "list_folder"}   # "open Spotify", "open the X folder in Downloads"
+# Neko's PC control (2026-10-16). Browser: the owner's EXISTING Chrome profiles, by alias; the node keeps the registry.
+BROWSER_OPS = {"open": "open", "read": "snapshot", "tabs": "snapshot", "whoami": "snapshot", "find": "snapshot",
+               "media": "snapshot", "play": "play", "click": "click", "type": "type", "press": "press"}
+DIAG_OPS = {"processes", "app_errors", "crashes", "services", "disk", "network", "app_info", "window_text"}
+REPAIR_OPS = {"restart_app", "edit_file", "restore", "install"}
+URL = re.compile(r"^https?://[^\s\"'<>\\]{1,2000}$")
+SAFE_TEXT = re.compile(r"^[^\r\n\0]*$")
 KINDS = {
     # kind: (policy tool, policy op or None when the op comes from the job's params)
     "project_check": ("tests", "run"),
@@ -30,6 +37,12 @@ KINDS = {
     "screenshot": ("ui", "screenshot"),    # a PNG of the desktop, written to the owner's outputs folder (never sent inline)
     # Connectors (2026-10-11): one operation on a local MCP server the owner allowed on that machine (connectors.py).
     "connector_op": ("connector", None),
+    # Neko (2026-10-16): the owner's existing Chrome profiles (Playwright MCP extension), read-only diagnostics, repairs
+    # with a backup first, and what the PC is playing (Windows media session).
+    "browser_ext": ("browser", None),
+    "diag": ("diag", None),
+    "repair": ("repair", None),
+    "media_state": ("media", "state"),
 }
 CONNECTOR_OPS = {"discover", "test", "connect", "disconnect", "call", "status"}
 RESULT_LIMITS = {"connector_op": 250_000}   # a tool list is larger than most results; every other kind keeps 60,000
@@ -55,7 +68,36 @@ def _check_params(kind: str, params: dict):
         ok = keys == {"agent", "name"} and NAME.match(str(params["agent"])) and OUTPUT_NAME.match(str(params["name"])) and ".." not in params["name"]
     elif kind == "ui_action":
         ok = (keys == {"agent", "op", "target", "text"} and NAME.match(str(params["agent"])) and params["op"] in UI_OPS
-              and isinstance(params["target"], str) and 0 < len(params["target"]) <= 120 and isinstance(params["text"], str) and len(params["text"]) <= 500)
+              and isinstance(params["target"], str) and 0 < len(params["target"]) <= 120 and isinstance(params["text"], str) and len(params["text"]) <= 500
+              and (params["op"] != "key" or re.match(r"^[a-z0-9]+(\+[a-z0-9]+){0,3}$", params["text"]) is not None)
+              and (params["op"] != "scroll" or params["text"] in ("up", "down"))
+              and (params["op"] != "click_at" or re.match(r"^[A-Za-z0-9_.\- ]{1,80}\|\d{1,5},\d{1,5}$", params["target"]) is not None))
+    elif kind == "browser_ext":
+        op = params.get("op")
+        ok = (keys == {"profile", "op", "url", "target", "text"} and op in BROWSER_OPS
+              and re.match(r"^[a-z0-9][a-z0-9_-]{0,31}$", str(params["profile"])) is not None
+              and isinstance(params["url"], str) and (params["url"] == "" or URL.match(params["url"]) is not None)
+              and isinstance(params["target"], str) and len(params["target"]) <= 300 and SAFE_TEXT.match(params["target"]) is not None
+              and isinstance(params["text"], str) and len(params["text"]) <= 500 and SAFE_TEXT.match(params["text"]) is not None
+              and (op != "open" or params["url"] != "")
+              and (op not in ("click", "type", "press", "play", "find") or params["target"] != "" or op == "press"))
+    elif kind == "diag":
+        ok = (keys == {"op", "target"} and params["op"] in DIAG_OPS and isinstance(params["target"], str)
+              and re.match(r"^[A-Za-z0-9_. :()-]{0,80}$", params["target"]) is not None)
+    elif kind == "repair":
+        op, t, args = params.get("op"), params.get("target"), params.get("args")
+        ok = keys == {"op", "target", "args"} and op in REPAIR_OPS and isinstance(t, str) and isinstance(args, dict)
+        if ok and op == "restart_app":
+            ok = re.match(r"^[A-Za-z0-9_.-]{1,40}$", t) is not None and args == {}
+        elif ok and op == "edit_file":
+            ok = (0 < len(t) <= 260 and SAFE_TEXT.match(t) is not None and set(args) == {"find", "replace"}
+                  and all(isinstance(args[k], str) and len(args[k]) <= 4000 for k in args) and args["find"] != "")
+        elif ok and op == "restore":
+            ok = re.match(r"^\d{8}-\d{6}-[0-9a-f]{6}$", t) is not None and args == {}
+        elif ok and op == "install":
+            ok = re.match(r"^[A-Za-z0-9][A-Za-z0-9.+_-]{1,80}$", t) is not None and args == {}
+    elif kind == "media_state":
+        ok = keys == set()
     elif kind == "pc_open":
         ok = (keys == {"agent", "op", "target", "path"} and NAME.match(str(params["agent"])) and params["op"] in PC_OPS
               and isinstance(params["target"], str) and 0 < len(params["target"].strip()) <= 80
@@ -89,11 +131,29 @@ def _check_params(kind: str, params: dict):
         raise JobError("bad job parameters")
 
 
-def action_for(kind: str, params: dict, lane: str = "private", untrusted: bool = False):
+def action_for(kind: str, params: dict, lane: str = "private", untrusted: bool = False, owner_direct: bool = False):
     """The policy Action a job stands for. Output content is NOT part of it (its words must not trip path rules);
-    the file name is, so a secret-looking name is still refused."""
+    the file name is, so a secret-looking name is still refused. owner_direct: the owner asked for it on the owner plane."""
+    a = _action_for(kind, params, lane, untrusted)
+    a.owner_direct = bool(owner_direct) and not untrusted
+    return a
+
+
+def _action_for(kind: str, params: dict, lane: str, untrusted: bool):
     from .policy import Action
     tool, op = KINDS[kind]
+    if kind == "browser_ext":                 # the profile is part of it: an approval for one account is not for another
+        p = {"profile": params["profile"]}
+        if params["text"]:
+            p["text"] = params["text"]
+        return Action("browser", BROWSER_OPS[params["op"]], params["url"] or params["target"] or params["op"],
+                      dict(p, element=params["target"]) if params["url"] and params["target"] else p, lane, untrusted)
+    if kind == "diag":
+        return Action("diag", params["op"], params["target"] or params["op"], {}, lane, untrusted)
+    if kind == "repair":                      # the edit itself is part of it: an approval binds to exactly this change
+        return Action("repair", params["op"], params["target"], dict(params["args"]), lane, untrusted)
+    if kind == "media_state":
+        return Action("media", "state", "system", {}, lane, untrusted)
     if kind == "project_check":
         return Action(tool, op, params["project"])
     if kind in ("output_save", "output_show"):
@@ -123,7 +183,7 @@ class Jobs:
         kernel.db.execute(
             "CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, node TEXT, kind TEXT, params TEXT, state TEXT, created REAL, expires REAL, "
             "result TEXT, notified INT DEFAULT 0, started REAL)")
-        for col in ("started REAL", "owner TEXT", "finished REAL"):   # older databases were created without these columns
+        for col in ("started REAL", "owner TEXT", "finished REAL", "cancel_requested REAL"):   # older databases lack these columns
             try:
                 kernel.db.execute("ALTER TABLE jobs ADD COLUMN " + col)
             except Exception:
@@ -131,13 +191,15 @@ class Jobs:
         kernel.db.execute("CREATE INDEX IF NOT EXISTS jobs_node_state ON jobs(node, state, created)")
         kernel.db.execute("CREATE INDEX IF NOT EXISTS jobs_owner_kind ON jobs(owner, kind, state)")
 
-    def create(self, node: str, kind: str, params: dict, approval_id: str = None, owner: str = None, lane: str = "private") -> str:
+    def create(self, node: str, kind: str, params: dict, approval_id: str = None, owner: str = None, lane: str = "private",
+               owner_direct: bool = False) -> str:
         """Authorize, then queue. owner = the agent that asked (None = the human owner). Agent jobs are untrusted
-        sessions, are reported to the agent (not to Telegram), and only that agent can read their result."""
+        sessions, are reported to the agent (not to Telegram), and only that agent can read their result.
+        owner_direct: the owner asked for exactly this on the owner plane (never for an agent's job)."""
         if kind not in KINDS:
             raise JobError("unknown job kind")
         _check_params(kind, params)
-        a = action_for(kind, params, lane, untrusted=owner is not None)
+        a = action_for(kind, params, lane, untrusted=owner is not None, owner_direct=owner_direct and owner is None)
         d = self.k.authorize(a, approval_id)        # raises Killed when the kill switch is on
         if not d.allowed:
             raise JobError("refused by policy: " + d.reason)
@@ -175,9 +237,10 @@ class Jobs:
         kind_row = self.k.db.execute("SELECT kind FROM jobs WHERE id=?", (jid,)).fetchone()
         if len(blob) > RESULT_LIMITS.get(kind_row[0] if kind_row else "", 60000):
             result, blob = {"ok": False, "error": "result too large"}, '{"ok": false, "error": "result too large"}'
+        state = "done" if result.get("ok") else "cancelled" if result.get("cancelled") else "failed"
         with self.k.db.tx():                       # the job and the registry change together: nobody reads "done" with stale registry state
             cur = self.k.db.execute("UPDATE jobs SET state=?, result=?, finished=? WHERE id=? AND node=? AND state='running'",
-                                    ("done" if result.get("ok") else "failed", blob, time.time(), jid, node))
+                                    (state, blob, time.time(), jid, node))
             self.k.audit.append("job_finished", {"id": jid, "ok": bool(result.get("ok")), "accepted": cur.rowcount == 1})
             if cur.rowcount == 1 and kind_row and kind_row[0] == "connector_op":
                 try:                               # the registry learns what the node found, in whichever process received it
@@ -186,6 +249,28 @@ class Jobs:
                 except Exception as e:
                     self.k.audit.append("connector_hook_failed", {"id": jid, "error": type(e).__name__})
         return cur.rowcount == 1
+
+    def cancel(self, jid: str, owner: str = None) -> dict:
+        """Stop a job (the safe direction: no approval). Queued: it never runs. Running: the node is told on its next
+        report and kills what the job started; the job ends as 'cancelled' when the node confirms. owner None = the human
+        owner (any job); an agent may cancel only its own."""
+        now = time.time()
+        q = "UPDATE jobs SET state='cancelled', finished=?, result=? WHERE id=? AND state='queued'" + ("" if owner is None else " AND owner=?")
+        args = [now, json.dumps({"ok": False, "cancelled": True, "error": "cancelled before it started"}), jid] + ([] if owner is None else [owner])
+        if self.k.db.execute(q, args).rowcount == 1:
+            self.k.audit.append("job_cancelled", {"id": jid, "was": "queued"})
+            return {"id": jid, "state": "cancelled"}
+        q = "UPDATE jobs SET cancel_requested=? WHERE id=? AND state='running'" + ("" if owner is None else " AND owner=?")
+        if self.k.db.execute(q, [now, jid] + ([] if owner is None else [owner])).rowcount == 1:
+            self.k.audit.append("job_cancel_requested", {"id": jid})
+            return {"id": jid, "state": "cancelling", "note": "the node stops it on its next report (a few seconds)"}
+        r = self.k.db.execute("SELECT state FROM jobs WHERE id=?", (jid,)).fetchone()
+        return {"id": jid, "state": r[0] if r else "unknown", "note": "nothing to cancel"}
+
+    def cancels_for(self, node: str) -> list:
+        """Running jobs on this node that the owner asked to stop (told to the node with every report)."""
+        return [r[0] for r in self.k.db.execute(
+            "SELECT id FROM jobs WHERE node=? AND state='running' AND cancel_requested IS NOT NULL", (node,)).fetchall()]
 
     def sweep(self, now=None):
         """Expire queued jobs nobody picked up and fail jobs a node started but never answered. Returns how many of

@@ -42,21 +42,34 @@ Why first: it is the largest missing capability with no owner dependency, and it
 - [x] Gateway ordered fallback: one try per provider, cooldown on 429, `X-Neko-Provider`; 4 tests with fake providers; live call still correct
 - [x] Benchmark: Qwen3.5-4B correct on Vulkan, 10.7 tok/s, not adopted here. Router scorecard in `neko_evals.py` (16 items)
 - [ ] Larger router/tool set (100 items) and an over-refusal set (later)
-- [ ] **OWNER:** Groq / OpenRouter / Cloudflare keys (optional)
+- [x] Groq first fallback (openai/gpt-oss-120b, free tier, own key file): live-verified through a temporary gateway with a fake Dahl 429 (2026-10-16)
+- [x] Tavily optional secondary search (key file only; primary stays web_search); merged, de-duplicated, tracked; 5 tests
+- [ ] **OWNER:** Tavily key (free, no card) to run `search.compare()`; OpenRouter / Cloudflare keys (optional)
 
-## Phase 5: voice — X3, X4, V3, V4
-- [ ] `wake_word_keywords()` reads `NEKO_WAKE_WORD_KEYWORDS_FILE` (default unchanged; 2 new tests)
-- [ ] "Hey Neko" keyword file (3 pronunciations)
-- [ ] **OWNER:** approve VS 2022 Build Tools + cmake (several GB on C:) to build the KWS runtime, or provision upstream's artifact (GitHub login)
-- [ ] Push-to-talk (window hotkey; global after the Tauri shell)
-- [ ] Microphone end to end; stop-speaking latency measurement (B3)
+## Phase 5: voice — X3, X4, V3, V4 (built 2026-10-16, D26; the owner's spoken test is open)
+- [x] KWS runtime 1.13.8+neko.kws2 built with upstream's script (Build Tools were already installed; C: untouched); model provisioned on D:
+- [x] `jarvis/wake/wake_listener.py`: mic → detector → VAD → local ASR → task → back to listening; cancel/stop/pause; status 48945; icon states
+- [x] Keyword lines configurable (`NEKO_WAKE_WORD_KEYWORDS_FILE`), 4 pronunciations; 16 loop tests; offline eval (`eval_wake.py`)
+- [x] Live microphone: 10 min, 0 false wakes; loopback 2/3 then 0/3 at low speaker level (honest: marginal at ~10 dB SNR)
+- [x] One real voice command from a file reached the main agent (run succeeded, icon showed "Done")
+- [ ] **OWNER:** say "Hey Neko, what is the time?" a few times at normal distance; report wakes/misses (see 05_OPERATIONS)
+- [ ] Push-to-talk (Phase 8 finding: RegisterHotKey + key-state polling, no global hook)
+- [ ] Stop-speaking latency measurement (B3)
 
-## Phase 6: computer control — C2–C6
-- [ ] OS interface in the JARVIS node: open_url, open_path, open_project (VS Code), media_state (SMTC), organise(plan) with an undo journal
-- [ ] Policy entries for new jobs (tiers as in the security model)
-- [ ] Song flow: search, open link, verify through SMTC
-- [ ] **OWNER:** install the Playwright MCP extension in Chrome, then the kernel connector and the account check
-- [ ] **OWNER:** the YouTube in-page automation decision
+## Phase 6: computer control — C2–C6 (built 2026-10-16, D27)
+- [x] Kernel: `browser_ext`, `diag`, `repair`, `media_state`; ui focus/key/scroll/click_at; `owner_direct`; approval round trip; job cancel
+- [x] Node: browserext (profile registry, Playwright MCP extension, chrome --profile-directory), diag, repair (backup/undo), media (SMTC), cancel
+- [x] `desktop` plugin: open_website, play_youtube, run_browser_action, run_pc_action, check_pc, run_troubleshooter, stop_pc_job, list_browser_profiles
+- [x] Sample app with a reproducible error (`jarvis/tests/neko_sample_app`)
+- [x] Deployed to hermes-agent-vm (473 server tests OK in place; proxy + kernel restarted; Telegram still off; rollback copy kept)
+- [x] Live on this laptop (`jarvis/tests/neko_pc_live.py`, 2026-10-16): 1 open in default profile PASS; 2 switch profile PARTIAL
+      (opens in Profile 1, "Venkat" asks which one; account check needs the extension); 3 YouTube PARTIAL (opens the search; playing
+      needs the extension; nothing claimed); 4 error dialog PASS (text read locally, not sent to the server); 5 diagnosis PASS
+      (verified cause, fix proposed, held for approval, denied in the test, nothing changed); 6 risky actions PASS (Buy now, alt+f4
+      held and denied); 7 no leaks PASS; 8 cancel PASS (queued job). Fix → restart → verify → undo: PASS with the approval SIMULATED
+      (`neko_fix_verify.py`); the live approved run waits for the owner's PIN
+- [ ] **OWNER:** install the Playwright extension in the Default and Profile 1 Chrome profiles; optional token file (05_OPERATIONS)
+- [ ] **OWNER:** set the approval PIN, then the live approval test (05_OPERATIONS)
 
 ## Phase 7: memory, feedback and evals — L2–L4 (part 1 ✅ 2026-10-16, D25)
 - [x] Feedback 👍/👎 on deliverables in the Neko icon, then `feedback.jsonl` (validated; tested)
@@ -64,9 +77,17 @@ Why first: it is the largest missing capability with no owner dependency, and it
 - [ ] Mirror feedback into N.E.K.O reinforce/dispute signals (needs a look at N.E.K.O's memory API)
 - [ ] Prompt and skill version ids in run records (git is the version store today)
 
-## Phase 8: desktop shell (optional) — X1, X4
-- [ ] 30-minute test of N.E.K.O.-Tauri on this PC (transparency, CPU, crash fail-safe); adopt or fall back to minimal Electron
-- [ ] **OWNER:** Rust and C++ build tools (on C:)
+## Phase 8: desktop shell (optional) — X1, X4 — DEFERRED (owner, 2026-10-16: no Rust yet; keep on the roadmap)
+- [x] Investigated in the current stack (2026-10-16), nothing installed:
+  - Transparent pet window: N.E.K.O's own Electron shell (N.E.K.O.-PC, upstream, separate repo) is the reuse-first route;
+    N.E.K.O's frontend already has desktop-window hooks. Cost: Electron on D: (~250 MB), Node 24 is present.
+  - The current Edge app-mode icon can be made semi-transparent and click-through as a whole window (SetLayeredWindowAttributes,
+    WS_EX_LAYERED/TRANSPARENT from open-widget.ps1), but not shaped per pixel.
+  - Hold-to-talk without a global keyboard hook: RegisterHotKey for the press, then poll GetAsyncKeyState for that one key
+    until release; the wake listener records while it is held (no other keystroke is ever seen).
+- [ ] Prototype hold-to-talk in the wake listener; try the click-through mode on the icon
+- [ ] Decide between N.E.K.O.-PC (Electron) and the deferred Rust/Tauri shell
+- [ ] **OWNER:** Rust and C++ build tools (on C:) — only if the Tauri route is chosen
 
 ## Done at every phase
 - [ ] `live_check.py` extended and green; unit tests green; gitleaks clean; commit (not pushed)
