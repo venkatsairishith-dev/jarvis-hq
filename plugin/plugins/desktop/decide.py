@@ -11,6 +11,7 @@ If the model is down, slow, or its plan does not validate, the result says so ("
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import urllib.error
@@ -45,7 +46,9 @@ SITES = {"youtube": "https://www.youtube.com/", "gmail": "https://mail.google.co
          "drive": "https://drive.google.com/", "google drive": "https://drive.google.com/", "maps": "https://maps.google.com/",
          "example": "https://example.com/", "example.com": "https://example.com/", "linkedin": "https://www.linkedin.com/",
          "calendar": "https://calendar.google.com/", "google calendar": "https://calendar.google.com/", "spotify": "https://open.spotify.com/",
-         "google maps": "https://maps.google.com/", "youtube music": "https://music.youtube.com/", "reddit": "https://www.reddit.com/"}
+         "google maps": "https://maps.google.com/", "youtube music": "https://music.youtube.com/", "reddit": "https://www.reddit.com/",
+         "google account": "https://myaccount.google.com/", "my google account": "https://myaccount.google.com/",
+         "account": "https://myaccount.google.com/"}
 MAX_STEPS = 4
 PROMPT_VERSION = 3          # 1: plain rules (baseline); 2: + examples, action enum, key/site normalisation; 3: + account read from the request, name/folder fields, vague words, follow-up context, step merging
 ALL_ACTIONS = sorted({a for v in ACTIONS.values() for a in v})
@@ -129,10 +132,28 @@ class Plan:
     raw: str = ""
 
 
+_S = {"type": "string"}
+_ARGS = {"open_website": {"site": _S, "account": _S}, "play_media": {"query": _S, "account": _S},
+         "browser": {"action": {"type": "string", "enum": ACTIONS["browser"]}, "target": _S, "text": _S, "account": _S},
+         "open_app": {"app": _S}, "window": {"action": {"type": "string", "enum": ACTIONS["window"]}, "app": _S},
+         "type_text": {"app": _S, "target": _S, "text": _S}, "press_key": {"app": _S, "key": _S},
+         "open_file": {"name": _S, "folder": _S}, "check_pc": {"action": {"type": "string", "enum": ACTIONS["check_pc"]}, "app": _S},
+         "troubleshoot": {"app": _S}, "research": {"query": _S, "deliverable": {"type": "string", "enum": ["none", "report", "presentation"]}},
+         "answer": {}, "clarify": {"question": _S}, "stop": {}}
+# One schema per tool with only that tool's arguments: the grammar cannot emit fields a tool does not use, so plans are
+# shorter (generation is ~10 tokens/s on this GPU) and carry fewer stray values. Behind a switch until measured.
+SCHEMA_STRICT = {"type": "object", "required": ["steps"], "properties": {"steps": {"type": "array", "minItems": 1, "maxItems": 4, "items": {
+    "anyOf": [{"type": "object", "additionalProperties": False, "required": ["tool"],
+               "properties": {"tool": {"const": t}, **a}} for t, a in _ARGS.items()]}}}}
+STRICT_SCHEMA = os.environ.get("NEKO_DECIDE_STRICT_SCHEMA", "0") == "1"
+
+
 def ask_model(request: str, model: str = DEFAULT_MODEL, url: str = LOCAL, timeout: float = 60.0, post=None) -> tuple[str, float]:
+    extra = overlay().get("examples") or []
+    system = SYSTEM + ("".join(f"\n{e['request']} -> {json.dumps(e['plan'])}" for e in extra) if extra else "")
     body = {"model": model, "temperature": 0, "max_tokens": 400, "chat_template_kwargs": {"enable_thinking": False},
-            "response_format": {"type": "json_schema", "json_schema": {"name": "plan", "schema": SCHEMA}},
-            "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": request}]}
+            "response_format": {"type": "json_schema", "json_schema": {"name": "plan", "schema": SCHEMA_STRICT if STRICT_SCHEMA else SCHEMA}},
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": request}]}
     t0 = time.time()
     if post is not None:
         return post(body), time.time() - t0
@@ -166,6 +187,7 @@ def resolve_account(phrase: str, profiles: list[dict]) -> tuple[str | None, str]
     return None, f"no Chrome profile matches '{phrase}'"
 
 
+ACTIVE = "(active window)"
 VAGUE = {"it", "this", "that", "something", "thing", "the thing", "there", "none", "null", "n/a", "na", "unknown", "page",
          "current page", "the page", "this page"}
 NO_ACCOUNT = {"", "none", "null", "n/a", "na", "default account", "unknown"}
@@ -208,6 +230,23 @@ def normalize_key(key: str) -> str:
     return k
 
 
+FORCED: dict | None = None                    # the regression gate evaluates a staged version without activating it
+FAST_PATH = os.environ.get("NEKO_DECIDE_FAST_PATH", "1") != "0"   # rules for one-command requests (0 = model only, for baselines)
+_OVERLAY = {"mtime": -1.0, "content": {}}
+
+
+def overlay() -> dict:
+    """What the owner promoted through skills.py (sites, examples); re-read when the registry changes."""
+    if FORCED is not None:
+        return FORCED
+    from . import skills
+    reg = skills.ROOT / "registry.json"
+    mt = reg.stat().st_mtime if reg.exists() else 0.0
+    if mt != _OVERLAY["mtime"]:
+        _OVERLAY.update(mtime=mt, content=skills.active(skills.ROOT) if mt else {})
+    return _OVERLAY["content"]
+
+
 def resolve_site(site: str) -> str | None:
     s = (site or "").strip()
     if not s:
@@ -217,9 +256,14 @@ def resolve_site(site: str) -> str | None:
     low = re.sub(r"(?i)\b(website|site|web site|the)\b", "", s.lower()).strip()
     if low in SITES:
         return SITES[low]
+    learned = overlay().get("sites") or {}
+    if low in learned:                                       # added by a promoted version (built-in names always win)
+        return learned[low]
     key = low.removesuffix(".com").strip()
     if key in SITES:
         return SITES[key]
+    if re.search(r"\.(txt|pdf|docx?|pptx?|xlsx?|csv|md|png|jpe?g|gif|exe|msi|py|zip|log|json|wav|mp[34])$", low):
+        return None                                           # a file name, not a website
     if re.match(r"^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d{1,5})?(/\S*)?$", low, re.I):
         return "http://" + low if re.match(r"^(127\.|localhost|10\.|192\.168\.)", low) else "https://" + low
     return None
@@ -238,6 +282,8 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
         return Plan([], "fallback", problems=["the model's answer was not JSON"], raw=raw)
     named = account_from_text(request, profiles)
     steps, problems = [], []
+    if MAKE_DOC.search(request) and not TOPIC.search(request):          # "create a pdf and open it": about what?
+        return Plan([], "clarify", question="What should it be about?", problems=["no topic for the document"], raw=raw)
     for s in (data.get("steps") or [])[:MAX_STEPS]:
         tool = s.get("tool")
         if tool not in TOOLS:
@@ -276,6 +322,8 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
             said_key = media_key_from_text(request) if tool == "press_key" else None
             if said_key and (key in KEY_WORDS or len(key) <= 1):     # a media request: what the owner said wins
                 key = said_key
+            if (not app or _vague(app)) and tool in ("troubleshoot", "window") and re.search(r"(?i)\b(screen|this error|the error|that error|popup|pop-up|dialog)\b", request):
+                app = ACTIVE                                  # the window showing the error, found at run time
             if (not app or _vague(app)) and not (tool == "press_key" and key in KEY_WORDS):
                 return Plan(steps, "clarify", question="Which app?", problems=["no app"], raw=raw)
             out["app"] = "" if _vague(app) else app[:80]
@@ -296,7 +344,8 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
             out.update(name=name[:120], folder=(s.get("folder") or s.get("site") or "")[:40])
         elif tool == "check_pc":
             act = (s.get("action") or "").lower()
-            out.update(check=act if act in ACTIONS["check_pc"] else ("app_info" if s.get("app") else "disk"), app=(s.get("app") or "")[:40])
+            guess = "media" if re.search(r"(?i)\b(song|music|playing|video)\b", request) else ("app_info" if s.get("app") else "disk")
+            out.update(check=act if act in ACTIONS["check_pc"] else guess, app=(s.get("app") or "")[:40])
         elif tool == "research":
             q = (s.get("query") or s.get("text") or "").strip()
             if not q:
@@ -309,25 +358,199 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
             return Plan(steps, "clarify", question=(s.get("question") or "Could you say a bit more?")[:200], raw=raw)
         steps.append(out)
     # "open YouTube and play X": playing opens YouTube itself; an open step with no site before a browser step adds nothing
-    browser_after = any(st["tool"] in ("play_media", "browser") for st in steps)
-    steps = [st for st in steps if not (st["tool"] == "open_website" and browser_after
-                                         and (not st["url"] or "youtube.com" in st["url"]))]
+    play_after = any(st["tool"] == "play_media" for st in steps)
+    browser_after = play_after or any(st["tool"] == "browser" for st in steps)
+    steps = [st for st in steps if not (st["tool"] == "open_website" and ((browser_after and not st["url"])
+                                                                           or (play_after and "youtube.com" in st["url"])))]
+    # the account's name chose the Chrome profile; it is not text to type or search for on the page
+    if named:
+        steps = [st for st in steps if not (st["tool"] == "browser" and st.get("action") in ("type", "find", "fill", "search")
+                                            and (st.get("text") or st.get("target") or "").strip().lower() == named.lower())]
+    # "research X, make slides and open them": the research step opens its own file (and the coordinator checks a window
+    # showing it appeared); a separate open step could not know the file's name yet
+    made = [st for st in steps if st["tool"] == "research" and st.get("deliverable") != "none"]
+    if made and re.search(r"(?i)\b(open|show)\b", request):
+        made[0]["open_after"] = True
+        steps = [st for st in steps if not (st["tool"] == "open_file" or (st["tool"] == "open_app" and re.search(
+            r"(?i)powerpoint|acrobat|pdf|edge|word|reader", st.get("app", ""))))]
+        # "... and explain": the explanation is the research summary; a page read or window step after it (seen in the
+        # live mission 2026-10-16 15:56) would act on whatever happens to be open
+        at = steps.index(made[0])
+        steps = steps[:at + 1] + [st for st in steps[at + 1:] if not (st["tool"] == "window" or
+                                                                       (st["tool"] == "browser" and st.get("action") in ("read", "find", "")))]
+    # the troubleshooter reads the window itself: a separate "look at the window" step before it adds nothing
+    if any(st["tool"] == "troubleshoot" for st in steps):
+        steps = [st for st in steps if not (st["tool"] == "window" and st.get("action") in ("inspect", "focus", "read"))]
+    # "play X and tell me when it is playing": the play step's own check (same video, position moving) is the answer; a
+    # status check after it adds nothing (G07 live run 2026-10-16 planned a disk check there)
+    if play_after:
+        first_play = next(i for i, st in enumerate(steps) if st["tool"] == "play_media")
+        steps = steps[:first_play + 1] + [st for st in steps[first_play + 1:] if st["tool"] != "check_pc"]
     # "... and tell me when it is playing": the coordinator's report is the answer; an answer step after real steps adds nothing
     if any(st["tool"] != "answer" for st in steps):
         steps = [st for st in steps if st["tool"] != "answer"]
+    steps = complete_plan(steps, request, profiles)
     if any(st["tool"] == "open_website" and not st["url"] for st in steps):
         return Plan(steps, "clarify", question="Which website should I open?", problems=["no site"], raw=raw)
     if not steps:
         return Plan([], "fallback", problems=problems or ["no usable step"], raw=raw)
+    for st in steps:
+        st["post"] = POST.get(st["tool"], "the action reported success").format(**{k: st.get(k, "") for k in ("app", "profile", "action", "check")})
     return Plan(steps, "ok", problems=problems, raw=raw)
 
 
+# What must be OBSERVED after each step for it to count as done (the coordinator's verify() checks these).
+POST = {"open_website": "a Chrome window of profile {profile} shows the page",
+        "play_media": "the chosen video is playing: same video id, position moving",
+        "browser": "the {action} result was observed on the page (whoami: the signed-in account matches {profile})",
+        "open_app": "a window for {app} appeared",
+        "type_text": "the field in {app} contains the typed text (read back)",
+        "window": "the {app} window is in the requested state",
+        "press_key": "the key reached {app} (media keys: the playback state is checked first)",
+        "open_file": "the file or folder opened",
+        "check_pc": "the {check} check returned data",
+        "troubleshoot": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis",
+        "research": "a report with checked citations exists (and the requested file passed its checks; if asked, a window showing it opened)",
+        "open_output": "a window showing the file Neko made appeared",
+        "stop": "the running work stopped"}
+TYPE_SAID = re.compile(r"(?i)\b(?:(?:type|write|enter)\s+[\"']?(.+?)[\"']?\s+(?:in|into|on)|put\s+[\"']?(.+?)[\"']?\s+into)\s+"
+                       r"(?:the\s+|my\s+)?([A-Za-z][\w.+-]*(?:\s[A-Za-z][\w.+-]*)?)\s*(?:app|window)?\s*[.!]?$")
+GO_SITE = re.compile(r"(?i)\b(?:go to|open|visit)\s+(?:my\s+|the\s+)?([A-Za-z0-9.-]+(?:\.[a-z]{2,})?(?:\s(?:maps|account|drive|calendar|music))?)\b")
+MAKE_DOC = re.compile(r"(?i)\b(create|make|write|generate|build|prepare)\b.{0,30}\b(pdf|report|document|slides?|deck|presentation|ppt)\b")
+TOPIC = re.compile(r"(?i)\b(about|on|regarding|covering|of|for|explaining|comparing|research(?:ing)?|summari[sz]e|compare|explain|"
+                   r"look up|find out)\s+(?!it\b|that\b|this\b|me\b|them\b)\w{3,}")
+
+
+def complete_plan(steps: list[dict], request: str, profiles: list[dict]) -> list[dict]:
+    """Deterministic completion of what the owner said outright but the model left out (measured omissions, 2026-10-16):
+    'write X into WordPad' needs a typing step; 'go to youtube' on an account is opening the site, not reading a page;
+    naming an account means checking that account before acting (opening a profile is not proof of who is signed in)."""
+    m = TYPE_SAID.search(request or "")
+    said, app = ((m.group(1) or m.group(2) or "").strip(), m.group(3).strip()) if m else ("", "")
+    if m and (app.lower() in SITES or resolve_site(app)):   # "put on some music on youtube" is not typing into an app
+        m = None
+    if m and not any(st["tool"] == "type_text" for st in steps):
+        # no "open the app" step is added: at run time the typing step opens the app only if no window of it exists
+        # (a second window would make it unclear where the text goes)
+        steps.append({"tool": "type_text", "app": app, "target": "", "text": said})
+    elif m:
+        for st in steps:
+            if st["tool"] == "type_text" and not st.get("text"):
+                st["text"] = said
+    # the first "go to / open / visit X" whose X is a known site ("open my VenkatAMV account and go to youtube" -> youtube)
+    hit = next(((g.group(1), u) for g in GO_SITE.finditer(request or "") for u in [resolve_site(g.group(1))] if u), None)
+    url = hit[1] if hit else None
+    if hit and " " in hit[0].strip() and hit[0].strip().lower() in SITES:      # "open my google account": the owner's own
+        for st in steps:                                                        # words name the page exactly
+            if st["tool"] == "open_website" and st.get("url") != url:
+                st["url"] = url
+                break
+    if url:
+        for i, st in enumerate(steps):
+            if st["tool"] == "browser" and st.get("action") in ("read", "find", "") and not any(x["tool"] == "open_website" for x in steps):
+                steps[i] = {"tool": "open_website", "profile": st.get("profile", "Default"), "url": url}
+    named = account_from_text(request, profiles)
+    acted = [st for st in steps if st["tool"] in ("open_website", "play_media")]
+    if named and acted and not any(st["tool"] == "browser" and st.get("action") == "whoami" for st in steps):
+        steps.insert(steps.index(acted[0]), {"tool": "browser", "action": "whoami", "profile": acted[0]["profile"], "target": "", "text": ""})
+    return steps[:MAX_STEPS + 1]
+
+
+FOLLOW_OPEN = re.compile(r"(?i)^\W*(?:please\s+|now\s+|can you\s+|ok\s+)?(?:open|show|launch|pull up)\s+(?:me\s+)?"
+                         r"(?:it|that|this|them|the (?:file|report|deck|slides|presentation|pdf|document|page|site|app))"
+                         r"(?:\s+(?:again|for me|now|please|up))*\W*$")
+
+
+def follow_up(request: str, last: dict | None) -> Plan | None:
+    """'open it' refers to what the last task verifiably produced: a made file, a page, an app. Nothing recent: ask."""
+    if not FOLLOW_OPEN.match(request or ""):
+        return None
+    last = last or {}
+    if last.get("file"):
+        step = {"tool": "open_output", "path": last["file"], "post": POST["open_output"]}
+    elif last.get("url"):
+        step = {"tool": "open_website", "profile": last.get("profile") or "Default", "url": last["url"]}
+        step["post"] = POST["open_website"].format(profile=step["profile"])
+    elif last.get("app"):
+        step = {"tool": "open_app", "app": last["app"]}
+        step["post"] = POST["open_app"].format(app=last["app"])
+    else:
+        return Plan([], "clarify", question="Open what? Nothing was made or opened in the last few minutes.", model="rule")
+    return Plan([step], "ok", model="rule")
+
+
+APPS = {"notepad": "notepad", "calculator": "calc", "calc": "calc", "paint": "mspaint", "ms paint": "mspaint",
+        "file explorer": "explorer", "explorer": "explorer", "spotify": "spotify", "chrome": "chrome", "google chrome": "chrome",
+        "edge": "msedge", "microsoft edge": "msedge", "word": "winword", "excel": "excel", "powerpoint": "powerpnt",
+        "vs code": "code", "visual studio code": "code", "terminal": "wt", "settings": "ms-settings", "task manager": "taskmgr",
+        "wordpad": "wordpad", "outlook": "outlook", "teams": "teams", "discord": "discord", "vlc": "vlc"}
+FAST_BLOCK = re.compile(r"(?i)\b(and|then|also|after|before|it|that|this|them|those|account|profile|instead|actually|again|"
+                        r"my \w+'s|for me and|unless|if)\b|[,;]|'s\b")
+MEDIA_FAST = {r"(?:pause|stop playing|pause (?:the )?(?:music|video|song|playback))": ("playpause", "pause"),
+              r"(?:resume|unpause|continue|resume (?:the )?(?:music|video|song|playback))": ("playpause", "play"),
+              r"(?:next|skip)(?: (?:song|track|video))?(?: please)?|skip (?:this|the) (?:song|track)": ("nexttrack", ""),
+              r"(?:previous|last|go back a)(?: (?:song|track|video))": ("prevtrack", ""),
+              r"(?:turn (?:the )?)?volume up|louder|turn it up": ("volumeup", ""),
+              r"(?:turn (?:the )?)?volume down|quieter|turn it down": ("volumedown", ""),
+              r"mute|unmute": ("mute", "")}
+
+
+def fast_path(request: str, profiles: list[dict]) -> Plan | None:
+    """A whole request that is ONE simple, unambiguous command is planned by rules (no model, milliseconds); its plan goes
+    through validate() exactly like the model's. Anything with a second part, a pronoun, an account or a profile, or a
+    name it does not know, returns None and the model plans it."""
+    r = re.sub(r"(?i)^(?:hey neko[, ]*|neko[, ]*|please |can you |could you |would you )+", "", (request or "").strip()).strip(" .!?")
+    r = re.sub(r"(?i)\s+(?:please|for me|now)$", "", r)
+    if not r or len(r) > 60 or FAST_BLOCK.search(r):
+        return None
+    low = r.lower()
+    steps = None
+    for pat, (key, intent) in MEDIA_FAST.items():
+        if re.fullmatch(pat, low):
+            steps = [{"tool": "press_key", "key": key, "text": intent or key}]
+            break
+    if steps is None:
+        m = re.fullmatch(r"(?:open|launch|start|run|fire up)\s+(?:the\s+)?(.+?)(?:\s+app)?", low)
+        g = re.fullmatch(r"(?:go to|open|visit|take me to)\s+(?:the\s+)?([a-z0-9.-]+\.[a-z]{2,}(?:/\S*)?|[a-z ]+?)(?:\s+(?:website|site))?", low)
+        p = re.fullmatch(r"(?:play|put on)\s+(?:some\s+)?(.{3,50})", low)
+        w = re.fullmatch(r"(minimize|minimise|maximize|maximise|restore)\s+(?:the\s+)?(.+?)(?:\s+window)?", low)
+        if m and m.group(1) in APPS:
+            steps = [{"tool": "open_app", "app": m.group(1)}]
+        elif g and (g.group(1) in SITES or re.fullmatch(r"[a-z0-9.-]+\.[a-z]{2,}(/\S*)?", g.group(1))):
+            steps = [{"tool": "open_website", "site": g.group(1), "account": ""}]
+        elif p and not re.search(r"(?i)\b(on|in|from) (spotify|vlc|netflix|prime)\b", p.group(1)) and re.sub(
+                r"(?i)\b(a|an|the|some|any|good|nice|new|song|songs|music|video|videos|track|tracks|something|anything)\b", "",
+                p.group(1)).strip():                              # "play a song" names nothing: the model asks which
+            steps = [{"tool": "play_media", "query": p.group(1), "account": ""}]
+        elif w and w.group(2) in APPS:
+            steps = [{"tool": "window", "action": w.group(1).replace("mise", "mize"), "app": w.group(2)}]
+        elif re.fullmatch(r"how much (?:free )?(?:disk )?space(?: do i have| is there| is left)?(?: left)?(?: on (?:my )?(?:pc|computer|disk))?", low):
+            steps = [{"tool": "check_pc", "action": "disk"}]
+        elif re.fullmatch(r"(?:is my internet working|am i (?:connected|online)(?: to the internet)?|is the internet (?:working|down))", low):
+            steps = [{"tool": "check_pc", "action": "network"}]
+    if not steps:
+        return None
+    plan = validate(json.dumps({"steps": steps}), profiles, request)
+    if plan.status != "ok":
+        return None
+    plan.model, plan.seconds = "rule", 0.0
+    return plan
+
+
 def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=None, timeout: float = 60.0,
-           context: str = "") -> Plan:
-    """context: the owner's previous request, for follow-ups such as "actually use the Satish profile instead"."""
+           context: str = "", last: dict | None = None) -> Plan:
+    """context: the owner's previous request, for follow-ups such as "actually use the Satish profile instead".
+    last: what that request verifiably produced (coordinator.previous), for "open it"."""
     request = " ".join(str(request or "").split())[:1000]
     if re.fullmatch(r"(?i)\W*(stop|cancel|abort|never ?mind|forget it)\W*", request):     # no model needed
         return Plan([{"tool": "stop"}], "ok", model="rule")
+    fu = follow_up(request, last)
+    if fu is not None:
+        return fu
+    if not context and FAST_PATH:
+        fp = fast_path(request, profiles)
+        if fp is not None:
+            return fp
     asked = f"Previous request: {context}\nNow: {request}" if context else request
     try:
         raw, secs = ask_model(asked, model, post=post, timeout=timeout)

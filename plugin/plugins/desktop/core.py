@@ -97,7 +97,7 @@ class Pc:
                 code, j = self.call("GET", f"job/{jid}", None)
                 if code < 400 and j.get("state") in FINAL:
                     return j
-                self.sleep(1.0)
+                self.sleep(0.5)                                # most one-step actions finish within 2-4 s
             self.cancel(jid)
             return {"id": jid, "state": "failed", "result": {"ok": False, "error": f"no result within {int(timeout)} s; it was cancelled"}}
         finally:
@@ -204,6 +204,8 @@ def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = N
     elif not out["cause"] and mod:
         out.update(cause=f"a required Python module is missing: {mod.group(1)} (a hypothesis until its environment is checked)",
                    dependency=mod.group(1))
+    if not out["cause"]:
+        _system_causes(joined, out)
     if not out["cause"] and dialog:
         out["cause"] = "the program showed an error dialog: " + ("; ".join(texts)[:200] if screen_text_allowed() else
                                                                 "its text stayed on this laptop")
@@ -217,6 +219,95 @@ def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = N
     if not out["cause"]:
         out["cause"] = "no error dialog, crash record or error event was found for it"
     return out
+
+
+PORT_IN_USE = re.compile(r"(?i)\bport (\d{2,5}) is already in use|address already in use[^\d]{0,40}(\d{2,5})|"
+                         r"only one usage of each socket address[^\d]{0,60}(\d{2,5})")
+NO_SPACE = re.compile(r"(?i)not enough space on the disk|disk is full|there is not enough space")
+NEEDS_SPACE = re.compile(r"(?i)needs (\d+) ?MB on ([A-Z]):")
+REFUSED = re.compile(r"(?i)(?:could not connect|connection refused|no connection could be made)[^\n]{0,80}?"
+                     r"\b(127\.0\.0\.1|localhost):(\d{2,5})|\b(127\.0\.0\.1|localhost):(\d{2,5})\b[^\n]{0,40}connection refused")
+
+
+def listener(port: int) -> dict | None:
+    """Who listens on this local TCP port right now: {pid, name} or None. Read-only (psutil)."""
+    import psutil
+    for c in psutil.net_connections(kind="tcp"):
+        if c.status == psutil.CONN_LISTEN and c.laddr and c.laddr.port == port:
+            try:
+                return {"pid": c.pid, "name": psutil.Process(c.pid).name() if c.pid else "a system process"}
+            except (psutil.Error, OSError):
+                return {"pid": c.pid, "name": "an unknown process"}
+    return None
+
+
+def free_port(start: int = 8100, end: int = 8999) -> int | None:
+    import socket
+    for p in range(start, end):
+        if listener(p):
+            continue
+        with socket.socket() as s:
+            try:
+                s.bind(("127.0.0.1", p))
+                return p
+            except OSError:
+                continue
+    return None
+
+
+def _system_causes(joined: str, out: dict):
+    """Port taken, disk full, a service not running: each checked against the system as it is now, never assumed."""
+    import psutil
+    m = PORT_IN_USE.search(joined)
+    if m:
+        port = int(next(g for g in m.groups() if g))
+        who = listener(port)
+        if who:
+            out.update(verified=True, cause=f"port {port} is already used by {who['name']} (process {who['pid']})", port=port)
+            out["evidence"].append(f"listening check: {who['name']} holds 127.0.0.1:{port}")
+            cfg = out.get("file")
+            if cfg and cfg.lower().endswith(".json") and os.path.isfile(cfg):
+                text = Path(cfg).read_text(encoding="utf-8-sig")
+                old = re.search(rf'"port"\s*:\s*{port}\b', text)
+                new = free_port()
+                if old and new:
+                    out["fix"] = {"action": "edit_file", "target": cfg, "args": {"find": old.group(0), "replace": f'"port": {new}'},
+                                  "why": f"move the program to free port {new} (the other program keeps {port})"}
+        else:
+            out.update(cause=f"the program says port {port} is in use, but nothing listens on it now (it may have been "
+                             "released): a hypothesis", port=port)
+        return
+    if NO_SPACE.search(joined):
+        n = NEEDS_SPACE.search(joined)
+        drive = (n.group(2) + ":\\") if n else (out.get("app_dir") or "C:\\")[:3]
+        try:
+            free_mb = psutil.disk_usage(drive).free // 2**20
+        except OSError:
+            free_mb = None
+        need = int(n.group(1)) if n else None
+        if free_mb is not None and need is not None:
+            ok = free_mb < need
+            out.update(verified=ok, cause=f"{drive[:2]} has {free_mb} MB free and the program needs {need} MB" if ok else
+                       f"the program reports low space, but {drive[:2]} has {free_mb} MB free (it needs {need}): a hypothesis",
+                       drive=drive[:2], free_mb=free_mb, needs_mb=need)
+        else:
+            out.update(cause=f"the program reports low disk space; {drive[:2]} has {free_mb} MB free: a hypothesis", drive=drive[:2])
+        out["evidence"].append(f"free-space check of {drive[:2]}: {free_mb} MB")
+        out["advice"] = "free space on that drive (the owner decides what to delete) or move the program's data elsewhere"
+        return
+    m = REFUSED.search(joined)
+    if m:
+        port = int(m.group(2) or m.group(4))
+        who = listener(port)
+        if who is None:
+            from .monitor import SERVICES
+            known = next((n for n, p in SERVICES.items() if p == port), None)
+            out.update(verified=True, port=port, cause=f"nothing is listening on 127.0.0.1:{port}: the service it needs is not running"
+                       + (f" (that is Neko's {known})" if known else ""))
+            out["advice"] = f"start {known or 'that service'}, then start the program again"
+        else:
+            out.update(port=port, cause=f"{who['name']} is listening on {port} now; the refusal may have been temporary: a hypothesis")
+        out["evidence"].append(f"listening check on {port}: {who['name'] if who else 'nothing'}")
 
 
 def _dll_present(name: str, app_dir: str | None = None) -> bool:

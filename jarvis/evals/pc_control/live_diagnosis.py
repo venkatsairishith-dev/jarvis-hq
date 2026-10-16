@@ -107,6 +107,9 @@ def main():
         case("D13", "a crash record alone is a hypothesis", lambda: (lambda dg_: (not dg_["verified"] and "hypothesis" in dg_["cause"], dg_["cause"]))(
             core.diagnose([], [], [{"app": "x.exe", "kind": "crash", "module": "y.dll", "code": "c0000005"}])))
         case("D14", "a broken backup is not restored (the repair stops safely)", lambda: _tampered(d1))
+        case("T-port-conflict", "port taken by another program: holder verified, app moved to a free port, then it runs", _port_conflict)
+        case("T-disk-space", "not enough disk space: verified against the drive's real free space, no invented fix", _disk_space)
+        case("T-service-down", "a needed local service is down: verified nothing listens; once it runs, the app starts", _service_down)
     finally:
         subprocess.run(["taskkill", "/IM", "NekoSampleApp.exe", "/F"], capture_output=True)
         repair.BACKUPS = old_backups
@@ -114,6 +117,55 @@ def main():
     out = HERE / "results" / f"diagnosis-{time.strftime('%Y%m%d-%H%M%S')}.json"
     out.write_text(json.dumps({"cases": ROWS}, indent=1), encoding="utf-8")
     print("SUMMARY", sum(r["ok"] for r in ROWS), "of", len(ROWS), "->", out)
+
+
+def _listen(port=0):
+    import socket
+    s = socket.socket()
+    s.bind(("127.0.0.1", port))
+    s.listen(5)
+    return s, s.getsockname()[1]
+
+
+def _port_conflict():
+    holder, port = _listen()                                  # "another program" holding the port: this test itself
+    try:
+        d = variant("port-taken", json.dumps({"name": "neko sample", "port": port, "listen": True}))
+        _, dg = run_and_read(d)
+        fix = dg.get("fix") or {}
+        if not (dg["verified"] and f"port {port}" in dg["cause"] and fix.get("action") == "edit_file"):
+            return False, f"diagnosis: {dg['cause']}; fix {fix}"
+        r = repair.edit_file(fix["target"], fix["args"]["find"], fix["args"]["replace"])
+        wins, after = run_and_read(d)
+        new = fix["args"]["replace"].split(":")[-1].strip()
+        runs = any(f"running on port {new}" in x.get("title", "") for x in wins) and not any(x.get("dialog") for x in wins)
+        return r["ok"] and runs, f"{dg['cause']}; fix {fix['args']}; after the fix: {[x.get('title') for x in wins]}"
+    finally:
+        holder.close()
+
+
+def _disk_space():
+    import psutil
+    free_mb = psutil.disk_usage(str(ROOT)[:3]).free // 2**20
+    d = variant("no-space", json.dumps({"name": "neko sample", "port": 8080, "needs_mb": int(free_mb + 100000)}))
+    _, dg = run_and_read(d)
+    ok = dg["verified"] and dg.get("fix") is None and dg.get("drive") == str(ROOT)[:2] and dg.get("needs_mb") == free_mb + 100000
+    return ok, f"{dg['cause']}; fix {dg.get('fix')}; advice: {dg.get('advice')}"
+
+
+def _service_down():
+    probe, port = _listen()                                   # a free port: bound once, then released
+    probe.close()
+    d = variant("service-down", json.dumps({"name": "neko sample", "port": 8080, "service_port": port}))
+    _w, dg = run_and_read(d)
+    if not (dg["verified"] and f"127.0.0.1:{port}" in dg["cause"] and dg.get("fix") is None):
+        return False, f"diagnosis: {dg['cause']}"
+    svc, _p = _listen(port)                                   # the service is started (here: a listener on that port)
+    try:
+        wins, after = run_and_read(d)
+        return not any(x.get("dialog") for x in wins), f"{dg['cause']}; with the service up: {[x.get('title') for x in wins]}"
+    finally:
+        svc.close()
 
 
 def _tampered(d1):

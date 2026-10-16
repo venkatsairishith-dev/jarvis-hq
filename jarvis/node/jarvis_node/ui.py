@@ -19,7 +19,13 @@ public class W { [DllImport("user32.dll")] public static extern IntPtr GetForegr
 '@
 $procName = '__PROC__'; $maxN = __MAX__; $maxD = __DEPTH__; $wantValues = __VALUES__
 if ($procName -eq '') { $h = [W]::GetForegroundWindow() }
-else { $p = Get-Process -Name $procName | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; $h = if ($p) { $p.MainWindowHandle } else { [IntPtr]::Zero } }
+else { $p = Get-Process -Name $procName | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; $h = if ($p) { $p.MainWindowHandle } else { [IntPtr]::Zero }
+  if ($h -eq [IntPtr]::Zero) {   # a modern (UWP) app: its window is an ApplicationFrameHost frame titled with the app's name (one only)
+    $AE = [System.Windows.Automation.AutomationElement]
+    $hit = @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,
+      (New-Object System.Windows.Automation.PropertyCondition($AE::ClassNameProperty, 'ApplicationFrameWindow'))) |
+      Where-Object { $_.Current.Name -eq $procName -or $_.Current.Name.StartsWith($procName + ' ', [StringComparison]::OrdinalIgnoreCase) })
+    if ($hit.Count -eq 1) { $h = [IntPtr]$hit[0].Current.NativeWindowHandle } } }
 if ($h -eq [IntPtr]::Zero) { '{"error":"no window"}'; exit }
 $root = [System.Windows.Automation.AutomationElement]::FromHandle($h)
 $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker

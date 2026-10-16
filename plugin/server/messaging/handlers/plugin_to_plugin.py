@@ -15,7 +15,11 @@ plugin_dispatch_service = PluginDispatchService()
 
 
 async def handle_plugin_to_plugin(request: dict[str, object], send_response: SendResponse) -> None:
-    context = resolve_common_fields(request, timeout_default=10.0, timeout_max=60.0)
+    # A call to another plugin's ENTRY may take as long as that entry declares (research: 900 s); the target plugin
+    # applies the entry's own limit. Other events keep the 60 s ceiling. (2026-10-16: the flat 60 s cap cut every
+    # long entry called from another plugin.)
+    is_entry = normalize_non_empty_str(request.get("event_type")) == "plugin_entry"
+    context = resolve_common_fields(request, timeout_default=10.0, timeout_max=1800.0 if is_entry else 60.0)
     if context is None:
         return
 

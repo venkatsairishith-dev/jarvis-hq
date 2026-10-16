@@ -149,6 +149,17 @@ def open_plain(profile: dict, url: str) -> dict:
                     "; page reading and playback checks need the Playwright extension"), "host": want}
 
 
+def token_file(profile_dir: str, folder: str = os.path.dirname(TOKEN_FILE)) -> str | None:
+    """The extension's connection token for this profile: each profile's extension has its own, saved by the owner's
+    helper as extension-token-<profile folder>.txt (e.g. extension-token-Profile_1.txt); the single shared file is the
+    fallback. Only the path is returned here; the value goes into the server's environment and nowhere else."""
+    own = os.path.join(folder, "extension-token-" + re.sub(r"[^A-Za-z0-9]+", "_", profile_dir) + ".txt")
+    for p in (own, os.path.join(folder, "extension-token.txt")):      # (a plain name: basename of a Windows path fails on Linux)
+        if os.path.isfile(p) and os.path.getsize(p) > 0:
+            return p
+    return None
+
+
 def extension_ready(profile: dict) -> bool:
     """Is the Playwright extension installed in this profile? (its folder under the profile's Extensions folder)"""
     return os.path.isdir(os.path.join(USER_DATA, profile["dir"], "Extensions", EXTENSION_ID))
@@ -161,8 +172,9 @@ class Session:
     def __init__(self, profile: dict, session_factory=None, isolated: bool = False):
         self.profile = profile
         env = dict(os.environ)
-        if os.path.isfile(TOKEN_FILE):
-            with open(TOKEN_FILE, encoding="utf-8") as f:
+        tok = token_file(profile["dir"])
+        if tok:
+            with open(tok, encoding="utf-8") as f:
                 env["PLAYWRIGHT_MCP_EXTENSION_TOKEN"] = f.read().strip()
         # Playwright MCP writes the pages' console logs into its working folder: give it a private one, deleted on exit
         self.work = os.path.join(local_result_dir(), f"playwright-{os.getpid()}-{secrets.token_hex(3)}")
@@ -352,8 +364,16 @@ def play(sess, query: str) -> dict:
 
 def whoami(sess, profile: dict) -> dict:
     """The account the visible browser is signed in to, from the Google Account page itself (masked)."""
-    navigate(sess, "https://myaccount.google.com/")
-    snap = sess.call("browser_snapshot", {})
+    # in a tab of its own, closed afterwards: checking the account must not navigate away from the page being worked on
+    sess.call("browser_tabs", {"action": "new", "url": "https://myaccount.google.com/"})
+    try:
+        sess.call("browser_wait_for", {"time": 2})
+        snap = sess.call("browser_snapshot", {})
+    finally:
+        try:
+            sess.call("browser_tabs", {"action": "close"})
+        except BrowserError:
+            pass
     found = EMAIL.findall(snap)
     emails = list(dict.fromkeys(e.lower() for e in found))            # page order: the signed-in account comes first
     shown = [mask(e) for e in emails][:3]

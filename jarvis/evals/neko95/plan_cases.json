@@ -1,0 +1,19 @@
+[
+ {"id": "P-play-not-just-open", "req": "open youtube and play a Kalyani song", "expect": {"has_tool": "play_media", "query": "kalyani", "all_post": true}},
+ {"id": "P-play-not-just-open", "req": "go to youtube and put on some lo-fi music", "expect": {"has_tool": "play_media", "query": "lo-fi", "all_post": true}},
+ {"id": "P-play-not-just-open", "req": "open youtube music and play ilaiyaraaja", "expect": {"has_tool": "play_media", "query": "ilaiyaraaja"}},
+ {"id": "P-type-not-just-open", "req": "write dear sir into wordpad", "expect": {"tools": ["open_app", "type_text"], "app": "wordpad", "text": "dear sir"}},
+ {"id": "P-type-not-just-open", "req": "open notepad and type shopping list", "expect": {"has_tool": "type_text", "app": "notepad", "text": "shopping list"}},
+ {"id": "P-type-not-just-open", "req": "put meeting at five into notepad", "expect": {"has_tool": "type_text", "app": "notepad", "text": "meeting at five"}},
+ {"id": "P-account-verify-step", "req": "open my VenkatAMV account and go to youtube", "expect": {"tools": ["browser", "open_website"], "action": "whoami", "profile": "Profile 1", "host": "youtube.com"}},
+ {"id": "P-account-verify-step", "req": "open gmail in Satish's profile", "expect": {"tools": ["browser", "open_website"], "action": "whoami", "profile": "Profile 2", "host": "mail.google.com"}},
+ {"id": "P-account-verify-step", "req": "play lo-fi beats in the VenkatAMV profile", "expect": {"tools": ["browser", "play_media"], "action": "whoami", "profile": "Profile 1"}},
+ {"id": "P-postconditions-present", "req": "open notepad and type hello", "expect": {"has_tool": "type_text", "all_post": true}},
+ {"id": "P-postconditions-present", "req": "how much disk space do I have left", "expect": {"tool": "check_pc", "all_post": true}},
+ {"id": "P-postconditions-present", "req": "minimize notepad", "expect": {"tool": "window", "action": "minimize", "all_post": true}},
+ {"id": "P-google-account", "req": "open my google account", "expect": {"tool": "open_website", "host": "myaccount.google.com", "all_post": true}},
+ {"id": "P-error-on-screen", "req": "find the error on the screen and fix it", "expect": {"tool": "troubleshoot", "app": "(active window)"}},
+ {"id": "P-pdf-no-topic", "req": "create a pdf and open it", "expect": {"status": "clarify"}},
+ {"id": "P-pdf-with-topic", "req": "make a pdf report about solar panels and open it", "expect": {"tool": "research", "query": "solar", "deliverable": "report"}},
+ {"id": "P-file-not-site", "req": "open notes.txt", "expect": {"tool": "open_file", "name": "notes"}}
+]

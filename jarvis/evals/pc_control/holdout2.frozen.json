@@ -1,0 +1,6 @@
+{
+    "frozen":  "2026-10-16 16:12:12",
+    "sha256":  "8282FC2624AFE9AE2522E1F774D4AB3C779BE3E48992971D09FCB34DB1240C3C",
+    "file":  "jarvis/evals/pc_control/decision_cases_holdout2.json",
+    "why":  "written BEFORE any fast-path rule exists; a fast path is judged on this set only"
+}

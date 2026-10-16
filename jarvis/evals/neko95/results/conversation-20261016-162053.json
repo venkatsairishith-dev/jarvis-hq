@@ -1,0 +1,604 @@
+{
+ "time": "2026-10-16 16:20:53",
+ "rows": [
+  {
+   "cap": "C2_conversation",
+   "id": "CV-followup-open-it",
+   "status": "pass",
+   "repeat_rate": 1.0,
+   "detail": "3/3 runs; real decider + Coordinator, fake agents"
+  },
+  {
+   "cap": "C2_conversation",
+   "id": "CV-correction-instead",
+   "status": "pass",
+   "repeat_rate": 1.0,
+   "detail": "3/3 runs; real decider + Coordinator, fake agents"
+  },
+  {
+   "cap": "C2_conversation",
+   "id": "CV-stop-then-new-task",
+   "status": "pass",
+   "repeat_rate": 1.0,
+   "detail": "3/3 runs; real decider + Coordinator, fake agents"
+  },
+  {
+   "cap": "C2_conversation",
+   "id": "CV-no-fabricated-completion",
+   "status": "pass",
+   "repeat_rate": 1.0,
+   "detail": "3/3 runs; real decider + Coordinator, fake agents"
+  },
+  {
+   "cap": "C2_conversation",
+   "id": "CV-pronoun-without-context",
+   "status": "pass",
+   "repeat_rate": 1.0,
+   "detail": "3/3 runs; real decider + Coordinator, fake agents"
+  }
+ ],
+ "runs": {
+  "CV-followup-open-it": [
+   {
+    "rep": 0,
+    "ok": true,
+    "statuses": [
+     "completed",
+     "completed"
+    ],
+    "log": [
+     [
+      "research",
+      {
+       "tool": "research",
+       "query": "solar panels",
+       "deliverable": "presentation"
+      }
+     ],
+     [
+      "open_output",
+      {
+       "tool": "open_output",
+       "path": "D:\\jarvis\\outputs\\neko\\deliverables\\20261016-solar\\solar-panels.pptx"
+      }
+     ]
+    ],
+    "plans": [
+     [
+      {
+       "tool": "research",
+       "query": "solar panels",
+       "deliverable": "presentation",
+       "post": "a report with checked citations exists (and the requested file passed its checks; if asked, a window showing it opened)"
+      }
+     ],
+     [
+      {
+       "tool": "open_output",
+       "path": "D:\\jarvis\\outputs\\neko\\deliverables\\20261016-solar\\solar-panels.pptx",
+       "post": "a window showing the file Neko made appeared"
+      }
+     ]
+    ]
+   },
+   {
+    "rep": 1,
+    "ok": true,
+    "statuses": [
+     "completed",
+     "completed"
+    ],
+    "log": [
+     [
+      "research",
+      {
+       "tool": "research",
+       "query": "solar panels",
+       "deliverable": "presentation"
+      }
+     ],
+     [
+      "open_output",
+      {
+       "tool": "open_output",
+       "path": "D:\\jarvis\\outputs\\neko\\deliverables\\20261016-solar\\solar-panels.pptx"
+      }
+     ]
+    ],
+    "plans": [
+     [
+      {
+       "tool": "research",
+       "query": "solar panels",
+       "deliverable": "presentation",
+       "post": "a report with checked citations exists (and the requested file passed its checks; if asked, a window showing it opened)"
+      }
+     ],
+     [
+      {
+       "tool": "open_output",
+       "path": "D:\\jarvis\\outputs\\neko\\deliverables\\20261016-solar\\solar-panels.pptx",
+       "post": "a window showing the file Neko made appeared"
+      }
+     ]
+    ]
+   },
+   {
+    "rep": 2,
+    "ok": true,
+    "statuses": [
+     "completed",
+     "completed"
+    ],
+    "log": [
+     [
+      "research",
+      {
+       "tool": "research",
+       "query": "solar panels",
+       "deliverable": "presentation"
+      }
+     ],
+     [
+      "open_output",
+      {
+       "tool": "open_output",
+       "path": "D:\\jarvis\\outputs\\neko\\deliverables\\20261016-solar\\solar-panels.pptx"
+      }
+     ]
+    ],
+    "plans": [
+     [
+      {
+       "tool": "research",
+       "query": "solar panels",
+       "deliverable": "presentation",
+       "post": "a report with checked citations exists (and the requested file passed its checks; if asked, a window showing it opened)"
+      }
+     ],
+     [
+      {
+       "tool": "open_output",
+       "path": "D:\\jarvis\\outputs\\neko\\deliverables\\20261016-solar\\solar-panels.pptx",
+       "post": "a window showing the file Neko made appeared"
+      }
+     ]
+    ]
+   }
+  ],
+  "CV-correction-instead": [
+   {
+    "rep": 0,
+    "ok": true,
+    "statuses": [
+     "completed",
+     "completed"
+    ],
+    "log": [
+     [
+      "open_website",
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/"
+      }
+     ],
+     [
+      "browser",
+      {
+       "tool": "browser",
+       "action": "whoami",
+       "profile": "Profile 2",
+       "target": "",
+       "text": ""
+      }
+     ],
+     [
+      "open_website",
+      {
+       "tool": "open_website",
+       "profile": "Profile 2",
+       "url": "https://mail.google.com/"
+      }
+     ]
+    ],
+    "plans": [
+     [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/",
+       "post": "a Chrome window of profile Default shows the page"
+      }
+     ],
+     [
+      {
+       "tool": "browser",
+       "action": "whoami",
+       "profile": "Profile 2",
+       "target": "",
+       "text": "",
+       "post": "the whoami result was observed on the page (whoami: the signed-in account matches Profile 2)"
+      },
+      {
+       "tool": "open_website",
+       "profile": "Profile 2",
+       "url": "https://mail.google.com/",
+       "post": "a Chrome window of profile Profile 2 shows the page"
+      }
+     ]
+    ]
+   },
+   {
+    "rep": 1,
+    "ok": true,
+    "statuses": [
+     "completed",
+     "completed"
+    ],
+    "log": [
+     [
+      "open_website",
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/"
+      }
+     ],
+     [
+      "browser",
+      {
+       "tool": "browser",
+       "action": "whoami",
+       "profile": "Profile 2",
+       "target": "",
+       "text": ""
+      }
+     ],
+     [
+      "open_website",
+      {
+       "tool": "open_website",
+       "profile": "Profile 2",
+       "url": "https://mail.google.com/"
+      }
+     ]
+    ],
+    "plans": [
+     [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/",
+       "post": "a Chrome window of profile Default shows the page"
+      }
+     ],
+     [
+      {
+       "tool": "browser",
+       "action": "whoami",
+       "profile": "Profile 2",
+       "target": "",
+       "text": "",
+       "post": "the whoami result was observed on the page (whoami: the signed-in account matches Profile 2)"
+      },
+      {
+       "tool": "open_website",
+       "profile": "Profile 2",
+       "url": "https://mail.google.com/",
+       "post": "a Chrome window of profile Profile 2 shows the page"
+      }
+     ]
+    ]
+   },
+   {
+    "rep": 2,
+    "ok": true,
+    "statuses": [
+     "completed",
+     "completed"
+    ],
+    "log": [
+     [
+      "open_website",
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/"
+      }
+     ],
+     [
+      "browser",
+      {
+       "tool": "browser",
+       "action": "whoami",
+       "profile": "Profile 2",
+       "target": "",
+       "text": ""
+      }
+     ],
+     [
+      "open_website",
+      {
+       "tool": "open_website",
+       "profile": "Profile 2",
+       "url": "https://mail.google.com/"
+      }
+     ]
+    ],
+    "plans": [
+     [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://mail.google.com/",
+       "post": "a Chrome window of profile Default shows the page"
+      }
+     ],
+     [
+      {
+       "tool": "browser",
+       "action": "whoami",
+       "profile": "Profile 2",
+       "target": "",
+       "text": "",
+       "post": "the whoami result was observed on the page (whoami: the signed-in account matches Profile 2)"
+      },
+      {
+       "tool": "open_website",
+       "profile": "Profile 2",
+       "url": "https://mail.google.com/",
+       "post": "a Chrome window of profile Profile 2 shows the page"
+      }
+     ]
+    ]
+   }
+  ],
+  "CV-stop-then-new-task": [
+   {
+    "rep": 0,
+    "ok": true,
+    "statuses": [
+     "completed",
+     "stopped",
+     "completed"
+    ],
+    "log": [
+     [
+      "open_app",
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     ],
+     [
+      "stop",
+      {
+       "tool": "stop"
+      }
+     ],
+     [
+      "open_app",
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     ]
+    ],
+    "plans": [
+     [
+      {
+       "tool": "open_app",
+       "app": "notepad",
+       "post": "a window for notepad appeared"
+      }
+     ],
+     [
+      {
+       "tool": "stop"
+      }
+     ],
+     [
+      {
+       "tool": "open_app",
+       "app": "notepad",
+       "post": "a window for notepad appeared"
+      }
+     ]
+    ]
+   },
+   {
+    "rep": 1,
+    "ok": true,
+    "statuses": [
+     "completed",
+     "stopped",
+     "completed"
+    ],
+    "log": [
+     [
+      "open_app",
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     ],
+     [
+      "stop",
+      {
+       "tool": "stop"
+      }
+     ],
+     [
+      "open_app",
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     ]
+    ],
+    "plans": [
+     [
+      {
+       "tool": "open_app",
+       "app": "notepad",
+       "post": "a window for notepad appeared"
+      }
+     ],
+     [
+      {
+       "tool": "stop"
+      }
+     ],
+     [
+      {
+       "tool": "open_app",
+       "app": "notepad",
+       "post": "a window for notepad appeared"
+      }
+     ]
+    ]
+   },
+   {
+    "rep": 2,
+    "ok": true,
+    "statuses": [
+     "completed",
+     "stopped",
+     "completed"
+    ],
+    "log": [
+     [
+      "open_app",
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     ],
+     [
+      "stop",
+      {
+       "tool": "stop"
+      }
+     ],
+     [
+      "open_app",
+      {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     ]
+    ],
+    "plans": [
+     [
+      {
+       "tool": "open_app",
+       "app": "notepad",
+       "post": "a window for notepad appeared"
+      }
+     ],
+     [
+      {
+       "tool": "stop"
+      }
+     ],
+     [
+      {
+       "tool": "open_app",
+       "app": "notepad",
+       "post": "a window for notepad appeared"
+      }
+     ]
+    ]
+   }
+  ],
+  "CV-no-fabricated-completion": [
+   {
+    "rep": 0,
+    "ok": true,
+    "statuses": [
+     "failed"
+    ],
+    "log": [],
+    "plans": [
+     [
+      {
+       "tool": "troubleshoot",
+       "app": "brokenapp",
+       "post": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis"
+      }
+     ]
+    ]
+   },
+   {
+    "rep": 1,
+    "ok": true,
+    "statuses": [
+     "failed"
+    ],
+    "log": [],
+    "plans": [
+     [
+      {
+       "tool": "troubleshoot",
+       "app": "brokenapp",
+       "post": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis"
+      }
+     ]
+    ]
+   },
+   {
+    "rep": 2,
+    "ok": true,
+    "statuses": [
+     "failed"
+    ],
+    "log": [],
+    "plans": [
+     [
+      {
+       "tool": "troubleshoot",
+       "app": "brokenapp",
+       "post": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis"
+      }
+     ]
+    ]
+   }
+  ],
+  "CV-pronoun-without-context": [
+   {
+    "rep": 0,
+    "ok": true,
+    "statuses": [
+     "needs_clarification"
+    ],
+    "log": [],
+    "plans": [
+     []
+    ]
+   },
+   {
+    "rep": 1,
+    "ok": true,
+    "statuses": [
+     "needs_clarification"
+    ],
+    "log": [],
+    "plans": [
+     []
+    ]
+   },
+   {
+    "rep": 2,
+    "ok": true,
+    "statuses": [
+     "needs_clarification"
+    ],
+    "log": [],
+    "plans": [
+     []
+    ]
+   }
+  ]
+ }
+}

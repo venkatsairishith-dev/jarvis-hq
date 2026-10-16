@@ -282,6 +282,58 @@ class Browser(unittest.TestCase):
         self.assertFalse(any(a.startswith("--caps") for a in s.s.argv))
 
 
+class Vision(unittest.TestCase):
+    LINES = [{"text": "Neko Sample App could not start.", "words": [{"text": t, "x": 66 + 30 * i, "y": 52, "w": 25, "h": 10}
+                                                                     for i, t in enumerate("Neko Sample App could not start.".split())]},
+             {"text": "0K", "words": [{"text": "0K", "x": 308, "y": 152, "w": 15, "h": 8}]}]
+
+    def test_find_text_forgives_ocr_digits_and_refuses_ambiguity(self):
+        from jarvis_node import vision
+        hit = vision.find_text(self.LINES, "OK")
+        self.assertEqual((hit["cx"], hit["cy"]), (315, 156))
+        self.assertEqual(vision.find_text(self.LINES, "could not start")["x"], 66 + 30 * 3)
+        twice = self.LINES + [{"text": "OK", "words": [{"text": "OK", "x": 10, "y": 10, "w": 15, "h": 8}]}]
+        self.assertIsNone(vision.find_text(twice, "OK"))           # two places: never guess where to click
+        self.assertIsNone(vision.find_text(self.LINES, "Cancel"))
+
+    def test_model_points_are_scaled_and_bounded(self):
+        from jarvis_node import vision
+        old = vision.ask_vision
+        try:
+            vision.ask_vision = lambda png, prompt, schema=None, timeout=120: "[500,250]"
+            self.assertEqual({k: v for k, v in vision.ground_vision("x.png", {"width": 400, "height": 200}, "b").items() if k != "raw"},
+                             {"cx": 200, "cy": 50})
+            vision.ask_vision = lambda png, prompt, schema=None, timeout=120: "[-1,-1]"
+            self.assertIsNone(vision.ground_vision("x.png", {"width": 400, "height": 200}, "b"))
+            vision.ask_vision = lambda png, prompt, schema=None, timeout=120: "I think it is near the top"
+            self.assertIsNone(vision.ground_vision("x.png", {"width": 400, "height": 200}, "b"))
+        finally:
+            vision.ask_vision = old
+
+    def test_kernel_target_rules_for_perception(self):
+        r = diag.run({"op": "window_locate", "target": "a;b|x"})
+        self.assertFalse(r["ok"])
+        r = diag.run({"op": "window_ocr", "target": "KeePass"})
+        self.assertFalse(r["ok"])
+
+
+class Tokens(unittest.TestCase):
+    def test_each_profile_uses_its_own_token_file_else_the_shared_one(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(browserext.token_file("Profile 1", d))
+            shared = os.path.join(d, "extension-token.txt")
+            with open(shared, "w") as f:
+                f.write("x")
+            self.assertEqual(browserext.token_file("Profile 1", d), shared)
+            own = os.path.join(d, "extension-token-Profile_1.txt")
+            with open(own, "w") as f:
+                f.write("y")
+            self.assertEqual(browserext.token_file("Profile 1", d), own)
+            self.assertEqual(browserext.token_file("Default", d), shared)
+            open(own, "w").close()                       # an empty file is ignored
+            self.assertEqual(browserext.token_file("Profile 1", d), shared)
+
+
 class Keys(unittest.TestCase):
     def test_sendkeys_mapping_refuses_raw_syntax(self):
         self.assertEqual(winbackend.sendkeys("ctrl+s"), "^s")

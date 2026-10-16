@@ -13,14 +13,25 @@ _SAFE = re.compile(r"^[A-Za-z0-9_.\- ]{1,80}$")
 FIND = r"""
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-$p = Get-Process -Name $env:JARVIS_UI_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
-if (-not $p) { throw 'no window' }
+__PICK__
 $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+if ($env:JARVIS_UI_ELEM -eq '*') {   # "the window's first text field": Edit or Document, never a password field
+  $AEc = [System.Windows.Automation.AutomationElement]; $CT = [System.Windows.Automation.ControlType]
+  $cond = New-Object System.Windows.Automation.OrCondition(
+    (New-Object System.Windows.Automation.PropertyCondition($AEc::ControlTypeProperty, $CT::Edit)),
+    (New-Object System.Windows.Automation.PropertyCondition($AEc::ControlTypeProperty, $CT::Document)),
+    (New-Object System.Windows.Automation.PropertyCondition($AEc::ClassNameProperty, 'Edit')),
+    (New-Object System.Windows.Automation.PropertyCondition($AEc::ClassNameProperty, 'RichEdit20W')),
+    (New-Object System.Windows.Automation.PropertyCondition($AEc::ClassNameProperty, 'RICHEDIT50W')))
+  $el = @($root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond) | Where-Object { -not $_.Current.IsPassword })[0]
+  if (-not $el) { throw 'no element' }
+} else {
 $cond = New-Object System.Windows.Automation.OrCondition(
   (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $env:JARVIS_UI_ELEM)),
   (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $env:JARVIS_UI_ELEM)))
 $el = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
 if (-not $el) { throw 'no element' }
+}
 """
 CLICK = FIND + r"""
 $pat = $null
@@ -145,8 +156,7 @@ public class W32 {
 """
 FOCUS = WIN32 + r"""
 $ErrorActionPreference='Stop'
-$p = Get-Process -Name $env:JARVIS_UI_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
-if (-not $p) { throw 'no window' }
+__PICK__
 $h = $p.MainWindowHandle
 $fpid = 0; [void][W32]::GetWindowThreadProcessId([W32]::GetForegroundWindow(), [ref]$fpid)
 for ($try = 0; $try -lt 3 -and ($fpid -ne $p.Id -or [W32]::IsIconic($h)); $try++) {   # already in front: do nothing (an Alt tap would close an open menu)
@@ -262,8 +272,7 @@ Add-Type @'
 using System; using System.Runtime.InteropServices;
 public class WS { [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h); }
 '@
-$p = Get-Process -Name $env:JARVIS_UI_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
-if (-not $p) { throw 'no window' }
+__PICK__
 $h = $p.MainWindowHandle
 [void][W32]::ShowWindow($h, [int]$env:JARVIS_UI_SHOW)
 Start-Sleep -Milliseconds 400
@@ -279,6 +288,24 @@ def _window_state(op):
         _run(WINDOW_STATE, {"JARVIS_UI_PROC": _proc(target), "JARVIS_UI_SHOW": n, "JARVIS_UI_WANT": want})   # checked after
     return run
 
+
+# The window a "process|..." target means. A modern (UWP) app's window belongs to ApplicationFrameHost, not to the app's
+# own process, so when no process of that name owns a window, a frame window titled with the name is used (one only).
+PICK = r"""
+$p = Get-Process -Name $env:JARVIS_UI_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if (-not $p) {
+  Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+  $AE = [System.Windows.Automation.AutomationElement]
+  $frames = $AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,
+    (New-Object System.Windows.Automation.PropertyCondition($AE::ClassNameProperty, 'ApplicationFrameWindow')))
+  $hit = @($frames | Where-Object { $_.Current.Name -eq $env:JARVIS_UI_PROC -or $_.Current.Name.StartsWith($env:JARVIS_UI_PROC + ' ', [StringComparison]::OrdinalIgnoreCase) })
+  if ($hit.Count -gt 1) { throw 'no window: more than one matches' }
+  if ($hit.Count -eq 1) { $p = [pscustomobject]@{ Id = $hit[0].Current.ProcessId; MainWindowHandle = [IntPtr]$hit[0].Current.NativeWindowHandle } }
+}
+if (-not $p) { throw 'no window' }
+"""
+FIND, CLICK, TYPE, READBACK, FOCUS, KEY, SCROLL, CLICK_AT, WINDOW_STATE = (
+    s.replace("__PICK__", PICK) for s in (FIND, CLICK, TYPE, READBACK, FOCUS, KEY, SCROLL, CLICK_AT, WINDOW_STATE))
 
 BACKEND = {"launch": launch, "click": click, "type": type_text, "focus": focus, "key": key, "scroll": scroll, "click_at": click_at,
            "minimize": _window_state("minimize"), "maximize": _window_state("maximize"), "restore": _window_state("restore")}

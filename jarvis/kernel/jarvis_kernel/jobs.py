@@ -19,7 +19,8 @@ PC_OPS = {"open_app", "open_folder", "open_file", "list_folder"}   # "open Spoti
 # Neko's PC control (2026-10-16). Browser: the owner's EXISTING Chrome profiles, by alias; the node keeps the registry.
 BROWSER_OPS = {"open": "open", "read": "snapshot", "tabs": "snapshot", "whoami": "snapshot", "find": "snapshot",
                "media": "snapshot", "play": "play", "click": "click", "type": "type", "press": "press"}
-DIAG_OPS = {"processes", "app_errors", "crashes", "services", "disk", "network", "app_info", "window_text"}
+DIAG_OPS = {"processes", "app_errors", "crashes", "services", "disk", "network", "app_info", "window_text",
+            "window_ocr", "window_locate"}   # 2026-10-16: OCR of one window / where a label is in it (read-only, text stays local)
 REPAIR_OPS = {"restart_app", "edit_file", "restore", "install"}
 URL = re.compile(r"^https?://[^\s\"'<>\\]{1,2000}$")
 SAFE_TEXT = re.compile(r"^[^\r\n\0]*$")
@@ -82,8 +83,10 @@ def _check_params(kind: str, params: dict):
               and (op != "open" or params["url"] != "")
               and (op not in ("click", "type", "press", "play", "find") or params["target"] != "" or op == "press"))
     elif kind == "diag":
+        target_ok = (r"^[A-Za-z0-9_. :()-]{1,80}\|[^\r\n\0|]{1,120}$" if params.get("op") == "window_locate"   # "app|label"
+                     else r"^[A-Za-z0-9_. :()-]{0,80}$")
         ok = (keys == {"op", "target"} and params["op"] in DIAG_OPS and isinstance(params["target"], str)
-              and re.match(r"^[A-Za-z0-9_. :()-]{0,80}$", params["target"]) is not None)
+              and re.match(target_ok, params["target"]) is not None)
     elif kind == "repair":
         op, t, args = params.get("op"), params.get("target"), params.get("args")
         ok = keys == {"op", "target", "args"} and op in REPAIR_OPS and isinstance(t, str) and isinstance(args, dict)

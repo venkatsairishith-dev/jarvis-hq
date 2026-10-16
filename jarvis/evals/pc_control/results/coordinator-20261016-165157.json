@@ -1,0 +1,269 @@
+{
+ "cases": [
+  {
+   "id": "G01",
+   "request": "open example.com in my VenkatAMV account",
+   "ok": false,
+   "ok_old_rule": false,
+   "status": "failed",
+   "task": "20261016-164731-2ad4b3",
+   "summary": "I could not finish: step 1 (browser): browser connection failed: McpError timeout (is the Playwright extension allowed to connect? its connect page opens in Chrome).",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "browser",
+     "agent": "browser",
+     "attempts": 2,
+     "passed": false,
+     "checked": "the action did not succeed",
+     "uncertainty": "browser connection failed: McpError timeout (is the Playwright extension allowed to connect? its connect page opens in Chrome)"
+    }
+   ],
+   "plan_seconds": 13.59,
+   "seconds": 107.1,
+   "error": null
+  },
+  {
+   "id": "G02",
+   "request": "open notepad",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "completed",
+   "task": "20261016-164928-475639",
+   "summary": "Done: a window for Notepad appeared.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "open_app",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "a window for Notepad appeared",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 0.0,
+   "seconds": 15.6,
+   "error": null
+  },
+  {
+   "id": "G03",
+   "request": "type hello from neko into notepad",
+   "ok": true,
+   "ok_old_rule": false,
+   "status": "completed",
+   "task": "20261016-164945-faf23d",
+   "summary": "Done: a window for notepad appeared; the text was typed into notepad and read back from the field.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "open_app",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "a window for notepad appeared",
+     "uncertainty": ""
+    },
+    {
+     "n": 2,
+     "tool": "type_text",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "the text was typed into notepad and read back from the field",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 6.55,
+   "seconds": 25.8,
+   "error": null
+  },
+  {
+   "id": "G04",
+   "request": "minimize notepad",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "completed",
+   "task": "20261016-165011-659a37",
+   "summary": "Done: the action reported success.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "window",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "the action reported success",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 0.0,
+   "seconds": 5.6,
+   "error": null
+  },
+  {
+   "id": "G05",
+   "request": "restore the notepad window",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "completed",
+   "task": "20261016-165018-19d283",
+   "summary": "Done: the action reported success.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "window",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "the action reported success",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 0.0,
+   "seconds": 6.1,
+   "error": null
+  },
+  {
+   "id": "G06",
+   "request": "how much disk space do I have left",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "completed",
+   "task": "20261016-165025-26d175",
+   "summary": "Done: disk read.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "check_pc",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "disk read",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 0.0,
+   "seconds": 2.0,
+   "error": null
+  },
+  {
+   "id": "G07",
+   "request": "play a Kalyani song and tell me when it is playing",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "completed",
+   "task": "20261016-165038-dcfbfc",
+   "summary": "Done: video 'KALYANI (with Shreya Ghoshal) ARJN | KDS | FIFTY4 | RONN | K' playing, same id as chosen.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "play_media",
+     "agent": "browser",
+     "attempts": 1,
+     "passed": true,
+     "checked": "video 'KALYANI (with Shreya Ghoshal) ARJN | KDS | FIFTY4 | RONN | K' playing, same id as chosen",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 5.45,
+   "seconds": 30.8,
+   "error": null
+  },
+  {
+   "id": "G08",
+   "request": "what song is playing right now",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "completed",
+   "task": "20261016-165110-4cc49c",
+   "summary": "Done: media read.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "check_pc",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "media read",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 4.05,
+   "seconds": 6.1,
+   "error": null
+  },
+  {
+   "id": "G09",
+   "request": "pause the music",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "completed",
+   "task": "20261016-165117-e547ae",
+   "summary": "Done: the action reported success.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "press_key",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "the action reported success",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 0.0,
+   "seconds": 3.1,
+   "error": null
+  },
+  {
+   "id": "G10",
+   "request": "open my venkat account",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "needs_clarification",
+   "task": "20261016-165121-d1ba64",
+   "summary": "Which Chrome account? ambiguous: Venkat (ven***@gmail.com, Default), Venkat (ris***@gmail.com, Profile 1), Venkat (ven***@gmail.com, Profile 4), venkat (ven***@gmail.com, Profile 5).",
+   "steps": [],
+   "plan_seconds": 5.12,
+   "seconds": 5.6,
+   "error": null
+  },
+  {
+   "id": "G11",
+   "request": "what is the capital of Italy",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "not_a_pc_task",
+   "task": "20261016-165128-004f44",
+   "summary": "That is not a PC task; passing it on.",
+   "steps": [],
+   "plan_seconds": 3.86,
+   "seconds": 4.0,
+   "error": null
+  },
+  {
+   "id": "G12",
+   "request": "which google account is chrome signed into",
+   "ok": true,
+   "ok_old_rule": true,
+   "status": "completed",
+   "task": "20261016-165144-5a5d2a",
+   "summary": "Done: signed-in account ven***@gmail.com vs expected ven***@gmail.com.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "browser",
+     "agent": "browser",
+     "attempts": 1,
+     "passed": true,
+     "checked": "signed-in account ven***@gmail.com vs expected ven***@gmail.com",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 3.16,
+   "seconds": 11.6,
+   "error": null
+  }
+ ]
+}

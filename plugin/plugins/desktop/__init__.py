@@ -6,9 +6,10 @@ decides; consequential actions wait for the owner's PIN in the JARVIS console). 
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 
-from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr
+from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, timer_interval, tr
 
 from . import core, decide
 
@@ -49,11 +50,138 @@ class DesktopPlugin(NekoPluginBase):
 
     @lifecycle(id="startup")
     async def startup(self, **_):
-        return Ok({"status": "ready", "profiles": len(core.profiles())})
+        # missions start on the first entry call, not here: the host runs startup in a temporary event loop that is
+        # closed afterwards, and the mission agents must reach the long-lived loop the entries run on
+        return Ok({"status": "ready", "profiles": len(core.profiles()), "missions": "start on first use"})
+
+    async def _missions_ready(self) -> bool:
+        """Remember the entries' event loop; start missions (and resume any a restart interrupted) once."""
+        self._cmd_loop = asyncio.get_running_loop()
+        if not getattr(self, "_missions_up", False):
+            self._missions_note = await asyncio.to_thread(self._start_missions, self._cmd_loop)
+        return getattr(self, "_missions_up", False)
 
     @lifecycle(id="shutdown")
     async def shutdown(self, **_):
+        if getattr(self, "_missions_up", False):
+            from dbos import DBOS
+            await asyncio.to_thread(DBOS.destroy, destroy_registry=False)
+            self._missions_up = False
         return Ok({"status": "stopped"})
+
+    def _start_missions(self, loop) -> str:
+        """Durable missions (missions.py): DBOS on a local SQLite file; launching resumes any mission a restart interrupted."""
+        try:
+            from dbos import DBOS
+            from . import coordinator as coord, missions
+            missions.configure(coord.DATA / "neko" / "missions")
+            missions.E.agents = self._agents(loop)
+            missions.E.plan_fn = lambda goal, ctx: (lambda p: p.steps if p.status == "ok" else [])(
+                decide.decide(goal, core.profiles(), context=ctx))
+            missions.E.on_cancel = lambda: [setattr(p, "stopped", True) or (p.current_job and p.cancel(p.current_job))
+                                            for p in list(getattr(self, "_active_pcs", []))]
+            DBOS.launch()
+            self._missions_up = True
+            return "ready"
+        except Exception as e:  # noqa: BLE001 - single PC tasks still work without missions
+            return f"unavailable ({type(e).__name__}: {str(e)[:120]})"
+
+    # ---------- long missions: several phases, durable, re-planned on a failed check, stoppable ----------
+    @plugin_entry(
+        id="start_mission",
+        name=tr("entry.start_mission.name", default="Start a long mission"),
+        description=tr("entry.start_mission.description", default=(
+            "Start a goal with several phases that may take minutes (for example 'research X, make slides, open them and "
+            "explain'). It runs in the background, survives a restart, never repeats an action, re-plans when a check fails "
+            "and stops on a loop or its budget. Use mission_status to follow it and stop_mission to stop it.")),
+        input_schema={"type": "object", "properties": {"goal": {"type": "string", "description": "The goal, in the owner's words"}},
+                      "required": ["goal"]},
+        timeout=30, llm_result_fields=["mission", "status", "error"],
+    )
+    async def start_mission(self, goal: str = "", **_):
+        if not await self._missions_ready():
+            return Err(SdkError(f"missions are unavailable right now ({getattr(self, '_missions_note', '')}); "
+                                "run_pc_task can still do it as one task"))
+        from . import missions
+        mid = await asyncio.to_thread(missions.start, goal)
+        return Ok({"mission": mid, "status": "started"})
+
+    @plugin_entry(
+        id="mission_status",
+        name=tr("entry.mission_status.name", default="Mission status"),
+        description=tr("entry.mission_status.description", default="How the current or a named mission is going: steps done and checked, what failed, the explanation."),
+        input_schema={"type": "object", "properties": {"mission": {"type": "string", "default": ""}}},
+        timeout=15, llm_result_fields=["mission", "goal", "status", "steps", "replans", "error", "explain"],
+    )
+    async def mission_status(self, mission: str = "", **_):
+        await self._missions_ready()
+        from . import missions
+        rec = await asyncio.to_thread(lambda: missions.load(mission) if mission else missions.latest())
+        if not rec:
+            return Ok({"status": "none"})
+        return Ok({"mission": rec.get("id"), "goal": rec.get("goal"), "status": rec.get("status"), "replans": rec.get("replans"),
+                   "steps": [{k: s.get(k) for k in ("n", "tool", "passed", "checked", "uncertainty")} for s in rec.get("steps", [])],
+                   "error": rec.get("error"), "explain": rec.get("explain")})
+
+    @plugin_entry(
+        id="stop_mission",
+        name=tr("entry.stop_mission.name", default="Stop the mission"),
+        description=tr("entry.stop_mission.description", default="Stop the current (or a named) mission and the PC job it is running."),
+        input_schema={"type": "object", "properties": {"mission": {"type": "string", "default": ""}}},
+        timeout=30, llm_result_fields=["mission", "stopped"],
+    )
+    async def stop_mission(self, mission: str = "", **_):
+        await self._missions_ready()
+        from . import missions
+        mid = mission or ((await asyncio.to_thread(missions.latest)) or {}).get("id", "")
+        ok = bool(mid) and await asyncio.to_thread(missions.cancel, mid)
+        return Ok({"mission": mid, "stopped": ok})
+
+    # ---------- proactive monitor: crashes, low disk, local services down, stuck PC tasks (read-only) ----------
+    @timer_interval(id="pc_monitor", seconds=60, auto_start=True)
+    async def pc_monitor(self, **_):
+        # the host awaits what a timer returns: async, with the (blocking) checks in a worker thread
+        return await asyncio.to_thread(self._monitor_tick)
+
+    def _monitor_tick(self):
+        from . import coordinator as coord, monitor
+        state_file = coord.DATA / "neko" / "monitor_state.json"
+        st = monitor.State.load(state_file)
+        alerts = monitor.Monitor(st, tasks=lambda: monitor.open_tasks(coord.TASKS), budget_s=coord.TOTAL_BUDGET_S).check()
+        st.save(state_file)
+        log = coord.DATA / "neko" / "monitor_alerts.jsonl"
+        for a in alerts:
+            with log.open("a", encoding="utf-8") as f:
+                f.write(json.dumps({"time": time.time(), "kind": a.kind, "subject": a.subject, "text": a.text}) + "\n")
+            self.ctx.push_message(source="desktop", visibility=["chat"], ai_behavior="respond", priority=6,
+                                  parts=[{"type": "text", "text": "PC monitor: " + a.text}],
+                                  metadata={"event_type": "pc_alert", "kind": a.kind, "subject": a.subject},
+                                  coalesce_key=f"pc_alert:{a.kind}:{a.subject}")
+        return Ok({"alerts": len(alerts)})
+
+    @plugin_entry(
+        id="recent_pc_alerts",
+        name=tr("entry.recent_pc_alerts.name", default="Recent PC alerts"),
+        description=tr("entry.recent_pc_alerts.description", default=(
+            "What the PC monitor noticed recently: program crashes, low disk space, a local service that stopped, a stuck "
+            "PC task. Use for 'is anything wrong with my PC?' or 'what did you notice?'.")),
+        input_schema={"type": "object", "properties": {"hours": {"type": "number", "default": 24}}},
+        timeout=10, llm_result_fields=["alerts", "count"],
+    )
+    async def recent_pc_alerts(self, hours: float = 24, **_):
+        from . import coordinator as coord
+        log = coord.DATA / "neko" / "monitor_alerts.jsonl"
+        since = time.time() - float(hours) * 3600
+        rows = []
+        if log.exists():
+            for line in log.read_text(encoding="utf-8").splitlines()[-500:]:
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                if r.get("time", 0) >= since:
+                    rows.append({"when": time.strftime("%H:%M", time.localtime(r["time"])), "kind": r["kind"], "text": r["text"]})
+        return Ok({"alerts": rows[-20:], "count": len(rows)})
 
     @plugin_entry(
         id="open_website",
@@ -288,26 +416,76 @@ class DesktopPlugin(NekoPluginBase):
             return "default" if folder == "Default" else _re.sub(r"[^a-z0-9]", "", str(folder).lower())
 
         def find_process(app):
-            """The process of an open window whose title or process name fits the app the owner named."""
+            """The process of an open window whose title or process name fits the app the owner named. "(active window)":
+            a window whose title reads like an error, else the window in front (never Neko's own or the editor)."""
             ws = pc({"op": "windows"}, 30).get("windows") or []
+            if app == decide.ACTIVE:
+                mine = ("code", "windowsterminal", "powershell", "python", "pythonw", "msedge", "explorer")
+                cands = [w for w in ws if str(w.get("process", "")).lower() not in mine]
+                err = [w for w in cands if _re.search(r"(?i)error|warning|failed|could not|cannot|exception|not found", str(w.get("title", "")))]
+                front = [w for w in cands if w.get("foreground")]
+                pick = (err or front or [None])[0]
+                return pick.get("process") if pick else None
             words = [w for w in _re.split(r"\W+", app.lower()) if len(w) > 2 and w not in ("app", "the", "window")]
             words = words or [app.lower()]
+
+            def name(w):                                         # a modern (UWP) app's window belongs to ApplicationFrameHost:
+                if str(w.get("process", "")).lower() == "applicationframehost":   # name it by its title (the node finds
+                    return _re.sub(r"[^A-Za-z0-9_.\- ]", "", str(w.get("title", "")))[:80] or None   # that one frame)
+                return w.get("process")
             for w in ws:
                 hay = (str(w.get("process", "")) + " " + str(w.get("title", ""))).lower()
                 if all(x in hay for x in words) or str(w.get("process", "")).lower() == app.lower().replace(" ", ""):
-                    return w.get("process")
+                    return name(w)
             for w in ws:
                 if any(x in (str(w.get("process", "")) + " " + str(w.get("title", ""))).lower() for x in words):
-                    return w.get("process")
+                    return name(w)
             return None
 
         def need_proc(step):
+            """Precondition: a window of the app exists. If not, open the app once (a recorded recovery), then look again."""
             proc = find_process(step["app"])
+            if not proc and step["app"] != decide.ACTIVE:
+                opened = pc({"op": "open_app", "target": step["app"]}, 60)
+                step.setdefault("recovered", []).append(f"opened {step['app']} first (precondition): {bool(opened.get('ok'))}")
+                time.sleep(2)
+                proc = find_process(step["app"])
             if not proc:
                 raise RuntimeError(f"no open window for '{step['app']}'")
             return proc
 
+        def open_app(step):
+            """Already open: bring that window to the front instead of starting a second one (a second window makes it
+            unclear where typing goes). The owner can still say 'open a new notepad window'."""
+            if not _re.search(r"(?i)\bnew\b", step.get("app", "")):
+                r = direct(step, {"op": "ui", "action": "focus", "target": "", "text": ""})
+                if r is None:                                    # not found under its usual name: look the window up
+                    proc = find_process(step["app"])
+                    r = pc({"op": "ui", "action": "focus", "target": f"{proc}|", "text": ""}, 60) if proc else None
+                if r is not None and r.get("ok"):
+                    return dict(r, opened=step["app"], verified="verified", note="it was already open: brought to the front")
+            return pc({"op": "open_app", "target": step["app"]}, 60)
+
+        PROCESS_OF = {"calc": "Calculator", "calculator": "Calculator", "paint": "mspaint", "visual studio code": "Code",
+                      "vs code": "Code", "file explorer": "explorer", "word": "WINWORD", "powerpoint": "POWERPNT"}
+
+        def direct(step, body):
+            """One kernel job instead of two: act on the app's likely process (or modern-app title) name first; only if
+            the node finds no such window, look the window up properly (need_proc). Never guesses between windows: the
+            node refuses when two frames match."""
+            app = step.get("app", "")
+            name = PROCESS_OF.get(app.lower(), decide.APPS.get(app.lower(), app))
+            if app != decide.ACTIVE and _re.fullmatch(r"[A-Za-z0-9_.\- ]{1,40}", name or ""):
+                r = pc(dict(body, target=f"{name}|{body['target']}"), 60)
+                if r.get("ok") or "no window" not in str(r.get("error", "")):
+                    return dict(r, process=name)
+            return None
+
         def window(step):
+            if step.get("action") != "inspect":
+                r = direct(step, {"op": "ui", "action": step.get("action", "focus"), "target": "", "text": ""})
+                if r is not None:
+                    return r
             proc = need_proc(step)
             if step.get("action") == "inspect":
                 r = pc({"op": "diag", "check": "window_text", "target": proc}, 60)
@@ -316,6 +494,10 @@ class DesktopPlugin(NekoPluginBase):
             return dict(pc({"op": "ui", "action": step.get("action", "focus"), "target": f"{proc}|", "text": ""}, 60), process=proc)
 
         def type_text(step):
+            if not step.get("target"):                           # the first text field, found by the node in the same job
+                r = direct(step, {"op": "ui", "action": "type", "target": "*", "text": step.get("text", "")})
+                if r is not None:
+                    return r
             proc = need_proc(step)
             target = step.get("target") or ""
             if not target:                                       # the window's first text field, by accessibility
@@ -335,7 +517,8 @@ class DesktopPlugin(NekoPluginBase):
                     return {"ok": True, "done": "nothing to do", "note": "nothing was playing" if step["intent"] == "pause" else "already playing"}
             if key in decide.KEY_WORDS:
                 return pc({"op": "ui", "action": "key", "target": "media|", "text": key}, 30)
-            return pc({"op": "ui", "action": "key", "target": f"{need_proc(step)}|", "text": key}, 30)
+            r = direct(step, {"op": "ui", "action": "key", "target": "", "text": key})
+            return r if r is not None else pc({"op": "ui", "action": "key", "target": f"{need_proc(step)}|", "text": key}, 30)
 
         def open_file(step):
             name, folder = step.get("name", ""), step.get("folder", "")
@@ -356,12 +539,13 @@ class DesktopPlugin(NekoPluginBase):
 
         def call(coro, timeout):
             import asyncio as _a
-            return _a.run_coroutine_threadsafe(coro, loop).result(timeout)
+            target = getattr(self, "_cmd_loop", None) or loop          # the entries' live loop (a mission may outlive the
+            return _a.run_coroutine_threadsafe(coro, target).result(timeout)   # call that started it)
 
         def troubleshoot(step):
             proc = find_process(step["app"])
-            start = step["app"]
-            if not proc:                                         # not open: start it so its error can be seen
+            start = step["app"] if step["app"] != decide.ACTIVE else ""
+            if not proc and start:                               # not open: start it so its error can be seen
                 pc({"op": "open_app", "target": start}, 60)
                 time.sleep(3)
                 proc = find_process(step["app"])
@@ -372,11 +556,41 @@ class DesktopPlugin(NekoPluginBase):
             return {"ok": data.get("outcome") in ("fixed and verified", "diagnosed"), **data}
 
         def research(step):
-            res = call(self.plugins.call_entry_json("research:research_topic", {"question": step["query"], "deliverable": step.get("deliverable", "none")},
-                                                    timeout=900.0), 960)
+            want_open = bool(step.get("open_after")) and step.get("deliverable", "none") != "none"
+            before = {w.get("hwnd") for w in pc({"op": "windows"}, 30).get("windows") or []} if want_open else set()
+            res = call(self.plugins.call_entry_json("research:research_topic", {"question": step["query"], "deliverable": step.get("deliverable", "none"),
+                                                                                 "open_after": want_open}, timeout=900.0), 960)
             data = res.value.get("data", res.value) if isinstance(res, Ok) and isinstance(res.value, dict) else {}
-            return {"ok": bool(data.get("summary")), "summary": str(data.get("summary") or "")[:600], "file": data.get("file"),
-                    "sources": (data.get("sources") or [])[:8], "error": None if data else str(getattr(res, "error", ""))[:200]}
+            out = {"ok": bool(data.get("summary")), "summary": str(data.get("summary") or "")[:600], "file": data.get("file"),
+                   "qa_passed": data.get("qa_passed"), "sources": (data.get("sources") or [])[:8],
+                   "error": None if data else str(getattr(res, "error", ""))[:200]}
+            if want_open and data.get("file"):
+                import os as _os
+                seen = opened_window(_os.path.splitext(_os.path.basename(str(data["file"])))[0].lower()[:40], before)
+                out.update(opened=seen or None, opened_verified=bool(seen))
+            return out
+
+        def opened_window(stem, before, tries=10):
+            """A NEW window whose title shows the file's name: the evidence that a made file really opened."""
+            for _ in range(tries):
+                ws = pc({"op": "windows"}, 30).get("windows") or []
+                hit = [w for w in ws if w.get("hwnd") not in before and stem and stem[:25] in str(w.get("title", "")).lower()]
+                if hit:
+                    return f"{hit[0].get('process')}: window for {stem}"
+                time.sleep(2)
+            return ""
+
+        def open_output(step):
+            """Re-open a file Neko made ("open it"): only through the deliverables plugin, which opens nothing outside its
+            own output folder."""
+            import os as _os
+            before = {w.get("hwnd") for w in pc({"op": "windows"}, 30).get("windows") or []}
+            res = call(self.plugins.call_entry_json("deliverables:open_output", {"path": step.get("path", "")}, timeout=30.0), 40)
+            if not isinstance(res, Ok):
+                return {"ok": False, "error": str(getattr(res, "error", res))[:200]}
+            stem = _os.path.splitext(_os.path.basename(str(step.get("path", ""))))[0].lower()[:40]
+            seen = opened_window(stem, before)
+            return {"ok": True, "opened": seen or step.get("path"), "opened_verified": bool(seen)}
 
         def stop(step):
             for p in list(active):
@@ -391,9 +605,9 @@ class DesktopPlugin(NekoPluginBase):
                 pc({"op": "browser", "action": "play", "profile": alias(s["profile"]), "target": s["query"]}, 200)),
             "browser": lambda s: pc({"op": "browser", "action": s["action"], "profile": alias(s.get("profile", "Default")),
                                      "target": s.get("target", ""), "text": s.get("text", "")}, 120, f"{s['action']} {s.get('target', '')}"),
-            "open_app": lambda s: pc({"op": "open_app", "target": s["app"]}, 60),
+            "open_app": open_app,
             "window": window, "type_text": type_text, "press_key": press_key, "open_file": open_file, "check_pc": check,
-            "troubleshoot": troubleshoot, "research": research, "stop": stop,
+            "troubleshoot": troubleshoot, "research": research, "open_output": open_output, "stop": stop,
         }
 
     @plugin_entry(
@@ -410,6 +624,7 @@ class DesktopPlugin(NekoPluginBase):
     async def run_pc_task(self, request: str = "", **_):
         from . import coordinator as coord
         loop = asyncio.get_running_loop()
+        await self._missions_ready()                        # also resumes a mission a restart interrupted
         self._cancel = False
         c = coord.Coordinator(self._agents(loop), core.profiles(), on_progress=core.set_activity,
                               cancelled=lambda: bool(getattr(self, "_cancel", False)))

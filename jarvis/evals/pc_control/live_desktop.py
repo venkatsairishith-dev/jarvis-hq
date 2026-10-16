@@ -119,6 +119,8 @@ def main():
     NOT_TESTED.append({"id": "B18", "name": "password fields are never typed into", "why": "no harmless app with a password field here; the refusal is in winbackend TYPE (IsPassword)"})
     case("B19", "an app outside the launch list is refused", lambda: expect_error(lambda: W.launch("cmd", {}), ["allowlist"]))
     case("B20", "sensitive app names are refused by diagnostics", lambda: (not diag.run({"op": "window_text", "target": "KeePass"})["ok"], "refused"))
+    case("W-uwp-app", "a modern (UWP) app: Calculator 1 + 2 = 3 by element names, result read back", lambda: _uwp_calculator())
+    case("W-installer-dialog", "an installer dialog (Windows Installer help): read, then OK by name closes it", lambda: _installer_dialog())
     out = HERE / "results" / f"desktop-{time.strftime('%Y%m%d-%H%M%S')}.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps({"cases": ROWS, "not_tested": NOT_TESTED}, indent=1), encoding="utf-8")
@@ -172,6 +174,48 @@ def _sample_dialog():
     time.sleep(1.5)
     exited = not subprocess.run(["tasklist", "/FI", "IMAGENAME eq NekoSampleApp.exe"], capture_output=True, text=True).stdout.count("NekoSampleApp")
     return "not valid" in texts and exited, f"text read: {'not valid' in texts}; exited after OK: {exited}"
+
+
+def _uwp_calculator():
+    """Calculator's window belongs to ApplicationFrameHost, not Calculator.exe: the target "calculator|..." must still work."""
+    from jarvis_node.jobs import ui_snapshot
+    close = ("Add-Type -AssemblyName UIAutomationClient; $AE=[System.Windows.Automation.AutomationElement]; "
+             "$AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, (New-Object System.Windows.Automation."
+             "PropertyCondition($AE::ClassNameProperty, 'ApplicationFrameWindow'))) | Where-Object { $_.Current.Name -eq 'Calculator' } | "
+             "ForEach-Object { $wp=$null; if ($_.TryGetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern, [ref]$wp)) { $wp.Close() } }")
+    if ps("@(Get-Process CalculatorApp,Calculator -ErrorAction SilentlyContinue).Count") != "0":
+        return False, "a Calculator is already open (maybe the owner's): not touched, case skipped as failed"
+    try:
+        W.launch("calc", {})
+        if not windows.wait_for(lambda w: w["title"] == "Calculator", timeout=10):
+            return False, "no Calculator window"
+        time.sleep(1.5)
+        for b in ("Clear", "One", "Plus", "Two", "Equals"):
+            W.click(f"calculator|{b}", {})
+            time.sleep(0.3)
+        shown = next((e.get("name") for e in ui_snapshot({"target": "calculator"}).get("elements") or [] if e.get("id") == "CalculatorResults"), "")
+        return shown.strip().endswith(" 3"), f"display reads {shown!r}"
+    finally:
+        ps(close)                                          # its own window only (no Calculator was open before)
+
+
+def _installer_dialog():
+    """msiexec /? only shows Windows Installer's help dialog (it installs nothing)."""
+    p = subprocess.Popen(["msiexec", "/?"])
+    try:
+        time.sleep(3)
+        r = wt("msiexec")
+        if r["summary"].get("dialogs", 0) < 1:
+            return False, f"no dialog seen {r['summary']}"
+        W.click("msiexec|OK", {})
+        for _ in range(10):
+            if p.poll() is not None:
+                return p.returncode == 0, f"dialog read ({r['summary']}), OK pressed by name, msiexec exited {p.returncode}"
+            time.sleep(0.5)
+        return False, "OK pressed but the dialog stayed"
+    finally:
+        if p.poll() is None:
+            p.kill()
 
 
 if __name__ == "__main__":

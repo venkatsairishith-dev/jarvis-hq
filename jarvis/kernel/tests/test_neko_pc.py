@@ -50,6 +50,9 @@ class OwnerDirectPolicy(unittest.TestCase):
     def test_diagnostics_repairs_and_media(self):
         self.assertEqual(decide(Action("diag", "app_errors", "notepad")).level, GREEN)
         self.assertEqual(decide(Action("diag", "app_errors", "notepad", lane="public")).level, YELLOW_APPROVAL)
+        self.assertEqual(decide(Action("diag", "window_ocr", "notepad")).level, GREEN)
+        self.assertEqual(decide(Action("diag", "window_locate", "notepad|OK")).level, GREEN)
+        self.assertEqual(decide(Action("diag", "window_ocr", "notepad", lane="public")).level, YELLOW_APPROVAL)
         self.assertEqual(decide(Action("media", "state", "system")).level, GREEN)
         self.assertEqual(decide(Action("repair", "restart_app", "notepad")).level, YELLOW_APPROVAL)
         self.assertEqual(decide(Action("repair", "install", "Notepad++.Notepad++")).level, YELLOW_APPROVAL)
@@ -98,6 +101,13 @@ class NewJobKinds(unittest.TestCase):
         self.ok("diag", {"op": "app_errors", "target": "notepad"})
         self.bad("diag", {"op": "shell", "target": "whoami"})
         self.bad("diag", {"op": "processes", "target": "a;b"})
+        # perception of one window (2026-10-16): read-only; locate takes "app|label", nothing else does
+        self.ok("diag", {"op": "window_ocr", "target": "NekoSampleApp"})
+        self.ok("diag", {"op": "window_locate", "target": "Calculator|Equals"})
+        self.bad("diag", {"op": "window_locate", "target": "Calculator"})
+        self.bad("diag", {"op": "window_locate", "target": "Calculator|a\nb"})
+        self.bad("diag", {"op": "window_ocr", "target": "Calculator|Equals"})
+        self.bad("diag", {"op": "window_locate", "target": "a;b|x"})
         self.ok("repair", {"op": "edit_file", "target": r"D:\apps\x\settings.json", "args": {"find": "a", "replace": "b"}})
         self.bad("repair", {"op": "edit_file", "target": r"D:\x", "args": {"find": "", "replace": "b"}})
         self.ok("repair", {"op": "restore", "target": "20261016-101500-abcdef", "args": {}})

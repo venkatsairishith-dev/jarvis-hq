@@ -66,12 +66,16 @@ APP_INFO = r"""
 WINDOW_TEXT = r"""
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $ids = @(Get-Process -Name $env:JARVIS_DIAG_NAME -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
-if (-not $ids) { '[]'; exit }
 $A = [System.Windows.Automation.AutomationElement]
 $S = [System.Windows.Automation.TreeScope]
+# a modern (UWP) app's window is an ApplicationFrameHost frame titled with the app's name: that frame only, never every frame
+$frames = @($A::RootElement.FindAll($S::Children, (New-Object System.Windows.Automation.PropertyCondition($A::ClassNameProperty, 'ApplicationFrameWindow'))) |
+  Where-Object { $_.Current.Name -eq $env:JARVIS_DIAG_NAME -or $_.Current.Name.StartsWith($env:JARVIS_DIAG_NAME + ' ', [StringComparison]::OrdinalIgnoreCase) } |
+  ForEach-Object { $_.Current.NativeWindowHandle })
+if (-not $ids -and -not $frames) { '[]'; exit }
 $out = @()
 foreach ($w in $A::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
-  if ($ids -notcontains $w.Current.ProcessId) { continue }
+  if ($ids -notcontains $w.Current.ProcessId -and $frames -notcontains $w.Current.NativeWindowHandle) { continue }
   $texts = @(); $buttons = @()
   foreach ($e in $w.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
     if ($e.Current.IsPassword) { continue }
@@ -114,6 +118,18 @@ def _json(text):
 
 def run(p: dict, runner=None) -> dict:
     op, name = str(p.get("op", "")), str(p.get("target", ""))
+    if op in ("window_ocr", "window_locate"):                # perception of one window (vision.py): read-only, local
+        proc, _, label = name.partition("|")
+        if not NAME.match(proc) or not proc or len(label) > 120 or "\n" in label:
+            return {"ok": False, "error": "bad target"}
+        if SENSITIVE.search(proc):
+            return {"ok": False, "error": "refused: a password manager, wallet or bank"}
+        from . import vision
+        try:
+            res = vision.look(proc, label if op == "window_locate" else "", use_model=op == "window_locate")
+        except vision.VisionError as e:
+            return {"ok": False, "error": str(e)}
+        return dict(res, check=op, note="the window's text stayed on this laptop (local_result); only counts and the point went to the kernel")
     if op not in SCRIPTS:
         return {"ok": False, "error": "unknown diagnostic"}
     if not NAME.match(name) or (op in NEEDS_NAME and not name):

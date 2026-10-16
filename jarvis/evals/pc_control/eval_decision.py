@@ -23,8 +23,13 @@ from plugin.plugins.desktop import core, decide  # noqa: E402
 
 
 def score(plan: decide.Plan, exp: dict) -> tuple[bool, str]:
-    first = plan.steps[0] if plan.steps else {}
+    # "tool" means the first ACTION: a leading account check (browser whoami, added since 2026-10-16 when an account is
+    # named) verifies, it does not act. Whether that check is there is tested separately ("tools", P-account-verify-step).
+    acts = [s for s in plan.steps if not (s["tool"] == "browser" and s.get("action") == "whoami")]
+    first = acts[0] if acts else (plan.steps[0] if plan.steps else {})
     tools = [s["tool"] for s in plan.steps]
+    if exp.get("all_post") and not all(s.get("post") for s in plan.steps):
+        return False, "a step has no post-condition"
     if "status" in exp and plan.status != exp["status"]:
         return False, f"status {plan.status} != {exp['status']}"
     if "status_in" in exp and plan.status not in exp["status_in"]:

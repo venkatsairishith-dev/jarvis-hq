@@ -1,0 +1,24 @@
+{
+ "time": "2026-10-16 16:41:44",
+ "report": {
+  "version": "v1",
+  "base": null,
+  "sha256": "ac177d5f6bd03a217b3fee1171272d1024ee098437d11e28219ed5f9f5cc5a41",
+  "passed": false,
+  "regressed": [
+   "A45#44"
+  ],
+  "staged_pass": 117,
+  "baseline_pass": 117,
+  "cases": 118,
+  "time": 1792149103.9773066
+ },
+ "rows": [
+  {
+   "cap": "C13_self_improvement",
+   "id": "SI-regression-gate-live",
+   "status": "pass",
+   "detail": "v1: gate FAILED (117/118 staged vs 117 active; regressed ['A45#44']); active unchanged: True; 236 real decider calls in 1248 s"
+  }
+ ]
+}

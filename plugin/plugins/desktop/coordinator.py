@@ -32,7 +32,7 @@ TOTAL_BUDGET_S = 600
 MAX_RETRIES = 1
 AGENT = {"open_website": "browser", "play_media": "browser", "browser": "browser", "open_app": "desktop", "window": "desktop",
          "type_text": "desktop", "press_key": "desktop", "open_file": "desktop", "check_pc": "desktop",
-         "troubleshoot": "troubleshooter", "research": "research", "stop": "coordinator"}
+         "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator"}
 TRANSIENT = re.compile(r"(?i)timeout|timed out|connection failed|not answering|temporarily|busy")
 
 
@@ -116,24 +116,79 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
         return r.get("verified") == "verified", f"a window for {r.get('opened')} {'appeared' if r.get('verified') == 'verified' else 'was not seen'}", \
             "" if r.get("verified") == "verified" else str(r.get("note") or "")
     if t == "browser" and step.get("action") == "whoami":
-        return bool(r.get("matches")), f"signed-in account {r.get('seen')} vs expected {r.get('expected')}", ""
+        seen = r.get("seen")
+        seen = ", ".join(map(str, seen)) if isinstance(seen, (list, tuple)) else seen
+        return bool(r.get("matches")), f"signed-in account {seen} vs expected {r.get('expected')}", ""
     if t == "check_pc":
         return True, f"{step.get('check')} read", ""
+    if t == "type_text":                                   # the node reads the field back and fails if the text is absent
+        return True, f"the text was typed into {r.get('process') or step.get('app')} and read back from the field", ""
+    if t == "open_output":
+        return bool(r.get("opened_verified")), f"{r.get('opened') or step.get('path')} " + (
+            "opened (a window showing it appeared)" if r.get("opened_verified") else "was sent to open, but no window showing it was seen"), ""
     if t == "troubleshoot":
         ok = r.get("outcome") in ("fixed and verified", "diagnosed")
         return ok, f"troubleshooter outcome: {r.get('outcome')}", "" if r.get("verified") else "the cause is a hypothesis"
     if t == "research":
-        return bool(r.get("summary")), "a report with checked citations came back", ""
+        made = step.get("deliverable", "none") != "none"
+        if made and not r.get("file"):
+            return False, f"no {step.get('deliverable')} file was made", "the research came back without the file"
+        if made and r.get("qa_passed") is False:
+            return False, f"the {step.get('deliverable')} failed its quality checks", str(r.get("file") or "")
+        if step.get("open_after") and made and not r.get("opened_verified"):
+            return False, f"{step.get('deliverable')} made but no window showing it appeared", str(r.get("file") or "")
+        what = f"; {step.get('deliverable')} {r.get('file')}" + (" opened" if r.get("opened_verified") else "") if made else ""
+        return bool(r.get("summary")), "a report with checked citations came back" + what, ""
     return True, "the action reported success", ""
 
 
 # ---------------------------------------------------------------- the run
+FOLLOW_UP_S = 600
+FOLLOW_CUE = re.compile(r"(?i)\b(instead|actually|again|also|too|as well|same|that one|the other|it|that|this|them|there|"
+                        r"rather|switch|change it|not that|no,)\b")
+
+
+def previous(tasks_dir: Path = TASKS, now: float | None = None, within_s: float = FOLLOW_UP_S) -> dict | None:
+    """The owner's last PC task if it was recent: its request and what it produced (a made file, a page, an app), so a
+    follow-up ("open it", "use the Satish profile instead") can refer to it. Only checked results count as produced."""
+    now = time.time() if now is None else now
+    files = sorted(tasks_dir.glob("*.json"))[-5:] if tasks_dir.is_dir() else []
+    for f in reversed(files):
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if now - float(rec.get("finished") or rec.get("started") or 0) > within_s:
+            return None
+        out = {"request": rec.get("request", ""), "status": rec.get("status")}
+        for s in rec.get("steps", []):
+            r, a = s.get("result") or {}, s.get("args") or {}
+            if not s.get("passed"):
+                continue
+            if r.get("file"):
+                out["file"] = r["file"]
+            if s["tool"] == "open_website" and a.get("url"):
+                out.update(url=a["url"], profile=a.get("profile"))
+            if s["tool"] == "open_app" and a.get("app"):
+                out["app"] = a["app"]
+        return out
+    return None
+
+
 class Coordinator:
     def __init__(self, agents: dict[str, Callable[[dict], dict]], profiles: list[dict], decide_fn=None, clock=time.time,
                  on_progress: Callable[[str, str], None] | None = None, tasks_dir: Path = TASKS, lock_path: Path = LOCK,
                  budget_s: float = TOTAL_BUDGET_S, cancelled: Callable[[], bool] = lambda: False):
         self.agents, self.profiles, self.clock = agents, profiles, clock
-        self.decide_fn = decide_fn or (lambda req: decide.decide(req, profiles))
+
+        def with_context(req):
+            # the previous request is shown to the model only when this one reads like a follow-up: otherwise the model
+            # mixes the two ("minimize notepad" after "type hello into notepad" came back with the typing again; live
+            # run 2026-10-16 15:5x). "open it" is resolved without the model (decide.follow_up).
+            prev = previous(tasks_dir, self.clock())
+            ctx = (prev or {}).get("request", "") if FOLLOW_CUE.search(req or "") else ""
+            return decide.decide(req, profiles, context=ctx, last=prev)
+        self.decide_fn = decide_fn or with_context
         self.on_progress = on_progress or (lambda s, d: None)
         self.tasks_dir, self.lock_path, self.budget_s, self.cancelled = tasks_dir, lock_path, budget_s, cancelled
 

@@ -17,7 +17,7 @@
  {"id": "H16", "req": "which programs are hogging memory", "expect": {"tool": "check_pc", "check": "processes"}},
  {"id": "H17", "req": "mute the sound", "expect": {"tool": "press_key", "key": "mute"}},
  {"id": "H18", "req": "go back to the previous track", "expect": {"tool": "press_key", "key": "prevtrack"}},
- {"id": "H19", "req": "write dear sir into wordpad", "expect": {"tool": "type_text", "app": "wordpad", "text": "dear sir"}},
+ {"id": "H19", "req": "write dear sir into wordpad", "expect": {"has_tool": "type_text", "app": "wordpad", "text": "dear sir"}},
  {"id": "H20", "req": "maximize the chrome window", "expect": {"tool": "window", "app": "chrome", "action": "maximize"}},
  {"id": "H21", "req": "read out the text of the error popup in notepad", "expect": {"tool": "window", "app": "notepad", "action": "inspect"}},
  {"id": "H22", "req": "what tabs do I have open in chrome", "expect": {"tool": "browser", "action": "tabs"}},

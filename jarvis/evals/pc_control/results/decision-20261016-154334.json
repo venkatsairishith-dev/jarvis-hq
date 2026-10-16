@@ -1,0 +1,51 @@
+{
+ "time": "2026-10-16 15:38:46",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases.json",
+ "models": [
+  {
+   "model": "decider",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 69,
+   "total": 70,
+   "accuracy": 0.986,
+   "json_valid": 70,
+   "cold_first_call_s": 3.0,
+   "first_call_status": "ok",
+   "p50_s": 3.91,
+   "p95_s": 6.86,
+   "memory": {
+    "ram_mb": 3391,
+    "top_gpu_dedicated_mb": 2387
+   },
+   "failures": [
+    {
+     "id": "A12",
+     "why": "tool open_app != play_media",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "youtube",
+       "post": "a window for youtube appeared"
+      },
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "Ilaiyaraaja music",
+       "post": "the chosen video is playing: same video id, position moving"
+      },
+      {
+       "tool": "type_text",
+       "app": "youtube",
+       "target": "",
+       "text": "on some Ilaiyaraaja music",
+       "post": "the field in youtube contains the typed text (read back)"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

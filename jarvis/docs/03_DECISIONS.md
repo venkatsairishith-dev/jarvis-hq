@@ -381,3 +381,39 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **JARVIS is stored byte-for-byte.** The root `.gitattributes` (`text=auto eol=lf`) would have rewritten 25 JARVIS files, including skill `PROVENANCE.json` files whose SHA-256 values and the deployment sync compare exact bytes. `jarvis/.gitattributes` (`* -text`) prevents that; all 275 files were checked identical to `main`.
 - **Main agent.** N.E.K.O's executor is a single-channel router (its Planner pipeline was removed upstream). `main_agent` adds plan-then-run orchestration as a plugin: one plan made from the request only, closed live catalogue, steps depend only on earlier steps, bounded time and steps, desktop control opt-in. JARVIS and its lab agents are one sub-agent kind among several.
 - **Not done, on purpose.** The live JARVIS services (console, `JarvisNode` task, server deploy scripts) still run from `D:\jarvis\hq` (branch `jarvis-hq-legacy`); moving them is a cutover with its own check. Nothing was pushed. N.E.K.O's own `docs/` is left as upstream; the five JARVIS docs live in `jarvis/docs/`.
+## D28 Neko 9.5 phase: plans, missions, monitor, perception, controlled self-improvement (2026-10-16)
+- **Plans are completed and checked by rules.**
+  - The local decider plans; `decide.py` then:
+    - adds what the owner said but the model left out (a typing step; an account check before acting on a named account; "go to SITE" as opening it);
+    - removes what is wrong (typing the account name into a page; an extra window step before the troubleshooter; a page read after research);
+    - asks when a document has no topic.
+  - Every step carries a post-condition. Each rule came from a measured miss and has a regression test.
+- **Fast path for one-command requests.** "open notepad", "pause", "minimize X" and the like are planned by rules in milliseconds, through the same `validate()`.
+  - Anything with a second part, a pronoun, an account or an unknown name goes to the model.
+  - It is judged on a holdout set written and hashed **before** the rules (`decision_cases_holdout2.json`, `holdout2.frozen.json`).
+- **Decider footprint.** Context 4096 → 2048. The owner's apps hold about 1.2 GB of the 4 GB GPU; the model spills into shared memory either way (about 10 tokens/s).
+  - Qwen3-1.7B is 6× faster but 17–20% less accurate: not adopted.
+- **Follow-ups.** The previous request is shown to the model **only** when the new one reads like a follow-up (a live run showed context bleeding into unrelated requests). "open it" re-opens what the last task verifiably made, through the deliverables plugin (its own outputs only).
+- **Opening an app that is already open** brings it to the front instead of starting a second window.
+- **Long missions** run on DBOS Transact (MIT, SQLite).
+  - A side-effect journal repeats an interrupted step only if repeating it is harmless (open, read, check); typing, keys, research and repairs stop and ask.
+  - Re-plan at most twice; budgets of 20 steps and 30 minutes; loop and ping-pong detection; cancellation reaches the running PC job.
+  - Missions start on the first entry call: the plugin host runs startup in a temporary event loop.
+- **Proactive monitor** (plugin timer, 60 s, read-only).
+  - Watches: crashes (Application log bookmark), disk floors (C: 12 GB), local services down twice in a row, stuck tasks.
+  - One alert per fault, then a 30-minute quiet period.
+- **Perception.** UI Automation first. Then Windows' built-in OCR on a capture of **one** window at 2× (never the desktop; local, deleted after use). Then UI-Venus-1.5-2B through llama-swap for what has no text.
+  - OCR text is "observed"; model output is "inferred". A model point is checked to be inside the window, and its click is verified.
+  - New read-only kernel ops `window_ocr` and `window_locate` (GREEN, like `window_text`), deployed with the full suite passing in place.
+- **Diagnosis checks the system, not the message.** Port in use (who holds it, plus a free-port fix), disk space (real free space), service down (nothing listening): each is verified live, or stated as a hypothesis.
+- **Controlled self-improvement.**
+  - Neko may only **propose** new site names and plan examples, as immutable hashed versions.
+  - A regression gate on the real decider must show no regression.
+  - Promotion and rollback are owner-only, from the command line; no plugin entry exists for them.
+  - The first live gate refused a proposal that regressed one case.
+- **N.E.K.O core edit (justified, minimal; upstream merge note).** `plugin/core/host.py`, `plugin/core/communication.py` and `plugin/server/messaging/handlers/plugin_to_plugin.py`.
+  - The problem: a plugin calling another plugin's **entry** was cut at 10 s (plugin side) and 60 s (router), whatever the entry declared. Research (900 s) called from the desktop plugin therefore always failed.
+  - Now entry calls get the entry's own timeout (and the caller's; the smaller wins). Other custom events keep 10 s and 60 s.
+  - Re-apply after an upstream merge if upstream has not fixed it.
+- **Node** polls for queued jobs every 1 s (was 3 s). The plugin polls job results every 0.5 s (was 1 s).
+- **Not done:** real-voice tuning, barge-in and echo cancellation (they need the owner's recordings, `neko_voice_owner_record.py`); unattended browser connection (needs the owner to save each profile's token, `save_playwright_token.ps1`); the Project JARVIS doc outside this repo was not updated.

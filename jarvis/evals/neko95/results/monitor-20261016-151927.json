@@ -1,0 +1,35 @@
+{
+ "time": "2026-10-16 15:19:27",
+ "rows": [
+  {
+   "cap": "C10_proactivity",
+   "id": "PR-crash-alert",
+   "status": "pass",
+   "detail": "canary exit 3762504530; alerted after 47 s (timer 60 s)"
+  },
+  {
+   "cap": "C10_proactivity",
+   "id": "PR-disk-alert",
+   "status": "pass",
+   "detail": "D:\\ free 11.0 GB: floor above -> ['D: is low on space: 11.0 GB free (floor 16 GB).']; floor below -> 0 alerts"
+  },
+  {
+   "cap": "C10_proactivity",
+   "id": "PR-service-down-alert",
+   "status": "pass",
+   "detail": "port 63072: up -> 0, 1st refusal -> 0, 2nd -> ['The canary listener (port 63072) stopped answering.']"
+  },
+  {
+   "cap": "C10_proactivity",
+   "id": "PR-stuck-task-alert",
+   "status": "pass",
+   "detail": "open past budget -> [\"The PC task 'monitor canary task' has been running for 13 minutes. Say 'stop the task' to end it.\"]"
+  },
+  {
+   "cap": "C10_proactivity",
+   "id": "PR-no-false-alarms",
+   "status": "pass",
+   "detail": "0 non-canary alerts in 24 h, 0 unconfirmed []; canary crash announced 1 time(s)"
+  }
+ ]
+}

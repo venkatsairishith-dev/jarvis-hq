@@ -1,0 +1,18 @@
+{
+ "rows": [
+  {
+   "cap": "C11_performance",
+   "id": "L-ui-action-p50",
+   "status": "fail",
+   "slo": true,
+   "detail": "one UI step end to end, p50 7.34 s over 6 steps [2.71, 5.32, 5.81, 7.34, 11.6, 15.17] (SLO 3.0 s)"
+  },
+  {
+   "cap": "C4_windows_control",
+   "id": "W-ui-action-latency",
+   "status": "fail",
+   "slo": true,
+   "detail": "p50 7.34 s over 6 steps"
+  }
+ ]
+}

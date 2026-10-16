@@ -1,0 +1,29 @@
+{
+ "time": "2026-10-16 16:20:04",
+ "goal": "research how home solar panels work and what they cost, make slides, open them and explain what you found",
+ "record": {
+  "mission": "m20261016-160416-d8072f",
+  "goal": "research how home solar panels work and what they cost, make slides, open them and explain what you found",
+  "status": "cancelled",
+  "replans": 1,
+  "steps": [
+   {
+    "n": 1,
+    "tool": "research",
+    "passed": false,
+    "checked": "the action did not succeed",
+    "uncertainty": "plugin call failed: Plugin research event plugin_entry.research_topic timed out after 900.0s"
+   }
+  ],
+  "error": null,
+  "explain": "0 of 1 steps done and checked. Not finished: cancelled"
+ },
+ "rows": [
+  {
+   "cap": "C6_missions",
+   "id": "M-research-deck-open-explain",
+   "status": "fail",
+   "detail": "status cancelled; steps [('research', False)]; research check: the action did not succeed; 948 s; error: None"
+  }
+ ]
+}

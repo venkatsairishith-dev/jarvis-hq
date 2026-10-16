@@ -1,0 +1,254 @@
+{
+ "cases": [
+  {
+   "id": "G01",
+   "request": "open example.com in my VenkatAMV account",
+   "ok": true,
+   "status": "completed",
+   "summary": "Done: signed-in account ['ris***@gmail.com'] vs expected ris***@gmail.com; Chrome window appeared in profile Profile 1.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "browser",
+     "agent": "browser",
+     "attempts": 1,
+     "passed": true,
+     "checked": "signed-in account ['ris***@gmail.com'] vs expected ris***@gmail.com",
+     "uncertainty": ""
+    },
+    {
+     "n": 2,
+     "tool": "open_website",
+     "agent": "browser",
+     "attempts": 1,
+     "passed": true,
+     "checked": "Chrome window appeared in profile Profile 1",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 3.65,
+   "seconds": 18.7,
+   "error": null
+  },
+  {
+   "id": "G02",
+   "request": "open notepad",
+   "ok": true,
+   "status": "completed",
+   "summary": "Done: a window for Notepad appeared.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "open_app",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "a window for Notepad appeared",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 2.45,
+   "seconds": 17.2,
+   "error": null
+  },
+  {
+   "id": "G03",
+   "request": "type hello from neko into notepad",
+   "ok": false,
+   "status": "completed",
+   "summary": "Done: a window for notepad appeared; the text was typed into notepad and read back from the field.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "open_app",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "a window for notepad appeared",
+     "uncertainty": ""
+    },
+    {
+     "n": 2,
+     "tool": "type_text",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "the text was typed into notepad and read back from the field",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 5.24,
+   "seconds": 29.4,
+   "error": null
+  },
+  {
+   "id": "G04",
+   "request": "minimize notepad",
+   "ok": true,
+   "status": "completed",
+   "summary": "Done: the action reported success.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "window",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "the action reported success",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 3.25,
+   "seconds": 11.7,
+   "error": null
+  },
+  {
+   "id": "G05",
+   "request": "restore the notepad window",
+   "ok": true,
+   "status": "completed",
+   "summary": "Done: the action reported success.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "window",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "the action reported success",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 3.16,
+   "seconds": 14.1,
+   "error": null
+  },
+  {
+   "id": "G06",
+   "request": "how much disk space do I have left",
+   "ok": true,
+   "status": "completed",
+   "summary": "Done: disk read.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "check_pc",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "disk read",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 2.51,
+   "seconds": 6.0,
+   "error": null
+  },
+  {
+   "id": "G07",
+   "request": "play a Kalyani song and tell me when it is playing",
+   "ok": true,
+   "status": "completed",
+   "summary": "Done: video 'KALYANI (with Shreya Ghoshal) ARJN | KDS | FIFTY4 | RONN | K' playing, same id as chosen.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "play_media",
+     "agent": "browser",
+     "attempts": 1,
+     "passed": true,
+     "checked": "video 'KALYANI (with Shreya Ghoshal) ARJN | KDS | FIFTY4 | RONN | K' playing, same id as chosen",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 4.44,
+   "seconds": 32.8,
+   "error": null
+  },
+  {
+   "id": "G08",
+   "request": "what song is playing right now",
+   "ok": true,
+   "status": "completed",
+   "summary": "Done: media read.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "check_pc",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "media read",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 2.84,
+   "seconds": 5.1,
+   "error": null
+  },
+  {
+   "id": "G09",
+   "request": "pause the music",
+   "ok": true,
+   "status": "completed",
+   "summary": "Done: the action reported success.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "press_key",
+     "agent": "desktop",
+     "attempts": 1,
+     "passed": true,
+     "checked": "the action reported success",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 2.87,
+   "seconds": 13.7,
+   "error": null
+  },
+  {
+   "id": "G10",
+   "request": "open my venkat account",
+   "ok": true,
+   "status": "needs_clarification",
+   "summary": "Which Chrome account? ambiguous: Venkat (ven***@gmail.com, Default), Venkat (ris***@gmail.com, Profile 1), Venkat (ven***@gmail.com, Profile 4), venkat (ven***@gmail.com, Profile 5).",
+   "steps": [],
+   "plan_seconds": 3.97,
+   "seconds": 4.1,
+   "error": null
+  },
+  {
+   "id": "G11",
+   "request": "what is the capital of Italy",
+   "ok": true,
+   "status": "not_a_pc_task",
+   "summary": "That is not a PC task; passing it on.",
+   "steps": [],
+   "plan_seconds": 3.6,
+   "seconds": 4.1,
+   "error": null
+  },
+  {
+   "id": "G12",
+   "request": "which google account is chrome signed into",
+   "ok": true,
+   "status": "completed",
+   "summary": "Done: signed-in account ['ven***@gmail.com'] vs expected ven***@gmail.com.",
+   "steps": [
+    {
+     "n": 1,
+     "tool": "browser",
+     "agent": "browser",
+     "attempts": 1,
+     "passed": true,
+     "checked": "signed-in account ['ven***@gmail.com'] vs expected ven***@gmail.com",
+     "uncertainty": ""
+    }
+   ],
+   "plan_seconds": 3.17,
+   "seconds": 16.2,
+   "error": null
+  }
+ ]
+}

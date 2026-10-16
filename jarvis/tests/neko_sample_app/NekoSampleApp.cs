@@ -24,6 +24,28 @@ static class NekoSampleApp {
                 MessageBox.Show(msg, "NekoSampleApp.exe - System Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 3;
             }
+            string fail = null;
+            if (data.ContainsKey("listen") && data["listen"] is bool && (bool)data["listen"]) {          // it serves on its port
+                try { var l = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port); l.Start(); l.Stop(); }
+                catch (System.Net.Sockets.SocketException) { fail = "Port " + port + " is already in use by another program."; }
+            }
+            if (fail == null && data.ContainsKey("needs_mb") && data["needs_mb"] is int) {               // it needs free space
+                var drive = new DriveInfo(Path.GetPathRoot(dir));
+                long freeMb = drive.AvailableFreeSpace / (1024 * 1024);
+                if (freeMb < (int)data["needs_mb"])
+                    fail = "There is not enough space on the disk: it needs " + (int)data["needs_mb"] + " MB on " + drive.Name.TrimEnd('\\') + ", which has " + freeMb + " MB free.";
+            }
+            if (fail == null && data.ContainsKey("service_port") && data["service_port"] is int) {       // it needs a local service
+                int sp = (int)data["service_port"];
+                try { using (var c = new System.Net.Sockets.TcpClient()) { if (!c.ConnectAsync("127.0.0.1", sp).Wait(1500) || !c.Connected) throw new System.Net.Sockets.SocketException(10061); } }
+                catch (Exception) { fail = "Could not connect to the Neko sample service at 127.0.0.1:" + sp + " (connection refused)."; }
+            }
+            if (fail != null) {
+                File.AppendAllText(log, DateTime.Now.ToString("s") + " ERROR " + fail + Environment.NewLine);
+                MessageBox.Show("Neko Sample App could not start.\n\n" + fail + "\n\nFile: " + cfg, "Neko Sample App - startup error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return 4;
+            }
         } catch (Exception e) {
             string why = (e is FormatException || e is ArgumentException || e is InvalidOperationException)
                 ? "config.json is not valid: " + e.Message : "config.json could not be read: " + e.GetType().Name;

@@ -15,7 +15,8 @@ from live_check import jget, run_entry  # noqa: E402
 
 ALLOW = str(HERE.parent / "scripts" / "allow_playwright_connection.ps1")
 CASES = [
-    ("G01", "open example.com in my VenkatAMV account", "completed", ["open_website"]),
+    # since 2026-10-16 a named account is checked first (browser whoami), then the site opens (NEKO_95_EVALUATION_PLAN.md)
+    ("G01", "open example.com in my VenkatAMV account", "completed", ["browser", "open_website"]),
     ("G02", "open notepad", "completed", ["open_app"]),
     ("G03", "type hello from neko into notepad", "completed", ["type_text"]),
     ("G04", "minimize notepad", "completed", ["window"]),
@@ -30,6 +31,9 @@ CASES = [
 ]
 
 
+HAS_TOOL = {"G03"}
+
+
 def main():
     rows = []
     _, st = jget("http://127.0.0.1:8799/api/owner/state", headers={"X-Jarvis-Console": "1"})
@@ -40,7 +44,8 @@ def main():
     for cid, req, want_status, want_tools in CASES:
         helper = None
         if any(t in ("open_website", "play_media", "browser") for t in want_tools):
-            run_entry("desktop", "open_website", {"url": "https://example.com/", "profile": "default"}, wait=60)
+            # the connect page lists the tabs of the profile being connected: open the example tab in THAT profile
+            run_entry("desktop", "open_website", {"url": "https://example.com/", "profile": "VenkatAMV" if "VenkatAMV" in req else "default"}, wait=60)
             helper = subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ALLOW, "-TimeoutS", "120"],
                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         t0 = time.time()
@@ -53,12 +58,36 @@ def main():
                 helper.kill()
         d = r.get("data") or {}
         tools = [s.get("tool") for s in d.get("steps") or []]
-        ok = d.get("status") == want_status and tools[:len(want_tools)] == want_tools and all(s.get("passed") for s in d.get("steps") or [])
-        rows.append({"id": cid, "request": req, "ok": ok, "status": d.get("status"), "summary": d.get("summary"), "steps": d.get("steps"),
+        # typing cases check that the typing step is there and verified (as A34/H19 do): an "open the app" step before it
+        # only brings the existing window to the front (NEKO_95_EVALUATION_PLAN.md, scorer changes)
+        shape = all(t in tools for t in want_tools) if cid in HAS_TOOL else tools[:len(want_tools)] == want_tools
+        ok = d.get("status") == want_status and shape and all(s.get("passed") for s in d.get("steps") or [])
+        old_rule = d.get("status") == want_status and tools[:len(want_tools)] == want_tools and all(s.get("passed") for s in d.get("steps") or [])
+        rows.append({"id": cid, "request": req, "ok": ok, "ok_old_rule": old_rule, "status": d.get("status"), "task": d.get("task"), "summary": d.get("summary"), "steps": d.get("steps"),
                      "plan_seconds": d.get("plan_seconds"), "seconds": secs, "error": r.get("error")})
         print(f"[{'PASS' if ok else 'FAIL'}] {cid} {req!r}: {d.get('status')} in {secs} s — {str(d.get('summary'))[:140]}", flush=True)
         time.sleep(1)
     subprocess.run(["taskkill", "/IM", "notepad.exe", "/F"], capture_output=True)
+    # how long one UI action takes end to end (plugin -> console -> kernel -> node -> Windows -> result), from the task
+    # records' own step times; the plan time is measured separately (C3/C11 L-plan-p50)
+    tasks = Path(r"D:\jarvis\N.E.K.O-data\neko\pc_tasks")
+    ui = []
+    for r in rows:
+        tid = (r.get("task") or "")
+        f = tasks / f"{tid}.json"
+        if tid and f.exists():
+            rec = json.loads(f.read_text(encoding="utf-8"))
+            ui += [round(s["finished"] - s["started"], 2) for s in rec.get("steps", [])
+                   if s.get("tool") in ("window", "type_text", "press_key", "open_app") and s.get("finished") and s.get("started")]
+    ui.sort()
+    p50 = ui[len(ui) // 2] if ui else None
+    neko95 = [{"cap": "C11_performance", "id": "L-ui-action-p50", "status": "pass" if p50 is not None and p50 <= 3.0 else "fail",
+               "slo": True, "detail": f"one UI step end to end, p50 {p50} s over {len(ui)} steps {ui} (SLO 3.0 s)"},
+              {"cap": "C4_windows_control", "id": "W-ui-action-latency", "status": "pass" if p50 is not None and p50 <= 3.0 else "fail",
+               "slo": True, "detail": f"p50 {p50} s over {len(ui)} steps"}]
+    (Path(__file__).resolve().parents[1] / "evals" / "neko95" / "results" / f"uilatency-{time.strftime('%Y%m%d-%H%M%S')}.json").write_text(
+        json.dumps({"rows": neko95}, indent=1), encoding="utf-8")
+    print("UI action p50:", p50, "s over", len(ui), "steps", ui)
     out = Path(__file__).resolve().parents[1] / "evals" / "pc_control" / "results" / f"coordinator-{time.strftime('%Y%m%d-%H%M%S')}.json"
     out.write_text(json.dumps({"cases": rows}, indent=1, default=str), encoding="utf-8")
     print("SUMMARY", sum(r["ok"] for r in rows), "of", len(rows), "->", out)

@@ -59,9 +59,10 @@ def _watch_cycle(watcher, url, token):
         watcher.ack(delivered)
 
 
-def run(url, name, once=False, collect_every=60, beat=15, poll=3, clock=time.time, sleep=time.sleep):
+def run(url, name, once=False, collect_every=60, beat=15, poll=1, clock=time.time, sleep=time.sleep):
     """Two cadences: the status report and file scan every `beat` seconds, the check for a queued job every `poll`
-    seconds. A request spoken to JARVIS used to wait up to a whole report interval before the laptop even saw it."""
+    seconds. A request spoken to JARVIS used to wait up to a whole report interval before the laptop even saw it.
+    poll 3 -> 1 s (2026-10-16): the wait for a queued job was the largest fixed part of a one-step PC action."""
     with open(TOKEN_FILE) as fh:
         token = fh.read().strip()
     state, last_collect, last_report, killed = {}, 0.0, None, False

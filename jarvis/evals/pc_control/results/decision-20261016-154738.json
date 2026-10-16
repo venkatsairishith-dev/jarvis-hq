@@ -1,0 +1,107 @@
+{
+ "time": "2026-10-16 15:47:06",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases_holdout.json",
+ "models": [
+  {
+   "model": "decider-qwen3-1.7b",
+   "cases": 30,
+   "repeat": 1,
+   "correct": 24,
+   "total": 30,
+   "accuracy": 0.8,
+   "json_valid": 30,
+   "cold_first_call_s": 0.8,
+   "first_call_status": "ok",
+   "p50_s": 0.93,
+   "p95_s": 1.3,
+   "memory": {
+    "ram_mb": 1633,
+    "top_gpu_dedicated_mb": 1547
+   },
+   "failures": [
+    {
+     "id": "H10",
+     "why": "tool research != answer",
+     "steps": [
+      {
+       "tool": "research",
+       "query": "who wrote the Ramayana",
+       "deliverable": "none",
+       "post": "a report with checked citations exists (and the requested file passed its checks; if asked, a window showing it opened)"
+      }
+     ]
+    },
+    {
+     "id": "H18",
+     "why": "tool browser != press_key",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "tabs",
+       "target": "",
+       "text": "",
+       "post": "the tabs result was observed on the page (whoami: the signed-in account matches Default)"
+      }
+     ]
+    },
+    {
+     "id": "H21",
+     "why": "tool browser != window",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "read",
+       "target": "",
+       "text": "",
+       "post": "the read result was observed on the page (whoami: the signed-in account matches Default)"
+      }
+     ]
+    },
+    {
+     "id": "H23",
+     "why": "target ['']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": "",
+       "post": "the whoami result was observed on the page (whoami: the signed-in account matches Default)"
+      }
+     ]
+    },
+    {
+     "id": "H24",
+     "why": "target ['']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "read",
+       "target": "",
+       "text": "refund policy",
+       "post": "the read result was observed on the page (whoami: the signed-in account matches Default)"
+      }
+     ]
+    },
+    {
+     "id": "H27",
+     "why": "status ok != clarify",
+     "steps": [
+      {
+       "tool": "open_file",
+       "name": "zzzz",
+       "folder": "Documents",
+       "post": "the file or folder opened"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

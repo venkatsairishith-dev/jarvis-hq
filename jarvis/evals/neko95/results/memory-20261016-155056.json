@@ -1,0 +1,11 @@
+{
+ "time": "2026-10-16 15:50:56",
+ "rows": [
+  {
+   "cap": "C13_self_improvement",
+   "id": "MEM-no-invented-memory",
+   "status": "fail",
+   "detail": "retrieval level: 6 returned entries, 0 not found verbatim in the store; made-up topics: [(1, 0), (2, 0), (1, 0), (0, 0)] (results, mentioning the invented name); stored fact found again: False (2 results); store 10 entries"
+  }
+ ]
+}

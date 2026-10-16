@@ -1760,11 +1760,17 @@ def _plugin_process_runner(
                     ret["error"] = f"Custom event '{event_type}.{event_id}' must be 'async def'."
                     return
 
+                # A plugin calling another plugin's ENTRY gets that entry's own timeout (and the caller's, the smaller
+                # wins), as a direct entry call does; other custom events keep the short default. (Before 2026-10-16 every
+                # plugin-to-plugin entry call was cut at PLUGIN_TRIGGER_TIMEOUT, 10 s: a 900 s research entry called
+                # from the desktop plugin always timed out.)
+                limit = (_resolve_timeout(event_id, msg.get("timeout", _TIMEOUT_UNSET))
+                         if event_type == "plugin_entry" else PLUGIN_TRIGGER_TIMEOUT)
                 with ctx._handler_scope(f"{event_type}.{event_id}"), ctx._lanlan_scope(lanlan_name):
                     result = await _run_with_watchdog(
                         method(**args),
                         f"{event_type}.{event_id}",
-                        PLUGIN_TRIGGER_TIMEOUT,
+                        limit,
                     )
 
                 if hasattr(result, "is_ok") and callable(result.is_ok):
@@ -1783,7 +1789,7 @@ def _plugin_process_runner(
                 ret["error"] = "Execution cancelled"
             except asyncio.TimeoutError:
                 logger.error("Custom event {}.{} timed out", event_type, event_id)
-                ret["error"] = f"Custom event timed out after {PLUGIN_TRIGGER_TIMEOUT}s"
+                ret["error"] = f"Custom event timed out after {limit}s"
             except Exception as e:
                 logger.exception("Error executing custom event {}.{}", event_type, event_id)
                 ret["error"] = str(e)

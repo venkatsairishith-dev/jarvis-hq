@@ -409,6 +409,7 @@ class PluginCommunicationResourceManager:
             "event_type": event_type,
             "event_id": event_id,
             "args": args,
+            "timeout": float(timeout) if timeout is not None else None,   # the plugin side applies it to entry calls
         }
         return await self._send_command_and_wait_local(
             req_id, msg, timeout, f"custom event {event_type}.{event_id}",

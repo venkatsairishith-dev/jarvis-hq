@@ -1,0 +1,26 @@
+{
+ "time": "2026-10-16 15:43:35",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases_holdout.json",
+ "models": [
+  {
+   "model": "decider",
+   "cases": 30,
+   "repeat": 1,
+   "correct": 30,
+   "total": 30,
+   "accuracy": 1.0,
+   "json_valid": 30,
+   "cold_first_call_s": 3.2,
+   "first_call_status": "ok",
+   "p50_s": 4.11,
+   "p95_s": 5.18,
+   "memory": {
+    "ram_mb": 3392,
+    "top_gpu_dedicated_mb": 2387
+   },
+   "failures": []
+  }
+ ]
+}

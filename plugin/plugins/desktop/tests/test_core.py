@@ -1,6 +1,7 @@
 """Desktop plugin logic without servers: the approval round trip, waiting and cancelling jobs, local results read once
 and deleted, and a diagnosis that is verified only against the file the error names."""
 import json
+import socket
 
 import pytest
 
@@ -97,3 +98,33 @@ def test_diagnosis_is_verified_against_the_named_file_and_proposes_a_safe_fix(tm
 def test_unknown_errors_stay_hypotheses():
     d = core.diagnose([], [], [{"app": "x.exe", "kind": "crash", "module": "y.dll", "code": "c0000005"}])
     assert not d["verified"] and "hypothesis" in d["cause"]
+
+
+def test_port_in_use_is_verified_against_the_real_listener_and_a_free_port_is_proposed(tmp_path):
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    s.listen(1)
+    port = s.getsockname()[1]
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"name": "x", "port": port, "listen": True}), encoding="utf-8")
+    try:
+        d = core.diagnose([{"dialog": True, "title": "x", "texts": [f"Port {port} is already in use by another program.", f"File: {cfg}"]}], [], [])
+        assert d["verified"] and f"port {port}" in d["cause"] and d["fix"]["args"]["find"] == f'"port": {port}'
+        assert d["fix"]["args"]["replace"] != d["fix"]["args"]["find"]
+    finally:
+        s.close()
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": [f"Port {port} is already in use by another program."]}], [], [])
+    assert not d["verified"] and "hypothesis" in d["cause"]          # released since: not claimed
+
+
+def test_disk_space_and_service_down_are_checked_not_assumed():
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": ["There is not enough space on the disk: it needs 999999999 MB on C:, which has 1 MB free."]}], [], [])
+    assert d["verified"] and d["fix"] is None and d["needs_mb"] == 999999999 and d["drive"] == "C:"
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": ["There is not enough space on the disk: it needs 1 MB on C:, which has 0 MB free."]}], [], [])
+    assert not d["verified"] and "hypothesis" in d["cause"]          # the drive really has space: the claim is not trusted
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": [f"Could not connect to the service at 127.0.0.1:{port} (connection refused)."]}], [], [])
+    assert d["verified"] and "nothing is listening" in d["cause"] and d["fix"] is None

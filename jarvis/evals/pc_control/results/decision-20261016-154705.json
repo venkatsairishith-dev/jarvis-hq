@@ -1,0 +1,179 @@
+{
+ "time": "2026-10-16 15:46:08",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases.json",
+ "models": [
+  {
+   "model": "decider-qwen3-1.7b",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 58,
+   "total": 70,
+   "accuracy": 0.829,
+   "json_valid": 70,
+   "cold_first_call_s": 6.1,
+   "first_call_status": "ok",
+   "p50_s": 0.66,
+   "p95_s": 1.13,
+   "memory": {
+    "ram_mb": 1633,
+    "top_gpu_dedicated_mb": 1547
+   },
+   "failures": [
+    {
+     "id": "A30",
+     "why": "tool troubleshoot != check_pc",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "cpu",
+       "post": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis"
+      }
+     ]
+    },
+    {
+     "id": "A31",
+     "why": "tool browser != check_pc",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": "",
+       "post": "the whoami result was observed on the page (whoami: the signed-in account matches Default)"
+      }
+     ]
+    },
+    {
+     "id": "A33",
+     "why": "tool open_app != press_key",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad",
+       "post": "a window for notepad appeared"
+      },
+      {
+       "tool": "type_text",
+       "app": "notepad",
+       "target": "",
+       "text": "save the file",
+       "post": "the field in notepad contains the typed text (read back)"
+      }
+     ]
+    },
+    {
+     "id": "A42",
+     "why": "target ['']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "find",
+       "target": "",
+       "text": "pricing",
+       "post": "the find result was observed on the page (whoami: the signed-in account matches Default)"
+      }
+     ]
+    },
+    {
+     "id": "A44",
+     "why": "tool open_website != play_media",
+     "steps": [
+      {
+       "tool": "open_website",
+       "profile": "Default",
+       "url": "https://www.youtube.com/",
+       "post": "a Chrome window of profile Default shows the page"
+      }
+     ]
+    },
+    {
+     "id": "A45",
+     "why": "status clarify: Which website should I open?",
+     "steps": [
+      {
+       "tool": "browser",
+       "action": "whoami",
+       "profile": "Profile 1",
+       "target": "",
+       "text": ""
+      },
+      {
+       "tool": "open_website",
+       "profile": "Profile 1",
+       "url": ""
+      }
+     ]
+    },
+    {
+     "id": "A47",
+     "why": "tools ['check_pc']",
+     "steps": [
+      {
+       "tool": "check_pc",
+       "check": "disk",
+       "app": "",
+       "post": "the disk check returned data"
+      }
+     ]
+    },
+    {
+     "id": "A49",
+     "why": "status clarify: What should I open?",
+     "steps": []
+    },
+    {
+     "id": "A53",
+     "why": "tool troubleshoot not in ['answer', 'clarify', 'check_pc']",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "windows firewall",
+       "post": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis"
+      }
+     ]
+    },
+    {
+     "id": "A55",
+     "why": "tool browser != answer",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "whoami",
+       "target": "",
+       "text": "",
+       "post": "the whoami result was observed on the page (whoami: the signed-in account matches Default)"
+      }
+     ]
+    },
+    {
+     "id": "A57",
+     "why": "tool play_media != press_key",
+     "steps": [
+      {
+       "tool": "play_media",
+       "profile": "Default",
+       "query": "next song",
+       "post": "the chosen video is playing: same video id, position moving"
+      }
+     ]
+    },
+    {
+     "id": "A60",
+     "why": "tool troubleshoot != check_pc",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "app",
+       "post": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

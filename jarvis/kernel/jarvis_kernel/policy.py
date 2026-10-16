@@ -67,7 +67,7 @@ RULES = [
     # owner's side. Repairs change the PC: approval, except putting a backed-up file back (the safe direction).
     ("browser", "play", YELLOW_AUTO),
     ("media", "state", GREEN),
-    ("diag", "processes|app_errors|crashes|services|disk|network|app_info|window_text", GREEN),
+    ("diag", "processes|app_errors|crashes|services|disk|network|app_info|window_text|window_ocr|window_locate", GREEN),
     ("repair", "restore", YELLOW_AUTO),
     ("repair", "restart_app|edit_file|install", YELLOW_APPROVAL),
     ("money", "*", RED),
