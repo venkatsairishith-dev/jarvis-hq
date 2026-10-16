@@ -379,6 +379,14 @@ Per area (final run):
   - **Live, 5 public questions through Dahl:** confirmed share 38–42% (two earlier runs) → **72%** (60/83). Still 5/5 correct with no fabricated sources; different runs and search results, so indicative.
   - Citation repair (re-cite to the source that does support a sentence) was added too; it changed 1 citation in 89 live, so wrong citations are not the main problem.
 
+- **Held-out context cases** (`bench/gen_holdout_dahl.py`): Dahl's GLM model wrote the cases (question, answer, critical lines, the surrounding block) without seeing the selector; MiniMax spent its whole token allowance reasoning and wrote nothing.
+  - Only **6 of 45** cases were written: Dahl then answered HTTP 429 "model_concurrency" for both models. Paid accounts are admitted first; the pool is never topped up, so that is the owner's decision.
+  - On those 6 (far too few to decide anything):
+    - head cut kept the answer in 2/6 (4 KB) and 3/6 (16 KB);
+    - evidence 6/6 (critical lines 5/6), always within budget;
+    - trim-1 alone 6/6, within budget 0–1/6.
+  - Both stay **off**: the next step is more held-out cases when Dahl has capacity, or real tool output on the laptop.
+
 ## What blocks 9.5 (owner actions)
 
 1. **Real voice (C1):**

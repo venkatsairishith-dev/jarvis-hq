@@ -111,12 +111,11 @@ def main(argv=None):
     ap.add_argument("--budgets", default="4000,8000,16000")
     ap.add_argument("--repeat", type=int, default=3)
     ap.add_argument("--set", choices=("dev", "holdout"), default="dev",
-                    help="dev = context_fixtures.py (the selector was tuned on it); holdout = context_fixtures_holdout.py "
-                         "(written blind by a separate author; never tuned on)")
+                    help="dev = context_fixtures.py (the selector was tuned on it); holdout = context_fixtures_holdout.json "
+                         "(cases written by Dahl's model without seeing the selector: gen_holdout_dahl.py; never tuned on)")
     a = ap.parse_args(argv)
     if a.set == "holdout":
-        from context_fixtures_holdout import fixtures as holdout
-        fx = holdout()
+        fx = json.loads((HERE / "context_fixtures_holdout.json").read_text(encoding="utf-8"))
     else:
         fx = fixtures()
     rows = run([int(b) for b in a.budgets.split(",")], a.repeat, fx)
