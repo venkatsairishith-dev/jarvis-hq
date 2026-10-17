@@ -50,7 +50,11 @@ class Connectors(Base):
 
     def test_commands_that_are_shells_scripts_or_eval_are_refused_and_nothing_is_written(self):
         sysroot = os.environ.get("SystemRoot", r"C:\Windows")
+        planted = os.path.join(self.cfg.secrets_dir, "connectors", "server.exe")    # a program inside the secrets folder
+        with open(planted, "w") as fh:
+            fh.write("x")
         bad = [
+            {"command": [planted]},
             {"command": ["cmd.exe", "/c", "calc"]},                                      # not absolute
             {"command": [os.path.join(sysroot, "System32", "cmd.exe"), "/c", "calc"]},   # a shell, in the Windows folder
             {"command": [sys.executable, "-c", "import os; os.system('calc')"]},         # an interpreter given code
@@ -63,7 +67,7 @@ class Connectors(Base):
             {"command": [sys.executable, FIXTURE], "env_refs": {"TOKEN": "../../keys.json"}},
             {"command": [sys.executable, FIXTURE], "env_refs": {"TOKEN": "C:\\Windows\\win.ini"}},
             {"command": [sys.executable, FIXTURE], "timeout_s": 9999},
-        ]
+        ] + [{"command": [p, "-c", "id"]} for p in ("/bin/sh", "/bin/bash", "/usr/bin/env") if os.path.exists(p)]   # Linux/macOS shells
         for local in bad:
             code, body, _ = self.add(local=local)
             self.assertEqual(code, 400, str(local)[:90] + " -> " + str(body)[:100])

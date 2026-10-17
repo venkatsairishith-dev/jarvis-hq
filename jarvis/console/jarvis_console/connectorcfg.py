@@ -22,6 +22,20 @@ SHELLS = {"cmd.exe", "powershell.exe", "pwsh.exe", "bash.exe", "sh.exe", "zsh.ex
           "ssh.exe", "scp.exe", "net.exe", "net1.exe", "sc.exe", "taskkill.exe", "runas.exe", "at.exe", "wmic.exe", "explorer.exe"}
 INTERPRETERS = {"python.exe", "pythonw.exe", "python3.exe", "node.exe", "deno.exe", "bun.exe", "java.exe", "javaw.exe", "ruby.exe", "perl.exe",
                 "php.exe", "uv.exe", "uvx.exe"}
+# Linux/macOS names of the same kind of program (the sets above are Windows names); compared by stem, so "python3.11",
+# "bash" and "node22" match too.
+UNIX_SHELLS = {"bash", "sh", "zsh", "dash", "ksh", "csh", "tcsh", "fish", "busybox", "env", "sudo", "doas", "su", "nohup", "xargs",
+               "osascript", "open", "launchctl", "crontab", "at", "curl", "wget", "ssh", "scp", "nc", "ncat", "socat"}
+
+
+def _stem(base: str) -> str:
+    b = base.lower()
+    b = b[:-4] if b.endswith(".exe") else b
+    return re.sub(r"[\d.\-]+$", "", b)
+
+
+SHELL_STEMS = {_stem(s) for s in SHELLS} | UNIX_SHELLS
+INTERPRETER_STEMS = {_stem(s) for s in INTERPRETERS}
 EVAL_FLAGS = {"-c", "-e", "--eval", "-p", "--print", "-r", "--require", "-i", "--interactive", "--command", "-command", "/c", "-x", "--exec"}
 BLOCKED_ENV = {"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "TMPDIR", "PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP",
                "NODE_OPTIONS", "NODE_PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA"}
@@ -70,17 +84,23 @@ def validate(name: str, spec, secrets: str = None) -> dict:
     base = os.path.basename(exe).lower()
     if os.name == "nt" and not base.endswith(".exe"):
         raise ConfigError("command: the program must be an .exe (scripts and shell wrappers are refused; point to the program itself)")
-    if base in SHELLS:
-        raise ConfigError(f"command: {base} is a shell or system tool and cannot be a connector")
     real = os.path.realpath(exe)
+    stems = {_stem(base), _stem(os.path.basename(real))}       # the name given and the program a link points to
+    if base in SHELLS or stems & SHELL_STEMS:
+        raise ConfigError(f"command: {base} is a shell or system tool and cannot be a connector")
     low = real.lower().replace("/", "\\")
-    if "jarvis-secrets" in low or os.path.commonpath([os.path.realpath(secrets).lower(), low]) == os.path.realpath(secrets).lower():
+    sec = os.path.realpath(secrets).lower()
+    try:                                     # compare real paths (not the backslashed copy, which is relative on Linux/macOS)
+        in_secrets = os.path.commonpath([sec, real.lower()]) == sec
+    except ValueError:                       # different drives on Windows
+        in_secrets = False
+    if "jarvis-secrets" in low or in_secrets:
         raise ConfigError("command: a program inside the secrets folder is refused")
     if re.search(r"\\windows\\", low):
         raise ConfigError("command: programs inside the Windows folder are refused")
     if not os.path.isfile(real):
         raise ConfigError("command: that program does not exist at this path (install it first)")
-    if base in INTERPRETERS:
+    if base in INTERPRETERS or stems & INTERPRETER_STEMS:
         if any(a.lower() in EVAL_FLAGS for a in cmd[1:]):
             raise ConfigError(f"command: {base} may not be given code to run (-c, -e, --eval and similar); give it the server's script or module")
     if any("jarvis-secrets" in a.lower() for a in cmd[1:]):
