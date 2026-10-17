@@ -996,5 +996,462 @@
    "resources"
   ],
   "platform": "owner_hardware"
+ },
+ {
+  "id": "J-049",
+  "area": "J",
+  "title": "Fallback order across five providers",
+  "scenario": "Private lane: local (priority 1), groq (priority 1, listed first), cer (3), slowcloud (5), plus Dahl (public, priority 0). Fake local providers: local and groq answer 503, cer 500, slowcloud answers. The real llm_proxy serves the owner's agent token. Guards the order rule (priority, local first on a tie) and the one-retry bound.",
+  "expected": "The agent gets slowcloud's answer. Arrival order at the fakes is exactly local, local, groq, groq, cer, cer, slowcloud (one same-provider retry on 5xx, then the next). Dahl is never asked.",
+  "risk": "high",
+  "check": "proxy_fallback_order",
+  "dims": [
+   "routing",
+   "recovery"
+  ],
+  "args": {
+   "want": [
+    "local",
+    "local",
+    "groq",
+    "groq",
+    "cer",
+    "cer",
+    "slowcloud"
+   ]
+  }
+ },
+ {
+  "id": "J-050",
+  "area": "J",
+  "title": "Lane outage: no retry storm, then recovery",
+  "scenario": "Three fake private providers all answer 503. The agent sends the same request 10 times, then the providers come back after the 30 s rest (fake clock). Guards against an agent retry loop hammering providers that are down.",
+  "expected": "1st request: 502 'all providers failed', each provider asked twice (6 upstream requests in total for all 10 agent calls). Requests 2-10: 503 with Retry-After 1-30 s and 'retry in', no upstream request. After the rest: the first provider is asked again and the agent gets 200.",
+  "risk": "high",
+  "check": "proxy_outage_bounded",
+  "dims": [
+   "routing",
+   "recovery",
+   "resources"
+  ],
+  "args": {
+   "requests": 10,
+   "max_upstream": 6
+  }
+ },
+ {
+  "id": "J-051",
+  "area": "J",
+  "title": "All providers fail three ways: truthful error",
+  "scenario": "Fake providers: p1 429 (Retry-After 120), p2 500 whose body names an internal address, p3 connection refused. Guards the error the agent (and the owner) sees when nothing worked.",
+  "expected": "HTTP 502 'all providers failed', never 200; the provider's internal text (10.1.2.3) is not passed on; the audit row lists classes [rate_limited, other, other]; the next request asks nobody and returns 429/503 with Retry-After <= 120.",
+  "risk": "high",
+  "check": "proxy_all_fail_truthful",
+  "dims": [
+   "routing",
+   "recovery",
+   "ux"
+  ]
+ },
+ {
+  "id": "J-052",
+  "area": "J",
+  "title": "Slow stream relayed as it arrives",
+  "scenario": "A fake provider streams five tokens 0.5 s apart, then [DONE]. Guards against the proxy buffering a stream (the agent and the owner would see nothing until the end, and Cloudflare-style idle timeouts would cut it).",
+  "expected": "The agent reads the tokens spread over >= 1.5 s (first to last read), and receives all five tokens and [DONE].",
+  "risk": "medium",
+  "check": "proxy_slow_stream_progressive",
+  "dims": [
+   "routing",
+   "speed"
+  ],
+  "args": {
+   "gap": 0.5,
+   "min_spread_s": 1.5
+  }
+ },
+ {
+  "id": "J-053",
+  "area": "J",
+  "title": "Stream that stalls mid-way",
+  "scenario": "A fake provider (timeout_s 1) sends one token, then stalls for 5 s. Guards a half-finished stream: it must end, must not be dressed up as complete, must not take the proxy down, and must be on record.",
+  "expected": "The stream ends within 1 + 2 s after the first token; no [DONE] and no second token are invented; the next request is answered (200); an audit row records the failed call for that provider.",
+  "risk": "high",
+  "check": "proxy_stalled_stream",
+  "dims": [
+   "routing",
+   "reliability",
+   "recovery"
+  ],
+  "args": {
+   "margin_s": 2
+  }
+ },
+ {
+  "id": "J-054",
+  "area": "J",
+  "title": "Provider withdrawn mid-request (proxy)",
+  "scenario": "Three fake private providers with synthetic key files. While the first is answering (slowly, then 503), the second provider's key file is deleted, as when the owner withdraws a provider. Guards fallback when a provider disappears between planning and calling.",
+  "expected": "The agent gets 200 with the third provider's answer; the withdrawn provider is not asked; the connection is never dropped without an answer.",
+  "risk": "high",
+  "check": "proxy_key_withdrawn_midrequest",
+  "dims": [
+   "routing",
+   "recovery",
+   "reliability"
+  ]
+ },
+ {
+  "id": "J-055",
+  "area": "J",
+  "title": "Provider withdrawn mid-request (gateway.call)",
+  "scenario": "The same as J-054 through gateway.call (the kernel's own model calls): the second provider's key file is deleted while the first is answering 500.",
+  "expected": "The third provider's answer is returned (or a RouteError); never an unhandled file error; the withdrawn provider is not asked.",
+  "risk": "high",
+  "check": "gateway_key_withdrawn_midrequest",
+  "dims": [
+   "routing",
+   "recovery",
+   "reliability"
+  ]
+ },
+ {
+  "id": "J-056",
+  "area": "J",
+  "title": "gateway.call: malformed replies fall through",
+  "scenario": "Fake providers answer 200 with HTML, 200 with an empty choices list, 200 with the wrong JSON shape; the fourth answers normally. Guards the kernel's own calls against a provider or proxy returning junk with a success code.",
+  "expected": "Answer 'good one'; each bad provider audited as a failure with its class: JSONDecodeError, IndexError, KeyError.",
+  "risk": "medium",
+  "check": "gateway_malformed_replies",
+  "dims": [
+   "routing",
+   "reliability"
+  ],
+  "args": {
+   "want_failures": [
+    [
+     "html",
+     "JSONDecodeError"
+    ],
+    [
+     "nochoices",
+     "IndexError"
+    ],
+    [
+     "shape",
+     "KeyError"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "J-057",
+  "area": "J",
+  "title": "Private call: all private fail, Dahl still never asked",
+  "scenario": "gateway.call for a private task. Fake Dahl (public, priority 0) is healthy; the private providers fail with 429, 500 and an 8 s hang (timeout_s 1). Guards the most important rule under pressure: the private lane never falls back to the public provider.",
+  "expected": "RouteError 'all providers failed'; Dahl asked 0 times; each private provider asked exactly once; the call ends in under 6 s (the hang is cut at 1 s).",
+  "risk": "critical",
+  "check": "gateway_private_all_fail_never_dahl",
+  "dims": [
+   "routing",
+   "security",
+   "recovery"
+  ],
+  "args": {
+   "hang_s": 8,
+   "max_s": 6
+  }
+ },
+ {
+  "id": "J-058",
+  "area": "J",
+  "title": "Public lane never falls into the private lane",
+  "scenario": "A lab (public) token; the only public provider, fake Dahl, answers 500; a healthy private provider has a better priority. Two requests.",
+  "expected": "502 then 502/503; the private provider is never asked; Dahl asked twice in total (one retry, then it rests).",
+  "risk": "critical",
+  "check": "proxy_public_never_private",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-059",
+  "area": "J",
+  "title": "Provider dies mid-request: fallback",
+  "scenario": "The first fake provider reads the request and closes the connection without an answer (its process died); the second answers.",
+  "expected": "200 with the second provider's answer; the dead provider is asked once (no blind retry); its failure is audited.",
+  "risk": "high",
+  "check": "proxy_dropped_connection_fallback",
+  "dims": [
+   "routing",
+   "recovery"
+  ]
+ },
+ {
+  "id": "J-060",
+  "area": "J",
+  "title": "Truncated summary is not passed on",
+  "scenario": "A context-compression call; the first fake provider returns a summary cut at the output cap (finish_reason 'length'), the second a complete one. Guards the agent's history: a cut checkpoint would lose the conversation.",
+  "expected": "200 with the complete summary; the cut one is audited as summary_truncated; the first provider asked once.",
+  "risk": "high",
+  "check": "proxy_truncated_summary_fallback",
+  "dims": [
+   "routing",
+   "reliability"
+  ]
+ },
+ {
+  "id": "J-061",
+  "area": "J",
+  "title": "Privacy gateway: all providers fail, truthful 502",
+  "scenario": "The real privacy gateway (Presidio replaced at the model boundary by a cue-word redactor). Fake Dahl answers 500 with an internal path in its page; the fallback is unreachable.",
+  "expected": "HTTP 502 naming 'dahl: HTTP 500' and 'groq: URLError'; the provider's internal page text is not relayed.",
+  "risk": "high",
+  "check": "privacy_all_fail_truthful",
+  "dims": [
+   "routing",
+   "recovery",
+   "ux"
+  ]
+ },
+ {
+  "id": "J-062",
+  "area": "J",
+  "title": "Privacy gateway: fallback key never echoed to the caller",
+  "scenario": "Fake Dahl answers 503; the fallback (its synthetic key read from a temp secrets folder) rejects the key with 401 and an error page that echoes the Authorization header, like a careless proxy. Guards the fallback key, which only the gateway may hold.",
+  "expected": "The caller gets an error status; the fallback's key appears nowhere in the reply body or headers.",
+  "risk": "critical",
+  "check": "privacy_fallback_key_not_echoed",
+  "dims": [
+   "routing",
+   "security"
+  ]
+ },
+ {
+  "id": "J-063",
+  "area": "J",
+  "title": "Privacy gateway: rate-limited fallback rests",
+  "scenario": "Two calls. Fake Dahl answers 500 each time (the caller's own provider is tried every call by design); the first fallback answers 429; the second fallback answers.",
+  "expected": "Both calls answered by the second fallback; requests per provider: dahl 2, groq 1 (resting on the second call), cerebras 2.",
+  "risk": "medium",
+  "check": "privacy_fallback_cooldown_bounded",
+  "dims": [
+   "routing",
+   "recovery",
+   "resources"
+  ],
+  "args": {
+   "want_counts": {
+    "dahl": 2,
+    "groq": 1,
+    "cerebras": 2
+   }
+  }
+ },
+ {
+  "id": "J-064",
+  "area": "J",
+  "title": "Privacy gateway: hung Dahl, fallback in time",
+  "scenario": "Fake Dahl hangs 6 s; the gateway timeout is 1 s; the fallback answers.",
+  "expected": "200 from the fallback in under 4 s.",
+  "risk": "high",
+  "check": "privacy_timeout_fallback",
+  "dims": [
+   "routing",
+   "recovery",
+   "speed"
+  ],
+  "args": {
+   "hang_s": 6,
+   "max_s": 4
+  }
+ },
+ {
+  "id": "J-065",
+  "area": "J",
+  "title": "Model profile at the edges of RAM and VRAM",
+  "scenario": "hwdetect.choose() with fake readings at each threshold: 5.9/6 GB RAM, 11.9/12 GB, 2999/3000 MiB free VRAM, 5999/6000 MiB, two GPUs (the larger free one counts), a big GPU in a 5.9 GB machine, and this laptop (31.9 GB, 3439 MiB).",
+  "expected": "remote_only, cpu8, cpu8, cpu16, vram4, vram4, vram8plus, vram8plus, vram4 for the listed readings.",
+  "risk": "medium",
+  "check": "hw_profile_boundaries",
+  "dims": [
+   "resources",
+   "routing"
+  ],
+  "args": {
+   "cases": [
+    [
+     5.9,
+     [
+      11000
+     ],
+     "remote_only"
+    ],
+    [
+     6,
+     [],
+     "cpu8"
+    ],
+    [
+     11.9,
+     [
+      2999
+     ],
+     "cpu8"
+    ],
+    [
+     12,
+     [],
+     "cpu16"
+    ],
+    [
+     16,
+     [
+      3000
+     ],
+     "vram4"
+    ],
+    [
+     16,
+     [
+      5999
+     ],
+     "vram4"
+    ],
+    [
+     16,
+     [
+      6000
+     ],
+     "vram8plus"
+    ],
+    [
+     16,
+     [
+      1500,
+      6200
+     ],
+     "vram8plus"
+    ],
+    [
+     31.9,
+     [
+      3439
+     ],
+     "vram4"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "J-066",
+  "area": "J",
+  "title": "Hardware detection from fake device readings",
+  "scenario": "hwdetect.detect() with a fake llama-server (temp file; a fake runner returns its --list-devices text on stderr) and fake psutil RAM: two GPUs (1500 and 7100 MiB free) with 16 GB; a hung llama-server (TimeoutExpired); the override NEKO_MODEL_PROFILE=gpu99 (invalid) and =cpu8; 4 GB of RAM.",
+  "expected": "(vram8plus, 2 GPUs), (cpu16, 0: the hang means no GPU, no crash), (vram8plus, 2: bad override ignored), (cpu8, 2: override honoured, 'detected' reason kept), (remote_only, 2); the 'why' names 7100 MiB; llama-server asked 5 times.",
+  "risk": "medium",
+  "check": "hw_detect_fake_devices",
+  "dims": [
+   "resources",
+   "reliability"
+  ],
+  "args": {
+   "want": [
+    [
+     "vram8plus",
+     2
+    ],
+    [
+     "cpu16",
+     0
+    ],
+    [
+     "vram8plus",
+     2
+    ],
+    [
+     "cpu8",
+     2
+    ],
+    [
+     "remote_only",
+     2
+    ]
+   ]
+  }
+ },
+ {
+  "id": "J-067",
+  "area": "J",
+  "title": "Every local profile runs one model at a time",
+  "scenario": "Read the llama-swap config of every profile the detector can pick (vram4: llama-swap.yaml; cpu8, cpu16, vram8plus: profiles/<name>.yaml). Guards the memory budget on small machines: two models loaded together could exhaust RAM/VRAM while the relative's trading software runs.",
+  "expected": "Each config exists; every model belongs to an exclusive swap group; every server command (macros expanded) has -np 1 and --host 127.0.0.1.",
+  "risk": "high",
+  "check": "hw_profile_configs_bounded",
+  "dims": [
+   "resources",
+   "security"
+  ]
+ },
+ {
+  "id": "J-068",
+  "area": "J",
+  "title": "Adviser address must BE the privacy gateway, not contain it",
+  "scenario": "local_team.advise() with adviser URLs that contain '127.0.0.1:48950' or 'localhost:48950' only in the path, the query or inside a longer host name (evil.example). The stream function is a fake that records where it would send.",
+  "expected": "All refused with TeamError; nothing is sent (the private task text and password never reach another server).",
+  "risk": "critical",
+  "check": "team_adviser_url_host",
+  "dims": [
+   "routing",
+   "security"
+  ],
+  "args": {
+   "urls": [
+    "http://evil.example/127.0.0.1:48950/v1",
+    "https://127.0.0.1:48950.evil.example/v1",
+    "http://evil.example/v1?via=localhost:48950"
+   ]
+  }
+ },
+ {
+  "id": "J-069",
+  "area": "J",
+  "title": "Local models down: truthful error, no public answer",
+  "scenario": "Local Team solve() with llama-swap and the decision model down (fake transport raises 'no answer from http://127.0.0.1:8080'); the adviser (fake) returns a plan.",
+  "expected": "solve() raises TeamError naming the local endpoint and 'no answer'; no result is returned; the adviser's plan is not passed off as the answer; adviser asked at most once.",
+  "risk": "medium",
+  "check": "team_local_down_truthful",
+  "dims": [
+   "routing",
+   "recovery",
+   "ux"
+  ]
+ },
+ {
+  "id": "J-070",
+  "area": "J",
+  "title": "Per-agent rate limit does not starve other agents",
+  "scenario": "Agent A sends 31 calls in one minute (the limit is 30); agent B then sends one. Fake provider.",
+  "expected": "A: 30 x 200 then 429 (the provider is not asked for the refused call); B: 200 in the same minute.",
+  "risk": "medium",
+  "check": "proxy_agent_limits_isolated",
+  "dims": [
+   "routing",
+   "resources"
+  ]
+ },
+ {
+  "id": "J-071",
+  "area": "J",
+  "title": "Owner's route view after a 429",
+  "scenario": "Fake groq answers 429 (Retry-After 300) to an agent call; the owner opens the route explanation (GET /v1/jarvis/owner/route?lane=private) during the rest and after it (fake clock).",
+  "expected": "During the rest: groq has RESTING_AFTER_ERRORS and is not in the chain, cerebras is chosen, Dahl shows LANE_MISMATCH. After: groq is chosen again.",
+  "risk": "medium",
+  "check": "owner_route_after_failure",
+  "dims": [
+   "routing",
+   "ux"
+  ]
  }
 ]

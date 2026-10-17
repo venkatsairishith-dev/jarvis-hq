@@ -311,5 +311,224 @@
    "voice"
   ],
   "platform": "owner_hardware"
+ },
+ {
+  "id": "G-024",
+  "area": "G",
+  "title": "Short commands that start with a cancel word are tasks",
+  "scenario": "Synthetic frames, fake detector/VAD; fake ASR returns 'cancel my meeting', 'stop the music', 'cancel my dentist appointment tomorrow' (nothing running), and the bare phrases 'cancel', 'Never mind.', 'nevermind', 'Forget it!', 'no thanks', 'quiet'. Guards against Neko silently dropping a real request.",
+  "expected": "The three object commands are submitted as tasks; the six bare phrases cancel (no task).",
+  "risk": "medium",
+  "check": "short_commands_not_cancels",
+  "dims": [
+   "voice",
+   "intent",
+   "ux"
+  ],
+  "args": {
+   "tasks": [
+    "cancel my meeting",
+    "stop the music",
+    "cancel my dentist appointment tomorrow"
+   ],
+   "cancels": [
+    "cancel",
+    "Never mind.",
+    "nevermind",
+    "Forget it!",
+    "no thanks",
+    "quiet"
+   ]
+  }
+ },
+ {
+  "id": "G-025",
+  "area": "G",
+  "title": "Speech heard but no words recognised",
+  "scenario": "Wake word, 1 s of speech, silence; the fake ASR returns an empty transcript (noise, a cough).",
+  "expected": "Nothing submitted; outcome 'no words recognized'; no_speech counted; back to wake_listening.",
+  "risk": "medium",
+  "check": "empty_transcript",
+  "dims": [
+   "voice",
+   "reliability"
+  ]
+ },
+ {
+  "id": "G-026",
+  "area": "G",
+  "title": "Main agent refuses or is down: the voice outcome says so",
+  "scenario": "The real submit_task() posts to a FAKE local widget that answers 409 'a task is already running'; then to an address where nothing listens.",
+  "expected": "Both: outcome 'the main agent refused the task' with the reason ('already running' / 'URLError'), tasks_started 0, one error counted, back to listening; the widget received exactly {task: 'open notepad', mode: 'work'}.",
+  "risk": "high",
+  "check": "task_refused_or_widget_down",
+  "dims": [
+   "voice",
+   "ux",
+   "reliability"
+  ]
+ },
+ {
+  "id": "G-027",
+  "area": "G",
+  "title": "Speech-recognition client: WAV out, text in, failure reported",
+  "scenario": "The real transcribe() against a FAKE local speech server: 0.5 s of PCM; the server answers '  open notepad \\n'; then the server answers 500 inside a full wake/command round.",
+  "expected": "Text 'open notepad' (trimmed); the server received audio/wav, 16 kHz, mono, 16-bit, 8000 frames, language=en. On 500: outcome 'speech recognition failed', nothing submitted, back to listening.",
+  "risk": "high",
+  "check": "transcribe_real_client",
+  "dims": [
+   "voice",
+   "reliability"
+  ]
+ },
+ {
+  "id": "G-028",
+  "area": "G",
+  "title": "'Hey Neko, stop' reports whether the stop worked",
+  "scenario": "Fake ASR says 'stop'; the real task_running()/stop_task() talk to a FAKE widget that shows a task in 'planning' and then answers the stop with ok=false 'nothing to stop'.",
+  "expected": "The widget receives {action: 'stop'} once; the outcome is 'stop the running task' with ok=false and the note 'nothing to stop' (not a claimed stop); nothing submitted.",
+  "risk": "high",
+  "check": "voice_stop_real_client",
+  "dims": [
+   "voice",
+   "ux",
+   "autonomy"
+  ]
+ },
+ {
+  "id": "G-029",
+  "area": "G",
+  "title": "Command gain from the wake word: raise, never cut, never wrap",
+  "scenario": "Synthetic levels: a quiet speaker (wake and command at 16), a loud one (20000), and a quiet wake word (100) followed by a loud command (10000).",
+  "expected": "Command peak 256 (16x, the +24 dB cap); 20000 (1x, never reduced); 32767 with no negative values (clipped, not wrapped around); each submits once.",
+  "risk": "medium",
+  "check": "command_gain",
+  "dims": [
+   "voice",
+   "reliability"
+  ]
+ },
+ {
+  "id": "G-030",
+  "area": "G",
+  "title": "Status shows a muted microphone",
+  "scenario": "One second of digital silence, then one second at full scale.",
+  "expected": "Status audio: about -120 dBFS for the silent second (<= -100), about 0 dBFS for the loud one (>= -1); max and min kept.",
+  "risk": "medium",
+  "check": "mic_level_status",
+  "dims": [
+   "voice",
+   "ux"
+  ]
+ },
+ {
+  "id": "G-031",
+  "area": "G",
+  "title": "The command ends one second after the speaker stops",
+  "scenario": "Wake word, 2.0 s of speech, 3 s of silence (fake VAD: any non-zero sample is speech).",
+  "expected": "One recognition call with 3.0-3.2 s of audio (2.0 s of speech + the 1 s end-of-command silence, to frame accuracy).",
+  "risk": "medium",
+  "check": "end_of_command_timing",
+  "dims": [
+   "voice",
+   "speed"
+  ],
+  "args": {
+   "speech_s": 2.0,
+   "slack_s": 0.2
+  }
+ },
+ {
+  "id": "G-032",
+  "area": "G",
+  "title": "A slow starter is still heard",
+  "scenario": "Wake word, then 4.5 s of silence, then 1 s of speech and 1.2 s of silence (the wait for speech is 5 s).",
+  "expected": "The command is submitted once; its audio covers the pause and the speech (>= 5.5 s); no 'no speech' outcome.",
+  "risk": "medium",
+  "check": "slow_starter",
+  "dims": [
+   "voice",
+   "ux"
+  ],
+  "args": {
+   "pause_s": 4.5
+  }
+ },
+ {
+  "id": "G-033",
+  "area": "G",
+  "title": "Listening for hours does not grow memory",
+  "scenario": "Two minutes of audio frames with no wake word (fake detector never fires).",
+  "expected": "The pre-roll ring holds at most 2 s (+ one 40 ms frame); no command audio is kept; recognition never called.",
+  "risk": "medium",
+  "check": "ring_buffer_bounded",
+  "dims": [
+   "voice",
+   "resources"
+  ],
+  "args": {
+   "seconds": 120
+  }
+ },
+ {
+  "id": "G-034",
+  "area": "G",
+  "title": "Status server: DNS rebinding and other localhost pages refused",
+  "scenario": "Real status server on a free port: GET /status and POST /pause with a non-loopback Host header; POST /pause and /resume from the widget's origins (localhost:48940, 127.0.0.1:48940); POST /resume from http://localhost:9999.",
+  "expected": "403, 403, 200, 403, 200 in that order; the foreign page could not resume the paused microphone; the widget could.",
+  "risk": "high",
+  "check": "status_host_and_origin",
+  "dims": [
+   "voice",
+   "security"
+  ],
+  "args": {
+   "want": {
+    "rebind_get": 403,
+    "rebind_pause": 403,
+    "widget_pause": 200,
+    "other_port_resume": 403,
+    "widget_resume": 200
+   }
+  }
+ },
+ {
+  "id": "G-035",
+  "area": "G",
+  "title": "Recorded test audio is normalised like the microphone",
+  "scenario": "A 1 s 48 kHz stereo WAV whose channels are opposite (L = -R); an 8-bit WAV; FileSource over 1 s of PCM.",
+  "expected": "16000 mono samples (+/-2) with the channels averaged (peak <= 50); the 8-bit file refused with ValueError; FileSource yields 100 whole 40 ms frames ending in 3 s of silence.",
+  "risk": "low",
+  "check": "wav_input_normalised",
+  "dims": [
+   "voice"
+  ]
+ },
+ {
+  "id": "G-036",
+  "area": "G",
+  "title": "Microphone that only offers 44.1 kHz (real device)",
+  "scenario": "On the laptop, a USB microphone whose driver refuses 16 kHz: MicSource must fall back to the device rate and resample, and a full 'Hey Neko, open notepad' must work. Needs the physical microphone; never simulated here.",
+  "expected": "Measured on the laptop; DEFERRED — OWNER HARDWARE REQUIRED.",
+  "risk": "medium",
+  "check": "none",
+  "dims": [
+   "voice"
+  ],
+  "platform": "owner_hardware"
+ },
+ {
+  "id": "G-037",
+  "area": "G",
+  "title": "Pause from the Neko icon with the real microphone",
+  "scenario": "With the real microphone open, the owner pauses listening from the Neko icon, speaks 'Hey Neko' three times, then resumes. Needs the physical microphone; never simulated here.",
+  "expected": "No detection while paused; detections resume after resume. DEFERRED — OWNER HARDWARE REQUIRED.",
+  "risk": "high",
+  "check": "none",
+  "dims": [
+   "voice",
+   "security"
+  ],
+  "platform": "owner_hardware"
  }
 ]

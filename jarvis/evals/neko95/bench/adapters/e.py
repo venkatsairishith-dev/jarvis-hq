@@ -13,6 +13,7 @@ import socket
 import subprocess
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -473,3 +474,463 @@ def monitor_case(a):
     quiet = m.check()
     ok = blip == [] and len(down) == 1 and "port 8080" in down[0].text and quiet == []
     return ok, f"one failed check {len(blip)}, two {len(down)}, three {len(quiet)}"
+
+
+# ---------------------------------------------------------------- diagnosis: proposed fixes must be applicable (2026-10-17)
+def _listening():
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    s.listen(1)
+    return s, s.getsockname()[1]
+
+
+def diag_fix_unique(a):
+    """A fix the diagnosis proposes must replace text that occurs EXACTLY once in the file as it is now (repair.edit_file
+    refuses anything else, so a non-unique fix is a proposal that can never apply); otherwise no fix is proposed."""
+    d = _dir()
+    s, port = _listening() if a.get("listen") else (None, None)
+    try:
+        cfg = d / "config.json"
+        cfg.write_text(a["content"].replace("{port}", str(port)), encoding="utf-8")
+        r = core.diagnose(_dialog(*[t.replace("{port}", str(port)).replace("{file}", str(cfg)) for t in a["dialog"]]), [], [])
+    finally:
+        if s:
+            s.close()
+    f = r.get("fix")
+    n = cfg.read_text(encoding="utf-8").count(f["args"]["find"]) if f else None
+    ok = r["verified"] is True and (f is None or n == 1) and (not a.get("no_fix") or f is None)
+    if a.get("cause_contains"):
+        ok = ok and a["cause_contains"] in r["cause"].replace(str(port), "{port}")
+    return ok, _brief(r) + (f"; the text to replace occurs {n} times in the file" if f else "")
+
+
+def diag_variants(a):
+    """Damaged config files (truncated mid-write, zero bytes, ...): the cause is verified at the right line, no fix is invented."""
+    out = []
+    for v in a["variants"]:
+        d = _dir()
+        cfg = d / "config.json"
+        cfg.write_bytes(v["content"].encode("utf-8"))
+        r = core.diagnose(_dialog("Neko Sample App could not start.", f"File: {cfg}"), [], [])
+        if not (r["verified"] and r.get("line") == v["line"] and r["fix"] is None and f"line {v['line']}" in r["cause"]):
+            return False, f"{v['content'][:30]!r}: " + _brief(r)
+        out.append(f"{v['content'][:15]!r}: line {r['line']}, no fix")
+    return True, "; ".join(out)
+
+
+def diag_text(a):
+    """Dialog text whose claim cannot be checked here (a remote host, a URL that only looks like a path): no verified cause,
+    no fix, and the claim is not repeated as a finding. An optional real file sits at the path the text mentions."""
+    d = _dir()
+    real = d / "config.json"
+    if a.get("file_content") is not None:
+        real.write_text(a["file_content"], encoding="utf-8")
+    r = core.diagnose(_dialog(*[t.replace("{file}", str(real)) for t in a["texts"]]), [], [])
+    bad = []
+    if r["verified"] or r["fix"] is not None:
+        bad.append("claimed")
+    if a.get("no_file") and r.get("file"):
+        bad.append(f"took {r['file']} as the named file")
+    bad += [f"cause says {w!r}" for w in a.get("cause_lacks", []) if w.lower() in r["cause"].lower()]
+    return not bad, "; ".join(bad) + (" | " if bad else "") + _brief(r)
+
+
+def diag_wrong_types(a):
+    """The node's window / event / crash lists arrive with wrong types (a list item that is null, texts given as one string,
+    an object instead of a list, an HTML string): diagnose() must still answer (no exception) and claim nothing."""
+    out = []
+    for v in a["variants"]:
+        try:
+            r = core.diagnose(v.get("windows", []), v.get("events", []), v.get("crashes", []))
+        except Exception as e:  # noqa: BLE001 - the point of the case
+            return False, f"{json.dumps(v)[:90]}: diagnose raised {type(e).__name__}: {e}"[:400]
+        if r["verified"] or r["fix"] is not None:
+            return False, f"{json.dumps(v)[:90]}: claimed " + _brief(r)
+        out.append(r["cause"][:40])
+    return True, f"{len(out)} malformed inputs answered without a claim: {out}"[:500]
+
+
+def diag_huge(a):
+    """A huge screen read (many windows, megabytes of text) with the real error dialog at the end: the diagnosis still finds
+    the named file's fault and its fix, within a time limit."""
+    d = _dir()
+    cfg = d / "config.json"
+    cfg.write_text('{\n  "name": "sample",\n  "port": 80x80\n}\n', encoding="utf-8")
+    noise = [{"title": f"Window {i}", "dialog": False, "texts": ["lorem ipsum dolor sit amet " * 20]} for i in range(a["windows"])]
+    t0 = time.perf_counter()
+    r = core.diagnose(noise + _dialog("Neko Sample App could not start.", f"File: {cfg}"), [], [])
+    ms = (time.perf_counter() - t0) * 1000
+    chars = sum(len(t) for w in noise for t in w["texts"])
+    ok = r["verified"] and r.get("line") == 3 and (r.get("fix") or {}).get("args", {}).get("replace") == '"port": 8080' and ms <= a["max_ms"]
+    return ok, f"{len(noise)} windows, {chars // 1000} k chars: {ms:.0f} ms (limit {a['max_ms']}); " + _brief(r)
+
+
+# ---------------------------------------------------------------- the troubleshooter with malformed node output
+class _BadReadConsole(_Console):
+    """Like _Console, but the node's window_text result file holds `bad` (an HTML page, cut-off JSON, ...): always, or only
+    for the read after the fix (`when`). Everything else is the fake console as above, running the node's real repair."""
+
+    def __init__(self, app, local, bad, when):
+        super().__init__(app, local, False)
+        self.bad, self.when = bad, when
+
+    def handle(self, method, path, body):
+        if path.endswith("/pc") and body.get("op") == "diag" and body.get("check") == "window_text" and \
+                (self.when == "always" or (self.when == "after_fix" and self.repairs)):
+            self.n += 1
+            f = self.local / f"window_text-{self.n}.json"
+            f.write_text(self.bad, encoding="utf-8")
+            jid = f"j{len(self.jobs) + 1}"
+            self.jobs[jid] = {"ok": True, "local_result": str(f)}
+            return 202, {"job": jid, "status": "queued"}
+        return super().handle(method, path, body)
+
+
+def _troubleshoot_with(console_of, config):
+    """Run DesktopPlugin.run_troubleshooter against a fake console; returns (report or None, exception text, console,
+    whether the config file changed, local files left, backups on disk, the raw result)."""
+    from plugin.plugins.desktop import DesktopPlugin
+    b = _Backups().__enter__()
+    try:
+        cfg = _cfg(b, config)
+        before = cfg.read_bytes()
+        local = _dir() / "neko-local"
+        local.mkdir()
+        console = console_of(_SampleApp(cfg), local)
+        srv = _serve(console)
+        saved = core.CONSOLE, core.LOCAL_RESULTS, core.set_activity
+        core.CONSOLE, core.LOCAL_RESULTS, core.set_activity = f"http://127.0.0.1:{srv.server_address[1]}", local, (lambda *x, **k: None)
+
+        class Host:
+            pass
+        h = Host()
+        h._run = lambda pc, body, timeout, what="": DesktopPlugin._run(h, pc, body, timeout, what)
+        err, res = "", None
+        try:
+            res = asyncio.run(DesktopPlugin.run_troubleshooter(h, app="NekoSampleApp", start_name="Neko Sample App"))
+        except Exception as e:  # noqa: BLE001 - a raise is what the cases look for
+            err = f"{type(e).__name__}: {e}"[:200]
+        finally:
+            core.CONSOLE, core.LOCAL_RESULTS, core.set_activity = saved
+            srv.shutdown()
+            srv.server_close()
+        rep = getattr(res, "value", None)
+        return rep, err, console, cfg.read_bytes() != before, list(local.iterdir()), b.count(), res
+    finally:
+        b.__exit__(None, None, None)
+
+
+def troubleshooter_bad_read(a):
+    """The node's screen read comes back malformed (fake console, real node repair code). Wanted: the troubleshooter answers
+    (no exception), changes nothing it could not diagnose, deletes the screen-text file, and never says 'fixed'."""
+    out = []
+    for bad in a["reads"]:
+        rep, err, console, changed, left, backups, res = _troubleshoot_with(
+            lambda app, local, bad=bad: _BadReadConsole(app, local, bad, "always"), '{\n  "name": "sample",\n  "port": 80x80\n}\n')
+        if err:
+            return False, f"read {bad[:30]!r}: run_troubleshooter raised {err}"
+        outcome = (rep or {}).get("outcome", "") if rep is not None else f"Err {getattr(res, 'error', '')}"
+        if console.repairs or changed or left or "fixed" in str(outcome):
+            return False, f"read {bad[:30]!r}: outcome {outcome!r}, repairs {console.repairs}, file changed {changed}, files left {len(left)}"
+        out.append(f"{bad[:20]!r}: {str(outcome)[:40]}")
+    return True, "; ".join(out)
+
+
+def troubleshooter_empty_read(a):
+    """The node's screen read is an empty file (nothing captured), twice (the troubleshooter starts the program once and
+    looks again). Wanted: 'hypothesis only', no approval asked, no repair, no file left."""
+    rep, err, console, changed, left, backups, res = _troubleshoot_with(
+        lambda app, local: _BadReadConsole(app, local, "", "always"), '{\n  "name": "sample",\n  "port": 80x80\n}\n')
+    rep = rep or {}
+    ok = not err and rep.get("outcome") == "hypothesis only" and rep.get("verified") is False and console.approvals == 0 \
+        and console.repairs == 0 and not changed and not left
+    return ok, f"{err or ''} outcome {rep.get('outcome')!r}, cause {str(rep.get('cause'))[:80]!r}, approvals {console.approvals}, repairs {console.repairs}, files left {len(left)}"
+
+
+def troubleshooter_bad_verify(a):
+    """The fix is approved and applied (a real backup is made), then the read that should verify it comes back as an HTML
+    page. Wanted: no exception, the report still names the backup and the undo, and it does not say 'fixed and verified'."""
+    rep, err, console, changed, left, backups, res = _troubleshoot_with(
+        lambda app, local: _BadReadConsole(app, local, a["read"], "after_fix"), '{\n  "name": "sample",\n  "port": 80x80\n}\n')
+    rep = rep or {}
+    ok = not err and console.repairs == 1 and bool(rep.get("backup")) and bool(rep.get("undo")) \
+        and rep.get("outcome") != "fixed and verified" and not left
+    return ok, (f"{err + '; ' if err else ''}repairs {console.repairs}, backups on disk {backups}, report backup {rep.get('backup')!r}, "
+                f"undo {rep.get('undo')!r}, outcome {rep.get('outcome')!r}, files left {len(left)}")
+
+
+class _HtmlServer:
+    """Something else answers on the console's port: every request gets 200 with an HTML page (a web server, a captive proxy)."""
+
+    def __enter__(self):
+        class H(BaseHTTPRequestHandler):
+            def _go(self):
+                n = int(self.headers.get("Content-Length") or 0)
+                if n:
+                    self.rfile.read(n)
+                data = b"<html><body><h1>Welcome to nginx!</h1></body></html>"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            do_GET = do_POST = _go
+
+            def log_message(self, *a):
+                pass
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.saved = core.CONSOLE, core.set_activity
+        core.CONSOLE, core.set_activity = f"http://127.0.0.1:{self.srv.server_address[1]}", (lambda *x, **k: None)
+        return self
+
+    def __exit__(self, *exc):
+        core.CONSOLE, core.set_activity = self.saved
+        self.srv.shutdown()
+        self.srv.server_close()
+
+
+def console_not_json(a):
+    """The console's port answers 200 with HTML instead of JSON. Wanted: core.Pc reports a DesktopError (the console is not
+    answering properly), never a raw decode error, and the troubleshooter returns its error instead of raising."""
+    from plugin.plugins.desktop import DesktopPlugin
+    with _HtmlServer():
+        try:
+            core.Pc().run({"op": "diag", "check": "window_text", "target": "NekoSampleApp"}, 5)
+            pc = "no error at all"
+        except core.DesktopError as e:
+            pc = f"DesktopError: {e}"
+        except Exception as e:  # noqa: BLE001
+            pc = f"{type(e).__name__}: {e}"
+
+        class Host:
+            pass
+        h = Host()
+        h._run = lambda p, body, timeout, what="": DesktopPlugin._run(h, p, body, timeout, what)
+        try:
+            res = asyncio.run(DesktopPlugin.run_troubleshooter(h, app="NekoSampleApp"))
+            ts = type(res).__name__
+        except Exception as e:  # noqa: BLE001
+            ts = f"raised {type(e).__name__}"
+    return pc.startswith("DesktopError") and ts == "Err", f"Pc.run -> {pc[:120]}; troubleshooter -> {ts}"
+
+
+# ---------------------------------------------------------------- the coordinator with malformed agent results
+def coordinator_bad_result(a):
+    """A step's agent returns a malformed result (fake agent). Wanted for each: the coordinator records the task (no
+    exception), the status is not 'completed', the summary does not start with 'Done', and the PC-task lock is released."""
+    out = []
+    for res in a["results"]:
+        d = _dir()
+        co = C.Coordinator({a["tool"]: lambda s, res=res: res}, [], tasks_dir=d / "t", lock_path=d / "l")
+        try:
+            rec = co.run("check the disk", D.Plan([dict(a["step"])], "ok", model="bench"))
+        except Exception as e:  # noqa: BLE001
+            return False, f"result {res!r}: the coordinator raised {type(e).__name__}: {e}; lock left behind {(d / 'l').exists()}"[:400]
+        saved = list((d / "t").glob("*.json"))
+        if rec["status"] == "completed" or C.summary(rec).startswith("Done") or (d / "l").exists() or not saved:
+            return False, f"result {res!r}: status {rec['status']}, summary {C.summary(rec)[:80]!r}, lock left {(d / 'l').exists()}, records {len(saved)}"
+        out.append(f"{str(res)[:20]!r}: {rec['status']}")
+    return True, "; ".join(out)
+
+
+# ---------------------------------------------------------------- repairs on files as they are now
+def repair_changed_since(a):
+    """Diagnosis proposes a fix; before the approved repair runs, the owner fixes the file by hand. The repair applies the
+    proposal to the file as it is NOW: the text is gone, so it changes nothing and makes no backup."""
+    with _Backups() as b:
+        p = _cfg(b)
+        r = core.diagnose(_dialog("Neko Sample App could not start.", f"File: {p}"), [], [])
+        fix = r.get("fix") or {}
+        p.write_text('{\n  "name": "sample",\n  "port": 9090\n}\n', encoding="utf-8")        # the owner's own edit
+        before = p.read_bytes()
+        res = repair.run({"op": fix.get("action", "edit_file"), "target": fix.get("target", str(p)), "args": fix.get("args", {})})
+        ok = bool(fix) and not res["ok"] and "0 times" in str(res.get("error")) and p.read_bytes() == before and b.count() == 0
+        return ok, f"proposed {fix.get('args')}; repair -> {res}; file unchanged {p.read_bytes() == before}; backups {b.count()}"
+
+
+def repair_minimal(a):
+    """A fix on a file with a UTF-8 BOM, CRLF line ends and non-ASCII text changes only the replaced bytes; the backup is
+    byte-identical to the original."""
+    with _Backups() as b:
+        p = _cfg(b)
+        orig = '﻿{\r\n  "name": "café ☕ sample",\r\n  "port": 80x80,\r\n  "debug": false\r\n}\r\n'.encode("utf-8")
+        p.write_bytes(orig)
+        r = repair.edit_file(str(p), '"port": 80x80', '"port": 8080')
+        after = p.read_bytes()
+        bak = (Path(repair.BACKUPS) / r.get("backup", "?") / "file.bak")
+        only = after == orig.replace(b'"port": 80x80', b'"port": 8080')
+        crlf = after.count(b"\r\n") == orig.count(b"\r\n")
+        same = bak.is_file() and bak.read_bytes() == orig
+        ok = r["ok"] and only and same and r["lines_before"] == r["lines_after"]
+        return ok, f"ok {r['ok']}; only the value changed {only}; BOM kept {after.startswith(orig[:3])}; CRLF kept {crlf}; backup identical {same}"
+
+
+def repair_unsafe_files(a):
+    """Files a text edit cannot change safely: UTF-16 text, a file over the size limit, a link that leads outside the
+    owner's folder, a folder. Each is refused; nothing on disk changes and no backup is made."""
+    with _Backups() as b:
+        base = b.dir / "app"
+        base.mkdir(parents=True, exist_ok=True)
+        u16 = base / "u16.json"
+        u16.write_bytes('{"port": 80x80}'.encode("utf-16"))
+        big = base / "big.json"
+        big.write_bytes(b"{" + b" " * (repair.MAX_FILE + 10) + b'"port": 80x80}')
+        # a file outside the user's folder (HOME is /tmp in the test image) that a careless edit could really change
+        outside = next(x for x in ("/var/tmp", "/dev/shm", "/etc") if os.access(x, os.W_OK) or x == "/etc")
+        target = Path(tempfile.mkdtemp(dir=outside)) / "outside.json" if outside != "/etc" else Path("/etc/hostname")
+        if outside != "/etc":
+            target.write_text('{"port": 80x80}', encoding="utf-8")
+        tbefore = target.read_bytes()
+        link = base / "link.json"
+        os.symlink(target, link)
+        cases = {"utf-16": u16, "too large": big, "link outside": link, "a folder": base}
+        before = {k: (v.read_bytes() if v.is_file() else None) for k, v in cases.items()}
+        res = {k: repair.edit_file(str(v), "80x80", "8080") for k, v in cases.items()}
+        changed = [k for k, v in cases.items() if v.is_file() and v.read_bytes() != before[k]]
+        ok = not any(r["ok"] for r in res.values()) and not changed and b.count() == 0 and target.read_bytes() == tbefore
+        if target.parent != Path("/etc"):
+            shutil.rmtree(target.parent, ignore_errors=True)
+        return ok, "; ".join(f"{k}: {(r.get('error') or 'ok')[:50]}" for k, r in res.items()) + f"; changed {changed}; backups {b.count()}"
+
+
+def repair_bad_manifest(a):
+    """A backup whose manifest.json is damaged (see variants) is never restored: restore() answers ok=False (no exception)
+    and the live file stays as it is."""
+    out = []
+    for v in a["variants"]:
+        with _Backups() as b:
+            p = _cfg(b)
+            r = repair.edit_file(str(p), '"port": 80x80', '"port": 8080')
+            m = Path(repair.BACKUPS) / r["backup"] / "manifest.json"
+            good = json.loads(m.read_text(encoding="utf-8"))
+            text = {"truncated": json.dumps(good)[:40], "empty": "", "no_sha": json.dumps({k: x for k, x in good.items() if k != "sha256"}),
+                    "a list": json.dumps([good]), "path a number": json.dumps(dict(good, path=42)),
+                    "sha a number": json.dumps(dict(good, sha256=12345))}[v]
+            m.write_text(text, encoding="utf-8")
+            live = p.read_bytes()
+            try:
+                t = repair.restore(r["backup"])
+            except Exception as e:  # noqa: BLE001
+                return False, f"{v}: restore raised {type(e).__name__}: {e}"
+            if t.get("ok") or p.read_bytes() != live:
+                return False, f"{v}: restore {t}; live file changed {p.read_bytes() != live}"
+            out.append(f"{v}: {t.get('error')}")
+    return True, "; ".join(out)
+
+
+def repair_restart_garbage(a):
+    """restart_app when PowerShell's answer is not the expected JSON object (fake PowerShell; see variants). Wanted: never
+    an exception, never ok, and the program is started only when the close step was read as a clean close."""
+    exe = _home_dir() / "NekoSampleApp.exe"
+    exe.write_bytes(b"MZ")
+    clean = json.dumps({"running": True, "path": str(exe), "closed": True, "left": 0})
+    out = []
+    try:
+        for v in a["variants"]:
+            close = clean if v["close"] == "CLEAN" else v["close"]
+
+            class P(_FakeProc):
+                def __enter__(self):
+                    self.o = (runtime.powershell, runtime.popen)
+                    runtime.powershell = lambda script, env=None, timeout=30: (self.ps.append(script), subprocess.CompletedProcess(
+                        [], 0, close if script == repair.CLOSE else v["check"], ""))[1]
+                    runtime.popen = lambda args, **kw: self.started.append(args)
+                    return self
+            with P({}, {}) as f:
+                try:
+                    r = repair.restart_app("NekoSampleApp")
+                except Exception as e:  # noqa: BLE001
+                    return False, f"close {close[:20]!r} / check {v['check'][:20]!r}: raised {type(e).__name__}: {e}"
+            if r["ok"] or bool(f.started) != v["starts"]:
+                return False, f"close {close[:20]!r} / check {v['check'][:20]!r}: {r}, started {f.started}"
+            out.append(f"{v['close'][:12]!r}/{v['check'][:8]!r}: {str(r.get('error'))[:45]}")
+    finally:
+        shutil.rmtree(exe.parent, ignore_errors=True)
+    return True, "; ".join(out)
+
+
+def repair_install_listing(a):
+    """What counts as 'installed' after winget (fake winget; see variants): only an exact package id in the listing of a
+    successful 'winget list'. A longer id that contains it, an error text that echoes it, or a failed list is not success."""
+    o_which, o_run = repair.shutil.which, runtime.run
+    out = []
+    try:
+        for v in a["variants"]:
+            repair.shutil.which = lambda n: "/fake/winget" if n == "winget" else o_which(n)
+            runtime.run = lambda args, timeout=30, v=v, **kw: subprocess.CompletedProcess(
+                args, v["exit"] if args[1] == "list" else 0, v["stdout"] if args[1] == "list" else "Successfully installed", "")
+            r = repair.install("Neko.SampleApp")
+            if r["ok"] != v["installed"]:
+                return False, f"list said {v['stdout'][:70]!r} (exit {v['exit']}): ok {r['ok']}, want {v['installed']}"
+            out.append(f"exit {v['exit']} {v['stdout'][:25]!r}: ok {r['ok']}")
+    finally:
+        repair.shutil.which, runtime.run = o_which, o_run
+    return True, "; ".join(out)
+
+
+# ---------------------------------------------------------------- the monitor after a damaged state file
+def monitor_corrupt_state(a):
+    """The monitor's saved state is cut off mid-write and a task record is damaged. Wanted: the monitor starts fresh (no
+    flood of old crash alerts), still reports a crash that happens afterwards, and the stuck-task scan skips the damaged
+    record while still finding the stuck one."""
+    d = _dir()
+    path = d / "monitor.json"
+    path.write_text('{"bookmark": 95, "seen_up": {"llama-swap": tr', encoding="utf-8")
+    events = [{"record": r, "id": 1000, "app": f"OldApp{r}.exe"} for r in range(1, 101)]
+    t = [10_000.0]
+    st = MON.State.load(path)
+    m = MON.Monitor(st, crashes=lambda after: [e for e in events if e["record"] > after], newest=lambda: 100, disks=lambda: {},
+                    port=lambda p: True, tasks=lambda: [], services={}, clock=lambda: t[0])
+    first = m.check()
+    events.append({"record": 101, "id": 1000, "app": "NekoSampleApp.exe"})
+    second = m.check()
+    tasks = d / "pc_tasks"
+    tasks.mkdir()
+    (tasks / "20261017-010000-aaaaaa.json").write_text('{"id": "x", "request": "open', encoding="utf-8")
+    (tasks / "20261017-010001-bbbbbb.json").write_text(json.dumps({"id": "stuck1", "request": "type the letter", "started": 1.0,
+                                                                   "status": "running"}), encoding="utf-8")
+    open_ = MON.open_tasks(tasks)
+    m2 = MON.Monitor(MON.State(), crashes=lambda after: [], newest=lambda: 1, disks=lambda: {}, port=lambda p: True,
+                     tasks=lambda: open_, services={}, clock=lambda: 5_000.0)
+    stuck = m2.check()
+    again = m2.check()                                         # the same stuck task is not announced twice
+    ok = first == [] and len(second) == 1 and "NekoSampleApp" in second[0].text and [o["id"] for o in open_] == ["stuck1"] \
+        and len(stuck) == 1 and "type the letter" in stuck[0].text and again == []
+    return ok, f"alerts after loading the damaged state {len(first)}; new crash {[x.text[:40] for x in second]}; open tasks " \
+               f"{[o['id'] for o in open_]}; stuck alerts {[x.text[:40] for x in stuck]}"
+
+
+def take_local_outside(a):
+    """A node result whose local_result path points outside outputs/neko-local (an absolute path elsewhere, a ../ escape, a
+    link inside neko-local that leads out): take_local() refuses each with DesktopError and deletes nothing; a proper file
+    inside neko-local is read once and deleted."""
+    d = _dir()
+    local = d / "neko-local"
+    local.mkdir()
+    victim = d / "owner-notes.json"
+    victim.write_text('{"keep": true}', encoding="utf-8")
+    link = local / "link.json"
+    os.symlink(victim, link)
+    paths = {"absolute": str(victim), "dot-dot": str(local / ".." / "owner-notes.json"), "link": str(link)}
+    saved = core.LOCAL_RESULTS
+    core.LOCAL_RESULTS = local
+    out = {}
+    try:
+        for name, p in paths.items():
+            try:
+                core.take_local(p)
+                out[name] = "read"
+            except core.DesktopError:
+                out[name] = "refused"
+            except Exception as e:  # noqa: BLE001
+                out[name] = f"raised {type(e).__name__}"
+        good = local / "window_text-1.json"
+        good.write_text('[{"title": "x"}]', encoding="utf-8")
+        got = core.take_local(str(good))
+    finally:
+        core.LOCAL_RESULTS = saved
+    ok = all(v == "refused" for v in out.values()) and victim.read_text(encoding="utf-8") == '{"keep": true}' \
+        and got == [{"title": "x"}] and not good.exists()
+    return ok, f"{out}; outside file still there {victim.exists()}; proper file read {got} and deleted {not good.exists()}"

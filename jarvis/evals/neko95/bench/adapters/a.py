@@ -95,7 +95,17 @@ def _check(plan, exp: dict) -> list[str]:
             for k, v in s.items():
                 if k in ("query", "text", "target") and word.lower() in str(v).lower():
                     bad.append(f"{word!r} in step {s['tool']}.{k}={v!r}")
+    for app in exp.get("app_never", []):                  # an app the owner corrected away or negated must not be acted on
+        bad += [f"step {s['tool']} acts on app {s.get('app')!r}" for s in plan.steps if _norm_app(s.get("app")) == _norm_app(app)]
+    for prof in exp.get("profile_never", []):             # a profile the owner excluded must not be used by any step
+        bad += [f"step {s['tool']} uses {prof}" for s in plan.steps if s.get("profile") == prof]
+    for k, want in (exp.get("step_values") or {}).items():  # every step that has key k carries this value
+        bad += [f"step {s['tool']} {k}={s.get(k)!r} != {want!r}" for s in plan.steps if k in s and s.get(k) != want]
     return bad
+
+
+def _norm_app(x) -> str:
+    return "".join(ch for ch in str(x or "").lower() if ch.isalnum())
 
 
 # ---------------------------------------------------------------- routing: rules vs the model
@@ -360,11 +370,14 @@ def task_context(a):
     k = Kernel(os.path.join(tmp.name, "d"))
     try:
         T = Tasks(k)
-        tid = T.create("hermes", "private", a["request"], a["goal"], a.get("plan"), a.get("criteria"), max_attempts=a.get("max_attempts", 3))
+        goal = (a["goal"] + " " + " ".join(f"detail-{i}" for i in range(int(a.get("goal_pad_words", 0))))).strip()
+        tid = T.create("hermes", "private", a["request"], goal, a.get("plan"), a.get("criteria"), max_attempts=a.get("max_attempts", 3))
         refused = []
         for u in a.get("updates", []):
+            u = dict(u)
+            by = u.pop("by", "hermes")                     # None = the kernel itself (the owner's console, the lab runner)
             try:
-                T.update("hermes", tid, **u)
+                T.update(by, tid, **u)
             except TaskError as e:
                 refused.append(f"{u.get('state') or 'update'}: {e}")
         cp = T.checkpoint("hermes")
@@ -377,12 +390,131 @@ def task_context(a):
                     bad.append(f"{key}={got} lacks {want}")
             elif str(want).lower() not in str(got).lower():
                 bad.append(f"{key}={got!r} lacks {want!r}")
+        for key, never in (a.get("expect_not") or {}).items():
+            got = c.get(key)
+            if any(never.lower() in str(g).lower() for g in (got if isinstance(got, list) else [got])):
+                bad.append(f"{key}={got!r} contains {never!r}")
         if len(refused) != int(a.get("expect_refused", 0)):
             bad.append(f"refused {refused}")
         for w in a.get("text_contains", []):
             if w.lower() not in cp["text"].lower():
-                bad.append(f"text lacks {w!r}")
+                bad.append(f"text lacks {w!r} (text is {len(cp['text'])} chars)")
         return not bad, "; ".join(bad) or f"state {c['state']}, attempts {c['attempts']}, next {c['next']!r}, refused {refused}"
     finally:
         k.db.close()
         tmp.cleanup()
+
+
+# ---------------------------------------------------------------- malformed model output (2026-10-17)
+def validate_no_crash(a):
+    """Model answers with wrong-typed fields (hand-written; the JSON grammar normally prevents them, a different model or a
+    proxy can still send them) -> decide.validate(). Each must come back as a plan the coordinator refuses (fallback or
+    clarify), never as an exception and never as a runnable plan built from the garbage."""
+    seen = []
+    for v in a["variants"]:
+        raw = v["model_plan"] if isinstance(v["model_plan"], str) else json.dumps(v["model_plan"])
+        try:
+            p = D.validate(raw, PROFILES, v["request"])
+        except Exception as e:  # noqa: BLE001 - the point of the case
+            return False, f"{raw[:80]}: validate raised {type(e).__name__}: {e}"[:400]
+        if p.status == "ok":
+            return False, f"{raw[:80]}: accepted as a runnable plan: {_view(p)}"
+        seen.append(f"{raw[:40]} -> {p.status}")
+    return True, "; ".join(seen)[:500]
+
+
+def decide_truncated(a):
+    """The model's answer cut off at every possible length (max_tokens, a dropped connection): every prefix is refused as
+    'not JSON' (fallback with no steps), never run as a shorter plan; through the coordinator, no agent is called."""
+    full = json.dumps(a["model_plan"])
+    whole = D.validate(full, PROFILES, a["request"])
+    if whole.status != "ok":
+        return False, f"the complete answer itself did not validate: {_view(whole)}"
+    bad = [i for i in range(len(full)) if (lambda p: p.status != "fallback" or p.steps)(D.validate(full[:i], PROFILES, a["request"]))]
+    called = []
+    agents = {t: (lambda s, t=t: called.append(t) or {"ok": True}) for t in D.TOOLS}
+    half = full[:len(full) // 2]
+    with tempfile.TemporaryDirectory() as tmp:
+        c = C.Coordinator(agents, PROFILES, tasks_dir=Path(tmp) / "t", lock_path=Path(tmp) / "lock",
+                          decide_fn=lambda r: D.decide(r, PROFILES, post=lambda b: half))
+        rec = c.run(a["request"])
+    ok = not bad and rec["status"] == "not_understood" and not called
+    return ok, (f"{len(full)} prefixes checked; accepted at lengths {bad[:5]}; coordinator on a half answer: status "
+                f"{rec['status']}, agents called {called}")
+
+
+def _planner_text(t):
+    return t if isinstance(t, str) else json.dumps(t)
+
+
+def planner_truncated(a):
+    """The planner model's reply cut off at every possible length: every prefix is refused, none runs as a shorter plan."""
+    from plugin.plugins.main_agent.planner import PlanError, parse_plan
+    full, caps = _planner_text(a["plan"]), _caps(a.get("caps"))
+    try:
+        parse_plan(full, caps, 6)
+    except PlanError as e:
+        return False, f"the complete plan itself was refused: {e}"
+    accepted = []
+    for i in range(len(full)):
+        try:
+            parse_plan(full[:i], caps, 6)
+            accepted.append(i)
+        except PlanError:
+            pass
+    return not accepted, f"{len(full)} prefixes checked; accepted at lengths {accepted[:5]}"
+
+
+def planner_refuses_each(a):
+    """Each reply must be refused with PlanError (optionally with a given message); none may become a plan."""
+    from plugin.plugins.main_agent.planner import PlanError, parse_plan
+    out = []
+    for t in a["texts"]:
+        try:
+            plan = parse_plan(_planner_text(t), _caps(a.get("caps")), 6)
+        except PlanError as e:
+            if a.get("error_contains") and a["error_contains"].lower() not in str(e).lower():
+                return False, f"{_planner_text(t)[:60]!r}: refused, but with {e}"
+            out.append(f"{_planner_text(t)[:30]!r}: {e}")
+            continue
+        return False, f"{_planner_text(t)[:80]!r}: accepted as {[(s.id, s.kind, s.ref, s.args) for s in plan.steps]}"
+    return True, "; ".join(out)[:500]
+
+
+def planner_huge(a):
+    """A runaway planner reply (megabytes in summary and goal) is bounded: summary <= 200 chars, goal <= 600, fast."""
+    from plugin.plugins.main_agent.planner import parse_plan
+    text = json.dumps({"summary": "S " * a["summary_chars"], "steps": [{"id": "s1", "agent": "think", "goal": "G " * a["goal_chars"]}]})
+    t0 = time.perf_counter()
+    plan = parse_plan(text, _caps(None), 6)
+    ms = (time.perf_counter() - t0) * 1000
+    ok = len(plan.summary) <= 200 and len(plan.steps[0].goal) <= 600 and ms <= a["max_ms"]
+    return ok, f"{len(text)} chars in; summary {len(plan.summary)}, goal {len(plan.steps[0].goal)} chars; {ms:.0f} ms (limit {a['max_ms']})"
+
+
+# ---------------------------------------------------------------- which earlier task does "open it" mean? (2026-10-17)
+def coordinator_follow_two(a):
+    """Several task records on disk (written as the coordinator writes them; a 'raw' one is a damaged file). 'open it' must
+    refer to the NEWEST task only: never reach back to an older task's file. The model is not asked (it raises if it is)."""
+    with tempfile.TemporaryDirectory() as t:
+        tasks, now = Path(t) / "tasks", time.time()
+        tasks.mkdir()
+        for n, r in enumerate(a["records"]):
+            at = now - float(r["age_s"])
+            name = f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(at))}-{n:06x}.json"
+            body = r["raw"] if "raw" in r else json.dumps({"request": r["request"], "started": at - 5, "finished": at,
+                                                           "status": r.get("status", "completed"), "steps": r["steps"]})
+            (tasks / name).write_text(body, encoding="utf-8")
+        c = C.Coordinator({}, PROFILES, tasks_dir=tasks, lock_path=Path(t) / "lock")
+        real = D.ask_model
+        D.ask_model = lambda *x, **k: (_ for _ in ()).throw(_ModelAsked("model asked"))
+        try:
+            p = c.decide_fn(a["request"])
+        except _ModelAsked:
+            return False, "the model was asked"
+        finally:
+            D.ask_model = real
+    bad = _check(p, a["expect"])
+    for path in a.get("never_open", []):
+        bad += [f"opens {path}" for s in p.steps if path in str(s.get("path") or s.get("url") or "")]
+    return not bad, "; ".join(bad) or _view(p)

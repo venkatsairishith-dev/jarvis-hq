@@ -409,5 +409,373 @@
    "intent"
   ],
   "platform": "owner_hardware"
+ },
+ {
+  "id": "F-031",
+  "area": "F",
+  "title": "The right memory among look-alikes",
+  "scenario": "Fourteen stored entries; five are about seats (window seat on flights, aisle seat on trains, front seat in cabs, car seat cover, office seat number). The agent asks 'aisle seat trains' and 'window seat long flights'.",
+  "expected": "resolve() returns the meant entry first and unique for each question; every candidate is a stored text verbatim.",
+  "risk": "high",
+  "check": "resolve_among_distractors",
+  "dims": [
+   "memory"
+  ],
+  "args": {
+   "distractors": [
+    "Prefer a window seat on long flights",
+    "Prefer an aisle seat on trains",
+    "Book the front seat in cabs",
+    "My car seat cover is grey leather",
+    "Seat number 14 at the office is mine"
+   ],
+   "filler": [
+    "Use dark mode in every app",
+    "My daughter's school is DPS Hyderabad",
+    "Allergic to peanuts",
+    "Weekly report goes out on Friday",
+    "Favourite editor is VS Code",
+    "Gym on Monday and Thursday",
+    "Prefers metric units",
+    "Mother tongue is Telugu",
+    "Coffee without sugar"
+   ],
+   "queries": {
+    "aisle seat trains": "Prefer an aisle seat on trains",
+    "window seat long flights": "Prefer a window seat on long flights"
+   }
+  }
+ },
+ {
+  "id": "F-032",
+  "area": "F",
+  "title": "Two entries disagree: the conflict is reported, never merged",
+  "scenario": "The agent saved 'Office address: Hitech City, Hyderabad' and later, as a separate entry, 'Office address: Gachibowli, Hyderabad (moved in March)'. It now asks for 'office address', and also tries to forget 'office address' by content through the real agent endpoint.",
+  "expected": "resolve() is not unique and returns both texts verbatim; list(query) returns both; forget-by-content answers 409 with both candidates and deletes nothing.",
+  "risk": "critical",
+  "check": "conflicting_entries",
+  "dims": [
+   "memory"
+  ],
+  "args": {
+   "texts": [
+    "Office address: Hitech City, Hyderabad",
+    "Office address: Gachibowli, Hyderabad (moved in March)"
+   ],
+   "query": "office address"
+  }
+ },
+ {
+  "id": "F-033",
+  "area": "F",
+  "title": "A corrected fact cannot be found by its old words",
+  "scenario": "'My gym is Anytime Fitness on 5th street' is corrected to 'My gym is Cult Fit near Gachibowli metro' (update, same id). The agent later searches with the old words ('Anytime Fitness 5th street').",
+  "expected": "The old words find nothing (list query empty, resolve has no unique match and never the old text); the new words find the entry uniquely; only get() history keeps the old text; the session block has only the new one.",
+  "risk": "high",
+  "check": "corrected_old_words_gone",
+  "dims": [
+   "memory"
+  ],
+  "args": {
+   "old": "My gym is Anytime Fitness on 5th street",
+   "new": "My gym is Cult Fit near Gachibowli metro",
+   "old_query": "Anytime Fitness 5th street",
+   "new_query": "Cult Fit Gachibowli metro gym",
+   "others": [
+    "Prefers metric units",
+    "Use dark mode in every app"
+   ]
+  }
+ },
+ {
+  "id": "F-034",
+  "area": "F",
+  "title": "A forgotten entry is gone from every read path",
+  "scenario": "An entry is forgotten; then get, list, list(query), resolve and render are asked for it; then the same text is saved again.",
+  "expected": "No read path returns it; saving it again makes a NEW entry (new id, version 1, no old history), not a revived one; the unrelated entry is untouched.",
+  "risk": "critical",
+  "check": "forgotten_everywhere",
+  "dims": [
+   "memory",
+   "security"
+  ]
+ },
+ {
+  "id": "F-035",
+  "area": "F",
+  "title": "Forget with a stale version keeps the owner's correction",
+  "scenario": "The agent read 'Weekly report goes to Ravi' (v1); the owner corrected it to Meena (v2); the agent then asks to forget v1.",
+  "expected": "Conflict carrying the owner's text; the corrected entry (v2) survives.",
+  "risk": "high",
+  "check": "forget_stale_version",
+  "dims": [
+   "memory",
+   "reliability"
+  ]
+ },
+ {
+  "id": "F-036",
+  "area": "F",
+  "title": "A forgotten entry cannot be brought back by a stale update",
+  "scenario": "An agent that read 'Spare key is under the third flower pot' before it was forgotten sends an update for version 1.",
+  "expected": "Refused ('no such entry'); the row stays a tombstone with no text.",
+  "risk": "critical",
+  "check": "no_resurrection",
+  "dims": [
+   "memory",
+   "security"
+  ]
+ },
+ {
+  "id": "F-037",
+  "area": "F",
+  "title": "Update and forget at the same moment: one wins, consistently",
+  "scenario": "Eight rounds: two threads, one updating and one forgetting the same entry from version 1, released together.",
+  "expected": "Each round exactly one succeeds; the row matches the winner (a tombstone with no text, or version 2 with the new text).",
+  "risk": "high",
+  "check": "forget_update_race",
+  "dims": [
+   "memory",
+   "reliability"
+  ],
+  "args": {
+   "rounds": 8
+  }
+ },
+ {
+  "id": "F-038",
+  "area": "F",
+  "title": "Forget by content stays inside its scope",
+  "scenario": "Through the real agent endpoint: 'Step 3 of 5 done: hotel shortlist saved' lives in scope task-42; the agent asks to forget 'hotel shortlist saved' in the default scope.",
+  "expected": "409 (nothing forgotten); the task-scope entry is never offered as a candidate nor found by default-scope resolve; it is still there.",
+  "risk": "high",
+  "check": "endpoint_scope_forget",
+  "dims": [
+   "memory"
+  ]
+ },
+ {
+  "id": "F-039",
+  "area": "F",
+  "title": "Public-lane agent: no read or write path reaches the owner's memory",
+  "scenario": "Through the real agent endpoint, a public-lane test agent (own token) tries resolve, render, list with a query, forget by content, and update by id on the owner's private entry ('PAN card ... blue folder'). F-026 covers get/forget-by-id/list.",
+  "expected": "No reply contains the owner's text; resolve/render/list are empty; forget 409 and update 400; the owner's entry is still v1.",
+  "risk": "critical",
+  "check": "endpoint_public_lane_reads",
+  "dims": [
+   "memory",
+   "security"
+  ]
+ },
+ {
+  "id": "F-040",
+  "area": "F",
+  "title": "Same text in two agents: forget removes only your own",
+  "scenario": "The owner's agent and a public test agent each saved 'Prefers jasmine tea in the evening'; the test agent forgets it by content.",
+  "expected": "Only the test agent's copy is forgotten; the owner's entry (other id) remains.",
+  "risk": "high",
+  "check": "endpoint_same_text_two_agents",
+  "dims": [
+   "memory",
+   "security"
+  ]
+ },
+ {
+  "id": "F-041",
+  "area": "F",
+  "title": "Endpoint: a malformed version is refused, not a dropped connection",
+  "scenario": "Through the real agent endpoint, update and forget arrive with expected_version 'latest', null, [1] or {\"v\": 1} (an agent's tool-call JSON gone wrong).",
+  "expected": "Each gets an HTTP 4xx refusal with a reason; the entry is unchanged (v1).",
+  "risk": "high",
+  "check": "endpoint_bad_version",
+  "dims": [
+   "memory",
+   "reliability"
+  ],
+  "args": {
+   "values": [
+    "latest",
+    null,
+    [
+     1
+    ],
+    {
+     "v": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "F-042",
+  "area": "F",
+  "title": "One damaged entry does not hide the others",
+  "scenario": "One entry's stored history is not JSON (a partial write or a manual edit); two healthy entries exist.",
+  "expected": "list, render and resolve still return the healthy entries (the damaged one may be skipped).",
+  "risk": "high",
+  "check": "corrupt_row_isolated",
+  "dims": [
+   "memory",
+   "reliability"
+  ],
+  "args": {
+   "history": "[{\"v\": 1, \"op\": \"add\", \"text\": \"Call me Ven"
+  }
+ },
+ {
+  "id": "F-043",
+  "area": "F",
+  "title": "Garbage queries never match an entry",
+  "scenario": "resolve() with an empty query, punctuation only, only short words, and 2 MB of one letter.",
+  "expected": "No candidates (resolve promises entries that match the query) and never unique, so forget-by-content cannot act; each answers in under 2 s.",
+  "risk": "medium",
+  "check": "garbage_queries_no_match",
+  "dims": [
+   "memory",
+   "security"
+  ],
+  "args": {
+   "queries": [
+    "",
+    "?!? ...",
+    "a an to is it",
+    "\u200b\u200b"
+   ]
+  }
+ },
+ {
+  "id": "F-044",
+  "area": "F",
+  "title": "The owner's console correction beats the agent's stale write",
+  "scenario": "The agent read 'Send the weekly report on Friday' (v1). The owner corrects it in the JARVIS console (Owner.handle, the real console route) to Thursday. The agent then writes from its old read.",
+  "expected": "Console update 200 at v2; the agent's write is a Conflict carrying the owner's text; the session block and the console view show only the owner's version.",
+  "risk": "high",
+  "check": "owner_console_correction",
+  "dims": [
+   "memory",
+   "ux"
+  ]
+ },
+ {
+  "id": "F-045",
+  "area": "F",
+  "title": "Lessons come only from verified repairs, from recorded events",
+  "scenario": "Three completed kernel tasks: one failed, was repaired ('the date column used a comma decimal separator') and was independently verified; one was repaired but never verified; one passed first time. The kernel's lesson capture runs twice.",
+  "expected": "Exactly one candidate, from the verified repaired task, quoting its recorded repair note; the second run adds nothing; the candidate is not in the session block.",
+  "risk": "high",
+  "check": "lessons_from_verified_repairs",
+  "dims": [
+   "memory",
+   "skills"
+  ]
+ },
+ {
+  "id": "F-046",
+  "area": "F",
+  "title": "N.E.K.O: conflicts are decided only on clear evidence",
+  "scenario": "N.E.K.O's deterministic_relation compares an old and a new statement: plain negations, identical statements, a question, 'or', 'sometimes', 'many', a hedge ('I think'), a different city.",
+  "expected": "'is not' negations of the same statement -> correction; identical -> confirmation; every other pair -> None (left for arbitration, never merged or penalised).",
+  "risk": "high",
+  "check": "neko_relation_conservative",
+  "dims": [
+   "memory"
+  ],
+  "args": {
+   "pairs": [
+    [
+     "My sister is a doctor",
+     "My sister is not a doctor",
+     "correction"
+    ],
+    [
+     "The car is red",
+     "The car is not red",
+     "correction"
+    ],
+    [
+     "I live in Pune",
+     "I live in Pune",
+     "confirmation"
+    ],
+    [
+     "Is my sister a doctor?",
+     "My sister is not a doctor",
+     null
+    ],
+    [
+     "I like tea or coffee",
+     "I do not like tea or coffee",
+     null
+    ],
+    [
+     "I sometimes drink tea",
+     "I sometimes do not drink tea",
+     null
+    ],
+    [
+     "Many friends like jazz",
+     "Many friends do not like jazz",
+     null
+    ],
+    [
+     "My sister is a doctor",
+     "I think my sister is not a doctor",
+     null
+    ],
+    [
+     "I live in Pune",
+     "I live in Mumbai",
+     null
+    ]
+   ]
+  }
+ },
+ {
+  "id": "F-047",
+  "area": "F",
+  "title": "N.E.K.O: an old temporary state is marked stale, a fresh one is not",
+  "scenario": "N.E.K.O's is_past_for_render on states, episodes and patterns of different ages, a time-zone-aware timestamp and garbage timestamps.",
+  "expected": "Only states older than the state window, old episodes and stored 'past' entries are stale; fresh states, recently ended states and patterns are not; nothing raises.",
+  "risk": "medium",
+  "check": "neko_stale_state",
+  "dims": [
+   "memory"
+  ]
+ },
+ {
+  "id": "F-048",
+  "area": "F",
+  "title": "N.E.K.O: a disputed fact sinks, a protected one never does",
+  "scenario": "N.E.K.O's evidence status for disputed, reinforced, protected, future-stamped, garbage-stamped and year-old entries.",
+  "expected": "archive_candidate / promoted / promoted / promoted / promoted / pending; nothing raises.",
+  "risk": "medium",
+  "check": "neko_disputed_sinks",
+  "dims": [
+   "memory"
+  ]
+ },
+ {
+  "id": "F-049",
+  "area": "F",
+  "title": "N.E.K.O: facts about different dated events are never merged",
+  "scenario": "N.E.K.O's dedup date guard: two events on different explicit dates, the same date worded differently, timeless facts that differ only by save time, different end dates, a garbage date.",
+  "expected": "different dates / end dates -> distinct; same date and timeless -> not distinct by date; garbage -> not distinct, no raise.",
+  "risk": "medium",
+  "check": "neko_event_windows",
+  "dims": [
+   "memory"
+  ]
+ },
+ {
+  "id": "F-050",
+  "area": "F",
+  "title": "N.E.K.O: wrong-typed stored values never break recall",
+  "scenario": "N.E.K.O memory entries with wrong-typed stored values (as manual edits or legacy files leave them): recall hits that are None, a bare string or blank, a tier given as a number; evidence counters stored as text or a list; a timestamp that is a list.",
+  "expected": "The recall block shows the 2 real entries numbered 1..2 under 'Found 2:'; evidence status and the stale-fact rule answer without raising.",
+  "risk": "medium",
+  "check": "neko_malformed_values",
+  "dims": [
+   "memory",
+   "reliability"
+  ]
  }
 ]

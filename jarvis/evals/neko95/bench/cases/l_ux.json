@@ -854,5 +854,326 @@
     ]
    }
   }
+ },
+ {
+  "id": "L-027",
+  "area": "L",
+  "title": "Console: providers resting, command refused with when to retry",
+  "scenario": "The owner's only private provider (fake, local) answered an agent call with 429 Retry-After 600. The owner then sends a command through the real owner plane (HTTP, owner token); the owner's agent is a fake that records calls.",
+  "expected": "HTTP 429 at once; the message says the providers are resting, about 10 min, and that nothing was sent; the agent is not called and no command row is created.",
+  "risk": "high",
+  "check": "owner_command_resting",
+  "dims": [
+   "ux",
+   "recovery"
+  ],
+  "args": {
+   "summary_contains": [
+    "resting",
+    "about 10 min",
+    "Nothing was sent"
+   ]
+  }
+ },
+ {
+  "id": "L-028",
+  "area": "L",
+  "title": "Console: a failed agent call shows 'failed', never 'done'",
+  "scenario": "The owner's agent (fake) raises ConnectionRefusedError whose text names an internal host. owner.py's own rule: keep the error class only.",
+  "expected": "Command state 'failed', reply empty, error starts with 'ConnectionRefusedError'; the internal host 10.20.30.40 is not shown.",
+  "risk": "high",
+  "check": "owner_command_agent_error",
+  "dims": [
+   "ux",
+   "reliability",
+   "security"
+  ]
+ },
+ {
+  "id": "L-029",
+  "area": "L",
+  "title": "Console: an agent's 'Done' is checked against the kernel's record",
+  "scenario": "1) 'open notepad': the fake agent answers 'Done! Notepad is open now.' although no job or task ran. 2) 'write the weekly report': the agent creates a task (left running, unverified) and answers 'All done, the weekly report is finished.'",
+  "expected": "1) reply ends with 'Kernel record:' and 'no action was run on this computer...'. 2) the record shows the task as running, 'NOT verified yet'.",
+  "risk": "critical",
+  "check": "owner_command_claim_checked",
+  "dims": [
+   "ux",
+   "reliability"
+  ]
+ },
+ {
+  "id": "L-030",
+  "area": "L",
+  "title": "Console: stop waiting, then a late answer",
+  "scenario": "A command whose agent call hangs (fake); the owner cancels it, sends a second command (answered), and then the first answer arrives late.",
+  "expected": "Cancel answers cancelled=true; the second command is accepted at once (202, not 'still working') and ends 'done'; the first stays 'cancelled' with no reply; the late answer is audited (owner_command_late).",
+  "risk": "high",
+  "check": "owner_command_cancel_late",
+  "dims": [
+   "ux",
+   "autonomy",
+   "reliability"
+  ]
+ },
+ {
+  "id": "L-031",
+  "area": "L",
+  "title": "Console: busy is said plainly",
+  "scenario": "A second command arrives while the first is still with the agent (fake, held).",
+  "expected": "HTTP 409 'JARVIS is still working on the previous command'; the agent is called once; the first command ends 'done'.",
+  "risk": "medium",
+  "check": "owner_command_busy",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "summary_contains": [
+    "still working on the previous command"
+   ]
+  }
+ },
+ {
+  "id": "L-032",
+  "area": "L",
+  "title": "Console: stopping a PC job reports its real state",
+  "scenario": "Three open_app jobs queued from the console (real owner plane, jobs and policy). One is cancelled while queued; the node (fake: jobs.next_for/finish) takes the other two; one is cancelled while running and the node later confirms; the other finishes and is then 'cancelled'.",
+  "expected": "States: queued cancel -> 'cancelled'; running cancel -> 'cancelling' while the job view still shows 'running'; after the node confirms -> 'cancelled'; finished job -> stays 'done' with 'nothing to cancel'.",
+  "risk": "high",
+  "check": "owner_job_cancel_states",
+  "dims": [
+   "ux",
+   "autonomy"
+  ]
+ },
+ {
+  "id": "L-033",
+  "area": "L",
+  "title": "Console: 'stop all' counts match what was stopped",
+  "scenario": "Two open tasks and one already cancelled, one pending approval (browser click on a shop), two queued PC jobs; the owner presses 'stop all'.",
+  "expected": "cancelled_tasks lists exactly the two open tasks; denied_approvals 1; expired_jobs 2; the database agrees (tasks cancelled, jobs expired, no approval pending).",
+  "risk": "high",
+  "check": "owner_stop_all_counts",
+  "dims": [
+   "ux",
+   "autonomy"
+  ]
+ },
+ {
+  "id": "L-034",
+  "area": "L",
+  "title": "Stopped after a finished step: say what already happened",
+  "scenario": "The owner presses stop after step 1 (notepad opened, check passed) of a two-step task. PC agents are fixtures returning recorded-shape results; the coordinator, its checks and summary() are real. Guards the owner's picture of the PC: notepad is now open.",
+  "expected": "Status 'cancelled'; the summary says it stopped AND that notepad was opened (step 1 was carried out and checked).",
+  "risk": "medium",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "autonomy"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_app",
+     "app": "notepad",
+     "post": "a window for notepad appeared"
+    },
+    {
+     "tool": "type_text",
+     "app": "notepad",
+     "target": "",
+     "text": "hello",
+     "post": "the field in notepad contains the typed text (read back)"
+    }
+   ],
+   "cancel_after": 1,
+   "status": "cancelled",
+   "calls": [
+    "open_app"
+   ],
+   "summary_contains": [
+    "Stopped",
+    "notepad"
+   ]
+  }
+ },
+ {
+  "id": "L-035",
+  "area": "L",
+  "title": "A transient failure is retried once, then reported",
+  "scenario": "open_website times out twice (transient). PC agents are fixtures; the coordinator is real.",
+  "expected": "The agent is called exactly twice (one retry, no more); status 'failed'; the summary names the timeout; progress shows the retry and ends idle.",
+  "risk": "high",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "recovery",
+   "resources"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_website",
+     "profile": "Default",
+     "url": "https://example.com/",
+     "post": "a Chrome window of profile Default shows the page"
+    }
+   ],
+   "results": {
+    "open_website": [
+     {
+      "ok": false,
+      "error": "timeout talking to the browser"
+     },
+     {
+      "ok": false,
+      "error": "timeout talking to the browser"
+     }
+    ]
+   },
+   "status": "failed",
+   "calls": [
+    "open_website",
+    "open_website"
+   ],
+   "summary_contains": [
+    "could not finish",
+    "timeout"
+   ],
+   "summary_not_contains": [
+    "Done"
+   ],
+   "progress_contains": [
+    "retrying step 1 once"
+   ],
+   "progress_ends_idle": true
+  }
+ },
+ {
+  "id": "L-036",
+  "area": "L",
+  "title": "Typing that timed out is not repeated blindly",
+  "scenario": "Step 2 (type_text) reports a timeout, which may come after the text was already typed. PC agents are fixtures; the coordinator is real.",
+  "expected": "type_text is called once (not retried); status 'failed'; the summary says it could not finish step 2 and names the timeout.",
+  "risk": "high",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "reliability"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "open_app",
+     "app": "notepad",
+     "post": "a window for notepad appeared"
+    },
+    {
+     "tool": "type_text",
+     "app": "notepad",
+     "target": "",
+     "text": "hello",
+     "post": "the field in notepad contains the typed text (read back)"
+    }
+   ],
+   "results": {
+    "type_text": [
+     {
+      "ok": false,
+      "error": "timed out waiting for the window"
+     }
+    ]
+   },
+   "status": "failed",
+   "calls": [
+    "open_app",
+    "type_text"
+   ],
+   "summary_contains": [
+    "could not finish",
+    "step 2",
+    "timed out"
+   ],
+   "summary_not_contains": [
+    "Done"
+   ]
+  }
+ },
+ {
+  "id": "L-037",
+  "area": "L",
+  "title": "A denied action is reported as denied, not as waiting",
+  "scenario": "A browser click the kernel denies (state 'denied'). PC agents are fixtures; the coordinator is real.",
+  "expected": "Status 'denied'; the summary says denied and does not ask the owner to approve in the console or say 'Done'.",
+  "risk": "high",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "security"
+  ],
+  "args": {
+   "plan": [
+    {
+     "tool": "browser",
+     "action": "click",
+     "profile": "Default",
+     "target": "Buy now",
+     "post": "the click landed"
+    }
+   ],
+   "results": {
+    "browser": [
+     {
+      "ok": false,
+      "state": "denied",
+      "error": "UI or browser on a banking app"
+     }
+    ]
+   },
+   "status": "denied",
+   "calls": [
+    "browser"
+   ],
+   "summary_contains": [
+    "denied"
+   ],
+   "summary_not_contains": [
+    "Done",
+    "Approve it in the JARVIS console"
+   ]
+  }
+ },
+ {
+  "id": "L-038",
+  "area": "L",
+  "title": "A request with only unsupported parts is never 'Done'",
+  "scenario": "'delete everything in my downloads': the (fixture) model plan has only an unknown delete_files step; it goes through the real validate() and coordinator.",
+  "expected": "Status 'not_understood'; the summary says it could not finish and names the unknown tool; no agent runs; not 'Done'.",
+  "risk": "high",
+  "check": "coord_run",
+  "dims": [
+   "ux",
+   "intent",
+   "security"
+  ],
+  "args": {
+   "request": "delete everything in my downloads",
+   "model_plan": [
+    {
+     "tool": "delete_files",
+     "path": "downloads"
+    }
+   ],
+   "status": "not_understood",
+   "calls": [],
+   "summary_contains": [
+    "could not finish",
+    "delete_files"
+   ],
+   "summary_not_contains": [
+    "Done"
+   ]
+  }
  }
 ]

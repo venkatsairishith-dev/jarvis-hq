@@ -2722,5 +2722,1230 @@
     "next": "exact blocker"
    }
   }
+ },
+ {
+  "id": "A-068",
+  "area": "A",
+  "title": "A key or text with no target app asks which app",
+  "scenario": "'press enter', 'press ctrl+s', 'type my address': the model planned the key or the typing but named no app. A keystroke sent to whatever window happens to be in front could save, submit or close the wrong thing. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "Each gives status 'clarify' asking 'Which app?'; no step runs.",
+  "risk": "high",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning",
+   "security"
+  ],
+  "args": {
+   "variants": [
+    {
+     "request": "press enter",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "press_key",
+        "key": "enter"
+       }
+      ]
+     },
+     "expect": {
+      "status": "clarify",
+      "question_contains": "app",
+      "no_steps": true
+     }
+    },
+    {
+     "request": "press ctrl+s",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "press_key",
+        "key": "ctrl+s",
+        "app": ""
+       }
+      ]
+     },
+     "expect": {
+      "status": "clarify",
+      "question_contains": "app",
+      "no_steps": true
+     }
+    },
+    {
+     "request": "type my address",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "type_text",
+        "text": "12 Main St"
+       }
+      ]
+     },
+     "expect": {
+      "status": "clarify",
+      "question_contains": "app",
+      "no_steps": true
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "A-069",
+  "area": "A",
+  "title": "'fix it' without an error on screen asks which app",
+  "scenario": "'fix it' / 'repair that': the model planned troubleshoot with app 'it' / 'that' and the request names no error, dialog or screen, so the active-window rule does not apply. The troubleshooter can apply approved repairs, so it must not be pointed at a guessed window. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "status 'clarify' asking which app; no troubleshoot step.",
+  "risk": "high",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning",
+   "recovery"
+  ],
+  "args": {
+   "variants": [
+    {
+     "request": "fix it",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "troubleshoot",
+        "app": "it"
+       }
+      ]
+     },
+     "expect": {
+      "status": "clarify",
+      "question_contains": "app",
+      "not_tools": [
+       "troubleshoot"
+      ]
+     }
+    },
+    {
+     "request": "repair that",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "troubleshoot",
+        "app": "that"
+       }
+      ]
+     },
+     "expect": {
+      "status": "clarify",
+      "question_contains": "app",
+      "not_tools": [
+       "troubleshoot"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "A-070",
+  "area": "A",
+  "title": "A research request with only a pronoun asks what to research",
+  "scenario": "'research it', 'look that up', 'find out more about this' with nothing earlier in the request: the model copied the pronoun into the research query (A-026 covers only an empty query). A web research run on the word 'it' wastes minutes and returns a confident report about nothing the owner meant. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "status 'clarify' asking what to research; no research step on 'it' / 'that' / 'this'.",
+  "risk": "high",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning",
+   "research"
+  ],
+  "args": {
+   "variants": [
+    {
+     "request": "research it",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "research",
+        "query": "it"
+       }
+      ]
+     },
+     "expect": {
+      "status": "clarify",
+      "question_contains": "research"
+     }
+    },
+    {
+     "request": "look that up",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "research",
+        "query": "that"
+       }
+      ]
+     },
+     "expect": {
+      "status": "clarify",
+      "question_contains": "research"
+     }
+    },
+    {
+     "request": "find out more about this",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "research",
+        "query": "this"
+       }
+      ]
+     },
+     "expect": {
+      "status": "clarify",
+      "question_contains": "research"
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "A-071",
+  "area": "A",
+  "title": "'no, the other file' asks which file",
+  "scenario": "Previous task 'open report-v1.docx from downloads' (recorded 30 s ago); now 'no, the other file'. The coordinator must give the model the previous request (a correction), and the model (a fake recorder at decide.ask_model) copied 'the other file' into open_file's name. Which other file is not knowable from the words. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "The model is given 'Previous request: ...'; the plan is status 'clarify' asking which file; nothing named 'the other file' is opened.",
+  "risk": "high",
+  "check": "coordinator_context",
+  "dims": [
+   "intent",
+   "planning",
+   "memory"
+  ],
+  "args": {
+   "previous": "open report-v1.docx from downloads",
+   "request": "no, the other file",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "open_file",
+      "name": "the other file",
+      "folder": "Downloads"
+     }
+    ]
+   },
+   "expect_context": true,
+   "expect": {
+    "status": "clarify",
+    "question_contains": "file",
+    "no_steps": true
+   }
+  }
+ },
+ {
+  "id": "A-072",
+  "area": "A",
+  "title": "'open notepad or wordpad' does not open both",
+  "scenario": "The owner offered a choice; the model planned BOTH open_app steps. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "At most one step (the system asks which one, or opens one); never both apps.",
+  "risk": "medium",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning"
+  ],
+  "args": {
+   "request": "open notepad or wordpad",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "open_app",
+      "app": "notepad"
+     },
+     {
+      "tool": "open_app",
+      "app": "wordpad"
+     }
+    ]
+   },
+   "expect": {
+    "max_steps": 1
+   }
+  }
+ },
+ {
+  "id": "A-073",
+  "area": "A",
+  "title": "A negated request is not carried out",
+  "scenario": "'don't open youtube' / 'do not play despacito': the model dropped the negation and planned the action (a known small-model miss). The fast path already refuses these (A-006); this is the model path. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "No open_website / play_media step is planned (clarify, answer or fallback).",
+  "risk": "high",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning",
+   "security"
+  ],
+  "args": {
+   "variants": [
+    {
+     "request": "don't open youtube",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "open_website",
+        "site": "youtube"
+       }
+      ]
+     },
+     "expect": {
+      "not_tools": [
+       "open_website",
+       "play_media"
+      ]
+     }
+    },
+    {
+     "request": "do not play despacito",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "play_media",
+        "query": "despacito"
+       }
+      ]
+     },
+     "expect": {
+      "not_tools": [
+       "play_media",
+       "open_website"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "A-074",
+  "area": "A",
+  "title": "In-sentence corrections never take the one-command fast path",
+  "scenario": "'play despacito no wait believer', 'play shape of you sorry I mean perfect', 'play anything except jazz': one-line requests whose second half corrects or excludes the first. The rules may only plan a request that is ONE unambiguous command (A-003 covers 'instead'/'actually').",
+  "expected": "fast_path() returns None for each and decide() asks the model (a fake recorder).",
+  "risk": "high",
+  "check": "fast_path_declines",
+  "dims": [
+   "intent",
+   "planning"
+  ],
+  "args": {
+   "requests": [
+    "play despacito no wait believer",
+    "play shape of you sorry I mean perfect",
+    "play anything except jazz",
+    "open notepad no wait wordpad"
+   ]
+  }
+ },
+ {
+  "id": "A-075",
+  "area": "A",
+  "title": "In-sentence app correction: the corrected app wins",
+  "scenario": "'open notepad, no wait, open wordpad': the model kept both apps (it handled the account version of this in A-018). The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "No step opens or acts on notepad; wordpad is opened (or the system asks).",
+  "risk": "high",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning"
+  ],
+  "args": {
+   "request": "open notepad, no wait, open wordpad",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "open_app",
+      "app": "notepad"
+     },
+     {
+      "tool": "open_app",
+      "app": "wordpad"
+     }
+    ]
+   },
+   "expect": {
+    "app_never": [
+     "notepad"
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-076",
+  "area": "A",
+  "title": "A negated account is never used, even when the model copies it",
+  "scenario": "'open gmail, but not in Satish's profile': the owner excluded Satish; the model still put account 'Satish' in the step. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "No step uses Profile 2 (Satish's); the default profile or a question instead.",
+  "risk": "critical",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "browser",
+   "security"
+  ],
+  "args": {
+   "request": "open gmail, but not in Satish's profile",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "open_website",
+      "site": "gmail",
+      "account": "Satish"
+     }
+    ]
+   },
+   "expect": {
+    "profile_never": [
+     "Profile 2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-077",
+  "area": "A",
+  "title": "A follow-up keeps the account named in the previous request",
+  "scenario": "Previous request 'open gmail in Satish's profile'; now 'also open youtube there' (the model, a fake recorder, planned youtube with no account). The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "The model is shown the previous request; every browser step uses Profile 2 and the account is checked first (whoami).",
+  "risk": "high",
+  "check": "decide_with_model",
+  "dims": [
+   "intent",
+   "browser",
+   "memory"
+  ],
+  "args": {
+   "request": "also open youtube there",
+   "context": "open gmail in Satish's profile",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "open_website",
+      "site": "youtube"
+     }
+    ]
+   },
+   "asked_contains": "Previous request: open gmail in Satish's profile",
+   "expect": {
+    "status": "ok",
+    "tools": [
+     "browser",
+     "open_website"
+    ],
+    "step_values": {
+     "profile": "Profile 2"
+    },
+    "steps": [
+     {
+      "i": 0,
+      "key": "action",
+      "eq": "whoami"
+     },
+     {
+      "i": 1,
+      "key": "url",
+      "contains": "youtube.com"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-078",
+  "area": "A",
+  "title": "The new request's account beats the previous request's account",
+  "scenario": "Previous request 'open gmail in Satish's profile'; now 'open youtube in VenkatAMV too'. Two accounts appear across the two turns; the newer instruction is the owner's current choice, not a clash to merge. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "status ok; every browser step uses Profile 1 (VenkatAMV); none uses Profile 2.",
+  "risk": "high",
+  "check": "decide_with_model",
+  "dims": [
+   "intent",
+   "browser",
+   "security"
+  ],
+  "args": {
+   "request": "open youtube in VenkatAMV too",
+   "context": "open gmail in Satish's profile",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "open_website",
+      "site": "youtube",
+      "account": "VenkatAMV"
+     }
+    ]
+   },
+   "expect": {
+    "status": "ok",
+    "step_values": {
+     "profile": "Profile 1"
+    },
+    "profile_never": [
+     "Profile 2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-079",
+  "area": "A",
+  "title": "Re-plan context: the owner's latest correction outranks older decisions",
+  "scenario": "A kernel task gets five owner decisions while planning; the last one corrects the first ('no, the other file: report-v2.docx'). The checkpoint a fresh session re-plans from shows only the last four.",
+  "expected": "The checkpoint's decisions and text carry the correction (report-v2); the superseded report-v1 decision is the one dropped.",
+  "risk": "high",
+  "check": "task_context",
+  "dims": [
+   "planning",
+   "memory"
+  ],
+  "args": {
+   "request": "fix the totals in my report",
+   "goal": "Correct the totals table in the owner's report",
+   "updates": [
+    {
+     "note": "owner: use report-v1.docx"
+    },
+    {
+     "note": "owner: keep the chart"
+    },
+    {
+     "note": "owner: round to 2 decimals"
+    },
+    {
+     "note": "owner: euros, not dollars"
+    },
+    {
+     "note": "owner: no, the other file: report-v2.docx"
+    }
+   ],
+   "expect": {
+    "decisions": [
+     "report-v2"
+    ]
+   },
+   "expect_not": {
+    "decisions": "report-v1"
+   },
+   "text_contains": [
+    "report-v2"
+   ]
+  }
+ },
+ {
+  "id": "A-080",
+  "area": "A",
+  "title": "Re-plan context: a long goal does not push the owner's correction out",
+  "scenario": "A task whose goal is ~900 characters (a pasted brief) gets the owner's correction 'no, the other file: report-v2.docx'. The checkpoint text is capped at 900 characters.",
+  "expected": "The checkpoint text still carries the correction and the next action (the goal is shortened, not the decisions).",
+  "risk": "high",
+  "check": "task_context",
+  "dims": [
+   "planning",
+   "memory"
+  ],
+  "args": {
+   "request": "fix the totals",
+   "goal": "Correct the totals table in the owner's report",
+   "goal_pad_words": 100,
+   "updates": [
+    {
+     "note": "owner: use report-v1.docx"
+    },
+    {
+     "note": "owner: no, the other file: report-v2.docx"
+    }
+   ],
+   "expect": {
+    "decisions": [
+     "report-v2"
+    ]
+   },
+   "text_contains": [
+    "report-v2",
+    "next:"
+   ]
+  }
+ },
+ {
+  "id": "A-081",
+  "area": "A",
+  "title": "The owner's cancel is final: a later 'completed' report is refused",
+  "scenario": "A running task is cancelled by the owner (through the kernel, no agent owner); afterwards the lab runner's late report says 'completed: all done'.",
+  "expected": "The late report is refused (1 refusal); the checkpoint shows state cancelled, no 'all done' result, next 'nothing; the owner cancelled it'.",
+  "risk": "high",
+  "check": "task_context",
+  "dims": [
+   "planning",
+   "reliability"
+  ],
+  "args": {
+   "request": "build the site",
+   "goal": "A site with 3 pages",
+   "updates": [
+    {
+     "state": "running",
+     "attempt": true
+    },
+    {
+     "state": "cancelled",
+     "note": "owner cancelled",
+     "by": null
+    },
+    {
+     "state": "completed",
+     "result": "all done",
+     "by": null
+    }
+   ],
+   "expect_refused": 1,
+   "expect": {
+    "state": "cancelled",
+    "next": "cancelled"
+   },
+   "expect_not": {
+    "result": "all done"
+   }
+  }
+ },
+ {
+  "id": "A-082",
+  "area": "A",
+  "title": "The owner's account beats a contradicting model account",
+  "scenario": "'open gmail in Satish's profile': the model put account 'VenkatAMV' (a wrong extraction). The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "Every browser step uses Profile 2 (Satish); none uses Profile 1.",
+  "risk": "critical",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "browser",
+   "security"
+  ],
+  "args": {
+   "request": "open gmail in Satish's profile",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "open_website",
+      "site": "gmail",
+      "account": "VenkatAMV"
+     }
+    ]
+   },
+   "expect": {
+    "status": "ok",
+    "step_values": {
+     "profile": "Profile 2"
+    },
+    "profile_never": [
+     "Profile 1"
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-083",
+  "area": "A",
+  "title": "The owner's 'report' beats the model's 'presentation'",
+  "scenario": "'make a report about electric buses': the model set deliverable 'presentation'. The owner's own word decides the file type (A-023 covers the model agreeing). The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "One research step with deliverable 'report'.",
+  "risk": "high",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning",
+   "research"
+  ],
+  "args": {
+   "request": "make a report about electric buses",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "research",
+      "query": "electric buses",
+      "deliverable": "presentation"
+     }
+    ]
+   },
+   "expect": {
+    "status": "ok",
+    "tools": [
+     "research"
+    ],
+    "steps": [
+     {
+      "i": 0,
+      "key": "deliverable",
+      "eq": "report"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-084",
+  "area": "A",
+  "title": "'write a report on X' is research, not typing into an app called X",
+  "scenario": "'write a report on electric buses' (the model planned the research correctly). The deterministic completion must not read 'write ... on <words>' as 'type into the app <words>'. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "Exactly one research step (deliverable report); no type_text step and no app named 'electric buses'.",
+  "risk": "high",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning",
+   "research"
+  ],
+  "args": {
+   "request": "write a report on electric buses",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "research",
+      "query": "electric buses",
+      "deliverable": "report"
+     }
+    ]
+   },
+   "expect": {
+    "status": "ok",
+    "tools": [
+     "research"
+    ],
+    "not_tools": [
+     "type_text"
+    ],
+    "app_never": [
+     "electric buses"
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-085",
+  "area": "A",
+  "title": "The owner's media words beat the model's key",
+  "scenario": "'skip to the next song' (the model chose prevtrack) and 'turn the volume down on youtube' (the model chose volumeup). The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "press_key nexttrack and volumedown respectively.",
+  "risk": "medium",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning"
+  ],
+  "args": {
+   "variants": [
+    {
+     "request": "skip to the next song",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "press_key",
+        "key": "prevtrack"
+       }
+      ]
+     },
+     "expect": {
+      "status": "ok",
+      "tools": [
+       "press_key"
+      ],
+      "steps": [
+       {
+        "i": 0,
+        "key": "key",
+        "eq": "nexttrack"
+       }
+      ]
+     }
+    },
+    {
+     "request": "turn the volume down on youtube",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "press_key",
+        "key": "volumeup"
+       }
+      ]
+     },
+     "expect": {
+      "status": "ok",
+      "tools": [
+       "press_key"
+      ],
+      "steps": [
+       {
+        "i": 0,
+        "key": "key",
+        "eq": "volumedown"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "A-086",
+  "area": "A",
+  "title": "'resume' is not turned into 'pause' by the model's key word",
+  "scenario": "'resume the song on youtube': the model chose key 'pause' (the toggle key is the same; what the owner wants is not). The play/pause toggle is checked against the intent before pressing. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "press_key playpause with intent 'play'.",
+  "risk": "medium",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "planning"
+  ],
+  "args": {
+   "request": "resume the song on youtube",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "press_key",
+      "key": "pause"
+     }
+    ]
+   },
+   "expect": {
+    "status": "ok",
+    "steps": [
+     {
+      "i": 0,
+      "key": "key",
+      "eq": "playpause"
+     },
+     {
+      "i": 0,
+      "key": "intent",
+      "eq": "play"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-087",
+  "area": "A",
+  "title": "'open it' after a failed task does not reach back to an older file",
+  "scenario": "Two task records: 2 minutes ago a research task made tides.pdf (checked); 10 s ago 'make slides about tides' failed (its step did not pass). The owner says 'open it'.",
+  "expected": "status 'clarify' (nothing was made by the last task); tides.pdf is not opened; the model is not asked.",
+  "risk": "high",
+  "check": "coordinator_follow_two",
+  "dims": [
+   "intent",
+   "memory"
+  ],
+  "args": {
+   "records": [
+    {
+     "request": "make a report about tides",
+     "age_s": 120,
+     "steps": [
+      {
+       "tool": "research",
+       "passed": true,
+       "args": {},
+       "result": {
+        "file": "D:\\x\\tides.pdf"
+       }
+      }
+     ]
+    },
+    {
+     "request": "make slides about tides",
+     "age_s": 10,
+     "status": "failed",
+     "steps": [
+      {
+       "tool": "research",
+       "passed": false,
+       "args": {},
+       "result": {
+        "ok": false
+       }
+      }
+     ]
+    }
+   ],
+   "request": "open it",
+   "expect": {
+    "status": "clarify",
+    "no_steps": true
+   },
+   "never_open": [
+    "tides.pdf"
+   ]
+  }
+ },
+ {
+  "id": "A-088",
+  "area": "A",
+  "title": "'open it' when the newest task record is damaged asks",
+  "scenario": "Two task records: 2 minutes ago a research task made tides.pdf; 10 s ago another task ran but its record on disk is truncated (a crash mid-write). The owner says 'open it', meaning the newest task.",
+  "expected": "status 'clarify'; tides.pdf (an older task's file) is not opened.",
+  "risk": "high",
+  "check": "coordinator_follow_two",
+  "dims": [
+   "intent",
+   "memory",
+   "reliability"
+  ],
+  "args": {
+   "records": [
+    {
+     "request": "make a report about tides",
+     "age_s": 120,
+     "steps": [
+      {
+       "tool": "research",
+       "passed": true,
+       "args": {},
+       "result": {
+        "file": "D:\\x\\tides.pdf"
+       }
+      }
+     ]
+    },
+    {
+     "raw": "{\"request\": \"make slides about volcanoes\", \"started\": 17",
+     "age_s": 10
+    }
+   ],
+   "request": "open it",
+   "expect": {
+    "status": "clarify",
+    "no_steps": true
+   },
+   "never_open": [
+    "tides.pdf"
+   ]
+  }
+ },
+ {
+  "id": "A-089",
+  "area": "A",
+  "title": "Wrong-typed fields in the model's plan never crash the decider",
+  "scenario": "Hand-written model answers (a fake of the decision model; the JSON grammar normally prevents these, a different model or a proxy can still send them): app 42, tool given as a list, query as a list, account as a number. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "decide.validate() returns fallback or clarify for each; no exception; nothing runnable is built from the garbage.",
+  "risk": "high",
+  "check": "validate_no_crash",
+  "dims": [
+   "intent",
+   "reliability"
+  ],
+  "args": {
+   "variants": [
+    {
+     "request": "open notepad",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "open_app",
+        "app": 42
+       }
+      ]
+     }
+    },
+    {
+     "request": "open notepad",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": [
+         "open_app"
+        ],
+        "app": "notepad"
+       }
+      ]
+     }
+    },
+    {
+     "request": "play lofi",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "play_media",
+        "query": [
+         "lofi"
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "request": "open gmail",
+     "model_plan": {
+      "steps": [
+       {
+        "tool": "open_website",
+        "site": "gmail",
+        "account": 7
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "A-090",
+  "area": "A",
+  "title": "HTML, empty or wrong-shaped model answers fall back",
+  "scenario": "Hand-written model answers (a fake of the decision model): an HTML 502 page from a proxy, an empty body, steps null, steps given as one object instead of a list. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "status 'fallback' with no steps for each (A-032/A-033 cover prose and a bare list).",
+  "risk": "high",
+  "check": "validate_plan",
+  "dims": [
+   "intent",
+   "reliability"
+  ],
+  "args": {
+   "variants": [
+    {
+     "request": "open notepad",
+     "model_plan": "<html><body><h1>502 Bad Gateway</h1></body></html>",
+     "expect": {
+      "status": "fallback",
+      "no_steps": true
+     }
+    },
+    {
+     "request": "open notepad",
+     "model_plan": "",
+     "expect": {
+      "status": "fallback",
+      "no_steps": true
+     }
+    },
+    {
+     "request": "open notepad",
+     "model_plan": {
+      "steps": null
+     },
+     "expect": {
+      "status": "fallback",
+      "no_steps": true
+     }
+    },
+    {
+     "request": "open notepad",
+     "model_plan": {
+      "steps": {
+       "tool": "open_app",
+       "app": "notepad"
+      }
+     },
+     "expect": {
+      "status": "fallback",
+      "no_steps": true
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "A-091",
+  "area": "A",
+  "title": "A truncated model answer is never run as a shorter plan",
+  "scenario": "The model's answer for 'open notepad and type hello' (hand-written, a fake of the decision model) cut off at every possible length, as max_tokens or a dropped connection would; one cut answer also goes through the coordinator. The model's answer is a hand-written fixture standing in for (faking) the laptop's decision model, which is not available on this server; everything after it is the real decide.py code.",
+  "expected": "Every prefix gives fallback with no steps; the coordinator records not_understood and calls no agent.",
+  "risk": "high",
+  "check": "decide_truncated",
+  "dims": [
+   "intent",
+   "reliability"
+  ],
+  "args": {
+   "request": "open notepad and type hello",
+   "model_plan": {
+    "steps": [
+     {
+      "tool": "open_app",
+      "app": "notepad"
+     },
+     {
+      "tool": "type_text",
+      "app": "notepad",
+      "text": "hello"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-092",
+  "area": "A",
+  "title": "Planner: a truncated plan is never run as a shorter plan",
+  "scenario": "The main agent's planner reply (a fixture: search, summarise, save a note) cut off at every possible length.",
+  "expected": "parse_plan refuses every prefix; the complete reply parses.",
+  "risk": "high",
+  "check": "planner_truncated",
+  "dims": [
+   "planning",
+   "reliability"
+  ],
+  "args": {
+   "plan": {
+    "summary": "find and save",
+    "steps": [
+     {
+      "id": "s1",
+      "agent": "plugin",
+      "plugin": "web_search:search",
+      "goal": "find",
+      "args": {
+       "query": "cats"
+      }
+     },
+     {
+      "id": "s2",
+      "agent": "think",
+      "goal": "summarise",
+      "depends_on": [
+       "s1"
+      ]
+     },
+     {
+      "id": "s3",
+      "agent": "plugin",
+      "plugin": "learn_vault:save_note",
+      "goal": "save",
+      "args": {
+       "path": "cats.md",
+       "content": "{{s2}}"
+      },
+      "depends_on": [
+       "s2"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "A-093",
+  "area": "A",
+  "title": "Planner: HTML, empty and non-object replies are refused",
+  "scenario": "Planner model replies (fixtures): a proxy's HTML 502 page, an empty string, whitespace, 'null', '[]'.",
+  "expected": "Each is refused with 'The planner did not return a plan.'; nothing runs.",
+  "risk": "medium",
+  "check": "planner_refuses_each",
+  "dims": [
+   "planning",
+   "reliability"
+  ],
+  "args": {
+   "texts": [
+    "<html><body><h1>502 Bad Gateway</h1></body></html>",
+    "",
+    "   \n ",
+    "null",
+    "[]"
+   ],
+   "error_contains": "did not return a plan"
+  }
+ },
+ {
+  "id": "A-094",
+  "area": "A",
+  "title": "Planner: an argument of the wrong type is refused",
+  "scenario": "Planner replies (fixtures) give web_search:search a query that is a number, a list, an object, or null, although the entry's schema says string. The planner promises arguments that satisfy the entry's schema.",
+  "expected": "parse_plan refuses each (PlanError); no plugin is called with a wrong-typed argument.",
+  "risk": "high",
+  "check": "planner_refuses_each",
+  "dims": [
+   "planning",
+   "reliability",
+   "security"
+  ],
+  "args": {
+   "texts": [
+    {
+     "summary": "x",
+     "steps": [
+      {
+       "id": "s1",
+       "agent": "plugin",
+       "plugin": "web_search:search",
+       "goal": "find",
+       "args": {
+        "query": 42
+       }
+      }
+     ]
+    },
+    {
+     "summary": "x",
+     "steps": [
+      {
+       "id": "s1",
+       "agent": "plugin",
+       "plugin": "web_search:search",
+       "goal": "find",
+       "args": {
+        "query": [
+         "cats"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "summary": "x",
+     "steps": [
+      {
+       "id": "s1",
+       "agent": "plugin",
+       "plugin": "web_search:search",
+       "goal": "find",
+       "args": {
+        "query": {
+         "q": "cats"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "summary": "x",
+     "steps": [
+      {
+       "id": "s1",
+       "agent": "plugin",
+       "plugin": "web_search:search",
+       "goal": "find",
+       "args": {
+        "query": null
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "id": "A-095",
+  "area": "A",
+  "title": "Planner: a runaway reply is bounded",
+  "scenario": "A planner reply (fixture) with a 2 MB summary and a 2 MB goal, as a looping model produces.",
+  "expected": "Summary at most 200 chars, goal at most 600, parsed in under 500 ms.",
+  "risk": "medium",
+  "check": "planner_huge",
+  "dims": [
+   "planning",
+   "resources"
+  ],
+  "args": {
+   "summary_chars": 1000000,
+   "goal_chars": 1000000,
+   "max_ms": 500
+  }
  }
 ]

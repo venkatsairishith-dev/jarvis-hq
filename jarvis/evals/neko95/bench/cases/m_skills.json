@@ -626,5 +626,176 @@
    "skills",
    "security"
   ]
+ },
+ {
+  "id": "M-024",
+  "area": "M",
+  "title": "A gate that ran no cases does not pass",
+  "scenario": "A staged version is gated with a regression suite that returns no results at all (the decision model was down or the case files were missing). Guards the promotion rule: a skill is admitted only with evidence.",
+  "expected": "gate() reports passed=false; promote() is refused; nothing becomes active.",
+  "risk": "critical",
+  "check": "gate_empty_suite",
+  "dims": [
+   "skills",
+   "reliability"
+  ]
+ },
+ {
+  "id": "M-025",
+  "area": "M",
+  "title": "A crashing regression suite never yields a pass",
+  "scenario": "The suite raises half-way through the gate (the model stopped answering).",
+  "expected": "No gate report is written; the version stays 'staged'; promote() is refused; the audit log has no 'passed' line.",
+  "risk": "high",
+  "check": "gate_suite_crash",
+  "dims": [
+   "skills",
+   "reliability"
+  ]
+ },
+ {
+  "id": "M-026",
+  "area": "M",
+  "title": "A staged file changed before its gate is not evaluated",
+  "scenario": "versions/v1.json is edited (hacker news -> evil-example.com) after the proposal and before the gate.",
+  "expected": "gate() refuses with SkillError; the suite never runs on the changed content; no report; status stays 'staged'.",
+  "risk": "critical",
+  "check": "gate_tampered_staged",
+  "dims": [
+   "skills",
+   "security"
+  ]
+ },
+ {
+  "id": "M-027",
+  "area": "M",
+  "title": "A later failed gate overrides an earlier pass",
+  "scenario": "v2 passes its gate; a second gate run finds case 'b' regressed (a flaky or newly added case). Guards against promoting on a stale pass.",
+  "expected": "Second report: passed=false, regressed ['b']; promote() refused; status 'gate_failed'; the audit log has both gate lines in order (passed, then FAILED).",
+  "risk": "high",
+  "check": "regate_fail_wins",
+  "dims": [
+   "skills",
+   "reliability"
+  ]
+ },
+ {
+  "id": "M-028",
+  "area": "M",
+  "title": "Rollback keeps history; the next version builds on the restored one",
+  "scenario": "v1 and v2 promoted; v2 rolled back; a new proposal v3 follows.",
+  "expected": "Active v1; v2 still on disk, loadable, status 'rolled_back'; v3's base is v1 and its sites are v1's plus the new one (not v2's); the audit log reads promoted v2, rolled back v2 -> v1, proposed v3 (base v1) in that order.",
+  "risk": "high",
+  "check": "history_after_rollback",
+  "dims": [
+   "skills",
+   "recovery"
+  ]
+ },
+ {
+  "id": "M-029",
+  "area": "M",
+  "title": "A damaged registry never overwrites the version history",
+  "scenario": "registry.json is cut off mid-write; then a new proposal is made. Guards the record of every version (the history the owner rolls back to).",
+  "expected": "The proposal is refused or written under a new name; the existing versions/v1.json is byte-for-byte unchanged; the decider still answers (built-ins or the checked version, never unchecked content).",
+  "risk": "high",
+  "check": "corrupt_registry_keeps_versions",
+  "dims": [
+   "skills",
+   "reliability",
+   "recovery"
+  ]
+ },
+ {
+  "id": "M-030",
+  "area": "M",
+  "title": "Simultaneous proposals each get their own version",
+  "scenario": "Six proposals arrive at the same moment (threads behind a barrier), three runs. Guards against two learning tasks overwriting each other's version or the registry.",
+  "expected": "Every run: six distinct version names, six registry entries, all six loadable; no proposal crashes.",
+  "risk": "medium",
+  "check": "concurrent_proposals",
+  "dims": [
+   "skills",
+   "reliability"
+  ],
+  "args": {
+   "n": 6,
+   "trials": 3
+  }
+ },
+ {
+  "id": "M-031",
+  "area": "M",
+  "title": "Kernel policy for activating a lab skill",
+  "scenario": "Real llm_proxy agent actions and kernel policy: skill.activate from a lab (public) token; from the owner's side with risk high, unrated, medium, low (for the lab) and low (for the owner's own agent).",
+  "expected": "HTTP 403, 403, 403, 202, 200, 202 in that order; only the low/lab activation is audited (skill_activate, with its risk and sha256).",
+  "risk": "critical",
+  "check": "skill_activation_policy",
+  "dims": [
+   "skills",
+   "security"
+  ],
+  "args": {
+   "want": {
+    "lab_low": 403,
+    "high": 403,
+    "unrated": 403,
+    "medium": 202,
+    "low_lab": 200,
+    "low_owner": 202
+   }
+  }
+ },
+ {
+  "id": "M-032",
+  "area": "M",
+  "title": "Lab skill whose smoke test fails is rolled back",
+  "scenario": "skillgate.py (real) with a temp pinned source: a low-risk allowlisted skill passes its checks, the kernel allows it (fake HTTP call), it is copied to the lab (fake WSL), and its smoke test fails (fake lab answer 'SKILL-MISSING').",
+  "expected": "cmd_activate returns 1; the kernel is asked to activate and then to deactivate; the lab folder is removed; active.json no longer lists the skill; the log keeps activate then deactivate; the provenance records the failed smoke test.",
+  "risk": "high",
+  "check": "skillgate_smoke_fail_rollback",
+  "dims": [
+   "skills",
+   "recovery"
+  ]
+ },
+ {
+  "id": "M-033",
+  "area": "M",
+  "title": "Kernel refusal or pending approval: nothing reaches the lab",
+  "scenario": "skillgate.py activation where the kernel (fake HTTP) answers 403, then (fresh run) 202 needs_approval.",
+  "expected": "403: refused naming the code, no lab command, active.json not written. 202: returns 3 (waits for the owner), no lab command, active.json not written.",
+  "risk": "critical",
+  "check": "skillgate_kernel_says_no",
+  "dims": [
+   "skills",
+   "security"
+  ]
+ },
+ {
+  "id": "M-034",
+  "area": "M",
+  "title": "Hermes's scanner can only raise a skill's rating",
+  "scenario": "A skill the static rules rated medium; Hermes's skills_guard in the lab (fake WSL output) reports a high-severity finding and refuses it.",
+  "expected": "Rating becomes reject; static and guard checks 'failed'; activation is refused before the kernel is asked.",
+  "risk": "high",
+  "check": "skillgate_guard_raises_rating",
+  "dims": [
+   "skills",
+   "security"
+  ]
+ },
+ {
+  "id": "M-035",
+  "area": "M",
+  "title": "A skill edited after its checks is not activated",
+  "scenario": "After staging and a passed guard, a line asking to copy ~/.ssh/id_rsa is appended to the staged SKILL.md.",
+  "expected": "Activation refused ('changed since staging'); the kernel is not asked; nothing is sent to the lab.",
+  "risk": "critical",
+  "check": "skillgate_changed_after_checks",
+  "dims": [
+   "skills",
+   "security"
+  ]
  }
 ]

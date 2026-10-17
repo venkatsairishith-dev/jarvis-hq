@@ -47,7 +47,10 @@ class Mock:
     """An OpenAI-style upstream on 127.0.0.1:<free port>. `steps` is a list of behaviours consumed one per request; the
     last one repeats. Each behaviour is a dict: {"ok": reply} | {"status": code, "body": bytes, "headers": {}} |
     {"sleep": s, then...} | {"raw": bytes} (a 200 with exactly these bytes) | {"stream": [chunks], "gap": s} |
-    {"echo_auth": code} (an error page that echoes the Authorization header back, like a careless proxy)."""
+    {"echo_auth": code} (an error page that echoes the Authorization header back, like a careless proxy) |
+    {"drop": True} (reads the request, then closes the connection without any answer, like a provider process dying).
+    {"hook": fn} runs fn() when the request arrives (to change the world while the caller waits). Each seen entry is
+    (method, path, body, Authorization, monotonic arrival time)."""
 
     def __init__(self, name, steps=None, port=0):
         self.name, self.steps, self.seen, self.n = name, list(steps or [{"ok": REPLY}]), [], 0
@@ -73,7 +76,7 @@ class Mock:
                     mock.write_failed.set()
 
             def do_GET(self):
-                mock.seen.append(("GET", self.path, None, self.headers.get("Authorization")))
+                mock.seen.append(("GET", self.path, None, self.headers.get("Authorization"), time.monotonic()))
                 self._send(200, json.dumps({"data": [{"id": "mock"}]}).encode())
 
             def do_POST(self):
@@ -82,9 +85,14 @@ class Mock:
                     i = min(mock.n, len(mock.steps) - 1)
                     mock.n += 1
                 st = mock.steps[i]
-                mock.seen.append(("POST", self.path, body, self.headers.get("Authorization")))
+                mock.seen.append(("POST", self.path, body, self.headers.get("Authorization"), time.monotonic()))
+                if st.get("hook"):
+                    st["hook"]()
                 if st.get("sleep"):
                     time.sleep(st["sleep"])
+                if st.get("drop"):
+                    self.close_connection = True
+                    return
                 if "status" in st:
                     return self._send(st["status"], st.get("body", b""), headers=st.get("headers"))
                 if "echo_auth" in st:
@@ -154,9 +162,10 @@ class Env:
         self.mocks.append(m)
         return m
 
-    def proxy(self, providers):
+    def proxy(self, providers, hermes=None):
+        """hermes: the owner's agent as seen by the owner plane (a fake callable text -> reply), or None (no agent)."""
         from jarvis_kernel.llm_proxy import make_handler
-        H, tokens = make_handler(self.k, providers, clock=lambda: self.now[0], owner_hermes=None)
+        H, tokens = make_handler(self.k, providers, clock=lambda: self.now[0], owner_hermes=hermes)
         from jarvis_kernel.llm_proxy import ProxyServer
         s = ProxyServer(("127.0.0.1", 0), H)                 # the server class llm_proxy.serve() runs in production
         threading.Thread(target=s.serve_forever, daemon=True).start()
@@ -883,14 +892,14 @@ class CueRedactor:
 
 
 @contextlib.contextmanager
-def privacy_gateway(upstreams, cooldown=60.0, secret_root=None):
+def privacy_gateway(upstreams, cooldown=60.0, secret_root=None, timeout=5):
     gw, red = _privacy_modules()
     gw._cooldown.clear()
     gw._keys.clear()
     old_root = gw.SECRET_ROOT
     if secret_root:
         gw.SECRET_ROOT = secret_root
-    H = gw.make_handler(CueRedactor(red), upstreams, timeout=5, cooldown=cooldown)
+    H = gw.make_handler(CueRedactor(red), upstreams, timeout=timeout, cooldown=cooldown)
     H.log_message = lambda *a, **k: None
     s = ThreadingHTTPServer(("127.0.0.1", 0), H)
     s.daemon_threads = True
@@ -982,3 +991,537 @@ def privacy_fallback_own_key(a):
         finally:
             dahl.close()
             groq.close()
+
+
+# ---------------------------------------------------------------- 2026-10-17: provider failure and recovery, constrained resources
+
+def _content(b):
+    try:
+        return json.loads(b)["choices"][0]["message"]["content"]
+    except Exception:  # noqa: BLE001 - not a chat reply
+        return None
+
+
+def _post_safe(e, tok, body, timeout=30):
+    """e.post, but a connection the proxy dropped without answering is a result ("dropped"), not a crash of the check."""
+    import http.client
+    try:
+        return e.post(tok, body, timeout=timeout)
+    except (http.client.HTTPException, ConnectionError, urllib.error.URLError, TimeoutError) as x:
+        return f"dropped ({type(x).__name__})", {}, b""
+
+
+def _order(*mocks):
+    """Provider names in the order their POSTs arrived (several mocks, one timeline)."""
+    return [m.name for m, _ in sorted(((m, s) for m in mocks for s in m.posts()), key=lambda t: t[1][4])]
+
+
+def proxy_fallback_order(a):
+    """Four same-lane providers fail in turn, the fifth answers: asked in plan order (priority, then local first on a tie),
+    at most twice each (one same-provider retry on 5xx), and the public Dahl never."""
+    with env() as e:
+        dahl = e.mock("dahl", [{"ok": reply("public answer")}])
+        loc = e.mock("local", [{"status": 503}])
+        groq = e.mock("groq", [{"status": 503}])
+        cer = e.mock("cer", [{"status": 500, "body": b'{"error":"boom"}'}])
+        last = e.mock("slowcloud", [{"ok": reply("last one answered")}])
+        tok = e.proxy([P("dahl", "public", dahl.url, priority=0), P("slowcloud", "private", last.url, priority=5),
+                       P("cer", "private", cer.url, priority=3), P("groq", "private", groq.url, priority=1),
+                       P("local", "local", loc.url, priority=1)]).issue("hermes")
+        c, _, b = e.post(tok, msg())
+        order = _order(dahl, loc, groq, cer, last)
+        ok = c == 200 and _content(b) == "last one answered" and order == a["want"]
+        return ok, f"HTTP {c} {_content(b)!r}; asked in order {order} (want {a['want']}); Dahl asked {len(dahl.posts())}x"
+
+
+def proxy_outage_bounded(a):
+    """Every provider of the lane answers 503 for a while: the first request tries each twice and says all failed; the next
+    requests are answered at once with 503 + Retry-After and reach no provider (no retry storm); after the rest the
+    providers are asked again and the lane recovers."""
+    with env() as e:
+        ms = [e.mock(n, [{"status": 503, "body": b'{"error":"overloaded"}'}]) for n in ("p1", "p2", "p3")]
+        tok = e.proxy([P(m.name, "private", m.url, priority=i) for i, m in enumerate(ms)]).issue("hermes")
+        n = int(a.get("requests", 10))
+        outs = [e.post(tok, msg("same question")) for _ in range(n)]
+        asked = sum(len(m.posts()) for m in ms)
+        later_ok = all(o[0] == 503 and 1 <= int(o[1].get("Retry-After", 0) or 0) <= 30 and b"retry in" in o[2] for o in outs[1:])
+        e.now[0] += 31
+        for m in ms:
+            m.steps, m.n = [{"ok": reply(f"{m.name} is back")}], 0
+        c3, _, b3 = e.post(tok, msg("same question"))
+        ok = (outs[0][0] == 502 and b"all providers failed" in outs[0][2] and asked == a["max_upstream"] and later_ok
+              and c3 == 200 and _content(b3) == "p1 is back")
+        return ok, (f"1st: HTTP {outs[0][0]} {outs[0][2][:60]!r}; upstream requests for {n} agent calls: {asked} (limit {a['max_upstream']}); "
+                    f"later: {sorted({(o[0], o[1].get('Retry-After')) for o in outs[1:]})}; after the rest: HTTP {c3} {_content(b3)!r}")
+
+
+def proxy_all_fail_truthful(a):
+    """Three providers fail three ways (429, 500 with internal details, connection refused): the agent gets an error that
+    says all failed (never a 200), without the providers' own error text; the audit records each failure class; the next
+    request does not ask anyone and says when to retry."""
+    with env() as e:
+        p1 = e.mock("p1", [{"status": 429, "body": b'{"error":{"message":"rate limit reached"}}', "headers": {"Retry-After": "120"}}])
+        p2 = e.mock("p2", [{"status": 500, "body": b'{"error":"internal: db at 10.1.2.3 refused"}'}])
+        tok = e.proxy([P("p1", "private", p1.url, priority=1), P("p2", "private", p2.url, priority=2),
+                       P("p3", "private", dead_url(), priority=3)]).issue("hermes")
+        c1, _, b1 = e.post(tok, msg())
+        n1 = len(p1.posts()) + len(p2.posts())
+        c2, h2, b2 = e.post(tok, msg("again"))
+        n2 = len(p1.posts()) + len(p2.posts())
+        req = e.audit("agent_model_request_failed")
+        classes = req[-1]["classes"] if req else None
+        ok = (c1 == 502 and b"all providers failed" in b1 and b"10.1.2.3" not in b1 and classes == ["rate_limited", "other", "other"]
+              and c2 in (429, 503) and 1 <= int(h2.get("Retry-After", 0) or 0) <= 120 and n2 == n1)
+        return ok, f"1st HTTP {c1} {b1[:70]!r}; classes audited {classes}; 2nd HTTP {c2} Retry-After {h2.get('Retry-After')}, providers asked again: {n2 - n1}"
+
+
+def _stream_req(e, tok, body):
+    return urllib.request.Request(e.url + "/v1/chat/completions", data=json.dumps(dict(body, stream=True)).encode(), method="POST",
+                                  headers={"Content-Type": "application/json", "Authorization": "Bearer " + tok})
+
+
+def proxy_slow_stream_progressive(a):
+    """A provider streams five tokens 0.5 s apart: the agent receives each as it comes (not one blob at the end), and the
+    whole stream including [DONE]."""
+    with env() as e:
+        ch = [f'data: {{"choices":[{{"delta":{{"content":"t{i}"}}}}]}}\n\n'.encode() for i in range(5)] + [b"data: [DONE]\n\n"]
+        up = e.mock("up", [{"stream": ch, "gap": a.get("gap", 0.5)}])
+        tok = e.proxy([P("up", "private", up.url)]).issue("hermes")
+        arrivals, got = [], b""
+        with urllib.request.urlopen(_stream_req(e, tok, msg()), timeout=30) as resp:
+            while True:
+                c = resp.read1(65536)
+                if not c:
+                    break
+                got += c
+                arrivals.append(time.monotonic())
+        spread = arrivals[-1] - arrivals[0] if arrivals else 0
+        ok = all(f"t{i}".encode() in got for i in range(5)) and b"[DONE]" in got and spread >= a["min_spread_s"]
+        return ok, f"{len(arrivals)} reads; first to last {spread:.2f}s (needs >= {a['min_spread_s']}s: relayed as it streams); complete={b'[DONE]' in got}"
+
+
+def proxy_stalled_stream(a):
+    """A provider sends one token and then stalls past its timeout_s: the proxy ends the stream within the timeout plus a
+    margin, does not invent an ending ([DONE]), stays up for the next request, and records the failed call in the audit."""
+    with env() as e:
+        up = e.mock("up", [{"stream": [b'data: {"choices":[{"delta":{"content":"a"}}]}\n\n', b'data: {"choices":[{"delta":{"content":"b"}}]}\n\n',
+                                       b"data: [DONE]\n\n"], "gap": 5}, {"ok": reply("next one")}])
+        tok = e.proxy([P("up", "private", up.url, timeout_s=1)]).issue("hermes")
+        got, first, end = b"", None, None
+        try:
+            with urllib.request.urlopen(_stream_req(e, tok, msg()), timeout=30) as resp:
+                while True:
+                    c = resp.read1(65536)
+                    if not c:
+                        break
+                    got += c
+                    first = first or time.monotonic()
+        except Exception:  # noqa: BLE001 - a cut connection is what a stall may look like to the agent
+            pass
+        end = time.monotonic()
+        held = (end - first) if first else None
+        c2, _, b2 = e.post(tok, msg("next"))
+        fails = [f for f in e.audit("agent_model_call_failed") + e.audit("agent_model_request_failed") if f.get("provider", "up") == "up"]
+        ok = (first is not None and held <= 1 + a["margin_s"] and b"[DONE]" not in got and b'"b"' not in got and c2 == 200
+              and _content(b2) == "next one" and bool(fails))
+        return ok, (f"stream held {held if held is None else round(held, 2)}s after the first token (limit {1 + a['margin_s']}s); "
+                    f"fake [DONE]={b'[DONE]' in got}; next request HTTP {c2}; failure audited: {fails or 'NO'}")
+
+
+def proxy_key_withdrawn_midrequest(a):
+    """While the first provider is answering (slowly, then 503), the second provider's key file is removed (the owner
+    withdraws that provider). The proxy must skip it and use the third, and answer the agent; never drop the connection."""
+    with env() as e:
+        k1, k2, k3 = e.key("a"), e.key("b"), e.key("c")
+        gone = lambda: os.path.exists(k2) and os.remove(k2)  # noqa: E731
+        pa = e.mock("a", [{"hook": gone, "sleep": 0.3, "status": 503}])
+        pb = e.mock("b", [{"ok": reply("from b")}])
+        pc = e.mock("c", [{"ok": reply("from c")}])
+        tok = e.proxy([P("a", "private", pa.url, k1, priority=1), P("b", "private", pb.url, k2, priority=2),
+                       P("c", "private", pc.url, k3, priority=3)]).issue("hermes")
+        c, _, b = _post_safe(e, tok, msg())
+        ok = c == 200 and _content(b) == "from c" and not pb.posts()
+        return ok, f"agent got {c} {_content(b)!r}; withdrawn provider asked {len(pb.posts())}x; third asked {len(pc.posts())}x"
+
+
+def gateway_key_withdrawn_midrequest(a):
+    """gateway.call: the second provider's key file disappears while the first is answering. The call must go on to the
+    third provider (or end in RouteError), never crash with a file error."""
+    with env() as e:
+        k1, k2, k3 = e.key("a"), e.key("b"), e.key("c")
+        gone = lambda: os.path.exists(k2) and os.remove(k2)  # noqa: E731
+        pa = e.mock("a", [{"hook": gone, "sleep": 0.3, "status": 500}])
+        pb = e.mock("b", [{"ok": reply("from b")}])
+        pc = e.mock("c", [{"ok": reply("from c")}])
+        provs = [P("a", "private", pa.url, k1, priority=1), P("b", "private", pb.url, k2, priority=2), P("c", "private", pc.url, k3, priority=3)]
+        try:
+            out = gateway.call(e.k, provs, "private", "summarise my notes")
+        except RouteError as x:
+            out = f"RouteError: {x}"
+        except Exception as x:  # noqa: BLE001 - the finding: a crash instead of a fallback
+            out = f"CRASH {type(x).__name__}: {str(x)[:80]}"
+        ok = out == "from c" and not pb.posts()
+        return ok, f"result {out!r}; withdrawn provider asked {len(pb.posts())}x; third asked {len(pc.posts())}x"
+
+
+def gateway_malformed_replies(a):
+    """gateway.call: a 200 with HTML, a 200 with no choices, a 200 with the wrong shape, then a good reply: each bad one is
+    a failure of its provider (audited by class), the good one answers."""
+    with env() as e:
+        ms = [e.mock("html", [{"raw": b"<html>upstream maintenance</html>"}]), e.mock("nochoices", [{"ok": {"choices": []}}]),
+              e.mock("shape", [{"ok": {"nope": 1}}]), e.mock("good", [{"ok": reply("good one")}])]
+        provs = [P(m.name, "private", m.url, priority=i) for i, m in enumerate(ms)]
+        try:
+            out = gateway.call(e.k, provs, "private", "hi")
+        except Exception as x:  # noqa: BLE001
+            out = f"{type(x).__name__}: {x}"
+        fails = [(f["provider"], f["error"]) for f in e.audit("model_call_failed")]
+        ok = out == "good one" and fails == [tuple(x) for x in a["want_failures"]]
+        return ok, f"answer {out!r}; failures audited {fails}"
+
+
+def gateway_private_all_fail_never_dahl(a):
+    """gateway.call for a private task: Dahl (public, first by priority, healthy) is never asked; the private providers fail
+    with 429, 500 and a hang; each is asked once, the hang is cut at its timeout, and the error says all failed."""
+    with env() as e:
+        dahl = e.mock("dahl", [{"ok": reply("public answer")}])
+        r429 = e.mock("r429", [{"status": 429, "headers": {"Retry-After": "30"}}])
+        r500 = e.mock("r500", [{"status": 500}])
+        hang = e.mock("hang", [{"sleep": a.get("hang_s", 8), "ok": REPLY}])
+        provs = [P("dahl", "public", dahl.url, priority=0), P("r429", "private", r429.url, priority=1),
+                 P("r500", "private", r500.url, priority=2), P("hang", "private", hang.url, priority=3, timeout_s=1)]
+        t0 = time.perf_counter()
+        try:
+            gateway.call(e.k, provs, "private", "my private note")
+            err = "no error"
+        except RouteError as x:
+            err = str(x)
+        dt = time.perf_counter() - t0
+        counts = [len(m.posts()) for m in (r429, r500, hang)]
+        ok = err.startswith("all providers failed") and not dahl.posts() and counts == [1, 1, 1] and dt < a["max_s"]
+        return ok, f"{err!r} after {dt:.1f}s (limit {a['max_s']}s); Dahl asked {len(dahl.posts())}x; private providers asked {counts}"
+
+
+def proxy_public_never_private(a):
+    """A public (lab) token whose only public provider, Dahl, fails: the agent gets an error; the private provider is never
+    asked, then or on the next request."""
+    with env() as e:
+        dahl = e.mock("dahl", [{"status": 500, "body": b'{"error":"down"}'}])
+        groq = e.mock("groq", [{"ok": reply("private answer")}])
+        toks = e.proxy([P("dahl", "public", dahl.url, priority=5), P("groq", "private", groq.url, priority=0)])
+        lab = toks.issue("lab", "public")
+        c1, _, b1 = e.post(lab, msg("public question"))
+        c2, _, _ = e.post(lab, msg("public question"))
+        ok = c1 == 502 and c2 in (502, 503) and not groq.posts() and len(dahl.posts()) == 2
+        return ok, f"HTTP {c1} then {c2}; private provider asked {len(groq.posts())}x; Dahl asked {len(dahl.posts())}x (one retry, then rested)"
+
+
+def proxy_dropped_connection_fallback(a):
+    """The first provider reads the request and closes the connection without answering (its process died): the next
+    provider answers, the dead one is asked once (no blind retry) and the failure is audited by class."""
+    with env() as e:
+        d = e.mock("dies", [{"drop": True}])
+        ok_m = e.mock("ok", [{"ok": reply("second provider")}])
+        tok = e.proxy([P("dies", "private", d.url, priority=1), P("ok", "private", ok_m.url, priority=2)]).issue("hermes")
+        c, _, b = _post_safe(e, tok, msg())
+        fails = [(f["provider"], f["error"]) for f in e.audit("agent_model_call_failed")]
+        ok = c == 200 and _content(b) == "second provider" and len(d.posts()) == 1 and any(p == "dies" for p, _ in fails)
+        return ok, f"HTTP {c} {_content(b)!r}; dead provider asked {len(d.posts())}x; failures audited {fails}"
+
+
+def proxy_truncated_summary_fallback(a):
+    """A context-compression (summary) call: the first provider's summary is cut at its output cap (finish_reason
+    'length'); it is not passed on, the next provider's complete summary is, and the cut is audited."""
+    with env() as e:
+        cut = e.mock("cut", [{"ok": reply("C" * 400, "length")}])
+        full = e.mock("full", [{"ok": reply("F" * 400)}])
+        tok = e.proxy([P("cut", "private", cut.url, priority=1), P("full", "private", full.url, priority=2)]).issue("hermes")
+        c, _, b = e.post(tok, {"messages": [{"role": "user", "content": sizing.SUMMARY_PREFIX + ". Summarise: ..."}]})
+        classes = [f.get("class") for f in e.audit("agent_model_call_failed")]
+        ok = c == 200 and _content(b) == "F" * 400 and "summary_truncated" in classes and len(cut.posts()) == 1
+        return ok, f"HTTP {c}; summary from the complete provider={_content(b) == 'F' * 400}; failure classes {classes}"
+
+
+def _pg_call(gurl, auth="Bearer SYNTH-CALLER-DAHL-KEY", text="password is Abc!2345q, plan my week"):
+    req = urllib.request.Request(gurl + "/chat/completions", method="POST", data=json.dumps(
+        {"model": "minimax", "messages": [{"role": "user", "content": text}]}).encode(),
+        headers={"Content-Type": "application/json", "Authorization": auth})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.status, dict(r.headers), r.read()
+    except urllib.error.HTTPError as x:
+        return x.code, dict(x.headers or {}), x.read()
+
+
+def privacy_all_fail_truthful(a):
+    """Privacy gateway: Dahl answers 500 and the fallback is unreachable: the caller gets a 502 that names each provider and
+    its failure class, not a success and not a provider's raw page."""
+    with tempfile.TemporaryDirectory() as d:
+        open(os.path.join(d, "groq.key"), "w").write("SYNTH-GROQ-KEY")
+        dahl = Mock("dahl", [{"status": 500, "body": b'{"error":"internal stack trace at /srv/app.py"}'}])
+        try:
+            provs = [{"name": "dahl", "base_url": dahl.url, "key": "from_request"},
+                     {"name": "groq", "base_url": dead_url(), "key_file": "groq.key", "model": "m"}]
+            with privacy_gateway(provs, secret_root=d) as gurl:
+                c, _, b = _pg_call(gurl)
+        finally:
+            dahl.close()
+    txt = b.decode("utf-8", "replace")
+    ok = c == 502 and "dahl: HTTP 500" in txt and "groq: URLError" in txt and "/srv/app.py" not in txt
+    return ok, f"HTTP {c} {txt[:160]!r}"
+
+
+def privacy_fallback_key_not_echoed(a):
+    """Privacy gateway: Dahl fails, the fallback rejects ITS OWN key (read from the secrets folder) with an error page that
+    echoes the Authorization header. That key must not reach the caller (N.E.K.O, its logs, the screen)."""
+    with tempfile.TemporaryDirectory() as d:
+        fb_key = "SYNTH-GROQ-" + "FALLBACK-" + os.urandom(6).hex()
+        open(os.path.join(d, "groq.key"), "w").write(fb_key)
+        dahl = Mock("dahl", [{"status": 503, "body": b'{"error":"busy"}'}])
+        groq = Mock("groq", [{"echo_auth": 401}])
+        try:
+            provs = [{"name": "dahl", "base_url": dahl.url, "key": "from_request"},
+                     {"name": "groq", "base_url": groq.url, "key_file": "groq.key", "model": "m"}]
+            with privacy_gateway(provs, secret_root=d) as gurl:
+                c, h, b = _pg_call(gurl)
+        finally:
+            dahl.close()
+            groq.close()
+    leaked = fb_key in (b.decode("utf-8", "replace") + json.dumps(h))
+    ok = c >= 400 and not leaked
+    return ok, f"HTTP {c}; fallback key in the reply to the caller: {leaked}; body {b[:90]!r}"
+
+
+def privacy_fallback_cooldown_bounded(a):
+    """Privacy gateway, two calls: Dahl 500 (the caller's own provider, tried every call by design), the first fallback 429,
+    the second fallback answers. On the second call the rate-limited fallback rests (not asked again)."""
+    with tempfile.TemporaryDirectory() as d:
+        for n in ("groq", "cerebras"):
+            open(os.path.join(d, n + ".key"), "w").write("SYNTH-" + n.upper())
+        dahl = Mock("dahl", [{"status": 500}])
+        groq = Mock("groq", [{"status": 429, "body": b'{"error":"slow down"}'}])
+        cer = Mock("cerebras", [{"ok": reply("from cerebras")}])
+        try:
+            provs = [{"name": "dahl", "base_url": dahl.url, "key": "from_request"},
+                     {"name": "groq", "base_url": groq.url, "key_file": "groq.key", "model": "g"},
+                     {"name": "cerebras", "base_url": cer.url, "key_file": "cerebras.key", "model": "c"}]
+            with privacy_gateway(provs, secret_root=d) as gurl:
+                outs = [_pg_call(gurl), _pg_call(gurl)]
+            counts = {m.name: len(m.posts()) for m in (dahl, groq, cer)}
+        finally:
+            for m in (dahl, groq, cer):
+                m.close()
+    answers = [_content(o[2]) for o in outs]
+    ok = answers == ["from cerebras"] * 2 and counts == a["want_counts"]
+    return ok, f"answers {answers}; requests per provider over 2 calls {counts} (want {a['want_counts']})"
+
+
+def privacy_timeout_fallback(a):
+    """Privacy gateway: Dahl hangs past the gateway's timeout; the fallback answers within the timeout plus a margin."""
+    with tempfile.TemporaryDirectory() as d:
+        open(os.path.join(d, "groq.key"), "w").write("SYNTH-GROQ")
+        dahl = Mock("dahl", [{"sleep": a.get("hang_s", 6), "ok": REPLY}])
+        groq = Mock("groq", [{"ok": reply("fallback in time")}])
+        try:
+            provs = [{"name": "dahl", "base_url": dahl.url, "key": "from_request"},
+                     {"name": "groq", "base_url": groq.url, "key_file": "groq.key", "model": "g"}]
+            with privacy_gateway(provs, secret_root=d, timeout=1) as gurl:
+                t0 = time.perf_counter()
+                c, _, b = _pg_call(gurl)
+                dt = time.perf_counter() - t0
+        finally:
+            dahl.close()
+            groq.close()
+    ok = c == 200 and _content(b) == "fallback in time" and dt < a["max_s"]
+    return ok, f"HTTP {c} {_content(b)!r} after {dt:.2f}s (gateway timeout 1 s, limit {a['max_s']}s)"
+
+
+# ---- local model profile (jarvis/local_models/hwdetect.py) from fake device readings
+
+def _hwdetect(llama_path=None):
+    """A fresh copy of hwdetect.py (its llama-server path is read at import time, so a fake one needs a fresh import)."""
+    import importlib.util
+    old = os.environ.get("NEKO_LLAMA_SERVER")
+    if llama_path:
+        os.environ["NEKO_LLAMA_SERVER"] = llama_path
+    try:
+        spec = importlib.util.spec_from_file_location("bench_hwdetect", ROOT / "jarvis" / "local_models" / "hwdetect.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    finally:
+        if llama_path:
+            if old is None:
+                os.environ.pop("NEKO_LLAMA_SERVER", None)
+            else:
+                os.environ["NEKO_LLAMA_SERVER"] = old
+
+
+def hw_profile_boundaries(a):
+    """choose() at the edges of each profile: RAM in GB and the free memory (MiB) of each GPU llama.cpp reports."""
+    hw = _hwdetect()
+    got, bad = [], []
+    for total, frees, want in a["cases"]:
+        devs = [{"backend": "Vulkan", "name": f"gpu{i}", "total_mb": f + 512, "free_mb": f} for i, f in enumerate(frees)]
+        p = hw.choose({"total_gb": total}, devs)[0]
+        got.append(p)
+        if p != want:
+            bad.append(f"{total} GB + GPUs {frees} -> {p}, want {want}")
+    return not bad, ("; ".join(bad) if bad else f"all {len(got)} readings -> {got}")
+
+
+def hw_detect_fake_devices(a):
+    """detect() end to end with a fake llama-server (its --list-devices text) and fake RAM readings: two GPUs (the one with
+    more free memory counts), a hung llama-server (timeout: no GPU, no crash), and the owner override (a bad value ignored)."""
+    import subprocess
+    from unittest import mock
+    with tempfile.TemporaryDirectory() as d:
+        exe = os.path.join(d, "llama-server")
+        open(exe, "w").write("fake")
+        hw = _hwdetect(exe)
+        seen = []
+
+        def runner(out=None, exc=None):
+            def run(cmd, **kw):
+                seen.append(cmd)
+                if exc:
+                    raise exc
+                return types.SimpleNamespace(stdout="", stderr=out)
+            return run
+        listing = ("ggml_vulkan: Found 2 Vulkan devices\nAvailable devices:\n"
+                   "  Vulkan0: Intel(R) UHD Graphics 630 (2048 MiB, 1500 MiB free)\n  Vulkan1: AMD Radeon RX 6600 (8176 MiB, 7100 MiB free)\n")
+        vm = lambda gb: types.SimpleNamespace(total=int(gb * 2**30), available=int(gb * 0.6 * 2**30))  # noqa: E731
+        env_keep = os.environ.pop("NEKO_MODEL_PROFILE", None)
+        try:
+            with mock.patch("psutil.virtual_memory", lambda: vm(16)):
+                r1 = hw.detect(runner=runner(listing))
+                r2 = hw.detect(runner=runner(exc=subprocess.TimeoutExpired("llama-server", 60)))
+                os.environ["NEKO_MODEL_PROFILE"] = "gpu99"
+                r3 = hw.detect(runner=runner(listing))
+                os.environ["NEKO_MODEL_PROFILE"] = "cpu8"
+                r4 = hw.detect(runner=runner(listing))
+            with mock.patch("psutil.virtual_memory", lambda: vm(4)):
+                os.environ.pop("NEKO_MODEL_PROFILE", None)
+                r5 = hw.detect(runner=runner(listing))
+        finally:
+            os.environ.pop("NEKO_MODEL_PROFILE", None)
+            if env_keep is not None:
+                os.environ["NEKO_MODEL_PROFILE"] = env_keep
+    got = [(r["profile"], len(r["gpus"])) for r in (r1, r2, r3, r4, r5)]
+    want = [tuple(x) for x in a["want"]]
+    ok = got == want and "7100" in r1["why"] and "detected" in r4["why"] and len(seen) == 5
+    return ok, f"profiles/GPUs seen {got} (want {want}); why: {r1['why']!r}, {r4['why']!r}; llama-server asked {len(seen)}x"
+
+
+def hw_profile_configs_bounded(a, root=None):
+    """Every profile the detector can choose that runs local models has its llama-swap config (vram4: llama-swap.yaml,
+    others: profiles/<name>.yaml, as local-models.ps1 picks them); in each config every model is in an exclusive swap group
+    (one model in memory at a time), and every server command has one request slot (-np 1) and listens on 127.0.0.1."""
+    import yaml
+    base = Path(root) if root else ROOT / "jarvis" / "local_models"
+    hw = _hwdetect()
+    bad, seen = [], {}
+    for prof in hw.PROFILES:
+        if prof == "remote_only":
+            continue
+        f = base / ("llama-swap.yaml" if prof == "vram4" else f"profiles/{prof}.yaml")
+        if not f.is_file():
+            bad.append(f"{prof}: no config {f.name}")
+            continue
+        cfg = yaml.safe_load(f.read_text(encoding="utf-8"))
+        macros = cfg.get("macros") or {}
+        models = cfg.get("models") or {}
+        grouped = set()
+        for g in (cfg.get("groups") or {}).values():
+            if g.get("exclusive") and g.get("swap"):
+                grouped |= set(g.get("members") or [])
+        loose = sorted(set(models) - grouped)
+        if loose:
+            bad.append(f"{prof}: models outside an exclusive swap group {loose}")
+        for name, m in models.items():
+            cmd = str(m.get("cmd", ""))
+            for k, v in macros.items():
+                cmd = cmd.replace("${" + k + "}", str(v))
+            if not re.search(r"(?<![\w-])-np 1(?!\d)", cmd) or "--host 127.0.0.1" not in cmd:
+                bad.append(f"{prof}/{name}: no single slot or not loopback")
+        seen[prof] = len(models)
+    return not bad, ("; ".join(bad) if bad else f"configs checked {seen}")
+
+
+def team_adviser_url_host(a):
+    """The public adviser is reached only through the privacy gateway: an address that merely CONTAINS the gateway's
+    host:port (in its path, query or a longer host name) is someone else's server and must be refused, nothing sent."""
+    core = _lt()
+    sent, out = [], []
+    stream = lambda url, body, headers=None, timeout=0: sent.append(url) or "1. plan"  # noqa: E731
+    for url in a["urls"]:
+        try:
+            core.advise("my password is hunter22", url, "minimax", "SYNTH-KEY", stream=stream)
+            out.append(f"SENT to {url}")
+        except core.TeamError:
+            out.append("refused")
+    ok = not sent
+    return ok, f"{out}; requests sent {sent}"
+
+
+def team_local_down_truthful(a):
+    """Local Team with llama-swap down (and the decision model down): solve() fails with an error that says the local
+    model did not answer. The adviser's plan is never handed back as if it were the answer."""
+    core = _lt()
+    adv = []
+
+    def post(url, body, headers=None, timeout=0):
+        raise core.TeamError(f"no answer from {url.split('/v1')[0]} (URLError)")
+
+    def adviser(task):
+        adv.append(task)
+        return {"plan": "1. a plan from the public adviser", "hidden_from_adviser": {}}
+    orig = core.loaded_models
+    core.loaded_models = lambda get=None: {"general", "code", "math"}   # llama-swap's last known list: memory is not the issue
+    try:
+        try:
+            res = core.solve("plan a birthday dinner for six", adviser=adviser, post=post, use_adviser="always")
+            err = None
+        except core.TeamError as x:
+            res, err = None, str(x)
+    finally:
+        core.loaded_models = orig
+    ok = res is None and err is not None and "no answer" in err and "8080" in err and len(adv) <= 1
+    return ok, f"error {err!r}; result {res}; adviser asked {len(adv)}x"
+
+
+def proxy_agent_limits_isolated(a):
+    """The per-agent rate limit is per agent: one agent that uses up its minute is refused (429), another agent is still
+    served in the same minute, and the provider is not asked for the refused call."""
+    from jarvis_kernel.llm_proxy import PER_MINUTE
+    with env() as e:
+        up = e.mock("up")
+        toks = e.proxy([P("up", "private", up.url)])
+        t1, t2 = toks.issue("busy-agent"), toks.issue("other-agent")
+        codes = [e.post(t1, msg("same status question"))[0] for _ in range(PER_MINUTE + 1)]
+        n = len(up.posts())
+        other = e.post(t2, msg("same status question"))[0]
+        ok = codes[:-1] == [200] * PER_MINUTE and codes[-1] == 429 and n == PER_MINUTE and other == 200
+        return ok, f"busy agent: {PER_MINUTE} x 200 then {codes[-1]}; provider asked {n}x; other agent in the same minute: {other}"
+
+
+def owner_route_after_failure(a):
+    """The owner's route explanation after a provider said 429 (Retry-After 300): it is shown resting and excluded, the
+    fallback is chosen, Dahl is a lane mismatch; after the rest it is chosen again."""
+    with env() as e:
+        groq = e.mock("groq", [{"status": 429, "body": b'{"error":"rate"}', "headers": {"Retry-After": "300"}}, {"ok": REPLY}])
+        cer = e.mock("cerebras", [{"ok": reply("fallback")}])
+        dahl = e.mock("dahl")
+        toks = e.proxy([P("groq", "private", groq.url, priority=1), P("cerebras", "private", cer.url, priority=2),
+                        P("dahl", "public", dahl.url, priority=0)])
+        agent, me = toks.issue("hermes"), toks.issue("me", "owner")
+        e.post(agent, msg())
+        c1, b1 = e.get(me, "/v1/jarvis/owner/route?lane=private")
+        r1 = json.loads(b1)
+        e.now[0] += 301
+        c2, b2 = e.get(me, "/v1/jarvis/owner/route?lane=private")
+        r2 = json.loads(b2)
+    codes = {c["provider"]: c["codes"] for c in r1.get("candidates", [])}
+    ok = (c1 == c2 == 200 and "RESTING_AFTER_ERRORS" in codes.get("groq", []) and r1.get("chosen") == "cerebras"
+          and "groq" not in r1.get("chain", []) and "LANE_MISMATCH" in codes.get("dahl", []) and r2.get("chosen") == "groq")
+    return ok, f"during the rest: chosen {r1.get('chosen')}, chain {r1.get('chain')}, groq {codes.get('groq')}; after: chosen {r2.get('chosen')}"

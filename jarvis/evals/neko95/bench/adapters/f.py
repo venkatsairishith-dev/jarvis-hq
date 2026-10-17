@@ -453,3 +453,443 @@ def neko_trust_arbitration(a):
     want = {"clear_old": "old", "clear_new": "new", "too_close": None, "nan": None, "string": None, "bool": None, "band_nan": "unknown",
             "id_ok": "qq:12345", "id_space": None, "id_noplat": None}
     return got == want, f"margin {M}; {got}"
+
+
+# ---------------------------------------------------------------- retrieval among distractors, conflicts, stale facts (2026-10-17)
+
+def resolve_among_distractors(a):
+    """Many entries share words with the question (seat, prefer, ...); resolve() must put the one meant first, call it
+    unique only when it clearly stands out, and list() must return only stored texts (no merged or invented one)."""
+    with store() as (k, m):
+        with fast_fill():
+            for t in a["distractors"]:
+                m.add(OWNER, t, "preference")
+            for t in a["filler"]:
+                m.add(OWNER, t, "fact")
+        stored = set(a["distractors"]) | set(a["filler"])
+        out, bad = [], []
+        for q, want in a["queries"].items():
+            r = m.resolve(OWNER, q)
+            top = r["candidates"][0]["text"] if r["candidates"] else None
+            if top != want or not r["unique"]:
+                bad.append(f"{q!r}: top {top!r} unique={r['unique']} scores {[c['score'] for c in r['candidates'][:3]]}")
+            if any(c["text"] not in stored for c in r["candidates"]):
+                bad.append(f"{q!r}: a candidate text that was never stored")
+            out.append(f"{q!r} -> {top!r} ({r['candidates'][0]['score'] if r['candidates'] else '-'})")
+        return not bad, "; ".join(bad) or "; ".join(out)
+
+
+def conflicting_entries(a):
+    """Two entries disagree (old and new office address, both saved as separate entries). Retrieval must report the conflict
+    (no unique match; both returned verbatim, never merged), and forget-by-content through the endpoint must refuse."""
+    with store() as (k, m):
+        for t in a["texts"]:
+            m.add(OWNER, t, "fact")
+        r = m.resolve(OWNER, a["query"])
+        texts = [c["text"] for c in r["candidates"]]
+        listed = [x["text"] for x in m.list(OWNER, query=a["query"])]
+        kernel_ok = not r["unique"] and sorted(texts) == sorted(a["texts"]) and sorted(listed) == sorted(a["texts"])
+    e, toks = _proxy_env()
+    try:
+        tok = toks.issue("hermes")
+        for t in a["texts"]:
+            _act(e, tok, "add", t)
+        f = _act(e, tok, "forget", a["query"])
+        left = [x["text"] for x in _act(e, tok, "list")[1]["entries"]]
+    finally:
+        e.close()
+    ok = kernel_ok and f[0] == 409 and len(f[1].get("candidates") or []) == len(a["texts"]) and sorted(left) == sorted(a["texts"])
+    return ok, f"resolve unique={r['unique']} candidates {texts}; list(query) {listed}; endpoint forget-by-content -> {f[0]}; left {len(left)}"
+
+
+def corrected_old_words_gone(a):
+    """After the owner corrects a fact (update), the OLD wording finds nothing (list query, resolve), the new wording finds the
+    entry uniquely, and only get() history still shows the old text."""
+    with store() as (k, m):
+        e = m.add(OWNER, a["old"], "fact")
+        with fast_fill():
+            for t in a.get("others", []):
+                m.add(OWNER, t, "fact")
+        m.update(OWNER, e["id"], a["new"], 1)
+        by_old = [x["text"] for x in m.list(OWNER, query=a["old_query"])]
+        res_old = m.resolve(OWNER, a["old_query"])
+        res_new = m.resolve(OWNER, a["new_query"])
+        hist = [h.get("text") for h in m.get(OWNER, e["id"])["history"]]
+        ok = a["old"] not in by_old and all(c["text"] != a["old"] for c in res_old["candidates"]) and not res_old["unique"] \
+            and res_new["unique"] and res_new["candidates"][0]["id"] == e["id"] and res_new["candidates"][0]["text"] == a["new"] \
+            and a["old"] in hist and a["old"] not in m.render(OWNER)
+        return ok, (f"old words -> list {by_old}, resolve unique={res_old['unique']} {[c['text'] for c in res_old['candidates']]}; "
+                    f"new words -> unique={res_new['unique']} {res_new['candidates'][0]['text'] if res_new['candidates'] else None!r}")
+
+
+def forgotten_everywhere(a):
+    """A forgotten entry is gone from every read path: get, list, list(query), resolve, render; and
+    saving the same text again makes a NEW entry (id differs, version 1, no old history), never a revived tombstone."""
+    text = "My locker code hint is the blue door on floor 3"
+    with store() as (k, m):
+        keep = m.add(OWNER, "I prefer short answers", "preference")
+        e = m.add(OWNER, text, "fact")
+        m.forget(OWNER, e["id"])
+        paths = {"get": m.get(OWNER, e["id"]), "list": [x for x in m.list(OWNER) if x["id"] == e["id"]],
+                 "query": m.list(OWNER, query="locker code blue door"),
+                 "resolve": [c for c in m.resolve(OWNER, "locker code blue door")["candidates"] if c["id"] == e["id"] or "locker" in c["text"]],
+                 "render": "locker" in m.render(OWNER)}
+        again = m.add(OWNER, text, "fact")
+        fresh = again["id"] != e["id"] and again["version"] == 1 and not again.get("duplicate") and len(again["history"]) == 1
+        ok = not any(paths.values()) and fresh and m.get(OWNER, keep["id"]) is not None
+        return ok, f"after forget: {{{', '.join(f'{k_}: {bool(v)}' for k_, v in paths.items())}}}; re-saved as new entry {fresh}"
+
+
+def forget_stale_version(a):
+    """An agent read an entry at version 1, the owner corrected it (version 2), then the agent asks to forget version 1:
+    Conflict carrying the owner's text; the corrected entry survives."""
+    with store() as (k, m):
+        e = m.add(OWNER, "Weekly report goes to Ravi", "instruction")
+        m.update(OWNER, e["id"], "Weekly report goes to Meena (Ravi moved teams)", 1)
+        err = None
+        try:
+            m.forget(OWNER, e["id"], 1)
+        except Conflict as c:
+            err = c
+        cur = m.get(OWNER, e["id"])
+        ok = err is not None and "Meena" in err.current["text"] and cur and cur["version"] == 2
+        return ok, f"conflict={err is not None} current {err.current['text'] if err else None!r}; entry now {cur['text'] if cur else None!r}"
+
+
+def no_resurrection(a):
+    """An agent that read an entry before it was forgotten cannot bring it back with an update (or forget it twice)."""
+    with store() as (k, m):
+        e = m.add(OWNER, "Spare key is under the third flower pot", "fact")
+        m.forget(OWNER, e["id"])
+        upd = _raises(lambda: m.update(OWNER, e["id"], "Spare key is under the third flower pot (confirmed)", 1))
+        row = k.db.execute("SELECT text, state FROM memories WHERE id=?", (e["id"],)).fetchone()
+        ok = upd is not None and "no such entry" in upd and row == ("", "deleted") and m.get(OWNER, e["id"]) is None
+        return ok, f"update after forget: {upd!r}; row {row}"
+
+
+def forget_update_race(a):
+    """Eight rounds: an update and a forget of the same entry, both from version 1, at the same moment. Exactly one wins each
+    round; the store is consistent with the winner (deleted with no text, or version 2 with the new text)."""
+    out, bad = [], []
+    for i in range(int(a.get("rounds", 8))):
+        with store() as (k, m):
+            e = m.add(OWNER, f"Gate code note number {i}", "fact")
+            res, start = {}, threading.Barrier(2)
+
+            def upd():
+                start.wait()
+                try:
+                    m.update(OWNER, e["id"], f"Gate code note number {i} (changed)", 1)
+                    res["update"] = "ok"
+                except MemoryError as x:
+                    res["update"] = type(x).__name__
+
+            def fgt():
+                start.wait()
+                try:
+                    m.forget(OWNER, e["id"], 1)
+                    res["forget"] = "ok"
+                except MemoryError as x:
+                    res["forget"] = type(x).__name__
+            th = [threading.Thread(target=upd), threading.Thread(target=fgt)]
+            [t.start() for t in th]
+            [t.join(10) for t in th]
+            row = k.db.execute("SELECT text, state, version FROM memories WHERE id=?", (e["id"],)).fetchone()
+            wins = [w for w, r in res.items() if r == "ok"]
+            consistent = (wins == ["forget"] and row[:2] == ("", "deleted")) or (wins == ["update"] and row[1] == "active" and row[2] == 2
+                                                                               and row[0].endswith("(changed)"))
+            if len(wins) != 1 or not consistent:
+                bad.append(f"round {i}: {res}, row {row}")
+            out.append(wins[0] if wins else "none")
+    return not bad, "; ".join(bad) or f"winners {out}"
+
+
+def endpoint_scope_forget(a):
+    """Forget-by-content in the default scope never reaches a task-scope entry, even when the words match it exactly: the
+    task entry is neither offered as a candidate nor deleted. (Zero-score candidates from the default scope are F-043's
+    subject, not this case's.)"""
+    e, toks = _proxy_env()
+    try:
+        tok = toks.issue("hermes")
+        _act(e, tok, "add", "Always answer in English")
+        _act(e, tok, "add", "Step 3 of 5 done: hotel shortlist saved", scope="task-42")
+        f = _act(e, tok, "forget", "hotel shortlist saved")
+        res = _act(e, tok, "resolve", "hotel shortlist saved")
+        task = [x["text"] for x in _act(e, tok, "list", scope="task-42")[1]["entries"]]
+        reached = [c["text"] for c in (f[1].get("candidates") or []) + res[1]["candidates"] if "hotel" in c["text"]]
+        ok = f[0] == 409 and not reached and task == ["Step 3 of 5 done: hotel shortlist saved"]
+        return ok, f"default-scope forget -> {f[0]}; task-scope texts offered {reached}; task scope still {task}"
+    finally:
+        e.close()
+
+
+def endpoint_public_lane_reads(a):
+    """A public-lane test agent (its own token) asks for the owner's private entry by every read and write path the endpoint
+    has: resolve, render, list with a query, forget by content, update by id. Nothing of the owner's leaks or changes."""
+    e, toks = _proxy_env()
+    try:
+        owner, lab = toks.issue("hermes"), toks.issue("lab", "public")
+        mid = _act(e, owner, "add", "Owner's PAN card is kept in the blue folder")[1]["entry"]["id"]
+        seen = {"resolve": _act(e, lab, "resolve", "PAN card blue folder"), "render": _act(e, lab, "render"),
+                "list": _act(e, lab, "list", query="PAN card blue folder"), "forget": _act(e, lab, "forget", "PAN card blue folder"),
+                "update": _act(e, lab, "update", mid, text="changed by lab", expected_version=1)}
+        leak = [k_ for k_, (c, r) in seen.items() if "PAN" in json.dumps(r) or "blue folder" in json.dumps(r)]
+        still = _act(e, owner, "get", mid)
+        ok = not leak and seen["resolve"][1]["candidates"] == [] and seen["render"][1]["text"] == "" and seen["list"][1]["entries"] == [] \
+            and seen["forget"][0] == 409 and seen["update"][0] == 400 and still[0] == 200 and still[1]["entry"]["version"] == 1
+        return ok, f"leaks in {leak}; codes {{{', '.join(f'{k_}: {c}' for k_, (c, r) in seen.items())}}}; owner's entry v{still[1].get('entry', {}).get('version')}"
+    finally:
+        e.close()
+
+
+def endpoint_same_text_two_agents(a):
+    """The owner's agent and a public test agent each saved the same text. The test agent forgets it by content: only its own
+    copy goes; the owner's stays."""
+    e, toks = _proxy_env()
+    try:
+        owner, lab = toks.issue("hermes"), toks.issue("lab", "public")
+        o = _act(e, owner, "add", "Prefers jasmine tea in the evening")[1]["entry"]
+        _act(e, lab, "add", "Prefers jasmine tea in the evening")
+        f = _act(e, lab, "forget", "Prefers jasmine tea in the evening")
+        mine = _act(e, owner, "get", o["id"])
+        lab_left = _act(e, lab, "list")[1]["entries"]
+        ok = f[0] == 200 and f[1]["forgotten"]["id"] != o["id"] and mine[0] == 200 and lab_left == []
+        return ok, f"lab forget -> {f[0]} id {f[1].get('forgotten', {}).get('id')} (owner's {o['id']}); owner's still there {mine[0] == 200}"
+    finally:
+        e.close()
+
+
+def endpoint_bad_version(a):
+    """Malformed expected_version values (text, null, a list, an object) for update and forget through the endpoint: each
+    gets an HTTP 4xx refusal (the agent can read and correct it), and the entry is unchanged."""
+    import http.client
+    e, toks = _proxy_env()
+    try:
+        tok = toks.issue("hermes")
+        mid = _act(e, tok, "add", "Wake me at 6 on weekdays")[1]["entry"]["id"]
+        out = []
+        for op, v in [("update", x) for x in a["values"]] + [("forget", x) for x in a["values"] if x is not None]:
+            try:
+                c, r = _act(e, tok, op, mid, **({"text": "Wake me at 9"} if op == "update" else {}), expected_version=v)
+            except (OSError, http.client.HTTPException) as x:
+                c, r = None, {"error": type(x).__name__}
+            out.append((op, v, c))
+        cur = _act(e, tok, "get", mid)[1]["entry"]
+        bad = [f"{op} {v!r}: {c or 'no HTTP answer (connection dropped)'}" for op, v, c in out if c is None or not 400 <= c < 500]
+        ok = not bad and cur["version"] == 1 and cur["text"] == "Wake me at 6 on weekdays"
+        return ok, ("; ".join(bad) + " | " if bad else "") + f"entry now v{cur['version']} {cur['text']!r}"
+    finally:
+        e.close()
+
+
+def corrupt_row_isolated(a):
+    """One entry's stored history is damaged (not JSON; a partial write or a manual edit). The other entries must still load:
+    list, render and resolve keep working for them."""
+    with store() as (k, m):
+        good = [m.add(OWNER, t, "preference")["text"] for t in ("I prefer metric units", "Use dark mode in every app")]
+        bad = m.add(OWNER, "Call me Venkat", "fact")
+        k.db.execute("UPDATE memories SET history=? WHERE id=?", (a["history"], bad["id"]))
+        got = {}
+        for name, fn in (("list", lambda: [x["text"] for x in m.list(OWNER)]), ("render", lambda: m.render(OWNER)),
+                         ("resolve", lambda: [c["text"] for c in m.resolve(OWNER, "dark mode every app")["candidates"]])):
+            try:
+                got[name] = fn()
+            except Exception as x:  # noqa: BLE001 - the point of the case
+                got[name] = f"raised {type(x).__name__}"
+        ok = all(t in got["list"] for t in good) if isinstance(got["list"], list) else False
+        ok = ok and isinstance(got["render"], str) and not got["render"].startswith("raised") and all(t in got["render"] for t in good) \
+            and isinstance(got["resolve"], list) and got["resolve"][:1] == ["Use dark mode in every app"]
+        return ok, f"{got}"[:500]
+
+
+def garbage_queries_no_match(a):
+    """Queries with no usable words (empty, punctuation, only short words, megabytes of one letter) never produce a unique
+    match, so forget-by-content can never act on them."""
+    with store() as (k, m):
+        for t in ("I like short answers", "Use dark mode in every app", "My daughter's school is DPS Hyderabad"):
+            m.add(OWNER, t, "preference")
+        out, bad = [], []
+        for q in a["queries"] + ["x" * 2_000_000]:
+            t0 = time.perf_counter()
+            r = m.resolve(OWNER, q)
+            ms = (time.perf_counter() - t0) * 1000
+            if r["unique"] or r["candidates"] or ms > 2000:
+                bad.append(f"{q[:20]!r}: unique={r['unique']} candidates {len(r['candidates'])} {ms:.0f} ms")
+            out.append(f"{q[:12]!r}: none")
+        return not bad, "; ".join(bad) or "; ".join(out)
+
+
+# ---------------------------------------------------------------- the owner's console overrides an agent's stale view
+
+def owner_console_correction(a):
+    """The agent read an instruction at version 1; the owner corrects it in the JARVIS console (Owner.handle, the console's
+    real route). The agent's later write from its old read is a conflict carrying the owner's text; the session block shows
+    only the owner's version."""
+    from jarvis_kernel.jobs import Jobs
+    from jarvis_kernel.owner import PREFIX, Owner
+    from jarvis_kernel.tasks import Tasks
+    with store() as (k, m):
+        o = Owner(k, Tasks(k), Jobs(k), m)
+        o.attach()
+        e = m.add(OWNER, "Send the weekly report on Friday", "instruction")
+        c1, r1 = o.handle("POST", PREFIX + "memory", {"op": "update", "owner": OWNER, "id": e["id"], "expected_version": 1,
+                                                      "text": "Send the weekly report on Thursday (Friday is a holiday now)"})
+        err = None
+        try:
+            m.update(OWNER, e["id"], "Send the weekly report on Friday at 9", 1)
+        except Conflict as c:
+            err = c
+        c2, view = o.handle("GET", PREFIX + "memory?owner=" + OWNER, {})
+        rendered = m.render(OWNER)
+        ok = c1 == 200 and r1["version"] == 2 and err is not None and "Thursday" in err.current["text"] \
+            and "Thursday" in rendered and "Friday at 9" not in rendered and c2 == 200 and view["entries"][0]["version"] == 2
+        return ok, f"console update -> {c1} v{r1.get('version')}; agent's stale write conflict={err is not None}; session block {rendered!r}"
+
+
+def lessons_from_verified_repairs(a):
+    """Lessons are captured only from tasks that failed, were repaired and then completed WITH independent verification; the
+    lesson text comes from the task's recorded events (not from a model); each task is captured once; a captured lesson is a
+    candidate and is not in the session block until the gate passes."""
+    from jarvis_kernel.jobs import Jobs
+    from jarvis_kernel.owner import Owner
+    from jarvis_kernel.tasks import Tasks
+    with store() as (k, m):
+        T = Tasks(k)
+        o = Owner(k, T, Jobs(k), m)
+
+        def run(goal, verified, repair_note, attempts):
+            tid = T.create(OWNER, "private", goal, goal, None, ["works"])
+            T.update(OWNER, tid, state="running", attempt=True)
+            if attempts > 1:
+                T.update(OWNER, tid, state="verifying")
+                T.update(OWNER, tid, state="repairing", note=repair_note)
+                T.update(OWNER, tid, state="running", attempt=True)
+            T.update(OWNER, tid, state="verifying")
+            T.update(OWNER, tid, state="completed", result="all 3 checks pass", verification={"passed": verified} if verified is not None else None)
+            return tid
+        good = run("Fix the CSV export", True, "export failed: the date column used a comma decimal separator", 2)
+        unverified = run("Fix the PDF export", None, "export failed: missing font", 2)
+        first_try = run("Rename the files", True, "", 1)
+        made = o.capture_lessons()
+        again = o.capture_lessons()
+        cands = m.candidates(OWNER)
+        texts = [c["text"] for c in cands]
+        ok = len(made) == 1 and again == [] and len(cands) == 1 and cands[0]["task"] == good and "comma decimal separator" in texts[0] \
+            and "comma decimal" not in m.render(OWNER)
+        return ok, f"captured {len(made)} then {len(again)}; candidates from tasks {[c['task'] == good for c in cands]}; text {texts[0][:90] if texts else None!r}"
+
+
+# ---------------------------------------------------------------- N.E.K.O memory: conflicts and stale facts (offline)
+
+def neko_relation_conservative(a):
+    """N.E.K.O's deterministic fact relation: a plain negation of the same statement is a correction, the same statement is a
+    confirmation; questions, 'or', 'sometimes', 'many', hedged ('I think') and different-place statements are left
+    undecided (None) so two conflicting facts are never merged or penalised on weak evidence."""
+    from memory.speaker_trust import deterministic_relation
+    got = {f"{o} | {n}": deterministic_relation(o, n) for o, n, _ in a["pairs"]}
+    want = {f"{o} | {n}": w for o, n, w in a["pairs"]}
+    bad = {k_: (got[k_], want[k_]) for k_ in want if got[k_] != want[k_]}
+    return not bad, f"wrong (got, want): {bad}" if bad else f"{len(want)} pairs as expected: {list(got.values())}"
+
+
+def neko_stale_state(a):
+    """N.E.K.O's stale-fact rule (is_past_for_render): a temporary state older than its window goes to the stale block, a
+    fresh one and a pattern do not; time-zone-aware and garbage timestamps never raise."""
+    from datetime import datetime, timedelta
+    from config import MEMORY_EPISODE_PAST_DAYS, MEMORY_STATE_PAST_DAYS
+    from memory.temporal import is_past_for_render
+    now = datetime(2026, 10, 17, 12, 0, 0)
+    old = (now - timedelta(days=MEMORY_STATE_PAST_DAYS + 3)).isoformat()
+    fresh = (now - timedelta(days=1)).isoformat()
+    ep_old = (now - timedelta(days=MEMORY_EPISODE_PAST_DAYS + 1)).isoformat()
+    cases = [("old state", {"temporal_scope": "state", "event_start_at": old}, True),
+             ("fresh state", {"temporal_scope": "state", "event_start_at": fresh}, False),
+             ("ended recently", {"temporal_scope": "state", "event_start_at": old, "event_end_at": fresh}, False),
+             ("old pattern", {"temporal_scope": "pattern", "event_start_at": "2001-01-01T00:00:00"}, False),
+             ("stored past", {"temporal_scope": "past"}, True),
+             ("old episode", {"temporal_scope": "episode", "created_at": ep_old}, True),
+             ("aware old", {"temporal_scope": "state", "event_start_at": "2026-09-01T00:00:00+05:30"}, True),
+             ("garbage", {"temporal_scope": "state", "event_start_at": "not a date"}, False),
+             ("number", {"temporal_scope": "state", "event_start_at": 12345}, False)]
+    bad = []
+    for name, entry, want in cases:
+        try:
+            got = is_past_for_render(entry, now)
+        except Exception as x:  # noqa: BLE001
+            got = f"raised {type(x).__name__}"
+        if got != want:
+            bad.append(f"{name}: {got} (want {want})")
+    return not bad, "; ".join(bad) or f"{len(cases)} entries classified as expected (state window {MEMORY_STATE_PAST_DAYS} d)"
+
+
+def neko_disputed_sinks(a):
+    """N.E.K.O evidence: a fact disputed more than reinforced falls to archive_candidate; a well-reinforced one is promoted; a
+    protected (character card) entry never sinks; a timestamp from the future or garbage does not decay or raise; a year-old
+    reinforcement decays to pending."""
+    from datetime import datetime, timedelta
+    from memory.evidence import derive_status
+    now = datetime(2026, 10, 17, 12, 0, 0)
+    cases = [("disputed", {"reinforcement": 1, "disputation": 6, "disp_last_signal_at": now.isoformat()}, "archive_candidate"),
+             ("reinforced", {"reinforcement": 5, "disputation": 0}, "promoted"),
+             ("protected", {"protected": True, "disputation": 99}, "promoted"),
+             ("future stamp", {"reinforcement": 3, "rein_last_signal_at": (now + timedelta(days=30)).isoformat()}, "promoted"),
+             ("garbage stamp", {"reinforcement": 3, "rein_last_signal_at": "garbage"}, "promoted"),
+             ("year old", {"reinforcement": 3, "rein_last_signal_at": (now - timedelta(days=365)).isoformat()}, "pending")]
+    got = {}
+    for name, e, want in cases:
+        try:
+            got[name] = derive_status(e, now)
+        except Exception as x:  # noqa: BLE001
+            got[name] = f"raised {type(x).__name__}"
+    bad = {n: (got[n], w) for n, _, w in cases if got[n] != w}
+    return not bad, f"wrong (got, want): {bad}" if bad else f"{got}"
+
+
+def neko_event_windows(a):
+    """N.E.K.O fact dedup: two facts about events on different explicit dates are distinct (never merged as duplicates); the
+    same date said two ways, or timeless facts that only differ by when they were saved, are not kept apart by date; garbage
+    dates do not raise."""
+    from memory.fact_dedup import _has_distinct_event_windows as distinct
+    got = {"different dates": distinct({"event_start_at": "2026-03-01T10:00:00", "event_when_raw": "march 1", "created_at": "2026-03-02T00:00:00"},
+                                       {"event_start_at": "2026-05-01T10:00:00", "event_when_raw": "may 1", "created_at": "2026-05-02T00:00:00"}),
+           "same date": distinct({"event_start_at": "2026-03-01T10:00:00", "event_when_raw": "march 1"},
+                                 {"event_start_at": "2026-03-01T10:00:00", "event_when_raw": "the first of march"}),
+           "timeless": distinct({"event_start_at": "2026-03-01T10:00:00", "created_at": "2026-03-01T10:00:00"},
+                                {"event_start_at": "2026-05-01T10:00:00", "created_at": "2026-05-01T10:00:00"}),
+           "end differs": distinct({"event_end_at": "2026-03-05T00:00:00"}, {"event_end_at": "2026-04-05T00:00:00"})}
+    try:
+        got["garbage"] = distinct({"event_start_at": "garbage", "event_when_raw": "x"}, {"event_start_at": None})
+    except Exception as x:  # noqa: BLE001
+        got["garbage"] = f"raised {type(x).__name__}"
+    want = {"different dates": True, "same date": False, "timeless": False, "end differs": True, "garbage": False}
+    return got == want, f"{got}"
+
+
+def neko_malformed_values(a):
+    """N.E.K.O memory entries with wrong-typed stored values (manual edits, legacy formats): the recall block renders only
+    real text and numbers lines without gaps; the evidence score of an entry whose counters are text does not raise; the
+    stale-fact rule does not raise on a list timestamp."""
+    from datetime import datetime
+    from memory.evidence import derive_status
+    from memory.recall_render import render_recall_block
+    from memory.temporal import is_past_for_render
+    got = {}
+    try:
+        blk = render_recall_block([{"text": None}, "a bare string", None, {"text": "   "}, {"text": "Owner likes filter coffee", "created_at": 7},
+                                   {"text": "Owner's cat is called Miso", "tier": 3, "entity": ["x"]}], "en", header_template="Found {n}:")
+        lines = blk.text.splitlines()
+        got["recall"] = lines[0] == "Found 2:" and lines[1].startswith("1.") and "filter coffee" in lines[1] and lines[2].startswith("2.") \
+            and "Miso" in lines[2] and len(lines) == 3
+    except Exception as x:  # noqa: BLE001
+        got["recall"] = f"raised {type(x).__name__}"
+    for name, e in (("evidence text counter", {"reinforcement": "x", "disputation": "2"}), ("evidence list counter", {"disputation": [1]})):
+        try:
+            got[name] = derive_status(e, datetime(2026, 10, 17))
+        except Exception as x:  # noqa: BLE001
+            got[name] = f"raised {type(x).__name__}"
+    try:
+        got["stale list stamp"] = is_past_for_render({"temporal_scope": "state", "event_start_at": ["2026-01-01"]}, datetime(2026, 10, 17))
+    except Exception as x:  # noqa: BLE001
+        got["stale list stamp"] = f"raised {type(x).__name__}"
+    ok = got["recall"] is True and not any(str(v).startswith("raised") for v in got.values())
+    return ok, f"{got}"
