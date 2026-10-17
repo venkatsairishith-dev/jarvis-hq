@@ -1,0 +1,72 @@
+{
+ "time": "2026-10-17 20:03:44",
+ "host": "Xeon Gold 6244 CPU",
+ "threads": 4,
+ "llama_cpp": "version: 0.7.0-dev (build 11714, commit c0fd78626); built with GNU 11.4.0 for Linux x86_64",
+ "server": "/llama/llama-server",
+ "prompt_version": 3,
+ "sets": [
+  "plan_cases",
+  "dev",
+  "holdout",
+  "holdout2"
+ ],
+ "models": [
+  {
+   "model": "qwen3-4b-2507",
+   "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+   "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+   "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+   "threads": 4,
+   "args": [],
+   "sets": {
+    "plan_cases": "16/17",
+    "dev": "69/70",
+    "holdout": "29/30",
+    "holdout2": "38/40"
+   },
+   "correct": 152,
+   "total": 157,
+   "model_path_correct": "103/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 2.5,
+   "cold_first_call_s": 16.2,
+   "first_call_status": "ok",
+   "p50_s": 3.54,
+   "p95_s": 6.89,
+   "gen_tps_p50": 8.7,
+   "gen_tokens_p50": 26.0,
+   "prompt_ms_p50": 545.0,
+   "peak_rss_mb": 4577,
+   "server_cpu_s": 1703.8,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-account-verify-step",
+     "why": "tools ['open_website', 'browser']"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "holdout",
+     "id": "H05",
+     "why": "tool open_app != open_website"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool window != check_pc"
+    }
+   ]
+  }
+ ]
+}

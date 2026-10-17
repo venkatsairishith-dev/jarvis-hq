@@ -45,6 +45,34 @@
    ]
   },
   {
+   "name": "llama-cpp-b11714-win-vulkan-x64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11714/llama-b11714-bin-win-vulkan-x64.zip",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11714",
+    "asset": "llama-b11714-bin-win-vulkan-x64.zip",
+    "commit": "c0fd78626405c6d9b934efef0ec7291fcc20e3d6"
+   },
+   "filename": "llama-b11714-bin-win-vulkan-x64.zip",
+   "sha256": "d4765447307f29fc0b4c8ae5b8b806c46b3e515d0ce5c2a54dd90d9b2c7a392f",
+   "bytes": 32306237,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11714-bin-win-vulkan-x64.zip",
+   "optional": false,
+   "unpack_to": "tools/llama.cpp/b11714/vulkan",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11714 (asset digest)",
+    "jarvis/local_models/llama-swap.yaml:12"
+   ],
+   "notes": "Adopted 2026-10-17 in place of b11669 after the Linux release-vs-release comparison (same accuracy, JSON validity and llama-bench speed; jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md). The Windows vulkan build itself is UNTESTED: run the laptop checks before relying on it. llama-cpp-b11669-win-vulkan-x64 stays locked for a rollback."
+  },
+  {
    "name": "llama-cpp-b11669-win-cpu-x64",
    "registry_name": "llama.cpp (llama-server)",
    "kind": "archive",
@@ -73,6 +101,34 @@
    ]
   },
   {
+   "name": "llama-cpp-b11714-win-cpu-x64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11714/llama-b11714-bin-win-cpu-x64.zip",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11714",
+    "asset": "llama-b11714-bin-win-cpu-x64.zip",
+    "commit": "c0fd78626405c6d9b934efef0ec7291fcc20e3d6"
+   },
+   "filename": "llama-b11714-bin-win-cpu-x64.zip",
+   "sha256": "f78eded047061a3f86372db426797400a2f1bb0ec37868d5927dd820eb3386c0",
+   "bytes": 19662606,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11714-bin-win-cpu-x64.zip",
+   "optional": false,
+   "unpack_to": "tools/llama.cpp/b11714/cpu",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11714 (asset digest)",
+    "jarvis/local_models/profiles/cpu8.yaml:8"
+   ],
+   "notes": "Adopted 2026-10-17 in place of b11669 after the Linux release-vs-release comparison (same accuracy, JSON validity and llama-bench speed; jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md). The Windows cpu build itself is UNTESTED: run the laptop checks before relying on it. llama-cpp-b11669-win-cpu-x64 stays locked for a rollback."
+  },
+  {
    "name": "llama-cpp-b11669-linux-x64",
    "registry_name": "llama.cpp (llama-server)",
    "kind": "archive",
@@ -99,6 +155,34 @@
     "jarvis/evals/neko95/bench/model_compare.py:194"
    ],
    "notes": "The Linux test server's b11669 CPU build today is a local source build (/srv/jarvis/tools/llama.cpp-b11669-cpu holds cmake.log and make.log), not this release binary. Optional until the test server switches to it."
+  },
+  {
+   "name": "llama-cpp-b11714-linux-x64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11714/llama-b11714-bin-ubuntu-x64.tar.gz",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11714",
+    "asset": "llama-b11714-bin-ubuntu-x64.tar.gz",
+    "commit": "c0fd78626405c6d9b934efef0ec7291fcc20e3d6"
+   },
+   "filename": "llama-b11714-bin-ubuntu-x64.tar.gz",
+   "sha256": "639059a1106e706810486285ec6d1d92c961f3f920ef78bbdd1ee359428679d0",
+   "bytes": 17968637,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11714-bin-ubuntu-x64.tar.gz",
+   "optional": true,
+   "unpack_to": "tools/llama.cpp-b11714-bin",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11714 (asset digest)",
+    "https://api.github.com/repos/ggml-org/llama.cpp/git/ref/tags/b11714 (commit)"
+   ],
+   "notes": "Release binary used 2026-10-17 to compare b11714 with b11669 release vs release (equal accuracy, JSON validity and llama-bench speed). Needs glibc >= 2.34 (neko-test has 2.41) and libgomp.so.1 copied next to it (not in neko-test). The test server's default stays a local native source build (/srv/jarvis/tools/llama.cpp-b11714-cpu, BUILD.txt), which is ~8% faster at prompt processing than this generic binary. Optional."
   },
   {
    "name": "llama-cpp-b11461-linux-arm64",
@@ -924,6 +1008,700 @@
     "https://huggingface.co/api/models/cross-encoder/nli-deberta-v3-xsmall/tree/a150876415327c80daeff35ca6f68f5ed8cf5c24",
     "plugin/plugins/research/verify.py:17-39"
    ]
+  },
+  {
+   "name": "factcg-deberta-v3-large-model-safetensors",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/model.safetensors",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "model.safetensors"
+   },
+   "filename": "model.safetensors",
+   "sha256": "379a343d1ca25c9dfe24ae149f76cc958ea4f09c00dae88bd49bbbf58c749d5e",
+   "bytes": 1740304440,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/model.safetensors",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 883,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "3739f40bfb2811ac49cad372de63f53f382cc545",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-tokenizer-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 8656646,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/tokenizer.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "f9bbf3fa0b51e2c1d9c2bf284e3de29c542720c7",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-tokenizer-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/tokenizer_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "tokenizer_config.json"
+   },
+   "filename": "tokenizer_config.json",
+   "sha256": null,
+   "bytes": 1284,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/tokenizer_config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "13d6406af565bd9e59dd649afd4c2b48bddb6a4c",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-special-tokens-map-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/special_tokens_map.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "special_tokens_map.json"
+   },
+   "filename": "special_tokens_map.json",
+   "sha256": null,
+   "bytes": 286,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/special_tokens_map.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "2c9cb07c8fdeeb5ac3ceafb170592e990b204dcd",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-added-tokens-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/added_tokens.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "added_tokens.json"
+   },
+   "filename": "added_tokens.json",
+   "sha256": null,
+   "bytes": 23,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/added_tokens.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "8ee2b3623dc526b123cde0aaa401755b82299af2",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-pytorch-model-bin",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/pytorch_model.bin",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "pytorch_model.bin"
+   },
+   "filename": "pytorch_model.bin",
+   "sha256": "32ced784f4831d5f324a072e43b96d4072cac4bf41042bc42243605ffbbccbdf",
+   "bytes": 1740386738,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/pytorch_model.bin",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 1075,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "3d6f63070c822ff347bb83aa9adad54ac29f19f3",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-tokenizer-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 8648917,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/tokenizer.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "645847e755c5da5572d1737f26b75a2912453aa5",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-tokenizer-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/tokenizer_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "tokenizer_config.json"
+   },
+   "filename": "tokenizer_config.json",
+   "sha256": null,
+   "bytes": 1496,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/tokenizer_config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "ed7ce59e944d744a27cb722ae34c0ab8cdeee226",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-special-tokens-map-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/special_tokens_map.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "special_tokens_map.json"
+   },
+   "filename": "special_tokens_map.json",
+   "sha256": null,
+   "bytes": 276,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/special_tokens_map.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "db6a3353e4d6e3080e91bb044ca6b91730754505",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-added-tokens-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/added_tokens.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "added_tokens.json"
+   },
+   "filename": "added_tokens.json",
+   "sha256": null,
+   "bytes": 79,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/added_tokens.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "38090ace11147c895618f82d436d75a661553849",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-roberta-large-pytorch-model-bin",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/pytorch_model.bin",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "pytorch_model.bin"
+   },
+   "filename": "pytorch_model.bin",
+   "sha256": "67af45a2d5a2706283821049232c7d7c81cea22e81dfdbb7097487a98bc61b53",
+   "bytes": 1421577710,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/pytorch_model.bin",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 890,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/config.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "9c9d73b5d3c061b6990343ebbe285ac03d7374a9",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-tokenizer-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 2108717,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/tokenizer.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "ca6d9de2001062449565ecb9f2139198e6a48f18",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-tokenizer-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/tokenizer_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "tokenizer_config.json"
+   },
+   "filename": "tokenizer_config.json",
+   "sha256": null,
+   "bytes": 1427,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/tokenizer_config.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "629a00eb3b705d4b62c90e6a6135e65920f03d1e",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-special-tokens-map-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/special_tokens_map.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "special_tokens_map.json"
+   },
+   "filename": "special_tokens_map.json",
+   "sha256": null,
+   "bytes": 267,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/special_tokens_map.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "b064251a5d9abe6b27f8e039fd4969cdda4bb2f7",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-added-tokens-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/added_tokens.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "added_tokens.json"
+   },
+   "filename": "added_tokens.json",
+   "sha256": null,
+   "bytes": 75,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/added_tokens.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "83f18e106e2ca8b6d2fa4aba8136fd5b080f8d34",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "hhem-2.1-open-model-safetensors",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/vectara/hallucination_evaluation_model/resolve/de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8/model.safetensors",
+   "revision": {
+    "source": "huggingface",
+    "repo": "vectara/hallucination_evaluation_model",
+    "commit": "de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8",
+    "path": "model.safetensors"
+   },
+   "filename": "model.safetensors",
+   "sha256": "634de18a38cf1e991c1acd0f7a9e0d30f7ea187fba42bb4798f862d3edd31e72",
+   "bytes": 438535352,
+   "licence": "Apache-2.0",
+   "dest": "models/nli/hhem-2.1-open/model.safetensors",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/vectara/hallucination_evaluation_model/revision/de9a5e6b",
+    "https://huggingface.co/api/models/vectara/hallucination_evaluation_model/tree/de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/vectara/hallucination_evaluation_model/resolve/de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "vectara/hallucination_evaluation_model",
+    "commit": "de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 389,
+   "licence": "Apache-2.0",
+   "dest": "models/nli/hhem-2.1-open/config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "4c9062d21243372ae3f9348dd1b72b3b7bb9b62f",
+   "source_evidence": [
+    "https://huggingface.co/api/models/vectara/hallucination_evaluation_model/revision/de9a5e6b",
+    "https://huggingface.co/api/models/vectara/hallucination_evaluation_model/tree/de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-flan-t5-base-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/google/flan-t5-base/resolve/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "google/flan-t5-base",
+    "commit": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 1404,
+   "licence": "Apache-2.0 (HHEM-2.1-Open needs the flan-t5-base tokenizer and config)",
+   "dest": "models/nli/hhem-2.1-open/flan-t5-base/config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "d41e16cd4cd58621695da4f94132f516d07251af",
+   "source_evidence": [
+    "https://huggingface.co/api/models/google/flan-t5-base/revision/7bcac572",
+    "https://huggingface.co/api/models/google/flan-t5-base/tree/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-flan-t5-base-tokenizer-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/google/flan-t5-base/resolve/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "google/flan-t5-base",
+    "commit": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 2424064,
+   "licence": "Apache-2.0 (HHEM-2.1-Open needs the flan-t5-base tokenizer and config)",
+   "dest": "models/nli/hhem-2.1-open/flan-t5-base/tokenizer.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "fc669fbad1a6a82119ca3e1fa75db33ee22ca47d",
+   "source_evidence": [
+    "https://huggingface.co/api/models/google/flan-t5-base/revision/7bcac572",
+    "https://huggingface.co/api/models/google/flan-t5-base/tree/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-flan-t5-base-tokenizer-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/google/flan-t5-base/resolve/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2/tokenizer_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "google/flan-t5-base",
+    "commit": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "path": "tokenizer_config.json"
+   },
+   "filename": "tokenizer_config.json",
+   "sha256": null,
+   "bytes": 2537,
+   "licence": "Apache-2.0 (HHEM-2.1-Open needs the flan-t5-base tokenizer and config)",
+   "dest": "models/nli/hhem-2.1-open/flan-t5-base/tokenizer_config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "e3685b0cb5c8909cf3e7d72ffc16ca94c861bdfb",
+   "source_evidence": [
+    "https://huggingface.co/api/models/google/flan-t5-base/revision/7bcac572",
+    "https://huggingface.co/api/models/google/flan-t5-base/tree/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-flan-t5-base-special-tokens-map-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/google/flan-t5-base/resolve/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2/special_tokens_map.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "google/flan-t5-base",
+    "commit": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "path": "special_tokens_map.json"
+   },
+   "filename": "special_tokens_map.json",
+   "sha256": null,
+   "bytes": 2201,
+   "licence": "Apache-2.0 (HHEM-2.1-Open needs the flan-t5-base tokenizer and config)",
+   "dest": "models/nli/hhem-2.1-open/flan-t5-base/special_tokens_map.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "2c19eb6e3b583f52d34b903b5978d3d30b6b7682",
+   "source_evidence": [
+    "https://huggingface.co/api/models/google/flan-t5-base/revision/7bcac572",
+    "https://huggingface.co/api/models/google/flan-t5-base/tree/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
   },
   {
    "name": "gliner-pii-small-v1.0-model-quint8-onnx",

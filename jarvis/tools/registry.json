@@ -87,15 +87,16 @@
   "category": "inference",
   "upstream_url": "https://github.com/ggml-org/llama.cpp",
   "licence": "MIT",
-  "pinned_version": "b11669 (commit 620d222) Vulkan + CPU builds on laptop and test server; b11461 on the Oracle VM",
+  "pinned_version": "b11714 (commit c0fd786) Vulkan + CPU release builds on the laptop (adopted 2026-10-17, Windows untested; b11669 kept for a rollback) and a local CPU source build on the test server; b11461 on the Oracle VM",
   "pin_location": [
-   "jarvis/local_models/llama-swap.yaml:12",
+   "jarvis/local_models/llama-swap.yaml:14",
+   "jarvis/local_models/profiles/*.yaml",
    "jarvis/local_models/hwdetect.py:21",
-   "jarvis/evals/neko95/bench/model_compare.py:194",
+   "jarvis/tools/jarvis.lock.json",
    "jarvis/deploy/jarvis-llm.service:8"
   ],
   "integration": "downloaded binary",
-  "machine": "laptop (Windows Vulkan/CPU release b11669); Oracle VM (Linux arm64 release b11461); Linux test server (local CPU source build of b11669 in /srv/jarvis/tools/llama.cpp-b11669-cpu, not a release binary)",
+  "machine": "laptop (Windows Vulkan/CPU release b11714); Oracle VM (Linux arm64 release b11461); Linux test server (local CPU source build of b11714 in /srv/jarvis/tools/llama.cpp-b11714-cpu; b11669 build kept)",
   "jarvis_files": [
    "jarvis/local_models/llama-swap.yaml",
    "jarvis/local_models/profiles/*.yaml",
@@ -123,7 +124,7 @@
     "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:24"
    },
    {
-    "feature": "KV-cache quantisation -ctk q8_0 for 4 GB VRAM",
+    "feature": "KV-cache quantisation -ctk q8_0 for 4 GB VRAM: measured 2026-10-17 (CPU): same score, speed-neutral, ~70 MB less; one case swapped (A53 injection case lost); laptop test required. -ctv q8_0 forces flash attention (not for RDNA1)",
     "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:42"
    },
    {
@@ -131,11 +132,11 @@
     "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:29"
    },
    {
-    "feature": "--api-key-file hardening",
+    "feature": "--api-key-file hardening: gateway side ready (optional key), server flag not on yet (decider and vision send no key)",
     "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:199"
    },
    {
-    "feature": "Upgrade b11669 -> latest (b11706 on 2026-10-17)",
+    "feature": "Upgrade b11669 -> b11714: DONE 2026-10-17 (measured equal; evidence 08 'Measured on the test server')",
     "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:13"
    },
    {
@@ -2033,11 +2034,12 @@
   "category": "browser",
   "upstream_url": "https://github.com/microsoft/playwright-mcp",
   "licence": "Apache-2.0",
-  "pinned_version": "0.0.83 in docs only, installed at D:\\jarvis\\tools\\playwright-mcp (no lock in repo); extension 0.4.0 (docs), Web Store auto-updates",
+  "pinned_version": "0.0.83, enforced at every start (browserext.MCP_VERSION against node_modules/@playwright/mcp/package.json); installed at D:\\jarvis\\tools\\playwright-mcp (no npm lock in repo); extension 0.4.0 (docs), Web Store auto-updates",
   "pin_location": [
    "jarvis/docs/03_DECISIONS.md:269",
    "jarvis/node/jarvis_node/browserext.py:37",
-   "jarvis/node/jarvis_node/browserext.py:39"
+   "jarvis/node/jarvis_node/browserext.py:39",
+   "jarvis/node/jarvis_node/browserext.py:42"
   ],
   "integration": "npm (npx) + browser extension",
   "machine": "laptop",
@@ -2048,13 +2050,10 @@
    "jarvis/scripts/allow_playwright_connection.ps1"
   ],
   "features_used": [
-   "drive the owner's logged-in Chrome profiles through an allowlisted tool set"
+   "drive the owner's logged-in Chrome profiles through an allowlisted tool set",
+   "page WebMCP tools (webmcp_*) refused by kernel policy and never enableable as connector tools (jarvis/kernel/jarvis_kernel/policy.py PAGE_TOOL_PREFIX; tests/test_webmcp.py)"
   ],
   "unused_features": [
-   {
-    "feature": "Deny webmcp_* tools; pin v0.0.83",
-    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:59-64"
-   },
    {
     "feature": "--secrets redaction, --proxy-server with Smokescreen",
     "evidence": "jarvis/docs/research/03-computer-control.md:154"

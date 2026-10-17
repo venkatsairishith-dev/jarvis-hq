@@ -455,6 +455,13 @@ Each item below was a real fault or gap seen against the live system, not a theo
   claims (VitaminC 16 and 21 of 200, against 11). Measured with `bench/claims_eval.py` (precision, recall, false acceptance
   and rejection, calibration). The newer checkers from the research (FactCG, MiniCheck, HHEM) are deferred until one is
   shown to fit CPU latency here.
+  - **Update, same day: MiniCheck-RoBERTa-Large (MIT, int8 ONNX) is the new default checker**, xsmall the fallback when its
+    file is missing (env `RESEARCH_NLI_MODEL` selects any measured checker; unknown names fall back with a warning, never to
+    no checking). Rule written before the runs: false acceptances lower or equal on all three sets, higher VitaminC recall,
+    at most 5x the time. It is the only one that passed: 0/46, 0/18, 9/200 false acceptances (xsmall 2/46, 1/18, 10/200),
+    VitaminC recall 0.71 (0.44), 3.6-3.9x the time. FactCG, MiniCheck-DeBERTa and HHEM failed the rule (int8 breaks both
+    DeBERTa-large models; FactCG fp32 is strictest but recall 0.31 and 7x). Evidence: `neko/evidence/11-claim-checker-candidates-2026-10-17.md`.
+    The laptop needs the converted file copied (Windows task, when the owner is home).
 - **Benchmark Console** (`/api/bench/*`, Bench screen): a loopback-only phone screen inside the existing console. Jobs are
   built only from allow-listed groups, existing case ids, pinned model names and fixed sets; the screen never downloads.
   Challenge-lab results are saved as untrusted and never become expectations.

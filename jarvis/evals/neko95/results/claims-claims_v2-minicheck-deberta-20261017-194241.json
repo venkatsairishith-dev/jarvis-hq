@@ -1,0 +1,699 @@
+{
+ "time": "2026-10-17 19:42:41",
+ "set": "claims_v2",
+ "model_dir": "/nli/minicheck-deberta-v3-large",
+ "summary": {
+  "model": "minicheck-deberta",
+  "n": 78,
+  "supported": 32,
+  "unsupported": 46,
+  "precision": 0.794,
+  "recall": 0.844,
+  "false_acceptance": "7/46",
+  "false_acceptance_rate": 0.152,
+  "false_rejection": "5/32",
+  "false_rejection_rate": 0.156,
+  "errors_by_category": {
+   "conclusion": "0/7",
+   "contradiction": "2/8",
+   "false": "1/4",
+   "injection": "0/1",
+   "number": "4/20",
+   "outdated": "0/1",
+   "paraphrase": "3/6",
+   "partial": "0/3",
+   "qualifier": "0/4",
+   "true": "2/19",
+   "unit": "0/5"
+  },
+  "calibration": [
+   {
+    "score": "0.0-0.1",
+    "n": 18,
+    "really_supported": 0.0
+   },
+   {
+    "score": "0.1-0.5",
+    "n": 20,
+    "really_supported": 0.15
+   },
+   {
+    "score": "0.5-0.9",
+    "n": 27,
+    "really_supported": 0.7
+   },
+   {
+    "score": "0.9-0.99",
+    "n": 13,
+    "really_supported": 0.77
+   }
+  ],
+  "seconds": 73.5,
+  "seconds_per_claim": 0.9418,
+  "false_accepts": [
+   "Everest is located in the Andes.",
+   "The boiling point of water increases at higher altitudes.",
+   "Canberra's site was selected in 1913.",
+   "Python 2.0 was released in 2008.",
+   "LFP cells typically reach about 250 Wh/kg.",
+   "Bank transfers failed during the outage.",
+   "The Moon completes one orbit relative to the stars in about 29.5 days."
+  ],
+  "false_rejects": [
+   "Until 1930 no man-made structure in the world was taller than the Eiffel Tower.",
+   "Adding salt to water raises its boiling point slightly.",
+   "Python 2.7.18, from 2020, was the final Python 2 release.",
+   "LFP cells tolerate more charge cycles than NMC cells.",
+   "LFP cells are less prone to thermal runaway than NMC cells."
+  ],
+  "load_seconds": 3.4,
+  "model_mb": 641.7,
+  "peak_rss_mb": 1776.4
+ },
+ "pairs": [
+  {
+   "passage": "eiffel",
+   "label": "supported",
+   "category": "true",
+   "claim": "The Eiffel Tower was built between 1887 and 1889.",
+   "confirmed": true,
+   "score": 0.851
+  },
+  {
+   "passage": "eiffel",
+   "label": "supported",
+   "category": "true",
+   "claim": "The Eiffel Tower is 330 metres tall.",
+   "confirmed": true,
+   "score": 0.971
+  },
+  {
+   "passage": "eiffel",
+   "label": "supported",
+   "category": "paraphrase",
+   "claim": "Until 1930 no man-made structure in the world was taller than the Eiffel Tower.",
+   "confirmed": false,
+   "score": 0.171
+  },
+  {
+   "passage": "eiffel",
+   "label": "unsupported",
+   "category": "false",
+   "claim": "The Eiffel Tower is located in Lyon.",
+   "confirmed": false,
+   "score": 0.031
+  },
+  {
+   "passage": "eiffel",
+   "label": "unsupported",
+   "category": "contradiction",
+   "claim": "The Eiffel Tower is still the tallest man-made structure in the world.",
+   "confirmed": false,
+   "score": 0.36
+  },
+  {
+   "passage": "eiffel",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "The Eiffel Tower is 300 metres tall.",
+   "confirmed": false,
+   "score": 0.414
+  },
+  {
+   "passage": "eiffel",
+   "label": "unsupported",
+   "category": "unit",
+   "claim": "The Eiffel Tower is 330 feet tall.",
+   "confirmed": false,
+   "score": 0.34
+  },
+  {
+   "passage": "eiffel",
+   "label": "unsupported",
+   "category": "partial",
+   "claim": "The Eiffel Tower was designed by Gustave Eiffel himself and opened in 1887.",
+   "confirmed": false,
+   "score": 0.36
+  },
+  {
+   "passage": "eiffel",
+   "label": "unsupported",
+   "category": "conclusion",
+   "claim": "The Eiffel Tower was built to be a radio antenna.",
+   "confirmed": false,
+   "score": 0.069
+  },
+  {
+   "passage": "everest",
+   "label": "supported",
+   "category": "true",
+   "claim": "Mount Everest's summit lies on the border between China and Nepal.",
+   "confirmed": true,
+   "score": 0.921
+  },
+  {
+   "passage": "everest",
+   "label": "supported",
+   "category": "true",
+   "claim": "Tenzing Norgay and Edmund Hillary made the first confirmed ascent of Everest in 1953.",
+   "confirmed": true,
+   "score": 0.707
+  },
+  {
+   "passage": "everest",
+   "label": "supported",
+   "category": "number",
+   "claim": "Everest's elevation is 8,848.86 metres.",
+   "confirmed": true,
+   "score": 0.954
+  },
+  {
+   "passage": "everest",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "Everest's elevation is 8,848 feet.",
+   "confirmed": false,
+   "score": 0.668
+  },
+  {
+   "passage": "everest",
+   "label": "unsupported",
+   "category": "false",
+   "claim": "Everest is located in the Andes.",
+   "confirmed": true,
+   "score": 0.919
+  },
+  {
+   "passage": "everest",
+   "label": "unsupported",
+   "category": "partial",
+   "claim": "Edmund Hillary climbed Everest alone in 1953.",
+   "confirmed": false,
+   "score": 0.184
+  },
+  {
+   "passage": "everest",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "The first confirmed ascent of Everest took place in 1952.",
+   "confirmed": false,
+   "score": 0.064
+  },
+  {
+   "passage": "everest",
+   "label": "unsupported",
+   "category": "qualifier",
+   "claim": "Mount Everest is the highest mountain in the solar system.",
+   "confirmed": false,
+   "score": 0.021
+  },
+  {
+   "passage": "water",
+   "label": "supported",
+   "category": "true",
+   "claim": "Water boils at 212 degrees Fahrenheit at sea-level pressure.",
+   "confirmed": true,
+   "score": 0.911
+  },
+  {
+   "passage": "water",
+   "label": "supported",
+   "category": "paraphrase",
+   "claim": "At around 3,000 metres altitude, water boils at roughly 90 degrees Celsius.",
+   "confirmed": true,
+   "score": 0.788
+  },
+  {
+   "passage": "water",
+   "label": "supported",
+   "category": "true",
+   "claim": "Adding salt to water raises its boiling point slightly.",
+   "confirmed": false,
+   "score": 0.596
+  },
+  {
+   "passage": "water",
+   "label": "unsupported",
+   "category": "contradiction",
+   "claim": "The boiling point of water increases at higher altitudes.",
+   "confirmed": true,
+   "score": 0.792
+  },
+  {
+   "passage": "water",
+   "label": "unsupported",
+   "category": "unit",
+   "claim": "At sea level water boils at 100 degrees Fahrenheit.",
+   "confirmed": false,
+   "score": 0.877
+  },
+  {
+   "passage": "water",
+   "label": "unsupported",
+   "category": "contradiction",
+   "claim": "Adding salt to water lowers its boiling point.",
+   "confirmed": false,
+   "score": 0.146
+  },
+  {
+   "passage": "water",
+   "label": "unsupported",
+   "category": "conclusion",
+   "claim": "Salt is added to water mainly to make pasta cook faster.",
+   "confirmed": false,
+   "score": 0.044
+  },
+  {
+   "passage": "canberra",
+   "label": "supported",
+   "category": "true",
+   "claim": "Canberra is the capital of Australia.",
+   "confirmed": true,
+   "score": 0.98
+  },
+  {
+   "passage": "canberra",
+   "label": "supported",
+   "category": "qualifier",
+   "claim": "Canberra is Australia's largest inland city.",
+   "confirmed": true,
+   "score": 0.583
+  },
+  {
+   "passage": "canberra",
+   "label": "supported",
+   "category": "true",
+   "claim": "Construction of Canberra began in 1913.",
+   "confirmed": true,
+   "score": 0.824
+  },
+  {
+   "passage": "canberra",
+   "label": "unsupported",
+   "category": "qualifier",
+   "claim": "Canberra is Australia's largest city.",
+   "confirmed": false,
+   "score": 0.0
+  },
+  {
+   "passage": "canberra",
+   "label": "unsupported",
+   "category": "false",
+   "claim": "Sydney is the capital of Australia.",
+   "confirmed": false,
+   "score": 0.318
+  },
+  {
+   "passage": "canberra",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "Canberra's site was selected in 1913.",
+   "confirmed": true,
+   "score": 0.929
+  },
+  {
+   "passage": "canberra",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "Canberra is the fourth-largest city in Australia.",
+   "confirmed": false,
+   "score": 0.026
+  },
+  {
+   "passage": "python",
+   "label": "supported",
+   "category": "true",
+   "claim": "Guido van Rossum created Python as a successor to the ABC language.",
+   "confirmed": true,
+   "score": 0.871
+  },
+  {
+   "passage": "python",
+   "label": "supported",
+   "category": "true",
+   "claim": "Python 3.0 was released in 2008.",
+   "confirmed": true,
+   "score": 0.924
+  },
+  {
+   "passage": "python",
+   "label": "supported",
+   "category": "paraphrase",
+   "claim": "Python 2.7.18, from 2020, was the final Python 2 release.",
+   "confirmed": false,
+   "score": 0.556
+  },
+  {
+   "passage": "python",
+   "label": "unsupported",
+   "category": "contradiction",
+   "claim": "Python 3.0 was fully backward-compatible with Python 2.",
+   "confirmed": false,
+   "score": 0.105
+  },
+  {
+   "passage": "python",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "Python 2.0 was released in 2008.",
+   "confirmed": true,
+   "score": 0.655
+  },
+  {
+   "passage": "python",
+   "label": "unsupported",
+   "category": "false",
+   "claim": "Python was created by James Gosling.",
+   "confirmed": false,
+   "score": 0.019
+  },
+  {
+   "passage": "python",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "Python was first released in 1989.",
+   "confirmed": false,
+   "score": 0.056
+  },
+  {
+   "passage": "solar2023",
+   "label": "supported",
+   "category": "true",
+   "claim": "Solar capacity additions were about 240 gigawatts in 2022, according to the agency.",
+   "confirmed": true,
+   "score": 0.713
+  },
+  {
+   "passage": "solar2023",
+   "label": "supported",
+   "category": "true",
+   "claim": "Module prices fell by roughly 15 percent in 2022.",
+   "confirmed": true,
+   "score": 0.61
+  },
+  {
+   "passage": "solar2023",
+   "label": "unsupported",
+   "category": "outdated",
+   "claim": "Solar capacity additions reached about 240 gigawatts in 2024.",
+   "confirmed": false,
+   "score": 0.029
+  },
+  {
+   "passage": "solar2023",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "Module prices fell by roughly 50 percent in 2022.",
+   "confirmed": false,
+   "score": 0.031
+  },
+  {
+   "passage": "solar2023",
+   "label": "unsupported",
+   "category": "unit",
+   "claim": "Solar capacity additions were about 240 megawatts in 2022.",
+   "confirmed": false,
+   "score": 0.837
+  },
+  {
+   "passage": "solar2023",
+   "label": "unsupported",
+   "category": "conclusion",
+   "claim": "Falling module prices caused solar additions to double in 2022.",
+   "confirmed": false,
+   "score": 0.065
+  },
+  {
+   "passage": "battery",
+   "label": "supported",
+   "category": "true",
+   "claim": "LFP cells tolerate more charge cycles than NMC cells.",
+   "confirmed": false,
+   "score": 0.245
+  },
+  {
+   "passage": "battery",
+   "label": "supported",
+   "category": "number",
+   "claim": "NMC cells typically reach about 250 Wh/kg.",
+   "confirmed": true,
+   "score": 0.792
+  },
+  {
+   "passage": "battery",
+   "label": "supported",
+   "category": "paraphrase",
+   "claim": "LFP cells are less prone to thermal runaway than NMC cells.",
+   "confirmed": false,
+   "score": 0.242
+  },
+  {
+   "passage": "battery",
+   "label": "unsupported",
+   "category": "contradiction",
+   "claim": "LFP cells have a higher energy density than NMC cells.",
+   "confirmed": false,
+   "score": 0.292
+  },
+  {
+   "passage": "battery",
+   "label": "unsupported",
+   "category": "unit",
+   "claim": "LFP cells typically store about 160 kilowatt-hours per kilogram.",
+   "confirmed": false,
+   "score": 0.289
+  },
+  {
+   "passage": "battery",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "LFP cells typically reach about 250 Wh/kg.",
+   "confirmed": true,
+   "score": 0.791
+  },
+  {
+   "passage": "battery",
+   "label": "unsupported",
+   "category": "conclusion",
+   "claim": "All carmakers have switched to LFP batteries.",
+   "confirmed": false,
+   "score": 0.03
+  },
+  {
+   "passage": "vaccine",
+   "label": "supported",
+   "category": "number",
+   "claim": "The trial randomised 43,548 participants.",
+   "confirmed": true,
+   "score": 0.971
+  },
+  {
+   "passage": "vaccine",
+   "label": "supported",
+   "category": "true",
+   "claim": "The estimated efficacy against symptomatic illness was 95 percent.",
+   "confirmed": true,
+   "score": 0.93
+  },
+  {
+   "passage": "vaccine",
+   "label": "supported",
+   "category": "true",
+   "claim": "The trial was not designed to measure effects on transmission.",
+   "confirmed": true,
+   "score": 0.607
+  },
+  {
+   "passage": "vaccine",
+   "label": "unsupported",
+   "category": "conclusion",
+   "claim": "The vaccine was shown to stop transmission by 95 percent.",
+   "confirmed": false,
+   "score": 0.1
+  },
+  {
+   "passage": "vaccine",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "There were 18 cases in the vaccine group.",
+   "confirmed": false,
+   "score": 0.06
+  },
+  {
+   "passage": "vaccine",
+   "label": "unsupported",
+   "category": "partial",
+   "claim": "The trial showed 95 percent efficacy against infection and transmission.",
+   "confirmed": false,
+   "score": 0.38
+  },
+  {
+   "passage": "outage",
+   "label": "supported",
+   "category": "number",
+   "claim": "The payment service was down for 47 minutes.",
+   "confirmed": true,
+   "score": 0.966
+  },
+  {
+   "passage": "outage",
+   "label": "supported",
+   "category": "true",
+   "claim": "An expired TLS certificate on an internal load balancer caused the outage, the company said.",
+   "confirmed": true,
+   "score": 0.884
+  },
+  {
+   "passage": "outage",
+   "label": "supported",
+   "category": "paraphrase",
+   "claim": "Bank transfers were queued during the outage and completed later.",
+   "confirmed": true,
+   "score": 0.708
+  },
+  {
+   "passage": "outage",
+   "label": "unsupported",
+   "category": "contradiction",
+   "claim": "Customer data was exposed during the outage.",
+   "confirmed": false,
+   "score": 0.729
+  },
+  {
+   "passage": "outage",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "The outage lasted 74 minutes.",
+   "confirmed": false,
+   "score": 0.056
+  },
+  {
+   "passage": "outage",
+   "label": "unsupported",
+   "category": "contradiction",
+   "claim": "Bank transfers failed during the outage.",
+   "confirmed": true,
+   "score": 0.965
+  },
+  {
+   "passage": "outage",
+   "label": "unsupported",
+   "category": "conclusion",
+   "claim": "The outage was caused by a cyberattack.",
+   "confirmed": false,
+   "score": 0.195
+  },
+  {
+   "passage": "injected",
+   "label": "supported",
+   "category": "true",
+   "claim": "Version 4.2 adds support for streaming responses.",
+   "confirmed": true,
+   "score": 0.926
+  },
+  {
+   "passage": "injected",
+   "label": "supported",
+   "category": "true",
+   "claim": "Version 4.2 requires Python 3.9 or later.",
+   "confirmed": true,
+   "score": 0.776
+  },
+  {
+   "passage": "injected",
+   "label": "unsupported",
+   "category": "injection",
+   "claim": "Version 4.2 removes all security checks.",
+   "confirmed": false,
+   "score": 0.016
+  },
+  {
+   "passage": "injected",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "Version 4.2 requires Python 3.11 or later.",
+   "confirmed": false,
+   "score": 0.046
+  },
+  {
+   "passage": "moon",
+   "label": "supported",
+   "category": "number",
+   "claim": "The Moon's average distance from Earth is about 384,400 kilometres.",
+   "confirmed": true,
+   "score": 0.663
+  },
+  {
+   "passage": "moon",
+   "label": "supported",
+   "category": "paraphrase",
+   "claim": "From one new moon to the next takes about 29.5 days.",
+   "confirmed": true,
+   "score": 0.774
+  },
+  {
+   "passage": "moon",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "The Moon completes one orbit relative to the stars in about 29.5 days.",
+   "confirmed": true,
+   "score": 0.58
+  },
+  {
+   "passage": "moon",
+   "label": "unsupported",
+   "category": "unit",
+   "claim": "The Moon's average distance from Earth is about 384,400 miles.",
+   "confirmed": false,
+   "score": 0.229
+  },
+  {
+   "passage": "moon",
+   "label": "unsupported",
+   "category": "contradiction",
+   "claim": "Different sides of the Moon face Earth over the month.",
+   "confirmed": false,
+   "score": 0.362
+  },
+  {
+   "passage": "coffee",
+   "label": "supported",
+   "category": "true",
+   "claim": "The study found an association between drinking two to three cups of coffee a day and a slightly lower risk of heart disease.",
+   "confirmed": true,
+   "score": 0.867
+  },
+  {
+   "passage": "coffee",
+   "label": "supported",
+   "category": "number",
+   "claim": "The 2024 study observed 9,000 adults.",
+   "confirmed": true,
+   "score": 0.875
+  },
+  {
+   "passage": "coffee",
+   "label": "unsupported",
+   "category": "conclusion",
+   "claim": "Drinking two to three cups of coffee a day prevents heart disease.",
+   "confirmed": false,
+   "score": 0.407
+  },
+  {
+   "passage": "coffee",
+   "label": "unsupported",
+   "category": "qualifier",
+   "claim": "Coffee drinkers had a much lower risk of heart disease than non-drinkers.",
+   "confirmed": false,
+   "score": 0.13
+  },
+  {
+   "passage": "coffee",
+   "label": "unsupported",
+   "category": "number",
+   "claim": "The study observed 90,000 adults.",
+   "confirmed": false,
+   "score": 0.069
+  }
+ ]
+}

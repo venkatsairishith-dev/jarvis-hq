@@ -3,7 +3,8 @@
     python jarvis/evals/neko95/bench/model_compare.py --fetch                      # download pinned files, SHA-256 checked
     python jarvis/evals/neko95/bench/model_compare.py --models qwen3-4b-2507,qwen3.5-2b [--sets dev,holdout2] [--repeat 1]
 
-Each model is started as its own llama-server (llama.cpp b11669 CPU build, the laptop's release), then every case goes
+Each model is started as its own llama-server (NEKO_LLAMA_SERVER; the build is read from its --version and saved with the
+results; a candidate's "args" add server flags such as a quantised KV cache), then every case goes
 through plugin/plugins/desktop/decide.py (same prompt, JSON-schema grammar and deterministic rules as the laptop) and is
 scored with eval_decision.score(). Measured per model: accuracy per set, JSON validity, cold start (process start to
 first answer), prompt and generation time from llama.cpp's own timings, tokens/s, peak RSS, CPU seconds, timeouts.
@@ -86,6 +87,17 @@ def cpu_s(pid: int) -> float:
         return 0.0
 
 
+def server_version() -> str:
+    """`llama-server --version` as one line ("version: 0.7.0-dev (build 11714, commit c0fd78626); built with GNU 11.4.0 ..."),
+    so a result file says which build produced it. A local source build reports "build 1"; its commit still identifies it."""
+    try:
+        out = subprocess.run([SERVER, "--version"], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"unknown ({type(e).__name__})"
+    keep = [ln.strip() for ln in (out.stdout + out.stderr).splitlines() if ln.startswith(("version:", "built with"))]
+    return "; ".join(keep) or "unknown"
+
+
 def start(name: str):
     c = CANDIDATES[name]
     path = MODEL_DIR / c["file"]
@@ -162,7 +174,7 @@ def run(name: str, sets: list[str], repeat: int) -> dict:
     gen = [t for t in timings if t.get("gen_tps")]
     lat.sort()
     return {"model": name, "repo": CANDIDATES[name]["repo"], "file": CANDIDATES[name]["file"], "sha256": CANDIDATES[name]["sha256"],
-            "threads": THREADS, "sets": per_set, "correct": sum(r["ok"] for r in rows), "total": len(rows),
+            "threads": THREADS, "args": CANDIDATES[name].get("args", []), "sets": per_set, "correct": sum(r["ok"] for r in rows), "total": len(rows),
             "model_path_correct": f"{sum(r['ok'] for r in model_rows)}/{len(model_rows)}",
             "json_valid": f"{sum(r['json_ok'] for r in model_rows)}/{len(model_rows)}",
             "errors": sum(r["status"] == "error" for r in rows), "load_s": round(load_s, 1), "cold_first_call_s": round(cold_first, 1),
@@ -191,7 +203,7 @@ def main(argv=None):
             print(m, fetch(m), flush=True)
         return
     out = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "host": "Xeon Gold 6244 CPU", "threads": THREADS,
-           "llama_cpp": "b11669 (620d222) CPU build", "prompt_version": decide.PROMPT_VERSION, "sets": a.sets.split(","), "models": []}
+           "llama_cpp": server_version(), "server": SERVER, "prompt_version": decide.PROMPT_VERSION, "sets": a.sets.split(","), "models": []}
     for m in names:
         try:
             r = run(m, a.sets.split(","), a.repeat)

@@ -124,6 +124,66 @@ class G(unittest.TestCase):
         rows = " ".join(r[0] for r in self.k.db.execute("SELECT payload FROM audit"))
         self.assertNotIn("SECRETKEYVALUE", rows)
 
+    # optional key for the laptop's local llama-swap / llama-server (--api-key-file); 2026-10-17
+    def _secrets(self):
+        d = os.path.join(self.tmp.name, "sec"); os.makedirs(os.path.join(d, "local"), exist_ok=True)
+        old = os.environ.get("JARVIS_SECRETS"); os.environ["JARVIS_SECRETS"] = d
+        self.addCleanup(lambda: os.environ.pop("JARVIS_SECRETS") if old is None else os.environ.__setitem__("JARVIS_SECRETS", old))
+        return os.path.join(d, "local", "llama-server.key")
+
+    def test_optional_local_key_is_sent_when_configured_and_never_logged(self):
+        import contextlib, io, logging
+        kf = self._secrets()
+        with open(kf, "w") as fh:          # llama-server --api-key-file format: '#' comment lines, then one key per line
+            fh.write("# local llama-server key\nLOCALKEY-7f3a9c2e1d0b-never-printed\nsecond-key-not-used\n")
+        loc = Provider("loc", "local", self.u_loc, "local/llama-server.key", ["any"], key_optional=True)
+        self.assertTrue(loc.available())
+        records = []
+        class Grab(logging.Handler):
+            def emit(self, rec): records.append(rec.getMessage())
+        h = Grab(level=logging.DEBUG); root = logging.getLogger(); root.addHandler(h); lvl = root.level; root.setLevel(logging.DEBUG)
+        out, err = io.StringIO(), io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                self.assertEqual(call(self.k, [loc], "private", "hi"), "hello from loc")
+                probe = gateway.probe(loc)
+        finally:
+            root.removeHandler(h); root.setLevel(lvl)
+        self.assertEqual(SEEN["loc"][0][1], "Bearer LOCALKEY-7f3a9c2e1d0b-never-printed")      # the header carries the key
+        rows = " ".join(r[0] for r in self.k.db.execute("SELECT payload FROM audit"))
+        for where in (rows, json.dumps(probe), " ".join(records), out.getvalue(), err.getvalue(), repr(loc), SEEN["loc"][0][0]):
+            self.assertNotIn("LOCALKEY", where)                                            # audit, probe result, logs, output, body
+        self.assertNotIn("second-key", SEEN["loc"][0][1])
+
+    def test_optional_key_absent_means_no_header_and_still_available(self):
+        self._secrets()                                                                    # folder exists, key file does not
+        loc = Provider("loc", "local", self.u_loc, "local/llama-server.key", ["any"], key_optional=True)
+        self.assertTrue(loc.available())
+        self.assertEqual(call(self.k, [loc], "private", "hi"), "hello from loc")
+        self.assertIsNone(SEEN["loc"][0][1])
+        row = gateway.explain([loc], "private")["candidates"][0]
+        self.assertNotIn("KEY_MISSING", row["codes"])
+        required = Provider("req", "local", self.u_loc, "local/llama-server.key", ["any"])  # without key_optional: skipped as before
+        self.assertFalse(required.available())
+        self.assertIn("KEY_MISSING", gateway.explain([required], "private")["candidates"][0]["codes"])
+
+    def test_an_empty_key_file_fails_that_provider_without_sending_a_blank_key(self):
+        kf = self._secrets(); open(kf, "w").write("# only a comment\n\n")
+        loc = Provider("loc", "local", self.u_loc, "local/llama-server.key", ["any"], key_optional=True, priority=1)
+        out = call(self.k, [loc, Provider("priv", "private", self.u_priv, None, ["any"], priority=2)], "private", "hi")
+        self.assertEqual(out, "hello from priv")
+        self.assertNotIn("loc", SEEN)
+        self.assertEqual(gateway.probe(loc)["why"], "key file unreadable")
+
+    def test_shipped_local_key_is_a_file_in_the_secrets_folder_and_optional(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "providers.json")
+        loc = [p for p in load(path) if p.name == "local-llama-vulkan"][0]
+        self.assertTrue(loc.key_optional)
+        self.assertFalse(os.path.isabs(loc.key_file) or ".." in loc.key_file.replace("\\", "/").split("/"))
+        self.assertTrue(loc.key_file.endswith(".key"))
+        raw = open(path, encoding="utf-8").read()
+        self.assertNotIn("Bearer", raw); self.assertNotIn('"api_key"', raw)                 # never a key inline
+
     def test_scrub_findings_do_not_contain_values(self):
         _, f, blocked = scrub("TOKEN=abcdefghijklmnop")
         self.assertEqual((f, blocked), (["key_assignment"], False))

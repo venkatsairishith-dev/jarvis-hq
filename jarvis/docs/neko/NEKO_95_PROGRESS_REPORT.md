@@ -542,8 +542,14 @@ python -m pytest jarvis\local_models -q                      # server flag guard
 python -m pytest plugin\plugins\desktop\tests -q             # includes the Windows msvcrt skills lock
 python jarvis\evals\neko95\bench\bench.py                    # 860 cases; Windows-only cases then run instead of deferring
 # decider on the real GPU (RSS is not measured on Windows):
-$env:NEKO_LLAMA_SERVER="D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe"; $env:NEKO_MODEL_DIR="D:\jarvis\models\gguf"
+# llama.cpp b11714 (chosen 2026-10-17 on the test server; configs still point at b11669): fetch, unpack, smoke-test,
+# then change b11669 -> b11714 in llama-swap.yaml, profiles\*.yaml and hwdetect.py; keep b11669 for a rollback
+python jarvis\tools\fetch.py --fetch llama-cpp-b11714-win-vulkan-x64 llama-cpp-b11714-win-cpu-x64   # then unzip to D:\jarvis\tools\llama.cpp\b11714\{vulkan,cpu}
+$env:NEKO_LLAMA_SERVER="D:\jarvis\tools\llama.cpp\b11714\vulkan\llama-server.exe"; $env:NEKO_MODEL_DIR="D:\jarvis\models\gguf"
 python jarvis\evals\neko95\bench\model_compare.py --models qwen3-4b-2507,qwen3-1.7b
+# -ctk q8_0 with -fa off (laptop test required before it goes on the decider line; evidence/08, KV section). The -faoff
+# variants run as llama-swap.yaml does; the plain candidates leave flash attention on "auto" (garbage risk on RDNA1).
+python jarvis\evals\neko95\bench\model_compare.py --models qwen3-4b-2507-faoff,qwen3-4b-2507-faoff-ctkq8
 # owner hardware: G-036 (44.1 kHz-only microphone), G-037 (pause with the real microphone)
 ```
 Research reports with links: `evidence/07-small-models-2026-10-17.md` (ranked shortlist and compatibility),

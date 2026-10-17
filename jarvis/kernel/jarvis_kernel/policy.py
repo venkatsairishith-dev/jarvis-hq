@@ -110,6 +110,11 @@ CONSEQUENTIAL = re.compile(
     r"unsubscribe|transfer|withdraw|deposit|accept|agree|allow|grant|authori[sz]e|reset|upload|download|save card|add card|"
     r"change password|close account|deactivate)\b", re.I)
 MESSAGING_APPS = re.compile(r"whatsapp|telegram|slack|teams|discord|outlook|thunderbird|signal|skype|messenger|mail\b", re.I)
+# Playwright MCP 0.0.82+ exposes the tools a web PAGE registers (WebMCP) as MCP tools named webmcp_*: their names,
+# descriptions and schemas come from whatever site is open, and the release notes call them untrusted. Refused whoever
+# asks and whatever risk class a connector entry gives them (evidence 08, 2026-10-17). There is no "untrusted but
+# approval-gated" class in this policy to put them in instead.
+PAGE_TOOL_PREFIX = "webmcp_"
 RISKY_KEYS = {"alt+f4", "ctrl+w", "ctrl+shift+w", "delete", "shift+delete", "ctrl+shift+delete", "ctrl+d", "ctrl+enter", "ctrl+shift+enter"}
 
 
@@ -317,6 +322,9 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
             level, reason = DENY, "a connector tool that is not classified as read, write or send is refused"
         if _name(a.lane) == "public" and p.get("public_ok") is not True:
             level, reason = DENY, "this connector is not available to the public lane"
+    called = [tool, op] + ([str(a.target).partition(".")[2]] if tool == "connector" else [])   # connector target: name.tool
+    if any(_name(n).startswith(PAGE_TOOL_PREFIX) for n in called):
+        level, reason = DENY, "a web page's own WebMCP tool (webmcp_*): untrusted, never called"
     if tool == "browser" and any(_internal_url(lf) for lf in leaves):
         level, reason = DENY, "browser pointed at an internal address"
     if protected:

@@ -1,0 +1,3322 @@
+{
+ "time": "2026-10-17 19:39:12",
+ "set": "vitaminc_sample",
+ "model_dir": "/nli/minicheck-roberta-large",
+ "summary": {
+  "model": "minicheck-roberta",
+  "n": 400,
+  "supported": 200,
+  "unsupported": 200,
+  "precision": 0.94,
+  "recall": 0.71,
+  "false_acceptance": "9/200",
+  "false_acceptance_rate": 0.045,
+  "false_rejection": "58/200",
+  "false_rejection_rate": 0.29,
+  "errors_by_category": {
+   "not_enough_info": "4/58",
+   "refutes": "5/142",
+   "supports": "58/200"
+  },
+  "calibration": [
+   {
+    "score": "0.0-0.1",
+    "n": 83,
+    "really_supported": 0.0
+   },
+   {
+    "score": "0.1-0.5",
+    "n": 111,
+    "really_supported": 0.08
+   },
+   {
+    "score": "0.5-0.9",
+    "n": 40,
+    "really_supported": 0.75
+   },
+   {
+    "score": "0.9-0.99",
+    "n": 166,
+    "really_supported": 0.97
+   }
+  ],
+  "seconds": 74.2,
+  "seconds_per_claim": 0.1854,
+  "false_accepts": [
+   "Arnout Schuijff is Ayden 's CEO .",
+   "Viñayem was signed to replace Jorge Lorzenzo at the factory Yamaha team .",
+   "Alan Arkin 's film career spans for over five decades .",
+   "The Latvian Soviet Socialist Republic is also known as Soviet Latvia .",
+   "Starting from the north , Brooklyn 's boundary is Linden Boulevard .",
+   "Mariah Carey is a mute .",
+   "Discovery Channel is a namesake of the company that owns it .",
+   "Against Me ! is a rock band .",
+   "Lee Daniels received a nomination for Best Producer ."
+  ],
+  "false_rejects": [
+   "Roberto Baggio finished third in the capocannoniere title with less than 20 goals and less than 10 assists .",
+   "I ( film ) grossed more than US $ 789,000 in the Tamil version .",
+   "John Wick : Chapter 3 - Parabellum grossed less than $ 220 million worldwide .",
+   "Lesbian Vampire Killers holds an approval rating of less than 25 % on Rotten Tomatoes .",
+   "The Los Angeles County Department of Public Works , in Alhambra , California , employs over 2,500 workers , according to the 2009 Financial report .",
+   "John Wick : Chapter 3 - Parabellum grossed more than $ 255.5 million worldwide .",
+   "According to Rotten Tomatoes , the series American Horror Story : Coven had an approval rating of less than 84 % .",
+   "Transfer taxes are considered direct taxes .",
+   "Perlego´s Ebook platform release was after 2016 .",
+   "John Wick : Chapter 3 - Parabellum grossed less than $ 140 million in the United States and Canada , and a worldwide total of less than $ 256 million .",
+   "Inside Llewyn Davis´ score in Rotten Tomatoes is based on under 199 reviews with an average score of 8.6 .",
+   "E-books became popular before the 18th century .",
+   "The Alhambra Unified School District , in Alhambra , California , employs under 2,500 workers , according to the 2016 Financial report .",
+   "The Latvian Soviet Socialist Republic is never known as Soviet Latvia .",
+   "Lesbian Vampire Killers holds an approval rating of less than 30 % on Rotten Tomatoes .",
+   "The album Honeymoon by Lana Del Rey sold more than 49,000 copies in France .",
+   "Kirik Party earned more than ₹59 crore and became the second highest-grossing film in Kannada .",
+   "Toy Story 2 was initially released in 1999 .",
+   "In the film `` Inside Llewyn Davis '' Pappi assures he and Jim had sex .",
+   "In 2011 , Viñales worked with Sergio Gadea in the 125cc World Championship .",
+   "According to the 2001 census , Bridlington 's population was under 25,000 .",
+   "Inside Llewyn Davis´ score in Rotten Tomatoes is based on under 100 reviews .",
+   "Alexis Sánchez has won less than 120 caps since 2006 , becoming the team 's most capped player with Claudio Bravo .",
+   "John Wick : Chapter 3 - Parabellum grossed less than $ 129 million in the United States and Canada , and a worldwide total of less than $ 228 million .",
+   "Victims from the middlemen make a decent profit .",
+   "Maverick Viñales beat his teammate by more than 20 points .",
+   "There are less than 230 firm orders for the Airbus A330neo .",
+   "E-books became popular after the 18th century .",
+   "Lesbian Vampire Killers holds an approval rating of more than 25 % on Rotten Tomatoes .",
+   "There are more than 230 firm orders for the Airbus A330neo .",
+   "The film Toy Story 2 was released before 2001 .",
+   "Jamiroquai sold over 2 million copies of his album in the US .",
+   "John Wick : Chapter 3 - Parabellum grossed less than $ 254 million worldwide .",
+   "Meet the Blacks ' approval rating is under 50 % on Rotten Tomatoes .",
+   "Touch My Body was released before 2006 .",
+   "Paul Blart : Mall Cop has a rating of over 32 % on Rotten Tomatoes .",
+   "John Wick : Chapter 3 - Parabellum scored more than 89.5 % based on more than 285 reviews .",
+   "It is estimated that more than 10 million people live in the 26 states east of the Mississippi and the District of Columbia .",
+   "Roberto Baggio established a personal record of less than 40 goals , scoring less than 10 goals in European competitions , less than 25 goals in Serie A , and less than 6 goals for Italy .",
+   "Marilyn Manson was born before September 1968 .",
+   "John Wick : Chapter 3 - Parabellum scored less than 89.5 % based on more than 294 reviews .",
+   "John Wick : Chapter 3 - Parabellum has an average rating of more than 7.45/10 based on more than 280 reviews .",
+   "Aaliyah 's estimated global sales are under 33 million albums .",
+   "In John Wick : Chapter 3 - Parabellum , Sofia is the manager of the Continental Hotel in Casablanca .",
+   "Alexis Sánchez has won more than 120 caps since 2006 , becoming the team 's most capped player .",
+   "In John Wick : Chapter 3 - Parabellum , Jason Mantzoukas and Robin Lord Taylor cameo as the Tick Tock Man and as The Administrator respectively .",
+   "Inside Llewyn Davis´ score in Rotten Tomatoes is based on over 210 reviews with an average score of 8.5 .",
+   "Marilyn Manson 's 2003–2004 Grotesk Burlesk Tour started after May 5 , 2003 .",
+   "While he played in Juventus , Baggio scored more than 300 goals in over 300 appearances , of which less than 280 happened in over 200 Serie A appearances .",
+   "Mark Haddon was born after 1988 .",
+   "The film Toy Story 2 was released after 2000 .",
+   "Marilyn Manson was born after September 1968 .",
+   "John Wick : Chapter 3 - Parabellum grossed more than $ 254 million worldwide .",
+   "Arnautović signed a contract worth more than £30 million .",
+   "John Wick : Chapter 3 - Parabellum grossed more than $ 225 million worldwide .",
+   "George W. Bush had ordered to shoot the plane down if it was still on its way to Washington .",
+   "Roberto Baggio scored less than 15 goals in the Serie C1 of 1984-1985 .",
+   "The film `` Toy Story 2 '' was released before 2000 ."
+  ],
+  "load_seconds": 1.3,
+  "model_mb": 357.2,
+  "peak_rss_mb": 517.6
+ },
+ "pairs": [
+  {
+   "passage": "v000",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Roberto Baggio finished third in the capocannoniere title with less than 20 goals and less than 10 assists .",
+   "confirmed": false,
+   "score": 0.985
+  },
+  {
+   "passage": "v001",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The Latvian Soviet Socialist Republic is never known as Latvia .",
+   "confirmed": true,
+   "score": 0.831
+  },
+  {
+   "passage": "v002",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Discovery Channel is a namesake of the company that owns it .",
+   "confirmed": true,
+   "score": 0.953
+  },
+  {
+   "passage": "v003",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Leslie Alexander is from the state of New York .",
+   "confirmed": true,
+   "score": 0.981
+  },
+  {
+   "passage": "v004",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Julian Brandt plays for Borussia Dortmund .",
+   "confirmed": true,
+   "score": 0.985
+  },
+  {
+   "passage": "v005",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Legendary Entertainment is owned by a Chinese conglomerate .",
+   "confirmed": true,
+   "score": 0.979
+  },
+  {
+   "passage": "v006",
+   "label": "supported",
+   "category": "supports",
+   "claim": "I ( film ) grossed more than US $ 789,000 in the Tamil version .",
+   "confirmed": false,
+   "score": 0.965
+  },
+  {
+   "passage": "v007",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Alan Wolf Arkin is also a comedian .",
+   "confirmed": true,
+   "score": 0.983
+  },
+  {
+   "passage": "v008",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Materials science involves designing new materials .",
+   "confirmed": true,
+   "score": 0.968
+  },
+  {
+   "passage": "v009",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 was released by Walt Disney Pictures .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v010",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed less than $ 220 million worldwide .",
+   "confirmed": false,
+   "score": 0.976
+  },
+  {
+   "passage": "v011",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Ice-T and the band Body Count have a song called Body Count .",
+   "confirmed": true,
+   "score": 0.982
+  },
+  {
+   "passage": "v012",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Lesbian Vampire Killers holds an approval rating of less than 25 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.984
+  },
+  {
+   "passage": "v013",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The Los Angeles County Department of Public Works , in Alhambra , California , employs over 2,500 workers , according to the 2009 Financial report .",
+   "confirmed": false,
+   "score": 0.915
+  },
+  {
+   "passage": "v014",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Laura Robson lost the Wimbledon Junior Girls ' Championship .",
+   "confirmed": true,
+   "score": 0.979
+  },
+  {
+   "passage": "v015",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Touch My Body is a diet drink .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v016",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed more than $ 255.5 million worldwide .",
+   "confirmed": false,
+   "score": 0.984
+  },
+  {
+   "passage": "v017",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Laura Robson attended the Wimbledon Junior Girls ' Championship .",
+   "confirmed": true,
+   "score": 0.957
+  },
+  {
+   "passage": "v018",
+   "label": "supported",
+   "category": "supports",
+   "claim": "According to Rotten Tomatoes , the series American Horror Story : Coven had an approval rating of less than 84 % .",
+   "confirmed": false,
+   "score": 0.982
+  },
+  {
+   "passage": "v019",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Transfer taxes are considered direct taxes .",
+   "confirmed": false,
+   "score": 0.458
+  },
+  {
+   "passage": "v020",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Perlego´s Ebook platform release was after 2016 .",
+   "confirmed": false,
+   "score": 0.987
+  },
+  {
+   "passage": "v021",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 was released by Walt Disney Pictures worldwide in 1999 .",
+   "confirmed": true,
+   "score": 0.589
+  },
+  {
+   "passage": "v022",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Kevon Looney 's hip injury made it impossible for him to participate in the majority of the playoffs .",
+   "confirmed": true,
+   "score": 0.873
+  },
+  {
+   "passage": "v023",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 is a live action film .",
+   "confirmed": true,
+   "score": 0.986
+  },
+  {
+   "passage": "v024",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed less than $ 140 million in the United States and Canada , and a worldwide total of less than $ 256 million .",
+   "confirmed": false,
+   "score": 0.979
+  },
+  {
+   "passage": "v025",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Inside Llewyn Davis´ score in Rotten Tomatoes is based on under 199 reviews with an average score of 8.6 .",
+   "confirmed": false,
+   "score": 0.465
+  },
+  {
+   "passage": "v026",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Air India 's Airbus A350-900 fleet operates long-distance services .",
+   "confirmed": true,
+   "score": 0.871
+  },
+  {
+   "passage": "v027",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Radamel Falcao 's first match in a World Cup with Colombia was on June 19 .",
+   "confirmed": true,
+   "score": 0.872
+  },
+  {
+   "passage": "v028",
+   "label": "supported",
+   "category": "supports",
+   "claim": "There was a republic of the Soviet Union called the Latvian Soviet Socialist Republic .",
+   "confirmed": true,
+   "score": 0.985
+  },
+  {
+   "passage": "v029",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marques Brownlee 's channel has over 1.2 billion total video views .",
+   "confirmed": true,
+   "score": 0.965
+  },
+  {
+   "passage": "v030",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marques Brown 's middle name is Kumar .",
+   "confirmed": true,
+   "score": 0.982
+  },
+  {
+   "passage": "v031",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 is a Greyhound .",
+   "confirmed": true,
+   "score": 0.98
+  },
+  {
+   "passage": "v032",
+   "label": "supported",
+   "category": "supports",
+   "claim": "E-books became popular before the 18th century .",
+   "confirmed": false,
+   "score": 0.598
+  },
+  {
+   "passage": "v033",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Shaquem 's parents are Tangie and Max ( mj ) Griffin .",
+   "confirmed": true,
+   "score": 0.982
+  },
+  {
+   "passage": "v034",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Laura Robson is a tennis player .",
+   "confirmed": true,
+   "score": 0.986
+  },
+  {
+   "passage": "v035",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Lee Daniels received a nomination for an award .",
+   "confirmed": true,
+   "score": 0.963
+  },
+  {
+   "passage": "v036",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Lee Daniels directed a film .",
+   "confirmed": true,
+   "score": 0.972
+  },
+  {
+   "passage": "v037",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film `` Inside Llewyn Davis '' is a pure drama .",
+   "confirmed": true,
+   "score": 0.772
+  },
+  {
+   "passage": "v038",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The V formation flying pattern of the American white Ibis increases energy efficiency .",
+   "confirmed": true,
+   "score": 0.505
+  },
+  {
+   "passage": "v039",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The Alhambra Unified School District , in Alhambra , California , employs under 2,500 workers , according to the 2016 Financial report .",
+   "confirmed": false,
+   "score": 0.974
+  },
+  {
+   "passage": "v040",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The Latvian Soviet Socialist Republic is never known as Soviet Latvia .",
+   "confirmed": false,
+   "score": 0.337
+  },
+  {
+   "passage": "v041",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Leslie Alexander has a former profession .",
+   "confirmed": true,
+   "score": 0.985
+  },
+  {
+   "passage": "v042",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Lesbian Vampire Killers holds an approval rating of less than 30 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.982
+  },
+  {
+   "passage": "v043",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The album Honeymoon by Lana Del Rey sold more than 49,000 copies in France .",
+   "confirmed": false,
+   "score": 0.969
+  },
+  {
+   "passage": "v044",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Chris Avellone volunteered to become lead designer of Alpha Protocol as that position was currently vacant .",
+   "confirmed": true,
+   "score": 0.679
+  },
+  {
+   "passage": "v045",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The actor Kevin Sorbo suffered a stroke .",
+   "confirmed": true,
+   "score": 0.966
+  },
+  {
+   "passage": "v046",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marques Brownlee 's channel has over 8.57 million subscribers and over 1.29 billion total video views .",
+   "confirmed": true,
+   "score": 0.953
+  },
+  {
+   "passage": "v047",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Julian Brandt plays for Bayer Leverkusen .",
+   "confirmed": true,
+   "score": 0.986
+  },
+  {
+   "passage": "v048",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 is a live action film .",
+   "confirmed": true,
+   "score": 0.988
+  },
+  {
+   "passage": "v049",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The song Joy from the album Doom Days will be first released on BBC Radio 1 with Scott Mills .",
+   "confirmed": true,
+   "score": 0.775
+  },
+  {
+   "passage": "v050",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The song `` Touch My Body '' was released in 2009 .",
+   "confirmed": true,
+   "score": 0.981
+  },
+  {
+   "passage": "v051",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Kirik Party earned more than ₹59 crore and became the second highest-grossing film in Kannada .",
+   "confirmed": false,
+   "score": 0.855
+  },
+  {
+   "passage": "v052",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Laura Robson debuted as a professional tennis player in the 2007 International Tennis Federation junior tour .",
+   "confirmed": true,
+   "score": 0.709
+  },
+  {
+   "passage": "v053",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Sebastian Caine is played by Kevin Costner in Hollow Man .",
+   "confirmed": true,
+   "score": 0.969
+  },
+  {
+   "passage": "v054",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Oppo is a Chinese company .",
+   "confirmed": true,
+   "score": 0.986
+  },
+  {
+   "passage": "v055",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 was initially released in 1999 .",
+   "confirmed": false,
+   "score": 0.93
+  },
+  {
+   "passage": "v056",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The Latvian Soviet Socialist Republic is also known as Latvia .",
+   "confirmed": true,
+   "score": 0.977
+  },
+  {
+   "passage": "v057",
+   "label": "supported",
+   "category": "supports",
+   "claim": "In the film `` Inside Llewyn Davis '' Pappi assures he and Jim had sex .",
+   "confirmed": false,
+   "score": 0.44
+  },
+  {
+   "passage": "v058",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Leslie Alexander is a factory owner .",
+   "confirmed": true,
+   "score": 0.974
+  },
+  {
+   "passage": "v059",
+   "label": "supported",
+   "category": "supports",
+   "claim": "In 2011 , Viñales worked with Sergio Gadea in the 125cc World Championship .",
+   "confirmed": false,
+   "score": 0.459
+  },
+  {
+   "passage": "v060",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Oppo introduced its first 4K/UHD in 2016 .",
+   "confirmed": true,
+   "score": 0.919
+  },
+  {
+   "passage": "v061",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Laura Robson attended the Wimbledon Girl Doubles ' Championship .",
+   "confirmed": true,
+   "score": 0.831
+  },
+  {
+   "passage": "v062",
+   "label": "supported",
+   "category": "supports",
+   "claim": "House of Balloons ' music incorporates soul with trip-hop tones .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v063",
+   "label": "supported",
+   "category": "supports",
+   "claim": "According to the 2001 census , Bridlington 's population was under 25,000 .",
+   "confirmed": false,
+   "score": 0.971
+  },
+  {
+   "passage": "v064",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Inside Llewyn Davis´ score in Rotten Tomatoes is based on under 100 reviews .",
+   "confirmed": false,
+   "score": 0.984
+  },
+  {
+   "passage": "v065",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Alexis Sánchez has won less than 120 caps since 2006 , becoming the team 's most capped player with Claudio Bravo .",
+   "confirmed": false,
+   "score": 0.967
+  },
+  {
+   "passage": "v066",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Mariah Carey is a popular singer .",
+   "confirmed": true,
+   "score": 0.702
+  },
+  {
+   "passage": "v067",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Against Me ! is a rock band .",
+   "confirmed": true,
+   "score": 0.982
+  },
+  {
+   "passage": "v068",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Laura Robson refuses to be in the International Tennis Federation .",
+   "confirmed": true,
+   "score": 0.968
+  },
+  {
+   "passage": "v069",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed less than $ 129 million in the United States and Canada , and a worldwide total of less than $ 228 million .",
+   "confirmed": false,
+   "score": 0.973
+  },
+  {
+   "passage": "v070",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Victims from the middlemen make a decent profit .",
+   "confirmed": false,
+   "score": 0.438
+  },
+  {
+   "passage": "v071",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Hyksos came from northeast Syria .",
+   "confirmed": true,
+   "score": 0.953
+  },
+  {
+   "passage": "v072",
+   "label": "supported",
+   "category": "supports",
+   "claim": "According to Lebron , Dwane Casey 's plan for Dallas allowed James to improve his game after that series .",
+   "confirmed": true,
+   "score": 0.718
+  },
+  {
+   "passage": "v073",
+   "label": "supported",
+   "category": "supports",
+   "claim": "There was a republic of the Irish Union called the Latvian Soviet Socialist Republic .",
+   "confirmed": true,
+   "score": 0.971
+  },
+  {
+   "passage": "v074",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Ronald Koeman is regarded as a free-kick specialist .",
+   "confirmed": true,
+   "score": 0.985
+  },
+  {
+   "passage": "v075",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marques K. Brownlee is an American YouTuber .",
+   "confirmed": true,
+   "score": 0.985
+  },
+  {
+   "passage": "v076",
+   "label": "supported",
+   "category": "supports",
+   "claim": "In 2008 , Touch My Body was released .",
+   "confirmed": true,
+   "score": 0.978
+  },
+  {
+   "passage": "v077",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Maverick Viñales beat his teammate by more than 20 points .",
+   "confirmed": false,
+   "score": 0.976
+  },
+  {
+   "passage": "v078",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Touch My Body is a song by Fall Out Boy .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v079",
+   "label": "supported",
+   "category": "supports",
+   "claim": "L. Ron Hubbard spent the remaining years of his life on his ranch the `` Whispering Wind . ``",
+   "confirmed": true,
+   "score": 0.969
+  },
+  {
+   "passage": "v080",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Emma and her husband go back to Storybrooke .",
+   "confirmed": true,
+   "score": 0.957
+  },
+  {
+   "passage": "v081",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Legendary Entertainment is a rival of Wanda Group .",
+   "confirmed": true,
+   "score": 0.975
+  },
+  {
+   "passage": "v082",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The song Joy from the album Doom Days will be first released on Apple Music 's Beats 1 show with Zane Lowe .",
+   "confirmed": true,
+   "score": 0.639
+  },
+  {
+   "passage": "v083",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Leslie Alexander owns an NBA team .",
+   "confirmed": true,
+   "score": 0.986
+  },
+  {
+   "passage": "v084",
+   "label": "supported",
+   "category": "supports",
+   "claim": "There are less than 230 firm orders for the Airbus A330neo .",
+   "confirmed": false,
+   "score": 0.981
+  },
+  {
+   "passage": "v085",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Roberto Baggio was awarded the 1994 Onze de Bronze .",
+   "confirmed": true,
+   "score": 0.985
+  },
+  {
+   "passage": "v086",
+   "label": "supported",
+   "category": "supports",
+   "claim": "E-books became popular after the 18th century .",
+   "confirmed": false,
+   "score": 0.588
+  },
+  {
+   "passage": "v087",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The Durham Cathedral partly led to the existence of Durham city .",
+   "confirmed": true,
+   "score": 0.814
+  },
+  {
+   "passage": "v088",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Lesbian Vampire Killers holds an approval rating of more than 25 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.986
+  },
+  {
+   "passage": "v089",
+   "label": "supported",
+   "category": "supports",
+   "claim": "There are more than 230 firm orders for the Airbus A330neo .",
+   "confirmed": false,
+   "score": 0.983
+  },
+  {
+   "passage": "v090",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The Latvian Soviet Socialist Republic is also referred to as White Russia .",
+   "confirmed": true,
+   "score": 0.967
+  },
+  {
+   "passage": "v091",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film Toy Story 2 was released before 2001 .",
+   "confirmed": false,
+   "score": 0.629
+  },
+  {
+   "passage": "v092",
+   "label": "supported",
+   "category": "supports",
+   "claim": "George Seaton 's disaster film grossed more than $ 100 million at the box office , equivalent to $ 590 million in 2017 .",
+   "confirmed": true,
+   "score": 0.604
+  },
+  {
+   "passage": "v093",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Jamiroquai sold over 2 million copies of his album in the US .",
+   "confirmed": false,
+   "score": 0.976
+  },
+  {
+   "passage": "v094",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed less than $ 254 million worldwide .",
+   "confirmed": false,
+   "score": 0.976
+  },
+  {
+   "passage": "v095",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Against Me ! is an alternative rock band .",
+   "confirmed": true,
+   "score": 0.983
+  },
+  {
+   "passage": "v096",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Algonquian peoples hunt migratory birds and their eggs between April and October .",
+   "confirmed": true,
+   "score": 0.975
+  },
+  {
+   "passage": "v097",
+   "label": "supported",
+   "category": "supports",
+   "claim": "In 1993 , he scored his 500th Serie A goal .",
+   "confirmed": true,
+   "score": 0.953
+  },
+  {
+   "passage": "v098",
+   "label": "supported",
+   "category": "supports",
+   "claim": "House of Balloons ' music incorporates soul with dubstep tones .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v099",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Meet the Blacks ' approval rating is under 50 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.981
+  },
+  {
+   "passage": "v100",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Legendary Entertainment is a subsidiary of Wanda Group .",
+   "confirmed": true,
+   "score": 0.979
+  },
+  {
+   "passage": "v101",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Mariah Carey is a mute .",
+   "confirmed": true,
+   "score": 0.961
+  },
+  {
+   "passage": "v102",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Kentucky is one of the main areas in which Altice USA 's costumers reside .",
+   "confirmed": true,
+   "score": 0.979
+  },
+  {
+   "passage": "v103",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Against Me ! is a punk rock band .",
+   "confirmed": true,
+   "score": 0.983
+  },
+  {
+   "passage": "v104",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marilyn Manson dated actress , model and musician Evan Rachel Wood .",
+   "confirmed": true,
+   "score": 0.952
+  },
+  {
+   "passage": "v105",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Legendary Entertainment has been a subsidiary of Wanda Group since 2017 .",
+   "confirmed": true,
+   "score": 0.976
+  },
+  {
+   "passage": "v106",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Improved technology has created things like vented discs .",
+   "confirmed": true,
+   "score": 0.978
+  },
+  {
+   "passage": "v107",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Touch My Body was released before 2006 .",
+   "confirmed": false,
+   "score": 0.983
+  },
+  {
+   "passage": "v108",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Paul Blart : Mall Cop has a rating of over 32 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.989
+  },
+  {
+   "passage": "v109",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film `` Toy Story 2 '' was released by Walt Disney Pictures .",
+   "confirmed": true,
+   "score": 0.983
+  },
+  {
+   "passage": "v110",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Alex Kurtzman worked as a consulting producer for a show .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v111",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum scored more than 89.5 % based on more than 285 reviews .",
+   "confirmed": false,
+   "score": 0.987
+  },
+  {
+   "passage": "v112",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Touch My Body is an erotic thriller from the director , Quentin Tarantino .",
+   "confirmed": true,
+   "score": 0.978
+  },
+  {
+   "passage": "v113",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Against Me ! is a pop-punk rock band .",
+   "confirmed": true,
+   "score": 0.983
+  },
+  {
+   "passage": "v114",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Mark Walberg has appeared on the US version of the television show Antiques Roadshow .",
+   "confirmed": true,
+   "score": 0.971
+  },
+  {
+   "passage": "v115",
+   "label": "supported",
+   "category": "supports",
+   "claim": "In the video game Alpha Protocol , the technical aptitudes of the character can be improved so he can avoid being detected .",
+   "confirmed": true,
+   "score": 0.811
+  },
+  {
+   "passage": "v116",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Lesbian Vampire Killers was filmed at Luton Hoo in Bedfordshire .",
+   "confirmed": true,
+   "score": 0.98
+  },
+  {
+   "passage": "v117",
+   "label": "supported",
+   "category": "supports",
+   "claim": "It is estimated that more than 10 million people live in the 26 states east of the Mississippi and the District of Columbia .",
+   "confirmed": false,
+   "score": 0.758
+  },
+  {
+   "passage": "v118",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Touch My Body is a song by Mariah Carey .",
+   "confirmed": true,
+   "score": 0.946
+  },
+  {
+   "passage": "v119",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Roberto Baggio established a personal record of less than 40 goals , scoring less than 10 goals in European competitions , less than 25 goals in Serie A , and less than 6 goals for Italy .",
+   "confirmed": false,
+   "score": 0.975
+  },
+  {
+   "passage": "v120",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film `` Inside Llewyn Davis '' has drama and comedy .",
+   "confirmed": true,
+   "score": 0.979
+  },
+  {
+   "passage": "v121",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marilyn Manson was born before September 1968 .",
+   "confirmed": false,
+   "score": 0.431
+  },
+  {
+   "passage": "v122",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Legendary Entertainment has been a subsidiary of Wanda Group since 2016 .",
+   "confirmed": true,
+   "score": 0.976
+  },
+  {
+   "passage": "v123",
+   "label": "supported",
+   "category": "supports",
+   "claim": "A playable demo of the EA Sports UFC was released with Jon Jones and Alexander Gustafsson as fighters .",
+   "confirmed": true,
+   "score": 0.749
+  },
+  {
+   "passage": "v124",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The song `` Touch My Body '' was released in 2008 .",
+   "confirmed": true,
+   "score": 0.978
+  },
+  {
+   "passage": "v125",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 is an action film .",
+   "confirmed": true,
+   "score": 0.977
+  },
+  {
+   "passage": "v126",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum scored less than 89.5 % based on more than 294 reviews .",
+   "confirmed": false,
+   "score": 0.444
+  },
+  {
+   "passage": "v127",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film , Lesbian Vampire Killers ' reviews were largely positive .",
+   "confirmed": true,
+   "score": 0.954
+  },
+  {
+   "passage": "v128",
+   "label": "supported",
+   "category": "supports",
+   "claim": "At the end of 2015 , the album Honeymoon by Lana Del Rey got a silver certification in the U.K .",
+   "confirmed": true,
+   "score": 0.959
+  },
+  {
+   "passage": "v129",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 is a computer-animated film .",
+   "confirmed": true,
+   "score": 0.986
+  },
+  {
+   "passage": "v130",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum has an average rating of more than 7.45/10 based on more than 280 reviews .",
+   "confirmed": false,
+   "score": 0.989
+  },
+  {
+   "passage": "v131",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 was produced by DreamWorks .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v132",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Viñales was signed to replace Jorge Lorzenzo at the factory Yamaha team .",
+   "confirmed": true,
+   "score": 0.969
+  },
+  {
+   "passage": "v133",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Aaliyah 's estimated global sales are under 33 million albums .",
+   "confirmed": false,
+   "score": 0.986
+  },
+  {
+   "passage": "v134",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marques Brownlee 's channel has over 8.80 million subscribers and over 1.34 billion total video views .",
+   "confirmed": true,
+   "score": 0.96
+  },
+  {
+   "passage": "v135",
+   "label": "supported",
+   "category": "supports",
+   "claim": "US Airways is based in Pittsburgh , Pennsylvania , in the Eastern United States .",
+   "confirmed": true,
+   "score": 0.951
+  },
+  {
+   "passage": "v136",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Don Beyer was proposed to be the US Ambassador to two countries , including Liechtenstein .",
+   "confirmed": true,
+   "score": 0.939
+  },
+  {
+   "passage": "v137",
+   "label": "supported",
+   "category": "supports",
+   "claim": "In John Wick : Chapter 3 - Parabellum , Sofia is the manager of the Continental Hotel in Casablanca .",
+   "confirmed": false,
+   "score": 0.949
+  },
+  {
+   "passage": "v138",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Dwane Casey played and coached in the past for the University of Kentucky NCAA .",
+   "confirmed": true,
+   "score": 0.955
+  },
+  {
+   "passage": "v139",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Amman is a primate city with a population that is almost half of that of Jordan 's .",
+   "confirmed": true,
+   "score": 0.975
+  },
+  {
+   "passage": "v140",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Republic Latvian is another name for the Latvian Soviet Socialist Republic .",
+   "confirmed": true,
+   "score": 0.958
+  },
+  {
+   "passage": "v141",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Llewyn Davis was unsettled .",
+   "confirmed": true,
+   "score": 0.937
+  },
+  {
+   "passage": "v142",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The 1953 film Titanic was produced by 20th Century Fox .",
+   "confirmed": true,
+   "score": 0.983
+  },
+  {
+   "passage": "v143",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Alexis Sánchez has won more than 120 caps since 2006 , becoming the team 's most capped player .",
+   "confirmed": false,
+   "score": 0.949
+  },
+  {
+   "passage": "v144",
+   "label": "supported",
+   "category": "supports",
+   "claim": "In John Wick : Chapter 3 - Parabellum , Jason Mantzoukas and Robin Lord Taylor cameo as the Tick Tock Man and as The Administrator respectively .",
+   "confirmed": false,
+   "score": 0.725
+  },
+  {
+   "passage": "v145",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Rosa Kaganovich was labelled as Stalin 's wife by Western media .",
+   "confirmed": true,
+   "score": 0.9
+  },
+  {
+   "passage": "v146",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Destructoid rated Alpha Protocol as 2/10 .",
+   "confirmed": true,
+   "score": 0.988
+  },
+  {
+   "passage": "v147",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Ice-T ( rapper ) began his career in the 1980s .",
+   "confirmed": true,
+   "score": 0.982
+  },
+  {
+   "passage": "v148",
+   "label": "supported",
+   "category": "supports",
+   "claim": "In the series American Horror Story : Coven , Emma Roberts plays the role of Chanel Oberlin and Gabourey Sidibe plays the role of Becky .",
+   "confirmed": true,
+   "score": 0.846
+  },
+  {
+   "passage": "v149",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Baseball player Don Mattingly is a free agent .",
+   "confirmed": true,
+   "score": 0.969
+  },
+  {
+   "passage": "v150",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Inside Llewyn Davis´ score in Rotten Tomatoes is based on over 210 reviews with an average score of 8.5 .",
+   "confirmed": false,
+   "score": 0.973
+  },
+  {
+   "passage": "v151",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Doraemon travels back in time to help a boy .",
+   "confirmed": true,
+   "score": 0.975
+  },
+  {
+   "passage": "v152",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marilyn Manson 's 2003–2004 Grotesk Burlesk Tour started after May 5 , 2003 .",
+   "confirmed": false,
+   "score": 0.981
+  },
+  {
+   "passage": "v153",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film Toy Story 2 was released in 2004 .",
+   "confirmed": true,
+   "score": 0.987
+  },
+  {
+   "passage": "v154",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 was released in 2004 .",
+   "confirmed": true,
+   "score": 0.983
+  },
+  {
+   "passage": "v155",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Laura Robson is an athlete .",
+   "confirmed": true,
+   "score": 0.987
+  },
+  {
+   "passage": "v156",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marilyn Manson is of Irish and English descent .",
+   "confirmed": true,
+   "score": 0.96
+  },
+  {
+   "passage": "v157",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Mariah Carey sang Touch My Body .",
+   "confirmed": true,
+   "score": 0.981
+  },
+  {
+   "passage": "v158",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The Latvian Soviet Socialist Republic is also known as Soviet Latvia .",
+   "confirmed": true,
+   "score": 0.98
+  },
+  {
+   "passage": "v159",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Viñayem was signed to replace Jorge Lorzenzo at the factory Yamaha team .",
+   "confirmed": true,
+   "score": 0.97
+  },
+  {
+   "passage": "v160",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marko Arnautović is from Serbia .",
+   "confirmed": true,
+   "score": 0.977
+  },
+  {
+   "passage": "v161",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Maverick Viñales ' new number ( 12 ) was formerly worn by Troy Bayliss .",
+   "confirmed": true,
+   "score": 0.977
+  },
+  {
+   "passage": "v162",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Doraemon travels back in time to help a girl .",
+   "confirmed": true,
+   "score": 0.975
+  },
+  {
+   "passage": "v163",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Laura Robson is a volleyball player .",
+   "confirmed": true,
+   "score": 0.985
+  },
+  {
+   "passage": "v164",
+   "label": "supported",
+   "category": "supports",
+   "claim": "In Alpha Protocol , a player is tasked with salvaging relevant files .",
+   "confirmed": true,
+   "score": 0.935
+  },
+  {
+   "passage": "v165",
+   "label": "supported",
+   "category": "supports",
+   "claim": "While he played in Juventus , Baggio scored more than 300 goals in over 300 appearances , of which less than 280 happened in over 200 Serie A appearances .",
+   "confirmed": false,
+   "score": 0.851
+  },
+  {
+   "passage": "v166",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Air Supply increased added to their legacy with the release on an inspiring single .",
+   "confirmed": true,
+   "score": 0.871
+  },
+  {
+   "passage": "v167",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Rihanna sang Touch My Body .",
+   "confirmed": true,
+   "score": 0.954
+  },
+  {
+   "passage": "v168",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 was released by Blue Sky Studios .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v169",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Mark Haddon was born after 1988 .",
+   "confirmed": false,
+   "score": 0.981
+  },
+  {
+   "passage": "v170",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film Toy Story 2 was released after 2000 .",
+   "confirmed": false,
+   "score": 0.988
+  },
+  {
+   "passage": "v171",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Kirik Party earned roughly INR 45 crores in its fourth week at the Indian box office .",
+   "confirmed": true,
+   "score": 0.978
+  },
+  {
+   "passage": "v172",
+   "label": "supported",
+   "category": "supports",
+   "claim": "I was a commercial success .",
+   "confirmed": true,
+   "score": 0.976
+  },
+  {
+   "passage": "v173",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marilyn Manson was born after September 1968 .",
+   "confirmed": false,
+   "score": 0.559
+  },
+  {
+   "passage": "v174",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Laura Robson is an athlete .",
+   "confirmed": true,
+   "score": 0.987
+  },
+  {
+   "passage": "v175",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed more than $ 254 million worldwide .",
+   "confirmed": false,
+   "score": 0.961
+  },
+  {
+   "passage": "v176",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Victims from the middlemen make little profit .",
+   "confirmed": true,
+   "score": 0.909
+  },
+  {
+   "passage": "v177",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Arnautović signed a contract worth more than £30 million .",
+   "confirmed": false,
+   "score": 0.941
+  },
+  {
+   "passage": "v178",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Matt Frewer played Carnage in a Netflix production titled Altered Carbon in 2018 .",
+   "confirmed": true,
+   "score": 0.978
+  },
+  {
+   "passage": "v179",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Legendary Entertainment is owned by a Dutch conglomerate .",
+   "confirmed": true,
+   "score": 0.978
+  },
+  {
+   "passage": "v180",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Matt Frewer made a cameo appearance as Max Headroom in the film Pixels in 2015 .",
+   "confirmed": true,
+   "score": 0.966
+  },
+  {
+   "passage": "v181",
+   "label": "supported",
+   "category": "supports",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed more than $ 225 million worldwide .",
+   "confirmed": false,
+   "score": 0.979
+  },
+  {
+   "passage": "v182",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 is an animated film .",
+   "confirmed": true,
+   "score": 0.98
+  },
+  {
+   "passage": "v183",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Ella Eyre 's song is called 'Just Got Paid ' and Sigala participates in it .",
+   "confirmed": true,
+   "score": 0.981
+  },
+  {
+   "passage": "v184",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Alex Kurtzman co-wrote the film Star Trek with J. J. Abrahams .",
+   "confirmed": true,
+   "score": 0.618
+  },
+  {
+   "passage": "v185",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film , Lesbian Vampire Killers ' reviews were largely negative .",
+   "confirmed": true,
+   "score": 0.962
+  },
+  {
+   "passage": "v186",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Cristian Muñiz 's middle name is Marcus .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v187",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The series American Horror Story : Coven features flashbacks to 1692 during the infamous Salem Witch Trials .",
+   "confirmed": true,
+   "score": 0.756
+  },
+  {
+   "passage": "v188",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Inside Llewyn Davis´s DVD release in the US was in March 2014 .",
+   "confirmed": true,
+   "score": 0.981
+  },
+  {
+   "passage": "v189",
+   "label": "supported",
+   "category": "supports",
+   "claim": "George W. Bush had ordered to shoot the plane down if it was still on its way to Washington .",
+   "confirmed": false,
+   "score": 0.342
+  },
+  {
+   "passage": "v190",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film Killers Anonymous was released in the US on June 28 , 2019 .",
+   "confirmed": true,
+   "score": 0.913
+  },
+  {
+   "passage": "v191",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Lee Daniels received a nomination for Best Director .",
+   "confirmed": true,
+   "score": 0.984
+  },
+  {
+   "passage": "v192",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Roberto Baggio scored less than 15 goals in the Serie C1 of 1984-1985 .",
+   "confirmed": false,
+   "score": 0.987
+  },
+  {
+   "passage": "v193",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Marques Brownlee 's channel has over 8.24 million subscribers and over 1.23 billion total video views .",
+   "confirmed": true,
+   "score": 0.953
+  },
+  {
+   "passage": "v194",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The Latvian Soviet Socialist Republic is also known as Soviet Latvia .",
+   "confirmed": true,
+   "score": 0.98
+  },
+  {
+   "passage": "v195",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Metallica is a thrash metal band .",
+   "confirmed": true,
+   "score": 0.987
+  },
+  {
+   "passage": "v196",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Roberto Baggio was awarded the 1994 Onze de Prata .",
+   "confirmed": true,
+   "score": 0.985
+  },
+  {
+   "passage": "v197",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Hallow Man received mixed reviews .",
+   "confirmed": true,
+   "score": 0.972
+  },
+  {
+   "passage": "v198",
+   "label": "supported",
+   "category": "supports",
+   "claim": "The film `` Toy Story 2 '' was released before 2000 .",
+   "confirmed": false,
+   "score": 0.986
+  },
+  {
+   "passage": "v199",
+   "label": "supported",
+   "category": "supports",
+   "claim": "Toy Story 2 first aired in theaters in 1999 .",
+   "confirmed": true,
+   "score": 0.987
+  },
+  {
+   "passage": "v200",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "All the Best : Fun Begins is the seventh highest-grossing Bollywood film of 2009 .",
+   "confirmed": false,
+   "score": 0.272
+  },
+  {
+   "passage": "v201",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Ice-T and the band Body Count have a song called Body Count .",
+   "confirmed": false,
+   "score": 0.061
+  },
+  {
+   "passage": "v202",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "In 1993 , he scored his 500th Serie A goal .",
+   "confirmed": false,
+   "score": 0.195
+  },
+  {
+   "passage": "v203",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "All the Best : Fun Begins is the fifth highest-grossing Bollywood film of 2009 .",
+   "confirmed": false,
+   "score": 0.173
+  },
+  {
+   "passage": "v204",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Improved technology has created things like vented rotors .",
+   "confirmed": false,
+   "score": 0.457
+  },
+  {
+   "passage": "v205",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The University of East London is a Russell Group public university .",
+   "confirmed": false,
+   "score": 0.029
+  },
+  {
+   "passage": "v206",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The film Toy Story 2 was released in 2004 .",
+   "confirmed": false,
+   "score": 0.524
+  },
+  {
+   "passage": "v207",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "According to Rotten Tomatoes , the series American Horror Story : Coven had an approval rating of more than 84 % .",
+   "confirmed": false,
+   "score": 0.082
+  },
+  {
+   "passage": "v208",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Mark Walberg has appeared on the US version of the television show Antiques Roadshow .",
+   "confirmed": false,
+   "score": 0.484
+  },
+  {
+   "passage": "v209",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Kirik Party earned roughly INR 45 crores in its fourth week at the Indian box office .",
+   "confirmed": false,
+   "score": 0.012
+  },
+  {
+   "passage": "v210",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 was launched by Walt Disney Pictures .",
+   "confirmed": false,
+   "score": 0.179
+  },
+  {
+   "passage": "v211",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The song `` Touch My Body '' was released in 2008 .",
+   "confirmed": false,
+   "score": 0.485
+  },
+  {
+   "passage": "v212",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Dwane Casey got his 156th win against Milwaukee Bucks in 2015 .",
+   "confirmed": false,
+   "score": 0.215
+  },
+  {
+   "passage": "v213",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Leslie Alexander owns a team in the NFL .",
+   "confirmed": false,
+   "score": 0.155
+  },
+  {
+   "passage": "v214",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The film , Lesbian Vampire Killers ' reviews were largely positive .",
+   "confirmed": false,
+   "score": 0.191
+  },
+  {
+   "passage": "v215",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum scored less than 89.5 % based on less than 285 reviews .",
+   "confirmed": false,
+   "score": 0.047
+  },
+  {
+   "passage": "v216",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Leslie Alexander is from the state of New Jersey .",
+   "confirmed": false,
+   "score": 0.172
+  },
+  {
+   "passage": "v217",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Arnout Schuijff is Ayden 's CEO .",
+   "confirmed": true,
+   "score": 0.973
+  },
+  {
+   "passage": "v218",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 is a live action film .",
+   "confirmed": false,
+   "score": 0.173
+  },
+  {
+   "passage": "v219",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The Latvian Soviet Socialist Republic is still a republic of the Union of Soviet Socialist Republics .",
+   "confirmed": false,
+   "score": 0.044
+  },
+  {
+   "passage": "v220",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Soviet Latvia is another name for the Latvian Soviet Socialist Republic .",
+   "confirmed": false,
+   "score": 0.115
+  },
+  {
+   "passage": "v221",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Touch My Body is a song by Mariah Carey .",
+   "confirmed": false,
+   "score": 0.242
+  },
+  {
+   "passage": "v222",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Matt Frewer made a cameo appearance as Max Headroom in the film Pixels in 2015 .",
+   "confirmed": false,
+   "score": 0.01
+  },
+  {
+   "passage": "v223",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Viñayem was signed to replace Jorge Lorzenzo at the factory Yamaha team .",
+   "confirmed": true,
+   "score": 0.961
+  },
+  {
+   "passage": "v224",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The album House of Balloons was produced by Canadian producer Zodiac .",
+   "confirmed": false,
+   "score": 0.115
+  },
+  {
+   "passage": "v225",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Legendary Entertainment is owned by a Chinese conglomerate .",
+   "confirmed": false,
+   "score": 0.189
+  },
+  {
+   "passage": "v226",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The film `` Inside Llewyn Davis '' is a pure drama .",
+   "confirmed": false,
+   "score": 0.393
+  },
+  {
+   "passage": "v227",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "It is estimated that more than 10 million people live in the 26 states east of the Mississippi and the District of Columbia .",
+   "confirmed": false,
+   "score": 0.227
+  },
+  {
+   "passage": "v228",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Arnautović signed with a fellow team from the Premier League .",
+   "confirmed": false,
+   "score": 0.884
+  },
+  {
+   "passage": "v229",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Against Me ! went on a month and a half long tour of the West Coast .",
+   "confirmed": false,
+   "score": 0.009
+  },
+  {
+   "passage": "v230",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Roberto Baggio finished third in the capocannoniere title with less than 20 goals and less than 10 assists .",
+   "confirmed": false,
+   "score": 0.037
+  },
+  {
+   "passage": "v231",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Trump stated that Yovanovitch had refused to hang his portrait , but it was untrue .",
+   "confirmed": false,
+   "score": 0.062
+  },
+  {
+   "passage": "v232",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The meaning of the idiom `` nuking the fridge '' was explained in Time magazine in 2008 .",
+   "confirmed": false,
+   "score": 0.062
+  },
+  {
+   "passage": "v233",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The film `` Inside Llewyn Davis '' is cataloged as a musical .",
+   "confirmed": false,
+   "score": 0.044
+  },
+  {
+   "passage": "v234",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 was released by Blue Sky Studios .",
+   "confirmed": false,
+   "score": 0.132
+  },
+  {
+   "passage": "v235",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Marques Brownlee 's channel has over 7 million subscribers .",
+   "confirmed": false,
+   "score": 0.136
+  },
+  {
+   "passage": "v236",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "In Alpha Protocol , a player is tasked with salvaging relevant files .",
+   "confirmed": false,
+   "score": 0.016
+  },
+  {
+   "passage": "v237",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson is a singer .",
+   "confirmed": false,
+   "score": 0.224
+  },
+  {
+   "passage": "v238",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "In John Wick : Chapter 3 - Parabellum , Jason Mantzoukas and Robin Lord Taylor cameo as the Tick Tock Man and as The Administrator respectively .",
+   "confirmed": false,
+   "score": 0.058
+  },
+  {
+   "passage": "v239",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Lesbian Vampire Killers holds an approval rating of less than 26.5 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.043
+  },
+  {
+   "passage": "v240",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Lee Daniels received a nomination for Best Director .",
+   "confirmed": false,
+   "score": 0.149
+  },
+  {
+   "passage": "v241",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Marko Arnautović was born after 1987 .",
+   "confirmed": false,
+   "score": 0.113
+  },
+  {
+   "passage": "v242",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "70 % of The Dolomites are found in the province of Belluno .",
+   "confirmed": false,
+   "score": 0.048
+  },
+  {
+   "passage": "v243",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Oppo introduced its first 1K/UHD in 2016 .",
+   "confirmed": false,
+   "score": 0.168
+  },
+  {
+   "passage": "v244",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Touch My Body is a song by Fall Out Boy .",
+   "confirmed": false,
+   "score": 0.357
+  },
+  {
+   "passage": "v245",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Roberto Baggio had more than 22 goals and more than 10 assists in the capocannoniere title , finishing in second place .",
+   "confirmed": false,
+   "score": 0.055
+  },
+  {
+   "passage": "v246",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The event in Alhambra , California is important to the foreign nationals .",
+   "confirmed": false,
+   "score": 0.252
+  },
+  {
+   "passage": "v247",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Touch My Body was released in 1989 .",
+   "confirmed": false,
+   "score": 0.611
+  },
+  {
+   "passage": "v248",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Cristian Muñiz 's middle name is Anthony .",
+   "confirmed": false,
+   "score": 0.067
+  },
+  {
+   "passage": "v249",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Marko Arnautović is from Serbia .",
+   "confirmed": false,
+   "score": 0.039
+  },
+  {
+   "passage": "v250",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The AFL was against the use of the words Melbourne , Football , and Club in the name .",
+   "confirmed": false,
+   "score": 0.178
+  },
+  {
+   "passage": "v251",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Alan Arkin 's film career spans for over five decades .",
+   "confirmed": true,
+   "score": 0.886
+  },
+  {
+   "passage": "v252",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The album Touch My Body was released in 2009 .",
+   "confirmed": false,
+   "score": 0.161
+  },
+  {
+   "passage": "v253",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Air India 's Airbus A350-900 fleet operates long-distance services .",
+   "confirmed": false,
+   "score": 0.068
+  },
+  {
+   "passage": "v254",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The film Toy Story 2 was released before 2001 .",
+   "confirmed": false,
+   "score": 0.168
+  },
+  {
+   "passage": "v255",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Since men in Ammon had married women without having converted them into Judaism , their children were not Jewish .",
+   "confirmed": false,
+   "score": 0.018
+  },
+  {
+   "passage": "v256",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Perlego´s Ebook platform release was after 2016 .",
+   "confirmed": false,
+   "score": 0.298
+  },
+  {
+   "passage": "v257",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Don Mattingly manages the Los Angeles Dodgers team of Major League Baseball .",
+   "confirmed": false,
+   "score": 0.061
+  },
+  {
+   "passage": "v258",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "There are more than 230 firm orders for the Airbus A330neo .",
+   "confirmed": false,
+   "score": 0.076
+  },
+  {
+   "passage": "v259",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Ice-T ( rapper ) began his career in the 1980s .",
+   "confirmed": false,
+   "score": 0.372
+  },
+  {
+   "passage": "v260",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 is a computer-animated film .",
+   "confirmed": false,
+   "score": 0.162
+  },
+  {
+   "passage": "v261",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The House of Balloons mixtape makes use of dubstep tones in its songs .",
+   "confirmed": false,
+   "score": 0.019
+  },
+  {
+   "passage": "v262",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 was released in 2004 .",
+   "confirmed": false,
+   "score": 0.523
+  },
+  {
+   "passage": "v263",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Marques Brownlee 's channel over 6.9 million subscribers .",
+   "confirmed": false,
+   "score": 0.336
+  },
+  {
+   "passage": "v264",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "`` Swear To Your Heart '' , by Air Supply was played often .",
+   "confirmed": false,
+   "score": 0.125
+  },
+  {
+   "passage": "v265",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Hallow Man received unfavorable reviews .",
+   "confirmed": false,
+   "score": 0.074
+  },
+  {
+   "passage": "v266",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 is an action film .",
+   "confirmed": false,
+   "score": 0.064
+  },
+  {
+   "passage": "v267",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The V formation flying pattern of the American white Ibis increases energy efficiency .",
+   "confirmed": false,
+   "score": 0.188
+  },
+  {
+   "passage": "v268",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Shaquem 's parents are Tangie and Terry Griffin .",
+   "confirmed": false,
+   "score": 0.329
+  },
+  {
+   "passage": "v269",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Benny Blanco won a Grammy twice .",
+   "confirmed": false,
+   "score": 0.021
+  },
+  {
+   "passage": "v270",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The song The Knowing from the album House of Balloons sampled Cherry-Coloured Fun by 80s ethereal pop/shoegazing band Cocteau Twins .",
+   "confirmed": false,
+   "score": 0.103
+  },
+  {
+   "passage": "v271",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Aaliyah 's estimated global sales are under 33 million albums .",
+   "confirmed": false,
+   "score": 0.08
+  },
+  {
+   "passage": "v272",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Lesbian Vampire Killers holds an approval rating of more than 30 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.078
+  },
+  {
+   "passage": "v273",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "I ( film ) grossed more than US $ 690,000 in the Tamil version .",
+   "confirmed": false,
+   "score": 0.102
+  },
+  {
+   "passage": "v274",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Against Me ! 's member , Grace changed her name from Tom Gabel after 2011 .",
+   "confirmed": false,
+   "score": 0.012
+  },
+  {
+   "passage": "v275",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Shaquem 's parents are Tangie and Max ( mj ) Griffin .",
+   "confirmed": false,
+   "score": 0.181
+  },
+  {
+   "passage": "v276",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Leslie Alexander is a factory owner .",
+   "confirmed": false,
+   "score": 0.189
+  },
+  {
+   "passage": "v277",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed less than $ 254 million worldwide .",
+   "confirmed": false,
+   "score": 0.108
+  },
+  {
+   "passage": "v278",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed less than $ 115 million in the United States and Canada , and a worldwide total of less than $ 190 million .",
+   "confirmed": false,
+   "score": 0.07
+  },
+  {
+   "passage": "v279",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed more than $ 220 million worldwide .",
+   "confirmed": false,
+   "score": 0.096
+  },
+  {
+   "passage": "v280",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Legendary Entertainment is a rival of Wanda Group .",
+   "confirmed": false,
+   "score": 0.129
+  },
+  {
+   "passage": "v281",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed less than $ 225 million worldwide .",
+   "confirmed": false,
+   "score": 0.103
+  },
+  {
+   "passage": "v282",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Republic Latvian is another name for the Latvian Soviet Socialist Republic .",
+   "confirmed": false,
+   "score": 0.194
+  },
+  {
+   "passage": "v283",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The film Toy Story 2 was released after 2000 .",
+   "confirmed": false,
+   "score": 0.462
+  },
+  {
+   "passage": "v284",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Lee Daniels received a nomination for an award .",
+   "confirmed": false,
+   "score": 0.163
+  },
+  {
+   "passage": "v285",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Meet the Blacks ' approval rating is over 50 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.089
+  },
+  {
+   "passage": "v286",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed more than $ 225 million worldwide .",
+   "confirmed": false,
+   "score": 0.116
+  },
+  {
+   "passage": "v287",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "E-books became popular before the 18th century .",
+   "confirmed": false,
+   "score": 0.084
+  },
+  {
+   "passage": "v288",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Don Beyer was proposed to be the US Ambassador to two countries , including Liechtenstein .",
+   "confirmed": false,
+   "score": 0.118
+  },
+  {
+   "passage": "v289",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Legendary Entertainment is a subsidiary of Wanda Group .",
+   "confirmed": false,
+   "score": 0.196
+  },
+  {
+   "passage": "v290",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed more than $ 129 million in the United States and Canada , and a worldwide total of more than $ 228 million .",
+   "confirmed": false,
+   "score": 0.04
+  },
+  {
+   "passage": "v291",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Marques Brownlee 's channel has over 1.2 billion total video views .",
+   "confirmed": false,
+   "score": 0.39
+  },
+  {
+   "passage": "v292",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Algonquian peoples hunt migratory birds and their eggs between April and July .",
+   "confirmed": false,
+   "score": 0.169
+  },
+  {
+   "passage": "v293",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed less than $ 220 million worldwide .",
+   "confirmed": false,
+   "score": 0.072
+  },
+  {
+   "passage": "v294",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Inside Llewyn Davis´ score in Rotten Tomatoes is based on over 210 reviews with an average score of 8.5 .",
+   "confirmed": false,
+   "score": 0.051
+  },
+  {
+   "passage": "v295",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Roberto Baggio scored less than 15 goals in the Serie C1 of 1984-1985 .",
+   "confirmed": false,
+   "score": 0.164
+  },
+  {
+   "passage": "v296",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson debuted as a professional tennis player in the 2007 International Tennis Federation junior tour .",
+   "confirmed": false,
+   "score": 0.09
+  },
+  {
+   "passage": "v297",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "On Metacritic , Inside Llewyn Davis´s score is 94 based on 30 reviews .",
+   "confirmed": false,
+   "score": 0.017
+  },
+  {
+   "passage": "v298",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The Latvian Soviet Socialist Republic is also known as Soviet Latvia .",
+   "confirmed": true,
+   "score": 0.643
+  },
+  {
+   "passage": "v299",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson is a Wimbledon Junior Girls ' Championship winner .",
+   "confirmed": false,
+   "score": 0.154
+  },
+  {
+   "passage": "v300",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Lesbian Vampire Killers holds an approval rating of more than 26.5 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.043
+  },
+  {
+   "passage": "v301",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Maverick Viñales ' new number ( 12 ) was formerly worn by Troy Bayliss .",
+   "confirmed": false,
+   "score": 0.006
+  },
+  {
+   "passage": "v302",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Touch My Body was released in 2008 .",
+   "confirmed": false,
+   "score": 0.341
+  },
+  {
+   "passage": "v303",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum scored less than 89.5 % based on less than 295 reviews .",
+   "confirmed": false,
+   "score": 0.043
+  },
+  {
+   "passage": "v304",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Starting from the north , Brooklyn 's boundary is Linden Boulevard .",
+   "confirmed": true,
+   "score": 0.974
+  },
+  {
+   "passage": "v305",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "There was a republic of the Irish Union called the Latvian Soviet Socialist Republic .",
+   "confirmed": false,
+   "score": 0.079
+  },
+  {
+   "passage": "v306",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Oppo is a Japanese company .",
+   "confirmed": false,
+   "score": 0.239
+  },
+  {
+   "passage": "v307",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The song Joy from the album Doom Days will be first released on Apple Music 's Beats 1 show with Zane Lowe .",
+   "confirmed": false,
+   "score": 0.018
+  },
+  {
+   "passage": "v308",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Juventus ' third player with the most goals scored is Roberto Baggio , and he is also the third player with most goals for the team in Serie A .",
+   "confirmed": false,
+   "score": 0.073
+  },
+  {
+   "passage": "v309",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Cristian Muñiz 's middle name is Marcus .",
+   "confirmed": false,
+   "score": 0.073
+  },
+  {
+   "passage": "v310",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "FC Red Bull Salzburg is an Austrian club .",
+   "confirmed": false,
+   "score": 0.078
+  },
+  {
+   "passage": "v311",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Marques Brownlee 's channel has over 8.80 million subscribers and over 1.34 billion total video views .",
+   "confirmed": false,
+   "score": 0.064
+  },
+  {
+   "passage": "v312",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Victims from the middlemen make a decent profit .",
+   "confirmed": false,
+   "score": 0.068
+  },
+  {
+   "passage": "v313",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Touch My Body is a diet drink .",
+   "confirmed": false,
+   "score": 0.243
+  },
+  {
+   "passage": "v314",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "I ( film ) grossed more than US $ 789,000 in the Tamil version .",
+   "confirmed": false,
+   "score": 0.094
+  },
+  {
+   "passage": "v315",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Doraemon travels back in time to help a boy .",
+   "confirmed": false,
+   "score": 0.22
+  },
+  {
+   "passage": "v316",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The series American Horror Story : Coven has received positive reviews from critics and fans .",
+   "confirmed": false,
+   "score": 0.192
+  },
+  {
+   "passage": "v317",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed less than $ 221.2 million worldwide .",
+   "confirmed": false,
+   "score": 0.505
+  },
+  {
+   "passage": "v318",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Juventus ' ninth player with the most goals scored is Roberto Baggio , and he is also the tenth player with most goals for the team in Serie A .",
+   "confirmed": false,
+   "score": 0.027
+  },
+  {
+   "passage": "v319",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "According to the 2001 census , Bridlington 's population was over 25,000 .",
+   "confirmed": false,
+   "score": 0.066
+  },
+  {
+   "passage": "v320",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Lesbian Vampire Killers holds an approval rating of more than 31 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.086
+  },
+  {
+   "passage": "v321",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson is a tennis player .",
+   "confirmed": false,
+   "score": 0.076
+  },
+  {
+   "passage": "v322",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum grossed more than $ 115 million in the United States and Canada , and a worldwide total of more than $ 190 million .",
+   "confirmed": false,
+   "score": 0.044
+  },
+  {
+   "passage": "v323",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson is an athlete .",
+   "confirmed": false,
+   "score": 0.023
+  },
+  {
+   "passage": "v324",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum has an average rating of less than 7.45/10 based on less than 280 reviews .",
+   "confirmed": false,
+   "score": 0.045
+  },
+  {
+   "passage": "v325",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 was initially released in 1999 .",
+   "confirmed": false,
+   "score": 0.124
+  },
+  {
+   "passage": "v326",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Mariah Carey is a mute .",
+   "confirmed": true,
+   "score": 0.544
+  },
+  {
+   "passage": "v327",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Alexis Sánchez has won more than 120 caps since 2006 , becoming the team 's most capped player .",
+   "confirmed": false,
+   "score": 0.057
+  },
+  {
+   "passage": "v328",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Sebastian Caine is played by Kevin Bacon in Hollow Man .",
+   "confirmed": false,
+   "score": 0.211
+  },
+  {
+   "passage": "v329",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson refuses to be in the International Tennis Federation .",
+   "confirmed": false,
+   "score": 0.438
+  },
+  {
+   "passage": "v330",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "In the series American Horror Story : Coven , Emma Roberts plays the role of Madison Montgomery and Gabourey Sidibe plays the role of Queenie .",
+   "confirmed": false,
+   "score": 0.015
+  },
+  {
+   "passage": "v331",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson is a Wimbledon Senior Girls ' Championship winner .",
+   "confirmed": false,
+   "score": 0.047
+  },
+  {
+   "passage": "v332",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Don Beyer has worked on the political area .",
+   "confirmed": false,
+   "score": 0.264
+  },
+  {
+   "passage": "v333",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Mariah Carey sang Touch My Body .",
+   "confirmed": false,
+   "score": 0.205
+  },
+  {
+   "passage": "v334",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "In John Wick : Chapter 3 - Parabellum , The Director is a main member of the Ruska Roma society .",
+   "confirmed": false,
+   "score": 0.466
+  },
+  {
+   "passage": "v335",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Ella Eyre 's song is called 'Just Got Paid ' and Sigala participates in it .",
+   "confirmed": false,
+   "score": 0.008
+  },
+  {
+   "passage": "v336",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The Latvian Soviet Socialist Republic is also referred to as White Russia .",
+   "confirmed": false,
+   "score": 0.015
+  },
+  {
+   "passage": "v337",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson attended the Wimbledon Girl Doubles ' Championship .",
+   "confirmed": false,
+   "score": 0.051
+  },
+  {
+   "passage": "v338",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Touch My Body , from Carey 's eleventh studio album , was released in 2008 .",
+   "confirmed": false,
+   "score": 0.207
+  },
+  {
+   "passage": "v339",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Hallow Man received mixed reviews .",
+   "confirmed": false,
+   "score": 0.056
+  },
+  {
+   "passage": "v340",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Marques Brown 's middle name is Kumar .",
+   "confirmed": false,
+   "score": 0.226
+  },
+  {
+   "passage": "v341",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The Los Angeles County Department of Public Works , in Alhambra , California , employs over 2,500 workers , according to the 2009 Financial report .",
+   "confirmed": false,
+   "score": 0.011
+  },
+  {
+   "passage": "v342",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Lesbian Vampire Killers holds an approval rating of more than 25 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.078
+  },
+  {
+   "passage": "v343",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Foreigner is a pop rock band .",
+   "confirmed": false,
+   "score": 0.067
+  },
+  {
+   "passage": "v344",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Mark Haddon was born before 1988 .",
+   "confirmed": false,
+   "score": 0.208
+  },
+  {
+   "passage": "v345",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Maria de Medeiros is a movie director .",
+   "confirmed": false,
+   "score": 0.035
+  },
+  {
+   "passage": "v346",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "George Seaton 's disaster film grossed more than $ 45 million at the box office .",
+   "confirmed": false,
+   "score": 0.295
+  },
+  {
+   "passage": "v347",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Theranos claimed to have created revolutionary blood tests .",
+   "confirmed": false,
+   "score": 0.462
+  },
+  {
+   "passage": "v348",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Roberto Baggio finished second in the capocannoniere title with more than 20 goals and more than 10 assists .",
+   "confirmed": false,
+   "score": 0.031
+  },
+  {
+   "passage": "v349",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The film `` Toy Story 2 '' was released by Walt Disney Pictures .",
+   "confirmed": false,
+   "score": 0.18
+  },
+  {
+   "passage": "v350",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Air Supply increased added to their legacy with the release on an inspiring single .",
+   "confirmed": false,
+   "score": 0.02
+  },
+  {
+   "passage": "v351",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 first aired in theaters in 1999 .",
+   "confirmed": false,
+   "score": 0.255
+  },
+  {
+   "passage": "v352",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Leslie Alexander has a former profession .",
+   "confirmed": false,
+   "score": 0.415
+  },
+  {
+   "passage": "v353",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 was released by Walt Disney Pictures worldwide in 1999 .",
+   "confirmed": false,
+   "score": 0.209
+  },
+  {
+   "passage": "v354",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The series American Horror Story : Coven has received positive reviews from critics and fans .",
+   "confirmed": false,
+   "score": 0.192
+  },
+  {
+   "passage": "v355",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Perlego´s Ebook platform release was before 2017 .",
+   "confirmed": false,
+   "score": 0.283
+  },
+  {
+   "passage": "v356",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Marilyn Manson 's 2003–2004 Grotesk Burlesk Tour started after May 5 , 2003 .",
+   "confirmed": false,
+   "score": 0.252
+  },
+  {
+   "passage": "v357",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "House of Balloons is an album by The Weeknd .",
+   "confirmed": false,
+   "score": 0.394
+  },
+  {
+   "passage": "v358",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Dwane Casey has two children , Zachary and Justine .",
+   "confirmed": false,
+   "score": 0.026
+  },
+  {
+   "passage": "v359",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson is a volleyball player .",
+   "confirmed": false,
+   "score": 0.272
+  },
+  {
+   "passage": "v360",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Dwane Casey got his 157th win against Milwaukee Bucks in 2015 .",
+   "confirmed": false,
+   "score": 0.193
+  },
+  {
+   "passage": "v361",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Meet the Blacks is the fifth-worst film of 2016 .",
+   "confirmed": false,
+   "score": 0.232
+  },
+  {
+   "passage": "v362",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Touch My Body is a diet drink .",
+   "confirmed": false,
+   "score": 0.391
+  },
+  {
+   "passage": "v363",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Baseball player Don Mattingly is a free agent .",
+   "confirmed": false,
+   "score": 0.259
+  },
+  {
+   "passage": "v364",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Kirik Party earned more than ₹59 crore and became the second highest-grossing film in Kannada .",
+   "confirmed": false,
+   "score": 0.015
+  },
+  {
+   "passage": "v365",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Roberto Baggio was awarded the 1994 Onze de Bronze .",
+   "confirmed": false,
+   "score": 0.346
+  },
+  {
+   "passage": "v366",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 was released in 2004 .",
+   "confirmed": false,
+   "score": 0.914
+  },
+  {
+   "passage": "v367",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Marques Brownlee 's channel has over 8.24 million subscribers and over 1.23 billion total video views .",
+   "confirmed": false,
+   "score": 0.047
+  },
+  {
+   "passage": "v368",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Lesbian Vampire Killers holds an approval rating of less than 31 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.12
+  },
+  {
+   "passage": "v369",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "L. Ron Hubbard had a ranch called `` The Quiet Place . ''",
+   "confirmed": false,
+   "score": 0.206
+  },
+  {
+   "passage": "v370",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Kevon Looney 's hip injury made it impossible for him to participate in the majority of the playoffs .",
+   "confirmed": false,
+   "score": 0.013
+  },
+  {
+   "passage": "v371",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Marques Brownlee 's channel has over 8.2 million subscribers and over 1.2 billion total video views .",
+   "confirmed": false,
+   "score": 0.157
+  },
+  {
+   "passage": "v372",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The Latvian Soviet Socialist Republic is also known as Soviet Latvia .",
+   "confirmed": false,
+   "score": 0.116
+  },
+  {
+   "passage": "v373",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Discovery Channel is a namesake of the company that owns it .",
+   "confirmed": true,
+   "score": 0.566
+  },
+  {
+   "passage": "v374",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Against Me ! is a rock band .",
+   "confirmed": true,
+   "score": 0.906
+  },
+  {
+   "passage": "v375",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum scored less than 89.5 % based on more than 294 reviews .",
+   "confirmed": false,
+   "score": 0.216
+  },
+  {
+   "passage": "v376",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "The Latvian Soviet Socialist Republic is never known as Latvia .",
+   "confirmed": false,
+   "score": 0.315
+  },
+  {
+   "passage": "v377",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "John Wick : Chapter 3 - Parabellum scored more than 89.5 % based on more than 295 reviews .",
+   "confirmed": false,
+   "score": 0.019
+  },
+  {
+   "passage": "v378",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Touch My Body is a song by Mariah Carey .",
+   "confirmed": false,
+   "score": 0.227
+  },
+  {
+   "passage": "v379",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "James Dumelow often uses the direct free kick method .",
+   "confirmed": false,
+   "score": 0.016
+  },
+  {
+   "passage": "v380",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Meet the Blacks ' approval rating is under 50 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.138
+  },
+  {
+   "passage": "v381",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Zlatan Ibrahimovic uses the direct free-kick method .",
+   "confirmed": false,
+   "score": 0.023
+  },
+  {
+   "passage": "v382",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The PC version of video game Alpha Protocol is perceived to be the best version .",
+   "confirmed": false,
+   "score": 0.016
+  },
+  {
+   "passage": "v383",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "The 1953 film Titanic was produced by 20th Century Fox .",
+   "confirmed": false,
+   "score": 0.199
+  },
+  {
+   "passage": "v384",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Laura Robson lost the Wimbledon Junior Girls ' Championship .",
+   "confirmed": false,
+   "score": 0.26
+  },
+  {
+   "passage": "v385",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Hyksos came from northeast Syria .",
+   "confirmed": false,
+   "score": 0.121
+  },
+  {
+   "passage": "v386",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Alan Wolf Arkin is also a comedian .",
+   "confirmed": false,
+   "score": 0.017
+  },
+  {
+   "passage": "v387",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Paul Blart : Mall Cop has a rating of under 33 % on Rotten Tomatoes .",
+   "confirmed": false,
+   "score": 0.128
+  },
+  {
+   "passage": "v388",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 is a live action film .",
+   "confirmed": false,
+   "score": 0.197
+  },
+  {
+   "passage": "v389",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Atlantic Avenue is on Cypress Hills ' South .",
+   "confirmed": false,
+   "score": 0.035
+  },
+  {
+   "passage": "v390",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Julian Brandt plays for Borussia Dortmund .",
+   "confirmed": false,
+   "score": 0.059
+  },
+  {
+   "passage": "v391",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "House of Balloons ' music incorporates soul with dubstep tones .",
+   "confirmed": false,
+   "score": 0.115
+  },
+  {
+   "passage": "v392",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 is a computer-animated film .",
+   "confirmed": false,
+   "score": 0.238
+  },
+  {
+   "passage": "v393",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Siouxsie 's song Happy House is popular .",
+   "confirmed": false,
+   "score": 0.226
+  },
+  {
+   "passage": "v394",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Emma and her husband go back to Storybrooke .",
+   "confirmed": false,
+   "score": 0.313
+  },
+  {
+   "passage": "v395",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Lee Daniels received a nomination for Best Producer .",
+   "confirmed": true,
+   "score": 0.599
+  },
+  {
+   "passage": "v396",
+   "label": "unsupported",
+   "category": "not_enough_info",
+   "claim": "Transfer taxes are considered direct taxes .",
+   "confirmed": false,
+   "score": 0.034
+  },
+  {
+   "passage": "v397",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "Toy Story 2 was released by Walt Disney Pictures .",
+   "confirmed": false,
+   "score": 0.145
+  },
+  {
+   "passage": "v398",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "While he played in Juventus , Baggio scored less than 120 goals in under 300 appearances , of which less than 80 happened in less than 145 Serie A appearances .",
+   "confirmed": false,
+   "score": 0.029
+  },
+  {
+   "passage": "v399",
+   "label": "unsupported",
+   "category": "refutes",
+   "claim": "E-books became popular after the 18th century .",
+   "confirmed": false,
+   "score": 0.188
+  }
+ ]
+}

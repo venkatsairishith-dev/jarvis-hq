@@ -1,0 +1,346 @@
+{
+ "time": "2026-10-17 19:48:38",
+ "set": "nli_pairs",
+ "model_dir": "/nli/factcg-deberta-v3-large",
+ "summary": {
+  "model": "factcg",
+  "n": 36,
+  "supported": 18,
+  "unsupported": 18,
+  "precision": 0.529,
+  "recall": 1.0,
+  "false_acceptance": "16/18",
+  "false_acceptance_rate": 0.889,
+  "false_rejection": "0/18",
+  "false_rejection_rate": 0.0,
+  "errors_by_category": {
+   "-": "16/36"
+  },
+  "calibration": [
+   {
+    "score": "0.0-0.1",
+    "n": 1,
+    "really_supported": 0.0
+   },
+   {
+    "score": "0.5-0.9",
+    "n": 35,
+    "really_supported": 0.51
+   }
+  ],
+  "seconds": 13.0,
+  "seconds_per_claim": 0.361,
+  "false_accepts": [
+   "Python was first published on GitHub in February 1991.",
+   "James Gosling began working on Python in the late 1980s.",
+   "Python 0.9.1 had no support for exception handling.",
+   "Python was created at Google.",
+   "The Eiffel Tower was built from steel-reinforced concrete.",
+   "The Eiffel Tower is located in Lyon.",
+   "The tower was designed by Le Corbusier.",
+   "Sydney is the capital city of Australia.",
+   "Canberra was chosen because it is on the coast.",
+   "Melbourne was chosen over Canberra in 1908.",
+   "The seasons are caused mainly by the changing distance between Earth and the Sun.",
+   "Earth's axis is not tilted.",
+   "The Moon's orbit causes the seasons on Earth.",
+   "Water boils at a higher temperature on Mount Everest than at sea level.",
+   "The boiling point of water rises as altitude increases.",
+   "Water freezes at 212 degrees Fahrenheit at sea level."
+  ],
+  "false_rejects": [],
+  "load_seconds": 3.4,
+  "model_mb": 641.7,
+  "peak_rss_mb": 1778.2
+ },
+ "pairs": [
+  {
+   "passage": "P1",
+   "label": "supported",
+   "category": "-",
+   "claim": "Python version 0.9.1 was first published to alt.sources in February 1991.",
+   "confirmed": true,
+   "score": 0.844
+  },
+  {
+   "passage": "P1",
+   "label": "supported",
+   "category": "-",
+   "claim": "Guido van Rossum started working on Python in the late 1980s.",
+   "confirmed": true,
+   "score": 0.837
+  },
+  {
+   "passage": "P1",
+   "label": "supported",
+   "category": "-",
+   "claim": "Early Python already had classes with inheritance and exception handling.",
+   "confirmed": true,
+   "score": 0.856
+  },
+  {
+   "passage": "P1",
+   "label": "supported",
+   "category": "-",
+   "claim": "Python was designed as a successor to the ABC language.",
+   "confirmed": true,
+   "score": 0.86
+  },
+  {
+   "passage": "P1",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Python was first published on GitHub in February 1991.",
+   "confirmed": true,
+   "score": 0.807
+  },
+  {
+   "passage": "P1",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "James Gosling began working on Python in the late 1980s.",
+   "confirmed": true,
+   "score": 0.847
+  },
+  {
+   "passage": "P1",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Python 0.9.1 had no support for exception handling.",
+   "confirmed": true,
+   "score": 0.812
+  },
+  {
+   "passage": "P1",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Python was created at Google.",
+   "confirmed": true,
+   "score": 0.866
+  },
+  {
+   "passage": "P2",
+   "label": "supported",
+   "category": "-",
+   "claim": "The Eiffel Tower was built between 1887 and 1889.",
+   "confirmed": true,
+   "score": 0.843
+  },
+  {
+   "passage": "P2",
+   "label": "supported",
+   "category": "-",
+   "claim": "The tower is named after the engineer Gustave Eiffel.",
+   "confirmed": true,
+   "score": 0.8
+  },
+  {
+   "passage": "P2",
+   "label": "supported",
+   "category": "-",
+   "claim": "The Eiffel Tower was the centrepiece of the 1889 World's Fair.",
+   "confirmed": true,
+   "score": 0.857
+  },
+  {
+   "passage": "P2",
+   "label": "supported",
+   "category": "-",
+   "claim": "The Eiffel Tower stands on the Champ de Mars in Paris.",
+   "confirmed": true,
+   "score": 0.861
+  },
+  {
+   "passage": "P2",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "The Eiffel Tower was built from steel-reinforced concrete.",
+   "confirmed": true,
+   "score": 0.853
+  },
+  {
+   "passage": "P2",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "The Eiffel Tower is located in Lyon.",
+   "confirmed": true,
+   "score": 0.853
+  },
+  {
+   "passage": "P2",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "The tower was designed by Le Corbusier.",
+   "confirmed": true,
+   "score": 0.814
+  },
+  {
+   "passage": "P2",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "The Eiffel Tower was the centrepiece of the 1900 Olympic Games.",
+   "confirmed": false,
+   "score": 0.872
+  },
+  {
+   "passage": "P3",
+   "label": "supported",
+   "category": "-",
+   "claim": "Canberra is the capital of Australia.",
+   "confirmed": true,
+   "score": 0.858
+  },
+  {
+   "passage": "P3",
+   "label": "supported",
+   "category": "-",
+   "claim": "Canberra's site was chosen in 1908 as a compromise between Sydney and Melbourne.",
+   "confirmed": true,
+   "score": 0.825
+  },
+  {
+   "passage": "P3",
+   "label": "supported",
+   "category": "-",
+   "claim": "Canberra is Australia's largest inland city.",
+   "confirmed": true,
+   "score": 0.817
+  },
+  {
+   "passage": "P3",
+   "label": "supported",
+   "category": "-",
+   "claim": "Building Canberra started in 1913.",
+   "confirmed": true,
+   "score": 0.845
+  },
+  {
+   "passage": "P3",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Sydney is the capital city of Australia.",
+   "confirmed": true,
+   "score": 0.838
+  },
+  {
+   "passage": "P3",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Canberra was chosen because it is on the coast.",
+   "confirmed": true,
+   "score": 0.828
+  },
+  {
+   "passage": "P3",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Canberra is Australia's largest city.",
+   "confirmed": false,
+   "score": 0.0
+  },
+  {
+   "passage": "P3",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Melbourne was chosen over Canberra in 1908.",
+   "confirmed": true,
+   "score": 0.835
+  },
+  {
+   "passage": "P4",
+   "label": "supported",
+   "category": "-",
+   "claim": "Earth's seasons are caused by the tilt of its axis.",
+   "confirmed": true,
+   "score": 0.838
+  },
+  {
+   "passage": "P4",
+   "label": "supported",
+   "category": "-",
+   "claim": "Earth's axis is tilted by about 23.4 degrees.",
+   "confirmed": true,
+   "score": 0.822
+  },
+  {
+   "passage": "P4",
+   "label": "supported",
+   "category": "-",
+   "claim": "The changing distance between Earth and the Sun is not the main cause of the seasons.",
+   "confirmed": true,
+   "score": 0.8
+  },
+  {
+   "passage": "P4",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "The seasons are caused mainly by the changing distance between Earth and the Sun.",
+   "confirmed": true,
+   "score": 0.806
+  },
+  {
+   "passage": "P4",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Earth's axis is not tilted.",
+   "confirmed": true,
+   "score": 0.814
+  },
+  {
+   "passage": "P4",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "The Moon's orbit causes the seasons on Earth.",
+   "confirmed": true,
+   "score": 0.823
+  },
+  {
+   "passage": "P5",
+   "label": "supported",
+   "category": "-",
+   "claim": "Water boils at 212 degrees Fahrenheit at sea level.",
+   "confirmed": true,
+   "score": 0.838
+  },
+  {
+   "passage": "P5",
+   "label": "supported",
+   "category": "-",
+   "claim": "The boiling point of water drops at higher altitudes because the air pressure is lower.",
+   "confirmed": true,
+   "score": 0.845
+  },
+  {
+   "passage": "P5",
+   "label": "supported",
+   "category": "-",
+   "claim": "On the summit of Mount Everest water boils at around 70 degrees Celsius.",
+   "confirmed": true,
+   "score": 0.801
+  },
+  {
+   "passage": "P5",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Water boils at a higher temperature on Mount Everest than at sea level.",
+   "confirmed": true,
+   "score": 0.849
+  },
+  {
+   "passage": "P5",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "The boiling point of water rises as altitude increases.",
+   "confirmed": true,
+   "score": 0.838
+  },
+  {
+   "passage": "P5",
+   "label": "unsupported",
+   "category": "-",
+   "claim": "Water freezes at 212 degrees Fahrenheit at sea level.",
+   "confirmed": true,
+   "score": 0.789
+  }
+ ]
+}

@@ -4,7 +4,10 @@ Rules (all deterministic):
 - Provider lanes: local, private, public. A private task may use local or private providers only; a public task
   may use local or public providers only. Fallbacks never cross lanes.
 - A provider marked paid, or missing a lane, is invalid and never used. Default budget for every provider is $0.
-- A provider with no key file present is skipped (unavailable), not an error.
+- A provider with no key file present is skipped (unavailable), not an error. Exception: key_optional=true (a local
+  server that may or may not be started with --api-key-file): it is called without a key until the file exists.
+- A key is read from its file at call time and only ever goes into the Authorization header: never into the audit log,
+  an error message or a return value.
 - Prompts pass the secret scrubber first. Private keys block the call; tokens are redacted.
 """
 import json
@@ -45,11 +48,26 @@ class Provider:
     timeout_s: int | None = None          # per-provider request timeout (a slow CPU fallback needs longer than a cloud API)
     max_input_tokens: int | None = None   # measured input limit; larger requests skip this provider (sizing.py)
     max_total_tokens: int | None = None   # measured limit on input + reserved output (Groq TPM, llama.cpp n_ctx)
+    key_optional: bool = False            # the key file may be absent: then requests go without a key (local llama-server)
 
     def key_path(self):
         if not self.key_file:
             return None
         return self.key_file if os.path.isabs(self.key_file) else os.path.join(secrets_dir(), *self.key_file.replace("\\", "/").split("/"))
+
+    def auth_headers(self) -> dict:
+        """{"Authorization": "Bearer <key>"} from the key file, or {} when there is no key file (or an optional one is absent).
+        The file may hold comment lines starting with '#', as llama-server's --api-key-file allows; the first other
+        non-empty line is the key. Raises OSError/ValueError for an unreadable or empty required key; the message never
+        contains the key."""
+        kp = self.key_path()
+        if kp is None or (self.key_optional and not os.path.isfile(kp)):
+            return {}
+        with open(kp, encoding="utf-8-sig") as fh:
+            keys = [ln.strip() for ln in fh.read().splitlines() if ln.strip() and not ln.strip().startswith("#")]
+        if not keys:
+            raise ValueError("key file is empty")
+        return {"Authorization": "Bearer " + keys[0]}
 
     def problems(self):
         out = []
@@ -68,7 +86,7 @@ class Provider:
         if self.os_only and self.os_only != os.name:
             return False
         kp = self.key_path()
-        return kp is None or os.path.isfile(kp)
+        return kp is None or self.key_optional or os.path.isfile(kp)
 
 
 def allowed(task_lane: str, provider_lane: str) -> bool:
@@ -113,7 +131,7 @@ def explain(providers, task_lane: str, purpose: str | None = None, est_tokens: i
         if p.os_only and p.os_only != os.name:
             codes.append("OTHER_MACHINE_ONLY")
         kp = p.key_path()
-        if kp is not None and not os.path.isfile(kp):
+        if kp is not None and not p.key_optional and not os.path.isfile(kp):
             codes.append("KEY_MISSING")
         if not allowed(task_lane, p.lane):
             codes.append("LANE_MISMATCH")
@@ -153,13 +171,11 @@ def probe(p: Provider, chat: bool = False, timeout: float = 20.0) -> dict:
         out["why"] = "not available here (disabled, no endpoint, key file missing, or another machine's provider)"
         return out
     headers = {"Content-Type": "application/json", "User-Agent": "jarvis-probe/0.1"}
-    if p.key_file:
-        try:
-            with open(p.key_path(), encoding="utf-8-sig") as fh:
-                headers["Authorization"] = "Bearer " + fh.read().strip()
-        except (OSError, ValueError):
-            out["why"] = "key file unreadable"
-            return out
+    try:
+        headers.update(p.auth_headers())
+    except (OSError, ValueError):
+        out["why"] = "key file unreadable"
+        return out
     base = p.base_url.rstrip("/")
     t0 = time.time()
     try:
@@ -212,14 +228,12 @@ def call(kernel, providers, task_lane: str, prompt: str, purpose: str | None = N
             last = "ModelRefused"
             continue
         headers = {"Content-Type": "application/json", "User-Agent": "jarvis-gateway/0.1"}
-        if p.key_file:
-            try:                                  # withdrawn or unreadable key: this provider fails, try the next one
-                with open(p.key_path(), encoding="utf-8-sig") as fh:
-                    headers["Authorization"] = "Bearer " + fh.read().strip()
-            except (OSError, ValueError) as e:
-                last = f"key unreadable ({type(e).__name__})"
-                kernel.audit.append("model_call_failed", {"provider": p.name, "lane": task_lane, "error": last})
-                continue
+        try:                                      # withdrawn or unreadable key: this provider fails, try the next one
+            headers.update(p.auth_headers())
+        except (OSError, ValueError) as e:
+            last = f"key unreadable ({type(e).__name__})"
+            kernel.audit.append("model_call_failed", {"provider": p.name, "lane": task_lane, "error": last})
+            continue
         payload = {"model": use_model, "max_tokens": int(max_tokens), "messages": [{"role": "user", "content": clean}]}
         payload.update(p.extra_body)
         body = json.dumps(payload).encode()

@@ -1,0 +1,172 @@
+{
+ "time": "2026-10-17 20:31:54",
+ "host": "Xeon Gold 6244 CPU",
+ "threads": 4,
+ "llama_cpp": "version: 0.7.0-dev (build 1, commit c0fd786); built with GNU 12.2.0 for Linux x86_64",
+ "server": "/llama/llama-server",
+ "prompt_version": 3,
+ "sets": [
+  "plan_cases",
+  "dev",
+  "holdout",
+  "holdout2"
+ ],
+ "models": [
+  {
+   "model": "qwen3-1.7b",
+   "repo": "unsloth/Qwen3-1.7B-GGUF",
+   "file": "Qwen3-1.7B-Q4_K_M.gguf",
+   "sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+   "threads": 4,
+   "args": [],
+   "sets": {
+    "plan_cases": "13/17",
+    "dev": "58/70",
+    "holdout": "25/30",
+    "holdout2": "36/40"
+   },
+   "correct": 132,
+   "total": 157,
+   "model_path_correct": "83/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 1.5,
+   "cold_first_call_s": 6.7,
+   "first_call_status": "ok",
+   "p50_s": 1.33,
+   "p95_s": 2.1,
+   "gen_tps_p50": 19.3,
+   "gen_tokens_p50": 22.0,
+   "prompt_ms_p50": 243.0,
+   "peak_rss_mb": 2096,
+   "server_cpu_s": 616.5,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-play-not-just-open",
+     "why": "tools ['open_website'] lack play_media"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-play-not-just-open",
+     "why": "tools ['open_website'] lack play_media"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "app ['screen']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "tool open_file != research"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "tool open_app != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "target ['']"
+    },
+    {
+     "set": "dev",
+     "id": "A44",
+     "why": "tool open_website != play_media"
+    },
+    {
+     "set": "dev",
+     "id": "A45",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A47",
+     "why": "tools ['check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A49",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "tool window not in ['answer', 'clarify', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "tool browser != answer"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A60",
+     "why": "tool troubleshoot != check_pc"
+    },
+    {
+     "set": "holdout",
+     "id": "H10",
+     "why": "tool research != answer"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "tool browser != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H23",
+     "why": "target ['']"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "target ['']"
+    },
+    {
+     "set": "holdout",
+     "id": "H27",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "holdout2",
+     "id": "K38",
+     "why": "tools ['open_app'] lack open_website"
+    }
+   ]
+  }
+ ]
+}

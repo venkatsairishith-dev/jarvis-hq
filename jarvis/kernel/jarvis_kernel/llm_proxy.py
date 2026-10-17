@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import gateway, sizing
+from . import gateway, idempotency, sizing
 from .scrub import scrub
 
 MAX_BODY = 2 * 1024 * 1024
@@ -263,6 +263,8 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
     from .connector_service import ConnectorService
     connectors = ConnectorService(kernel, jobs)
     owner_plane.install_connectors(connectors)
+    idem = idempotency.Idempotency(kernel, clock)
+    owner_plane.idem = idem
     kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
     dispatch_lock = threading.Lock()            # one dispatch decision at a time (the server answers on many threads)
@@ -639,7 +641,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                     return self._json(400, {"error": "bad request"})
             if method == "GET" and self.path.split("?")[0].rstrip("/") == owner_mod.PREFIX + "stream":
                 return self._owner_stream()
-            code, reply = owner_plane.handle(method, self.path, body)
+            code, reply = owner_plane.handle(method, self.path, body, self.headers)
             return self._json(code, reply)
 
         def _owner_stream(self):
@@ -743,7 +745,9 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                         raise ValueError
                 except (ValueError, OSError):
                     return self._json(400, {"status": "refused", "reason": "bad request"})
-                code, reply = agent_action(agent, lane, body)
+                # a retried action with the same Idempotency-Key gets its first reply back instead of acting twice
+                code, reply = idem.run("agent:" + agent, idempotency.key_from(self.headers, body), body,
+                                       lambda: agent_action(agent, lane, body))
                 kernel.audit.append("agent_action", {"agent": agent, "lane": lane, "tool": str(body.get("tool", ""))[:20],
                                                      "op": str(body.get("op", ""))[:20], "status": reply.get("status")})
                 return self._json(code, reply)
@@ -830,15 +834,13 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 if summary:
                     payload["stream"] = False                        # read the whole summary to check it before passing it on
                 headers = {"Content-Type": "application/json", "User-Agent": "jarvis-llm-proxy/0.1"}
-                if p.key_file:
-                    try:
-                        with open(p.key_path(), encoding="utf-8-sig") as fh:
-                            headers["Authorization"] = "Bearer " + fh.read().strip()
-                    except (OSError, ValueError) as e:            # key withdrawn or unreadable: this provider fails, try the next
-                        last, why = f"key unreadable ({type(e).__name__})", "other"
-                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": "no_key"})
-                        outcomes.append(why)
-                        continue
+                try:
+                    headers.update(p.auth_headers())               # {} for a keyless or optional-and-absent key
+                except (OSError, ValueError) as e:                # key withdrawn or unreadable: this provider fails, try the next
+                    last, why = f"key unreadable ({type(e).__name__})", "other"
+                    kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": "no_key"})
+                    outcomes.append(why)
+                    continue
                 req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
                 resp, t_call = None, time.time()
                 for attempt in (1, 2):
