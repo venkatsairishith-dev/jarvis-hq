@@ -239,3 +239,18 @@ def test_side_effects_of_real_entries_fail_closed():
     for ref in ("web_search:search", "web_search:search_summary", "proactive_controller:get_state", "local_team:team_status",
                 "jarvis_bridge:task_result", "learn_vault:search_notes"):
         assert effect_of("plugin", ref) == "none", ref
+
+
+def test_an_argument_of_the_wrong_type_is_refused():  # bench A-094 (2026-10-17); before: accepted
+    for q in (42, ["cats"], {"q": "cats"}, None, True):
+        text = json.dumps({"summary": "x", "steps": [{"id": "s1", "agent": "plugin", "plugin": "web_search:search", "goal": "find",
+                                                       "args": {"query": q}}]})
+        with pytest.raises(PlanError, match="wrong type"):
+            parse_plan(text, caps(), 6)
+    for args in ({"query": "cats", "max_results": "5"}, {"query": "cats", "max_results": 2.5}, {"query": "cats", "max_results": False}):
+        text = json.dumps({"summary": "x", "steps": [{"id": "s1", "agent": "plugin", "plugin": "web_search:search", "goal": "find", "args": args}]})
+        with pytest.raises(PlanError, match="wrong type"):
+            parse_plan(text, caps(), 6)
+    text = json.dumps({"summary": "x", "steps": [{"id": "s1", "agent": "plugin", "plugin": "web_search:search", "goal": "find",
+                                                   "args": {"query": "cats", "max_results": 5}}]})
+    assert parse_plan(text, caps(), 6).steps[0].args == {"query": "cats", "max_results": 5}

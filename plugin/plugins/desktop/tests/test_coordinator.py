@@ -86,6 +86,19 @@ def test_a_stop_during_a_step_is_reported_as_cancelled(tmp_path):
     assert rec["status"] == "cancelled" and C.summary(rec) == "Stopped." and rec["steps"][0]["attempts"] == 1
 
 
+def test_a_stop_after_a_finished_step_says_what_already_happened(tmp_path):
+    """Bench L-034 (2026-10-17): stopped after notepad was opened, the owner was told only 'Stopped.'"""
+    flag, later = {"stop": False}, []
+
+    def first(s):
+        flag["stop"] = True
+        return {"ok": True, "verified": "verified", "opened": "notepad"}
+    rec = coord(tmp_path, {"open_app": first, "type_text": lambda s: later.append(1) or {"ok": True}},
+                cancelled=lambda: flag["stop"]).run("x", plan({"tool": "open_app", "app": "notepad"}, {"tool": "type_text", "app": "notepad", "text": "x"}))
+    s = C.summary(rec)
+    assert rec["status"] == "cancelled" and not later and s.startswith("Stopped.") and "notepad" in s and "done" not in s.lower()
+
+
 def test_lock_race_has_one_winner_and_a_lock_being_written_is_not_stale(tmp_path):
     """Bench B-014 (2026-10-16): 8 threads, 3 winners: a lock file created but not yet written read as pid 0 (dead) and
     was taken over."""
@@ -373,3 +386,41 @@ def test_summary_says_which_part_was_not_done():
            "steps": [{"tool": "open_file", "passed": True, "checked": "downloads opened"}]}
     s = C.summary(rec)
     assert s.startswith("Done: downloads opened.") and "Not done: unknown tool 'delete_files'" in s
+
+
+# ---- bench 2026-10-17: each test fails on the code before the fix
+def test_open_it_asks_when_the_newest_task_record_is_damaged(tmp_path):  # A-088
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    import time as _t
+    now = _t.time()
+    (tasks / "20261017-100000-aaaaaa.json").write_text(json.dumps({"request": "make a report about tides", "started": now - 125,
+        "finished": now - 120, "steps": [{"tool": "research", "passed": True, "args": {}, "result": {"file": r"D:\x\tides.pdf"}}]}),
+        encoding="utf-8")
+    for damaged in ('{"request": "make slides about volcanoes", "started": 17', '["not", "a", "record"]'):
+        (tasks / "20261017-100150-bbbbbb.json").write_text(damaged, encoding="utf-8")
+        c = C.Coordinator({}, PROFILES, tasks_dir=tasks, lock_path=tmp_path / "lock", clock=lambda: now)
+        p = c.decide_fn("open it")
+        assert p.status == "clarify" and not p.steps, (damaged, p)
+    (tasks / "20261017-100150-bbbbbb.json").unlink()                          # the older task alone is still "it"
+    p = C.Coordinator({}, PROFILES, tasks_dir=tasks, lock_path=tmp_path / "lock", clock=lambda: now).decide_fn("open it")
+    assert p.status == "ok" and "tides.pdf" in p.steps[0]["path"]
+
+
+def test_a_result_that_is_not_an_object_is_a_failed_step(tmp_path):  # E-047
+    step = {"tool": "check_pc", "check": "disk"}
+    for bad in ("<html><body>502 Bad Gateway</body></html>", ["ok"], 42, {"ok": True, "windows_media": 5}):
+        tool = "play_media" if isinstance(bad, dict) else "check_pc"
+        st = {"tool": "play_media", "profile": "Default", "query": "x"} if isinstance(bad, dict) else step
+        rec = coord(tmp_path, {tool: lambda s, bad=bad: dict(bad, playing=True, same_video=True) if isinstance(bad, dict) else bad}).run("x", plan(st))
+        assert rec["status"] == "failed" and not C.summary(rec).startswith("Done"), (bad, rec)
+        assert not (tmp_path / "lock").exists()
+
+
+def test_only_boolean_true_ok_is_success(tmp_path):  # E-049
+    step = {"tool": "check_pc", "check": "disk"}
+    for bad in ("false", "no", 1, "true"):
+        rec = coord(tmp_path, {"check_pc": lambda s, bad=bad: {"ok": bad}}).run("x", plan(step))
+        assert rec["status"] == "failed" and not C.summary(rec).startswith("Done"), bad
+    assert coord(tmp_path, {"check_pc": lambda s: {"ok": True}}).run("x", plan(step))["status"] == "completed"
+

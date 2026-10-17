@@ -69,3 +69,95 @@ def test_malformed_or_too_long_model_plans_are_reported_not_crashed_on():
     assert len(p.steps) == 4 and any("6 steps" in x for x in p.problems)
     p = D.validate(json.dumps({"steps": ["open notepad", {"tool": "open_app", "app": "notepad"}]}), PROFILES, "open notepad")
     assert [s["tool"] for s in p.steps] == ["open_app"] and p.problems
+
+
+# ---- bench area A, 2026-10-17: each test fails on the code before the fix (A-0xx = the bench case it guards)
+def test_a_research_topic_that_is_only_a_pronoun_asks(): # A-070
+    for req, q in (("research it", "it"), ("look that up", "that"), ("dig into this for me", "this")):
+        p = v(req, {"tool": "research", "query": q})
+        assert p.status == "clarify" and "research" in p.question.lower() and not p.steps, (req, p)
+    assert v("research tidal energy", {"tool": "research", "query": "tidal energy"}).status == "ok"
+
+
+def test_the_other_one_is_vague_not_a_file_or_app_name():  # A-071
+    for req, step in (("no, the other file", {"tool": "open_file", "name": "the other file", "folder": "Downloads"}),
+                      ("open the other one", {"tool": "open_file", "name": "the other one"}),
+                      ("open that one", {"tool": "open_app", "app": "that one"})):
+        p = v(req, step)
+        assert p.status == "clarify" and not p.steps, (req, p)
+    assert v("open the budget file", {"tool": "open_file", "name": "budget"}).status == "ok"
+
+
+def test_a_choice_offered_with_or_asks_which_one():  # A-072
+    p = v("open notepad or wordpad", {"tool": "open_app", "app": "notepad"}, {"tool": "open_app", "app": "wordpad"})
+    assert p.status == "clarify" and not p.steps and "notepad" in p.question and "wordpad" in p.question
+    p = v("open youtube or maybe gmail", {"tool": "open_website", "site": "youtube"}, {"tool": "open_website", "site": "gmail"})
+    assert p.status == "clarify" and not p.steps
+    p = v("open notepad and wordpad", {"tool": "open_app", "app": "notepad"}, {"tool": "open_app", "app": "wordpad"})
+    assert [s["app"] for s in p.steps] == ["notepad", "wordpad"]                 # "and" still means both
+
+
+def test_a_negated_action_is_never_planned():  # A-073
+    for req, step in (("don't open youtube", {"tool": "open_website", "site": "youtube"}),
+                      ("do not play despacito", {"tool": "play_media", "query": "despacito"}),
+                      ("never launch paint", {"tool": "open_app", "app": "paint"})):
+        p = v(req, step)
+        assert p.status != "ok" and not p.steps, (req, p)
+    p = v("open gmail but don't open youtube", {"tool": "open_website", "site": "gmail"}, {"tool": "open_website", "site": "youtube"})
+    assert p.status == "ok" and [s["url"] for s in p.steps] == [D.SITES["gmail"]] and p.problems
+
+
+def test_in_sentence_corrections_leave_the_fast_path():  # A-074
+    for req in ("play despacito no wait believer", "play shape of you sorry I mean perfect", "play anything except jazz",
+                "open notepad no wait wordpad", "play rock or jazz", "don't open youtube"):
+        assert D.fast_path(req, PROFILES) is None, req
+    assert D.fast_path("play despacito", PROFILES) is not None and D.fast_path("open notepad", PROFILES) is not None
+
+
+def test_an_app_corrected_in_the_same_sentence_is_dropped():  # A-075
+    p = v("open notepad, no wait, open wordpad", {"tool": "open_app", "app": "notepad"}, {"tool": "open_app", "app": "wordpad"})
+    assert [s["app"] for s in p.steps] == ["wordpad"]
+    p = v("open wordpad instead of notepad", {"tool": "open_app", "app": "wordpad"}, {"tool": "open_app", "app": "notepad"})
+    assert [s["app"] for s in p.steps] == ["wordpad"]
+    # a correction of another detail never removes the step it does not replace
+    p = v("open notepad and type hello, actually make it hi", {"tool": "open_app", "app": "notepad"},
+          {"tool": "type_text", "app": "notepad", "text": "hi"})
+    assert [s["tool"] for s in p.steps] == ["open_app", "type_text"]
+
+
+def test_a_negated_account_is_never_used_even_from_the_model():  # A-076
+    p = v("open gmail, but not in Satish's profile", {"tool": "open_website", "site": "gmail", "account": "Satish"})
+    assert not any(s.get("profile") == "Profile 2" for s in p.steps) and p.status == "clarify"
+    p = v("play lofi on youtube, not with VenkatAMV", {"tool": "play_media", "query": "lofi", "account": "VenkatAMV"})
+    assert not any(s.get("profile") == "Profile 1" for s in p.steps)
+
+
+def test_the_owners_document_word_beats_the_models():  # A-083
+    p = v("make a report about electric buses", {"tool": "research", "query": "electric buses", "deliverable": "presentation"})
+    assert p.steps[0]["deliverable"] == "report"
+    p = v("make slides about tides", {"tool": "research", "query": "tides", "deliverable": "report"})
+    assert p.steps[0]["deliverable"] == "presentation"
+
+
+def test_writing_a_report_on_a_topic_is_not_typing_into_an_app():  # A-084
+    for req in ("write a report on electric buses", "write an essay on monsoon rains"):
+        p = v(req, {"tool": "research", "query": req.split(" on ", 1)[1], "deliverable": "report"})
+        assert [s["tool"] for s in p.steps] == ["research"], (req, p.steps)
+    p = v("write dear sir on notepad", {"tool": "open_app", "app": "notepad"})      # typing into a real app still works
+    assert [s["tool"] for s in p.steps] == ["open_app", "type_text"]
+
+
+def test_the_owners_resume_beats_the_models_pause():  # A-086
+    for req in ("resume the song on youtube", "continue the video", "unpause the music"):
+        p = v(req, {"tool": "press_key", "key": "pause"})
+        assert p.steps[0]["key"] == "playpause" and p.steps[0]["intent"] == "play", (req, p.steps)
+    assert v("pause the song", {"tool": "press_key", "key": "play"}).steps[0]["intent"] == "pause"
+
+
+def test_wrong_typed_model_fields_fall_back_and_never_crash():  # A-089
+    for req, step in (("open notepad", {"tool": "open_app", "app": 42}), ("open notepad", {"tool": ["open_app"], "app": "notepad"}),
+                      ("play lofi", {"tool": "play_media", "query": ["lofi"]}),
+                      ("open gmail", {"tool": "open_website", "site": "gmail", "account": 7}),
+                      ("open notepad", {"tool": {"x": 1}}), ("research tides", {"tool": "research", "query": {"q": "tides"}})):
+        p = v(req, step)
+        assert p.status in ("fallback", "clarify") and not p.steps, (step, p)

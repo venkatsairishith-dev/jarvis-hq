@@ -209,13 +209,10 @@ def account_from_text(request: str, profiles: list[dict]) -> str | None:
 
 
 CORRECTION = re.compile(r"(?i)\bno\s*,|\b(no wait|wait|actually|instead|i mean|i meant|rather|sorry|scratch that|make (?:that|it))\b")
-NEGATED = ("not", "instead of", "rather than")
+NEGATED = ("not", "instead of", "rather than", "not in", "not on", "not with", "not as", "not using", "not from", "not under")
 
 
-def _account_mentions(request: str, profiles: list[dict]) -> tuple[list[tuple[int, str]], bool, bool]:
-    """Every account alias the owner named, in order: [(word position, alias)], whether they point at different profiles
-    (a clash), and whether the request corrects itself ("no wait", "instead", "actually"). A name inside a longer one
-    ("Venkat" in "Venkat AMV") and a name the owner negated ("not VenkatAMV", "instead of Satish") do not count."""
+def _alias_spans(request: str, profiles: list[dict]) -> tuple[list[str], dict[str, set], list[tuple[int, int, str]]]:
     text = re.sub(r"(?i)'s\b", "", request or "")
     words = [w for w in (_norm(x) for x in re.split(r"[^A-Za-z0-9.@-]+", text)) if w]
     owners: dict[str, set] = {}
@@ -225,7 +222,25 @@ def _account_mentions(request: str, profiles: list[dict]) -> tuple[list[tuple[in
                 owners.setdefault(_norm(a), set()).add(p.get("profile"))
     spans = [(i, i + n, "".join(words[i:i + n])) for n in (1, 2, 3) for i in range(len(words) - n + 1) if "".join(words[i:i + n]) in owners]
     spans = [s for s in spans if not any(o[0] <= s[0] and s[1] <= o[1] and o[1] - o[0] > s[1] - s[0] for o in spans)]
-    spans = [s for s in spans if not (words[max(0, s[0] - 1):s[0]] == ["not"] or " ".join(words[max(0, s[0] - 2):s[0]]) in NEGATED)]
+    return words, owners, spans
+
+
+def _is_negated(words: list[str], s: tuple[int, int, str]) -> bool:
+    return words[max(0, s[0] - 1):s[0]] == ["not"] or " ".join(words[max(0, s[0] - 2):s[0]]) in NEGATED
+
+
+def negated_profiles(request: str, profiles: list[dict]) -> set:
+    """The Chrome profiles the owner excluded ("but not in Satish's profile", "instead of VenkatAMV")."""
+    words, owners, spans = _alias_spans(request, profiles)
+    return {f for s in spans if _is_negated(words, s) for f in owners[s[2]]}
+
+
+def _account_mentions(request: str, profiles: list[dict]) -> tuple[list[tuple[int, str]], bool, bool]:
+    """Every account alias the owner named, in order: [(word position, alias)], whether they point at different profiles
+    (a clash), and whether the request corrects itself ("no wait", "instead", "actually"). A name inside a longer one
+    ("Venkat" in "Venkat AMV") and a name the owner negated ("not VenkatAMV", "instead of Satish") do not count."""
+    words, owners, spans = _alias_spans(request, profiles)
+    spans = [s for s in spans if not _is_negated(words, s)]
     spans.sort()
     hits = [(s[0], s[2]) for s in spans]
     common = set.intersection(*(owners[h[1]] for h in hits)) if hits else set()
@@ -298,8 +313,75 @@ def resolve_site(site: str) -> str | None:
     return None
 
 
+VAGUE_RX = re.compile(r"(?:the\s+)?(?:other|another)(?:\s+\w+)?|(?:that|this|the same)\s+one")   # "the other file", "that one"
+
+
 def _vague(v) -> bool:
-    return str(v or "").strip().lower() in VAGUE
+    s = " ".join(str(v or "").strip().lower().split())
+    return s in VAGUE or bool(VAGUE_RX.fullmatch(s))
+
+
+STRING_FIELDS = set(SCHEMA["properties"]["steps"]["items"]["properties"]) | {"deliverable", "check"}   # all text in the schema
+_MAIN = ("app", "site", "query", "name", "url")
+
+
+def _main(s: dict) -> str:
+    """The phrase a model step acts on (app, site, query or file name), as the owner would have said it."""
+    return next((str(s[k]).strip() for k in _MAIN if isinstance(s.get(k), str) and s[k].strip()), "")
+
+
+def _said(phrase: str, text: str) -> bool:
+    return bool(phrase) and bool(re.search(r"(?<!\w)" + re.escape(phrase.lower()) + r"(?!\w)", (text or "").lower()))
+
+
+def _choice(request: str, given: list) -> tuple[str, str] | None:
+    """'open notepad or wordpad': two steps of one tool for the two things the owner offered as a choice -> (a, b)."""
+    if not re.search(r"(?i)\bor\b", request or ""):
+        return None
+    st = [(s.get("tool"), _main(s)) for s in given if isinstance(s, dict) and isinstance(s.get("tool"), str)]
+    for i, (t1, a) in enumerate(st):
+        for t2, b in st[i + 1:]:
+            if t1 == t2 and a and b and _norm(a) != _norm(b) and re.search(
+                    r"(?i)(?<!\w)" + re.escape(a) + r"(?!\w)[\s,]+(?:\w+\s+){0,3}?or\s+(?:\w+\s+){0,3}?" + re.escape(b) + r"(?!\w)", request):
+                return a, b
+    return None
+
+
+def _corrected_away(request: str, given: list) -> set:
+    """Indexes of model steps the owner took back in the same sentence: 'open notepad, no wait, open wordpad' (what comes
+    before the last correction) or 'open wordpad instead of notepad'. A step is dropped only when another step of the
+    same tool carries what the owner said instead, so a correction of some other detail never removes a step."""
+    req = request or ""
+    marks = [m for m in CORRECTION.finditer(req) if not re.match(r"(?i)\s+(?:of|than)\b", req[m.end():])]
+    before, after = (req[:marks[-1].start()], req[marks[-1].end():]) if marks else ("", req)
+    rejected = before + " " + " ".join(m.group(1) for m in re.finditer(r"(?i)\b(?:instead of|rather than)\s+([^,.;!?]+)", req))
+    after = re.sub(r"(?i)\b(?:instead of|rather than)\s+[^,.;!?]+", " ", after)
+    if not rejected.strip():
+        return set()
+    st = [(i, s.get("tool"), _main(s)) for i, s in enumerate(given) if isinstance(s, dict) and isinstance(s.get("tool"), str)]
+    kept = {t for i, t, p in st if _said(p, after)}
+    return {i for i, t, p in st if t in kept and _said(p, rejected) and not _said(p, after)}
+
+
+NEG_VERBS = {"open": ("open_website", "open_app", "open_file"), "launch": ("open_app", "open_website"), "start": ("open_app",),
+             "run": ("open_app",), "go to": ("open_website",), "visit": ("open_website",), "play": ("play_media",),
+             "put on": ("play_media",), "type": ("type_text",), "write": ("type_text",), "enter": ("type_text",),
+             "research": ("research",), "search": ("research", "browser"), "look up": ("research", "browser"),
+             "close": ("window",), "minimize": ("window",), "maximize": ("window",), "press": ("press_key",)}
+NEG_RX = re.compile(r"(?i)\b(?:don['’]?t|do\s+not|never)\s+(" + "|".join(sorted(NEG_VERBS, key=len, reverse=True)) +
+                    r")\b\s*([^,.;!?]*?)\s*(?=[,.;!?]|\bbut\b|\band\b|\binstead\b|\bjust\b|\bthen\b|$)")
+
+
+def _negated_step(request: str, tool: str, s: dict) -> str:
+    """'don't open youtube' / 'do not play despacito': the owner said NOT to do this step. Returns what was negated."""
+    for m in NEG_RX.finditer(request or ""):
+        verb, obj = m.group(1).lower(), m.group(2).strip()
+        if tool not in NEG_VERBS[re.sub(r"\s+", " ", verb)] or not obj:
+            continue
+        p = _main(s)
+        if _vague(obj) or (p and (_said(p, obj) or _said(obj, p) or _norm(p) == _norm(obj))):
+            return f"{verb} {obj}"
+    return ""
 
 
 def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
@@ -319,13 +401,28 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
     given = data.get("steps") or []
     if len(given) > MAX_STEPS:                                            # never cut the owner's request silently
         problems.append(f"the plan had {len(given)} steps; only the first {MAX_STEPS} are used")
-    for s in given[:MAX_STEPS]:
+    pick = _choice(request, given[:MAX_STEPS])
+    if pick:                                                              # "open notepad or wordpad": a choice, not both
+        return Plan([], "clarify", question=f"Which one: {pick[0]} or {pick[1]}?", problems=["the request offers a choice"], raw=raw)
+    dropped = _corrected_away(request, given[:MAX_STEPS])
+    negated = negated_profiles(request, profiles)
+    for n, s in enumerate(given[:MAX_STEPS]):
         if not isinstance(s, dict):
             problems.append("a step was not an object")
             continue
         tool = s.get("tool")
-        if tool not in TOOLS:
-            problems.append(f"unknown tool {tool!r}")
+        if not isinstance(tool, str) or tool not in TOOLS:
+            problems.append(f"unknown tool {tool!r}"[:80])
+            continue
+        wrong = sorted(k for k in STRING_FIELDS if s.get(k) is not None and not isinstance(s.get(k), str))
+        if wrong:                                         # the grammar prevents this; another model or a proxy may not
+            problems.append(f"a {tool} step had wrong-typed field(s): {', '.join(wrong)}")
+            continue
+        if n in dropped:                                  # "open notepad, no wait, open wordpad"
+            continue
+        neg = _negated_step(request, tool, s)
+        if neg:                                           # "don't open youtube": never the negated action
+            problems.append(f"you said not to {neg}"[:120])
             continue
         if tool == "open_app" and resolve_site(s.get("app") or "") and (s.get("app") or "").lower() in SITES:
             tool, s = "open_website", dict(s, site=s.get("app"))          # "open youtube" is a site, not a Start-menu app
@@ -338,6 +435,10 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
             folder, why = resolve_account(phrase, profiles)
             if folder is None:
                 return Plan(steps, "clarify", question=f"Which Chrome account? {why}.", problems=[why], raw=raw)
+            if folder in negated:                         # "but not in Satish's profile": never that one, whoever named it
+                who = next((f"{p.get('name')} ({folder})" for p in profiles if p.get("profile") == folder and p.get("name")), folder)
+                return Plan(steps, "clarify", question=f"Which Chrome account should I use? You said not {who}.",
+                            problems=[f"the owner excluded {folder}"], raw=raw)
             out["profile"] = folder
         if tool == "open_website":
             site = next((v for v in (s.get("site"), s.get("target"), s.get("query"), s.get("name")) if v and not _vague(v)), "")
@@ -378,9 +479,13 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
                 out.update(target=(s.get("target") or "")[:120] if s.get("target") != app else "", text=(s.get("text") or "")[:500])
             if tool == "press_key":
                 out["key"] = key[:30]
-                said = (s.get("key") or s.get("text") or "").strip().lower() + " " + request.lower()
-                if key == "playpause":                         # the media key toggles: keep what the owner wanted
-                    out["intent"] = "pause" if re.search(r"\b(pause|stop)\b", said) else ("play" if re.search(r"\b(play|resume|continue)\b", said) else "")
+                if key == "playpause":                         # the media key toggles: keep what the owner wanted; the
+                    out["intent"] = ""                         # owner's own words first, the model's key word only after
+                    for said in (request.lower(), (s.get("key") or s.get("text") or "").strip().lower()):
+                        out["intent"] = "pause" if re.search(r"\b(pause|stop)\b", said) else (
+                            "play" if re.search(r"\b(play|resume|continue|unpause)\b", said) else "")
+                        if out["intent"]:
+                            break
         elif tool == "open_file":
             name = next((v for v in (s.get("name"), s.get("target"), s.get("query"), s.get("text")) if v and not _vague(v)), "").strip()
             if not name:
@@ -392,11 +497,14 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
             out.update(check=act if act in ACTIONS["check_pc"] else guess, app=(s.get("app") or "")[:40])
         elif tool == "research":
             q = (s.get("query") or s.get("text") or "").strip()
-            if not q:
+            if not q or _vague(q):                        # "research it": a run on the word "it" is about nothing
                 return Plan(steps, "clarify", question="What should I research?", problems=["no topic"], raw=raw)
-            said = request + " " + json.dumps(s)
-            deliverable = "presentation" if re.search(r"(?i)slides?|deck|presentation|ppt", said) else (
-                "report" if re.search(r"(?i)report|pdf", said) else "none")
+            deliverable = "none"
+            for said in (request, json.dumps(s)):         # the owner's own words decide the file type, then the model's
+                deliverable = "presentation" if re.search(r"(?i)slides?|deck|presentation|ppt", said) else (
+                    "report" if re.search(r"(?i)report|pdf", said) else "none")
+                if deliverable != "none":
+                    break
             out.update(query=q[:300], deliverable=deliverable)
         elif tool == "clarify":
             return Plan(steps, "clarify", question=(s.get("question") or "Could you say a bit more?")[:200], raw=raw)
@@ -436,6 +544,10 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
     steps = complete_plan(steps, request, profiles)
     if any(st["tool"] == "open_website" and not st["url"] for st in steps):
         return Plan(steps, "clarify", question="Which website should I open?", problems=["no site"], raw=raw)
+    negs = [p for p in problems if p.startswith("you said not to ")]
+    if not steps and negs:
+        return Plan([], "clarify", question=f"You said not to {negs[0].removeprefix('you said not to ')}. "
+                    "What should I do instead?", problems=problems, raw=raw)
     if not steps:
         return Plan([], "fallback", problems=problems or ["no usable step"], raw=raw)
     for st in steps:
@@ -484,6 +596,10 @@ def complete_plan(steps: list[dict], request: str, profiles: list[dict]) -> list
     said, app = ((m.group(1) or m.group(2) or "").strip(), _clean_app(m.group(3))) if m else ("", "")
     if m and (app.lower() in SITES or resolve_site(app)):   # "put on some music on youtube" is not typing into an app
         m = None
+    # "write a report on electric buses": a document ABOUT a topic (research), not typing into an app named after it
+    if m and _norm(app) not in {_norm(a) for a in APPS} and (any(st["tool"] == "research" for st in steps) or re.search(
+            r"(?i)\b(report|essay|article|summary|paper|document|deck|slides?|presentation|pdf)\b", said)):
+        m = None
     if m and not any(st["tool"] == "type_text" for st in steps):
         # no "open the app" step is added: at run time the typing step opens the app only if no window of it exists
         # (a second window would make it unclear where the text goes). It goes right after the step that opens that
@@ -527,6 +643,8 @@ def follow_up(request: str, last: dict | None) -> Plan | None:
     if not FOLLOW_OPEN.match(request or ""):
         return None
     last = last or {}
+    if last.get("status") == "unreadable":             # the newest task's record is damaged: which "it" is unknown
+        return Plan([], "clarify", question="Open what? The record of your last task could not be read.", model="rule")
     if last.get("file"):
         step = {"tool": "open_output", "path": last["file"], "post": POST["open_output"]}
     elif last.get("url"):
@@ -546,7 +664,10 @@ APPS = {"notepad": "notepad", "calculator": "calc", "calc": "calc", "paint": "ms
         "vs code": "code", "visual studio code": "code", "terminal": "wt", "settings": "ms-settings", "task manager": "taskmgr",
         "wordpad": "wordpad", "outlook": "outlook", "teams": "teams", "discord": "discord", "vlc": "vlc"}
 FAST_BLOCK = re.compile(r"(?i)\b(and|then|also|after|before|it|that|this|them|those|account|profile|instead|actually|again|"
-                        r"my \w+'s|for me and|unless|if)\b|[,;]|'s\b")
+                        r"my \w+'s|for me and|unless|if|"
+                        r"or|no|not|wait|sorry|i mean|i meant|except|but|rather|without|scratch that|don't|dont)\b|[,;]|'s\b")
+# second line: an in-sentence correction, exclusion, negation or choice ("play X no wait Y", "anything except jazz",
+# "notepad or wordpad") is never ONE command
 MEDIA_FAST = {r"(?:pause|stop playing|pause (?:the )?(?:music|video|song|playback))": ("playpause", "pause"),
               r"(?:resume|unpause|continue|resume (?:the )?(?:music|video|song|playback))": ("playpause", "play"),
               r"(?:next|skip)(?: (?:song|track|video))?(?: please)?|skip (?:this|the) (?:song|track)": ("nexttrack", ""),

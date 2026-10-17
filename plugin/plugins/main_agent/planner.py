@@ -248,6 +248,19 @@ def fill_args(args: dict[str, Any], results: dict[str, str]) -> dict[str, Any]:
     return out
 
 
+_JSON_TYPES = {"string": lambda v: isinstance(v, str), "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+               "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool), "boolean": lambda v: isinstance(v, bool),
+               "array": lambda v: isinstance(v, list), "object": lambda v: isinstance(v, dict), "null": lambda v: v is None}
+
+
+def _type_ok(value: Any, spec: Any) -> bool:
+    """Whether a value has the JSON type the entry's schema declares for it (no declared type: anything goes)."""
+    t = spec.get("type") if isinstance(spec, dict) else None
+    types = [t] if isinstance(t, str) else (t if isinstance(t, list) else [])
+    known = [x for x in types if x in _JSON_TYPES]
+    return not known or any(_JSON_TYPES[x](value) for x in known)
+
+
 def parse_plan(text: str, caps: list[Capability], max_steps: int) -> Plan:
     data = _extract_json(text)
     steps_raw = data.get("steps")
@@ -286,6 +299,9 @@ def parse_plan(text: str, caps: list[Capability], max_steps: int) -> Plan:
             declared = (cap.schema or {}).get("properties")
             if isinstance(declared, dict) and declared:
                 args = {k: v for k, v in args.items() if k in declared}      # drop anything the entry does not declare
+                wrong = [k for k, v in args.items() if not _type_ok(v, declared[k])]
+                if wrong:
+                    raise PlanError(f"Step {sid} gives argument(s) of the wrong type: {', '.join(map(str, wrong))}.")
             for key, value in args.items():
                 for m in PLACEHOLDER.finditer(value if isinstance(value, str) else ""):
                     if key not in PLACEHOLDER_ARGS:

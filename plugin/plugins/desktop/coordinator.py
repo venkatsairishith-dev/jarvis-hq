@@ -162,7 +162,7 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
     t = step["tool"]
     if r.get("state") in ("waiting_for_permission", "denied"):
         return False, f"held for the owner ({r.get('state')})", ""
-    if not r.get("ok"):
+    if r.get("ok") is not True:                         # only boolean True: {"ok": "false"} is not success
         return False, "the action did not succeed", str(r.get("error") or r.get("state") or "")[:200]
     if t == "open_website":
         ok = r.get("profile") == step.get("profile") and r.get("verified") == "window"
@@ -219,12 +219,18 @@ def previous(tasks_dir: Path = TASKS, now: float | None = None, within_s: float 
     follow-up ("open it", "use the Satish profile instead") can refer to it. Only checked results count as produced."""
     now = time.time() if now is None else now
     files = sorted(tasks_dir.glob("*.json"))[-5:] if tasks_dir.is_dir() else []
-    for f in reversed(files):
+    for f in files[-1:]:
+        # only the NEWEST task counts: if its record is damaged, "it" is unknown, and an older task's file is not it
         try:
             rec = json.loads(f.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if now - float(rec.get("finished") or rec.get("started") or 0) > within_s:
+            at = float(rec.get("finished") or rec.get("started") or 0)
+        except (OSError, ValueError, TypeError, AttributeError):
+            try:
+                recent = now - f.stat().st_mtime <= within_s
+            except OSError:
+                recent = True
+            return {"request": "", "status": "unreadable"} if recent else None
+        if now - at > within_s:
             return None
         out = {"request": rec.get("request", ""), "status": rec.get("status")}
         for s in rec.get("steps", []):
@@ -283,7 +289,8 @@ class Coordinator:
             return rec
         if plan.steps and plan.steps[0]["tool"] == "stop":
             res = (self.agents.get("stop") or (lambda s: {"ok": True}))({"tool": "stop"})
-            rec.update(status="stopped" if res.get("ok") else "failed", steps=[{"tool": "stop", "result": res}], finished=self.clock())
+            res = res if isinstance(res, dict) else {"ok": False, "error": f"the stop agent returned {type(res).__name__}"}
+            rec.update(status="stopped" if res.get("ok") is True else "failed", steps=[{"tool": "stop", "result": res}], finished=self.clock())
             self._save(rec)
             return rec
         try:
@@ -315,9 +322,12 @@ class Coordinator:
                     entry["attempts"] += 1
                     try:
                         res = fn(step) or {}
+                        if not isinstance(res, dict):          # an HTML error page, a list, a number: not a result
+                            res = {"ok": False, "error": f"the agent returned a {type(res).__name__}, not a result object"}
+                        passed, checked, unc = verify(step, res)
                     except Exception as e:  # noqa: BLE001 - a failed agent is a failed step, not a crashed coordinator
                         res = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:160]}"}
-                    passed, checked, unc = verify(step, res)
+                        passed, checked, unc = False, "the action did not succeed", res["error"]
                     entry.update(result=_slim(res), passed=passed, checked=checked, uncertainty=unc, finished=self.clock())
                     transient = not passed and TRANSIENT.search(str(res.get("error") or "")) and res.get("state") not in (
                         "waiting_for_permission", "denied", "cancelled")
@@ -383,5 +393,7 @@ def summary(rec: dict) -> str:
     if st == "not_a_pc_task":
         return "That is not a PC task; passing it on."
     if st == "cancelled":
-        return "Stopped."
+        # what already happened stays on the PC (a window opened, a file saved): the owner must hear it
+        before = "; ".join(s["checked"] for s in rec.get("steps") or [] if s.get("passed") and s.get("checked"))
+        return "Stopped." + (f" Before the stop: {before}." if before else "")
     return f"I could not finish: {rec.get('error') or st}."

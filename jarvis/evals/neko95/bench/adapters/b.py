@@ -161,7 +161,8 @@ def cancel_between_steps(a):
         return {"ok": True, "verified": "verified", "opened": "notepad"}
     co, _ = _coord({"open_app": first, "type_text": lambda s: later.append(1) or {"ok": True}}, cancelled=lambda: flag["stop"])
     rec = co.run("bench", _plan({"tool": "open_app", "app": "notepad"}, {"tool": "type_text", "app": "notepad", "text": "x"}))
-    return rec["status"] == "cancelled" and not later and C.summary(rec) == "Stopped.", \
+    # starts with "Stopped." (since 2026-10-17 it may go on to name what already happened before the stop: L-034)
+    return rec["status"] == "cancelled" and not later and C.summary(rec).startswith("Stopped."), \
         f"status {rec['status']}, later steps {len(later)}, summary '{C.summary(rec)}'"
 
 

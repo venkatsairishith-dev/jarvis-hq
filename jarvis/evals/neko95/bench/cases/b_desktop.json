@@ -79,7 +79,7 @@
   "risk": "high", "dims": ["reliability", "desktop"], "check": "lock_released_after_crash"},
  {"id": "B-018", "area": "B", "title": "Cancel between steps",
   "scenario": "The owner says stop while step 1 runs; step 2 (typing) is next.",
-  "expected": "Status 'cancelled', step 2 never runs, summary 'Stopped.'.",
+  "expected": "Status 'cancelled', step 2 never runs, summary starts 'Stopped.' (it may name what already happened before the stop).",
   "risk": "critical", "dims": ["desktop", "ux", "autonomy"], "check": "cancel_between_steps"},
  {"id": "B-019", "area": "B", "title": "Cancel during a step is reported as cancelled",
   "scenario": "The owner stops while a typing job runs; the job comes back state='cancelled'.",
