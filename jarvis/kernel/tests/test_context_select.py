@@ -41,18 +41,21 @@ def _verbatim_in_order(orig, out):
 
 
 class Modes(unittest.TestCase):
-    def test_default_is_off_and_matches_the_old_head_cut(self):
+    def test_default_is_evidence_and_off_still_gives_the_old_head_cut(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop(CS.ENV_MODE, None)
+            self.assertEqual(CS.configured_mode(), "evidence")
+            self.assertIn(ERR, CS.select(_long(), "why", 4000).text.split("\n"))
+        with mock.patch.dict(os.environ, {CS.ENV_MODE: "off"}):
             text = _long()
             s = CS.select(text, "why", 4000)
         self.assertEqual(s.mode, "off")
         self.assertTrue(s.text.startswith(text[:4000]))
         self.assertTrue(s.text.endswith(f"[truncated: {len(text) - 4000} more characters]"))
 
-    def test_an_unknown_mode_falls_back_to_off(self):
+    def test_an_unknown_mode_falls_back_to_the_default(self):
         with mock.patch.dict(os.environ, {CS.ENV_MODE: "magic"}):
-            self.assertEqual(CS.configured_mode(), "off")
+            self.assertEqual(CS.configured_mode(), "evidence")
 
     def test_text_that_fits_is_returned_unchanged_in_every_mode(self):
         for mode in CS.MODES:
@@ -158,3 +161,19 @@ class ProcessResult(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HostileInput(unittest.TestCase):
+    """Tool output is untrusted: no input may make selection slow (it runs inside the kernel for every long result)."""
+    def test_one_huge_line_and_many_lines_are_selected_quickly(self):
+        import time
+        cases = {"one 1 MB line": "at " + "x" * 1_000_000,
+                 "1 MB line with an ident run": "a" + "b" * 1_000_000 + "-c",
+                 "long File line": 'File "' + "y" * 200_000,
+                 "100k short lines": "\n".join(f"at frame{i} line" for i in range(100_000)) + "\nERROR end"}
+        for name, text in cases.items():
+            t0 = time.perf_counter()
+            s = CS.select(text, "error at line", 4000, "evidence")
+            secs = time.perf_counter() - t0
+            self.assertLess(secs, 5.0, f"{name}: {secs:.1f} s")
+            self.assertLessEqual(len(s.text), 4000, name)

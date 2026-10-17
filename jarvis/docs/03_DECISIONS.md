@@ -433,3 +433,9 @@ Each item below was a real fault or gap seen against the live system, not a theo
   before any case ran: 10 x pass rate, capped by failed critical/high cases, deferred critical cases and small samples.
 - **Live tests on the Linux server** use Dahl's public lane only with synthetic data (owner-authorised key, to be revoked),
   run headless in the test container at low priority (the relative works on this machine), never Claude models.
+- **Update (same night): `evidence` is now the default.**
+  - Held-out test: 45 cases written by Dahl's GLM model, which never saw the selector (`bench/gen_holdout_dahl.py`). The answer line was kept in 44/45, against 15/45 (4 KB) and 18/45 (16 KB) for the head cut.
+  - Case by case, evidence kept the answer in 26–29 cases the head cut lost, and never the reverse (sign test p ≈ 2e-9). The head cut kept more secondary critical lines in 1–2 cases.
+  - Known miss: an access-log line whose only failure signal is its HTTP status. It was not tuned on, so the held-out set stays clean.
+  - `JARVIS_CONTEXT_SELECT=off` restores the head cut. trim-1 stays off: one more answer at 16 KB on 45 cases is not a credible difference.
+

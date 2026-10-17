@@ -35,11 +35,15 @@ def keeps_answer(a):
 
 
 def default_is_off(a):
+    """(name kept for the case file) The default is evidence; 'off' restores the old head cut."""
+    f = _FX["python-middle-013"]
     with mock.patch.dict(os.environ, {}, clear=False):
         os.environ.pop(CS.ENV_MODE, None)
-        f = _FX["python-middle-013"]
-        s = CS.select(f["text"], f["query"], 4000)
-    return s.mode == "off" and s.text.startswith(f["text"][:4000]), f"mode {s.mode}"
+        d = CS.select(f["text"], f["query"], 4000)
+    with mock.patch.dict(os.environ, {CS.ENV_MODE: "off"}):
+        o = CS.select(f["text"], f["query"], 4000)
+    ok = d.mode == "evidence" and f["answer"] in d.text.split("\n") and o.mode == "off" and o.text.startswith(f["text"][:4000])
+    return ok, f"default {d.mode}, off {o.mode}"
 
 
 def short_untouched(a):

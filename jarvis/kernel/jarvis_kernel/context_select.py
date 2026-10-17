@@ -1,9 +1,15 @@
 """Context selection for long tool output (2026-10-16): keep the lines that matter, verbatim and in order, instead of
-cutting the text after its first N characters. OFF by default (JARVIS_CONTEXT_SELECT); "off" keeps the old head cut.
+cutting the text after its first N characters. Default "evidence" since 2026-10-16 (held-out result below);
+JARVIS_CONTEXT_SELECT=off restores the old head cut.
+
+Held-out evidence for the default (45 cases written by a separate model that never saw this code, bench/context_bench.py
+--set holdout): the answer line survived in 44/45 (evidence) vs 15/45 at 4 KB and 18/45 at 16 KB (head cut); evidence
+kept the answer in 26-29 cases the head cut lost, the reverse never happened. Known miss: an access-log line whose only
+sign of failure is its HTTP status ("... 502 559").
 
 Modes
-  off               the old behaviour: the first max_chars characters and a "[truncated: ...]" note.
-  evidence          deterministic: the last and first lines, every line that carries evidence (errors, exceptions, stack
+  off               the old behaviour: the first max_chars characters and a "[truncated: ...]" note (opt-out).
+  evidence          (default) deterministic: the last and first lines, every line that carries evidence (errors, exceptions, stack
                     frames, exit codes, paths with line numbers, failures, denials) with its neighbours, and lines that
                     share words with the query, filled up to max_chars in that priority. No model.
   trim1-<point>     the vendored trim-1 line selector (jarvis/vendor/trim-1, a LightGBM model run by a small Go binary),
@@ -38,11 +44,19 @@ EVIDENCE = re.compile(          # strong evidence: something went wrong, and whe
     r"failed|failure|\bfail\b|denied|refused|forbidden|unauthori[sz]ed|not found|no such file|cannot|can't|couldn't|"
     r"timed? ?out|timeout|killed|oom|out of memory|exit (code|status)|exited with|returned non-zero|status [45]\d\d|"
     r"\b[45]\d\d (bad|not|internal|service|gateway|forbidden|unauthori)|quota|exceeded|crash|"
-    r"^\s+at |\bat .+:\d+(:\d+)?\)?$|File \".+\", line \d+|\.(py|js|ts|tsx|go|rs|java|cs|cpp|c|h):\d+|"
+    r"^\s+at |\bat \S.{0,300}:\d+(:\d+)?\)?$|File \"[^\"]{1,400}\", line \d+|\.(py|js|ts|tsx|go|rs|java|cs|cpp|c|h):\d+|"
     r"goroutine \d+|caused by|during handling of the above|the above exception|\w+(Error|Exception|Exit)\b)")
 WEAK = re.compile(r"(?i)(warn|deprecat|retry|retrying|slow)")   # weak evidence: ranked after strong evidence and query hits
 IDENT = re.compile(r"\b[A-Za-z][\w.]*[-_.][\w.-]*[A-Za-z0-9]\b")    # names like ledger-svc, payments_api, db.main
 WORD = re.compile(r"[\w./\\:-]{3,}", re.UNICODE)
+PROBE_HEAD, PROBE_TAIL = 600, 200
+
+
+def _probe(line: str) -> str:
+    """What the line-classifying regexes read: the whole line, or for a very long one its start and end, where error
+    markers and file:line references sit. Without it one long line from a tool took quadratic time (measured: 8.6 s for
+    32,000 characters, hours for a megabyte) and could stall the kernel."""
+    return line if len(line) <= PROBE_HEAD + PROBE_TAIL else line[:PROBE_HEAD] + " " + line[-PROBE_TAIL:]
 
 
 @dataclass
@@ -57,9 +71,12 @@ class Selection:
     note: str = ""
 
 
+DEFAULT_MODE = "evidence"
+
+
 def configured_mode() -> str:
-    m = (os.environ.get(ENV_MODE) or "off").strip().lower()
-    return m if m in MODES else "off"
+    m = (os.environ.get(ENV_MODE) or DEFAULT_MODE).strip().lower()
+    return m if m in MODES else DEFAULT_MODE
 
 
 def _sha(text: str) -> str:
@@ -91,13 +108,15 @@ def evidence_select(text: str, query: str, max_chars: int) -> tuple[str, list, i
     lines = text.split("\n")
     n = len(lines)
     terms = _query_terms(query)
-    evidence = [i for i, l in enumerate(lines) if EVIDENCE.search(l)]
-    weak = [i for i, l in enumerate(lines) if not EVIDENCE.search(l) and WEAK.search(l)]
+    probes = [_probe(l) for l in lines]
+    evidence = [i for i, l in enumerate(probes) if EVIDENCE.search(l)]
+    evidence_set = set(evidence)
+    weak = [i for i, l in enumerate(probes) if i not in evidence_set and WEAK.search(l)]
     hits = [i for i, l in enumerate(lines) if terms and any(t in l.lower() for t in terms)]
     # second hop: names that the errors mention (a crashed service, a failing module), followed to other lines
     names = []
     for i in evidence[::-1][:20]:
-        names += [m.lower() for m in IDENT.findall(lines[i]) if len(m) >= 5 and not m[0].isdigit()]
+        names += [m.lower() for m in IDENT.findall(probes[i]) if len(m) >= 5 and not m[0].isdigit()]
     names = list(dict.fromkeys(names))[:12]
     hops = [i for i, l in enumerate(lines) if names and any(nm in l.lower() for nm in names)] if names else []
     order: list[int] = []

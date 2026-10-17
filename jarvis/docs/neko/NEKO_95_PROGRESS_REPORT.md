@@ -258,7 +258,7 @@ Per area (final run):
   - Worst cases:
     - **evidence:** one 180 KB single line, which no verbatim selector can keep, and one paraphrase at 4 KB;
     - **head cut:** every error in the middle.
-- **Decision:** both stay **off**.
+- **Decision (first pass):** both stay **off**; later superseded, see "Context selection is now ON" below.
   - The evidence selector looks clearly better than the head cut, but only on fixtures it was tuned on.
   - The independent held-out set was never written: its author was stopped when testing on Linux was paused.
   - trim-1 adds no measured benefit here: it keeps almost everything, and only the budget step cuts.
@@ -396,6 +396,20 @@ Per area (final run):
     - after any test that already set up the PluginServer logger, `_ensure_root_logger` correctly treats logging as set up;
     - the test assumes a fresh process, and the repo's pinned seed happens to pass. Documented, not changed.
 - **H-027** (the real claim checker on the 36 labelled pairs) now runs wherever the model is present instead of being deferred. Area H: 36/36 with the model; without it, H-027 errors and never passes.
+
+- **Context selection is now ON (`evidence`) by default** (D29 update), based on the full held-out set (45 cases written by Dahl's GLM, 15 more refused while Dahl was busy):
+
+| Mode | Answer kept @4 KB | @16 KB | Fits budget |
+|---|---|---|---|
+| head cut (old default) | 15/45 | 18/45 | 0/45 |
+| evidence (new default) | 44/45 | 44/45 | 45/45 |
+| trim-1 then evidence | 44/45 | 45/45 | 45/45 |
+| trim-1 alone, balanced | 45/45 | 45/45 | 2–12/45 |
+
+  - Evidence never lost an answer the head cut kept (0 vs 26–29).
+  - Opt-out: `JARVIS_CONTEXT_SELECT=off`.
+  - Known miss: an nginx access-log line whose only sign of failure is "502".
+  - Found by the kernel suite right after the switch, and fixed before committing: one regex was quadratic on a very long line (8.6 s at 32,000 characters, hours for a megabyte), so a hostile tool could stall the kernel. Lines are now classified on their start and end, and the pattern is bounded; 1 MB lines now take well under 5 s (test `HostileInput`). Kernel: 517 OK, 16 Windows-only skips.
 
 ## What blocks 9.5 (owner actions)
 

@@ -2,9 +2,9 @@
  {
   "id": "X-001",
   "area": "X",
-  "title": "Default mode is the old head cut",
-  "scenario": "JARVIS_CONTEXT_SELECT unset; a long tool output is selected.",
-  "expected": "Mode 'off'; output starts with the first max_chars characters (behaviour unchanged).",
+  "title": "Default mode is evidence; 'off' still gives the old head cut",
+  "scenario": "JARVIS_CONTEXT_SELECT unset, then set to 'off'; a long tool output is selected (default changed 2026-10-16 after the held-out test; D29).",
+  "expected": "Unset: mode 'evidence' and the error line kept. 'off': the first max_chars characters (old behaviour).",
   "risk": "high",
   "check": "default_is_off",
   "dims": [
