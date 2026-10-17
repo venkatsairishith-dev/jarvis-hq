@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
+import urllib.error
 import random
 import re
 import sys
@@ -53,6 +55,7 @@ Think briefly (a few sentences at most), then output the JSON."""
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=45)
+    ap.add_argument("--start", type=int, default=0, help="first case index (cases already in the file are kept)")
     a = ap.parse_args(argv)
     tmp = tempfile.TemporaryDirectory()
     k = Kernel(str(Path(tmp.name) / "d"))
@@ -62,18 +65,30 @@ def main(argv=None):
     srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     url, tok = f"http://127.0.0.1:{srv.server_address[1]}", tokens.issue("bench-holdout", "public")
-    r = random.Random(4242)
-    out, rejected = [], 0
+    r = random.Random(4242 + a.start)
+    path = HERE / "context_fixtures_holdout.json"
+    out = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    have = {f["id"] for f in out}
+    rejected = 0
     try:
-        for i in range(a.n):
+        for i in range(a.start, a.start + a.n):
+            if f"ho-{i:03d}" in have:
+                continue
             kind = KINDS[i % len(KINDS)]
             body = {"model": "x", "max_tokens": 4096, "temperature": 0.7,
                     "messages": [{"role": "user", "content": PROMPT.format(kind=kind)}]}
             req = urllib.request.Request(url + "/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
                                          headers={"Content-Type": "application/json", "Authorization": "Bearer " + tok})
             try:
-                with urllib.request.urlopen(req, timeout=300) as resp:
-                    text = json.loads(resp.read())["choices"][0]["message"]["content"] or ""
+                for attempt in range(4):              # Dahl's free pool answers 429 "model_concurrency" when busy
+                    try:
+                        with urllib.request.urlopen(req, timeout=300) as resp:
+                            text = json.loads(resp.read())["choices"][0]["message"]["content"] or ""
+                        break
+                    except urllib.error.HTTPError as e:
+                        if e.code not in (429, 503) or attempt == 3:
+                            raise
+                        time.sleep(20 * (attempt + 1))
                 text = re.sub(r"(?s)<think>.*?</think>", "", text)
                 d = json.loads(re.search(r"(?s)\{.*\}", text).group(0))
                 block = [str(x).replace("\n", " ") for x in d["block"]]
@@ -94,7 +109,7 @@ def main(argv=None):
         srv.shutdown()
         k.db.close()
         tmp.cleanup()
-    (HERE / "context_fixtures_holdout.json").write_text(json.dumps(out, ensure_ascii=False, indent=0), encoding="utf-8")
+    path.write_text(json.dumps(out, ensure_ascii=False, indent=0), encoding="utf-8")
     print(json.dumps({"written": len(out), "rejected": rejected}))
 
 

@@ -340,14 +340,17 @@
   "id": "H-027",
   "area": "H",
   "title": "Real NLI model on real claims",
-  "scenario": "The ONNX NLI model (nli-deberta-v3-xsmall, in D:\\jarvis\\models\\nli) checks a set of supported and unsupported sentences.",
-  "expected": "Supported sentences pass, invented ones fail (needs the model files that live on the laptop).",
+  "scenario": "The ONNX NLI model (nli-deberta-v3-xsmall, revision a150876; RESEARCH_NLI_DIR) checks 36 labelled pairs (plugin/plugins/research/tests/fixtures/nli_pairs.json): 18 claims the passage states, 18 it does not.",
+  "expected": "At least 17/18 true claims confirmed and at most 2/18 false claims accepted. Without the model files the case errors (never passes).",
   "risk": "high",
-  "check": "none",
+  "check": "nli_real_model",
   "dims": [
    "research"
   ],
-  "platform": "windows"
+  "args": {
+   "min_true": 17,
+   "max_false": 2
+  }
  },
  {
   "id": "H-028",

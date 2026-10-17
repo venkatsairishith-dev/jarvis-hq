@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from pathlib import Path
 import shutil
 import socket
 import tempfile
@@ -461,11 +462,18 @@ def unchecked_claims_labelled(a):
     html_, _t = drep.render_html(dspec.report(out["spec"]))
     noted = any("not checked" in n or "not available" in n for n in out["notes"])
     badge = "Verified</span>" in html_
-    return noted and not badge and verify.available() is False, f"note={noted}; 'Verified' badge in report={badge}; checker on this server={verify.available()}"
+    # the run is given verifier=None explicitly, so whether this machine has the model files does not matter
+    return noted and not badge, f"note={noted}; 'Verified' badge in report={badge}; checker on this machine={verify.available()}"
 
 
 def nli_real_model(a):
-    raise NotImplementedError("deferred")
+    """The real claim checker on the labelled pairs. Missing model files raise (an error, never a pass)."""
+    if not verify.available():
+        raise FileNotFoundError("NLI model files not found (RESEARCH_NLI_DIR)")
+    pairs = json.loads((Path(__file__).resolve().parents[5] / "plugin/plugins/research/tests/fixtures/nli_pairs.json").read_text(encoding="utf-8"))
+    t = sum(verify.supported(h, [pairs["passages"][p]])[0] for p, lab, h in pairs["pairs"] if lab == "yes")
+    f = sum(verify.supported(h, [pairs["passages"][p]])[0] for p, lab, h in pairs["pairs"] if lab == "no")
+    return t >= a["min_true"] and f <= a["max_false"], f"true claims confirmed {t}/18, false claims accepted {f}/18"
 
 
 # ---------------------------------------------------------------- search
