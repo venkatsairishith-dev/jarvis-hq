@@ -113,7 +113,9 @@ class Tasks:
         ids = []
         for tid in cand:
             with self.k.db.tx():            # the state, its event and its audit row together; a task that just finished is left alone
-                cur = self.k.db.execute(f"UPDATE tasks SET state='failed', updated=?, result=CASE WHEN result='' THEN 'time budget used up' ELSE result END "
+                # the reason is always in the result: an earlier partial result alone read like the outcome (bench D-068)
+                cur = self.k.db.execute(f"UPDATE tasks SET state='failed', updated=?, result=CASE WHEN result='' THEN 'time budget used up' "
+                                        f"ELSE substr('time budget used up; last reported: ' || result, 1, {TEXT_MAX['result']}) END "
                                         f"WHERE id=? AND state NOT IN ({marks})", (now, tid, *FINAL))
                 if cur.rowcount == 1:
                     self._event(tid, "failed", "state", "time budget used up")
@@ -166,22 +168,37 @@ class Tasks:
             out.append({"id": tid, "goal": t["goal"], "criteria": t["criteria"], "state": t["state"],
                         "attempts": f"{t['attempts']}/{t['max_attempts']}", "done": done, "pending": t["plan"] if t["state"] == "planning" else [],
                         "decisions": decisions, "result": t["result"], "next": self.NEXT_ACTION.get(t["state"], "")})
-        text, lines = "", []
+        # The goal is trimmed, never the owner's latest correction or the "next:" line: cutting the joined text at max_chars
+        # used to drop exactly those after one long goal (bench A-080). When too long, optional lines go first (from the
+        # oldest task up), then whole older tasks; essential lines are never cut mid-way.
+        blocks = []
         for c in out:
-            block = [f"Task {c['id']} [{c['state']}, attempts {c['attempts']}]: {c['goal']}",
-                     "  criteria: " + "; ".join(map(str, c["criteria"]))[:300]]
+            goal = str(c["goal"])
+            block = [(f"Task {c['id']} [{c['state']}, attempts {c['attempts']}]: " + (goal if len(goal) <= 160 else goal[:157] + "..."), True),
+                     ("  criteria: " + "; ".join(map(str, c["criteria"]))[:300], False)]
             if c["done"]:
-                block.append("  done: " + " | ".join(map(str, c["done"]))[:300])
+                block.append(("  done: " + " | ".join(map(str, c["done"]))[:300], False))
             if c["pending"]:
-                block.append("  pending: " + "; ".join(map(str, c["pending"]))[:200])
+                block.append(("  pending: " + "; ".join(map(str, c["pending"]))[:200], False))
             if c["decisions"]:
-                block.append("  decisions: " + " | ".join(map(str, c["decisions"]))[:250])
+                block.append(("  decisions: " + " | ".join(map(str, c["decisions"]))[:250], True))
             if c["result"]:
-                block.append("  result: " + str(c["result"])[:200])
-            block.append("  next: " + c["next"])
-            lines.append("\n".join(block))
-        text = "\n".join(lines)[:max_chars]
-        return {"tasks": out, "text": text}
+                block.append(("  result: " + str(c["result"])[:200], False))
+            block.append(("  next: " + c["next"], True))
+            blocks.append(block)
+
+        def joined():
+            return "\n".join(line for b in blocks for line, _ in b)
+        while len(joined()) > max_chars:
+            opt = next((b for b in reversed(blocks) if any(not keep for _, keep in b)), None)
+            if opt is not None:
+                drop = ("  done:", "  pending:", "  criteria:", "  result:")      # the result (often the blocker) goes last
+                opt.remove(min((x for x in opt if not x[1]), key=lambda x: next(i for i, p in enumerate(drop) if x[0].startswith(p))))
+            elif len(blocks) > 1:
+                blocks.pop()
+            else:
+                break
+        return {"tasks": out, "text": joined()}
 
     def recent(self, limit=30):
         rows = self.k.db.execute("SELECT id FROM tasks ORDER BY updated DESC LIMIT ?", (limit,)).fetchall()

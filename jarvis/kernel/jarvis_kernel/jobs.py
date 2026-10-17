@@ -225,7 +225,10 @@ class Jobs:
         return {"id": jid, "kind": r[0], "state": r[1], "result": json.loads(r[2]) if r[2] else None}
 
     def next_for(self, node: str):
-        """Hand the oldest queued, unexpired job to the node (atomically marks it running)."""
+        """Hand the oldest queued, unexpired job to the node (atomically marks it running). Nothing while the kill switch is
+        on: the node endpoint checked that itself, the lab runner's /runner/next did not (bench D-075, 2026-10-17)."""
+        if self.k.killed():
+            return None
         now = time.time()
         self.k.db.execute("UPDATE jobs SET state='expired' WHERE state='queued' AND expires<?", (now,))
         for jid, kind, params in self.k.db.execute("SELECT id, kind, params FROM jobs WHERE node=? AND state='queued' ORDER BY created LIMIT 3", (node,)).fetchall():
@@ -240,18 +243,50 @@ class Jobs:
         kind_row = self.k.db.execute("SELECT kind FROM jobs WHERE id=?", (jid,)).fetchone()
         if len(blob) > RESULT_LIMITS.get(kind_row[0] if kind_row else "", 60000):
             result, blob = {"ok": False, "error": "result too large"}, '{"ok": false, "error": "result too large"}'
-        state = "done" if result.get("ok") else "cancelled" if result.get("cancelled") else "failed"
+        # only a real true is success: a node's {"ok": "false"} or {"ok": 1} is not recorded as done (bench N-062)
+        state = "done" if result.get("ok") is True else "cancelled" if result.get("cancelled") else "failed"
         with self.k.db.tx():                       # the job and the registry change together: nobody reads "done" with stale registry state
             cur = self.k.db.execute("UPDATE jobs SET state=?, result=?, finished=? WHERE id=? AND node=? AND state='running'",
                                     (state, blob, time.time(), jid, node))
-            self.k.audit.append("job_finished", {"id": jid, "ok": bool(result.get("ok")), "accepted": cur.rowcount == 1})
+            self.k.audit.append("job_finished", {"id": jid, "ok": state == "done", "accepted": cur.rowcount == 1})
             if cur.rowcount == 1 and kind_row and kind_row[0] == "connector_op":
                 try:                               # the registry learns what the node found, in whichever process received it
                     from . import connectors
                     connectors.on_job_finished(self.k, jid, node, result)
                 except Exception as e:
                     self.k.audit.append("connector_hook_failed", {"id": jid, "error": type(e).__name__})
+        if cur.rowcount == 1 and kind_row and kind_row[0] == "lab_run" and state != "done":
+            self.close_lab_tasks()
         return cur.rowcount == 1
+
+    def close_lab_tasks(self) -> list:
+        """A task whose latest lab job ended without success (the runner crashed or could not start, the job expired
+        unclaimed, was cancelled or never reported) is not being worked on any more. It used to keep saying queued/running
+        until its deadline, and the owner heard nothing (only final tasks are announced; bench D-072..D-074). Close it with
+        the job's own error: cancelled if the job was cancelled, otherwise failed. Paused and planning tasks are left alone:
+        they can be dispatched again. Returns the ids closed."""
+        try:
+            rows = self.k.db.execute(
+                "SELECT t.id, j.id, j.state, j.result FROM tasks t JOIN jobs j ON j.kind='lab_run' AND json_extract(j.params,'$.task')=t.id "
+                "WHERE t.state IN ('queued','running','verifying','repairing','waiting_approval') AND j.state IN ('failed','expired','cancelled') "
+                "AND j.created=(SELECT MAX(created) FROM jobs j2 WHERE j2.kind='lab_run' AND json_extract(j2.params,'$.task')=t.id)").fetchall()
+        except Exception:                          # no tasks table in this database: nothing to close
+            return []
+        from .tasks import TaskError, Tasks
+        T, closed = Tasks(self.k), []
+        for tid, jid, jstate, result in rows:
+            try:
+                err = str((json.loads(result) if result else {}).get("error") or "")[:200]
+            except (ValueError, AttributeError):
+                err = ""
+            why = {"expired": "the lab never picked it up before the job expired", "cancelled": "the lab job was cancelled"}.get(jstate, err or "no reason given")
+            try:
+                T.update(None, tid, state="cancelled" if jstate == "cancelled" else "failed",
+                         result=f"lab work ended without a verified result: lab job {jid} {jstate} ({why})", note=f"lab job {jid} {jstate}")
+                closed.append(tid)
+            except TaskError:                      # finished or changed meanwhile: its own final state stands
+                pass
+        return closed
 
     def cancel(self, jid: str, owner: str = None) -> dict:
         """Stop a job (the safe direction: no approval). Queued: it never runs. Running: the node is told on its next
@@ -262,6 +297,7 @@ class Jobs:
         args = [now, json.dumps({"ok": False, "cancelled": True, "error": "cancelled before it started"}), jid] + ([] if owner is None else [owner])
         if self.k.db.execute(q, args).rowcount == 1:
             self.k.audit.append("job_cancelled", {"id": jid, "was": "queued"})
+            self.close_lab_tasks()
             return {"id": jid, "state": "cancelled"}
         q = "UPDATE jobs SET cancel_requested=? WHERE id=? AND state='running'" + ("" if owner is None else " AND owner=?")
         if self.k.db.execute(q, [now, jid] + ([] if owner is None else [owner])).rowcount == 1:
@@ -287,6 +323,7 @@ class Jobs:
                                    now, now - RUN_TTL, now - LAB_RUN_TTL)).rowcount
         if stuck:
             self.k.audit.append("job_stuck_failed", {"count": stuck})
+        self.close_lab_tasks()
         return {"expired": expired, "stuck_failed": stuck}
 
     def fail_orphans(self, node: str, now=None, grace: float = 30.0) -> int:

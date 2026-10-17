@@ -53,6 +53,58 @@ class Store(unittest.TestCase):
         with self.assertRaises(TaskError):
             self.T.create("hermes", "private", "", "goal", max_attempts=9)
 
+    def test_an_expired_task_says_why_even_after_a_partial_result(self):
+        # regression (bench D-068): the earlier partial result alone was kept, so "failed: draft 1 of 3 written" hid the reason
+        t = self.T.create("hermes", "private", "", "Write 3 pages", budget_s=60)
+        self.T.update("hermes", t, state="running", result="draft 1 of 3 pages written")
+        self.T.expire(time.time() + 61)
+        r = self.T.get(t)["result"]
+        self.assertTrue(r.startswith("time budget used up"), r); self.assertIn("draft 1 of 3", r)
+
+    def test_checkpoint_keeps_the_latest_correction_and_next_with_a_long_goal(self):
+        # regression (bench A-080): the joined text was cut at 900 characters after an untrimmed goal line
+        t = self.T.create("hermes", "private", "", "Plan the trip: " + "visit every museum and gallery on the list " * 25)
+        self.T.update("hermes", t, state="running", step="booking", note="owner: use the train, not the plane")
+        for i in range(2):
+            o = self.T.create("hermes", "private", "", f"other task {i} " + "with a long goal " * 20, criteria=["c" * 250])
+            self.T.update("hermes", o, state="running", note="x" * 200)
+        self.T.update("hermes", t, note="owner correction: the budget is 500 euros")    # newest: listed first
+        txt = self.T.checkpoint("hermes")["text"]
+        self.assertLessEqual(len(txt), 900)
+        self.assertIn("the budget is 500 euros", txt)
+        self.assertIn("next: wait: the lab is working", txt)
+        self.assertNotIn("museum and gallery on the list " * 5, txt)                  # the goal is what was trimmed
+
+    def _lab_task(self, run=True):
+        from jarvis_kernel.jobs import Jobs
+        J = Jobs(self.k)
+        t = self.T.create("hermes", "public", "", "A tool", criteria=["tests pass"])
+        jid = J.create("lab", "lab_run", {"task": t, "agent": "hermes", "instructions": "build it", "criteria": ["tests pass"],
+                                          "max_attempts": 2, "timeout_s": 600}, owner="hermes", lane="public")
+        self.T.update("hermes", t, state="queued")
+        if run:
+            J.next_for("lab"); self.T.update(None, t, state="running", attempt=True)
+        return J, t, jid
+
+    def test_lab_work_that_ends_without_a_result_does_not_leave_the_task_open(self):
+        # regression (bench D-072..D-074): the task kept saying running/queued until its deadline and the owner heard nothing
+        J, t, jid = self._lab_task()
+        J.finish("lab", jid, {"ok": False, "error": "runner error: KeyError"})        # the runner crashed before reporting
+        g = self.T.get(t)
+        self.assertEqual(g["state"], "failed"); self.assertIn("runner error: KeyError", g["result"])
+        J, t, jid = self._lab_task(run=False)
+        J.cancel(jid)                                                                 # the owner cancelled the queued lab job
+        self.assertEqual(self.T.get(t)["state"], "cancelled")
+        J, t, jid = self._lab_task(run=False)
+        self.k.db.execute("UPDATE jobs SET expires=? WHERE id=?", (time.time() - 1, jid))
+        J.sweep()                                                                     # the runner was offline: the job expired
+        self.assertEqual(self.T.get(t)["state"], "failed"); self.assertIn("expired", self.T.get(t)["result"])
+        J, t, jid = self._lab_task()
+        self.T.update(None, t, state="verifying")
+        self.T.update(None, t, state="completed", result="verified", verification={"passed": True})
+        J.finish("lab", jid, {"ok": True})
+        self.assertEqual(self.T.get(t)["state"], "completed")                         # a normal end is untouched
+
 
 class Base(unittest.TestCase):
     def setUp(self):

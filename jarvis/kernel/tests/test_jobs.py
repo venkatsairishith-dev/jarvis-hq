@@ -75,6 +75,22 @@ class Queue(unittest.TestCase):
         self.assertIn("restarted or lost", json.dumps(rep[0][4]))
         self.assertFalse(self.j.finish("laptop", jid, GOOD))                     # a late result for it is not accepted as a success
 
+    def test_no_job_is_handed_out_while_the_kill_switch_is_on(self):
+        # regression (bench D-075): the lab runner's /runner/next called next_for without checking the kill switch
+        jid = self.j.create("lab", "project_check", {"project": "jarvis-hq"})
+        self.k.kill("t")
+        self.assertIsNone(self.j.next_for("lab"))
+        self.assertEqual(self.k.db.execute("SELECT state FROM jobs WHERE id=?", (jid,)).fetchone()[0], "queued")
+        self.k.resume()
+        self.assertEqual(self.j.next_for("lab")["id"], jid)
+
+    def test_only_a_real_true_ok_is_recorded_as_done(self):
+        # regression (bench N-062): {"ok": "false"} was truthy and recorded as done
+        for res in ({"ok": "false"}, {"ok": 1}, {"ok": "yes"}):
+            jid = self.j.create("laptop", "project_check", {"project": "jarvis-hq"}); self.j.next_for("laptop")
+            self.assertTrue(self.j.finish("laptop", jid, res))
+            self.assertEqual(self.k.db.execute("SELECT state FROM jobs WHERE id=?", (jid,)).fetchone()[0], "failed", res)
+
     def test_unstarted_job_cannot_be_finished(self):
         jid = self.j.create("laptop", "project_check", {"project": "jarvis-hq"})
         self.assertFalse(self.j.finish("laptop", jid, GOOD))                    # never handed out

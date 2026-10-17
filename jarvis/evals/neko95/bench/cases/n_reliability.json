@@ -430,5 +430,562 @@
    "reliability"
   ],
   "check": "connector_busy"
+ },
+ {
+  "id": "N-034",
+  "area": "N",
+  "title": "A retried approved action runs once",
+  "scenario": "Owner plane: a repair edit needs approval; the owner approves; the same request with the approval id is sent twice (double tap / network retry). Node side not involved.",
+  "expected": "First: needs_approval; second: queued; third: refused 403; exactly one repair job.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "owner_approval_reuse",
+  "regression": "Idempotency of approved side effects rests on single-use approvals."
+ },
+ {
+  "id": "N-035",
+  "area": "N",
+  "title": "The same job result posted 8 times at once",
+  "scenario": "8 threads post the node's result for one running job simultaneously.",
+  "expected": "Exactly one accepted; the stored result is that one; 8 audit rows with exactly one accepted.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "duplicate_results_concurrent",
+  "regression": "A retried result post must not overwrite or double-count the outcome."
+ },
+ {
+  "id": "N-036",
+  "area": "N",
+  "title": "Job hand-out across two kernel connections",
+  "scenario": "10 queued jobs; 8 pollers on two Kernel connections to one database call next_for until empty.",
+  "expected": "Each job handed out exactly once (10 distinct, no duplicates); no errors.",
+  "risk": "critical",
+  "dims": [
+   "reliability"
+  ],
+  "check": "next_for_two_connections",
+  "regression": "Double execution of a node job would repeat a side effect on the laptop."
+ },
+ {
+  "id": "N-037",
+  "area": "N",
+  "title": "Job hand-out across four processes",
+  "scenario": "20 queued jobs; 4 separate processes poll next_for at the same instant until empty.",
+  "expected": "Each job handed out exactly once across all processes.",
+  "risk": "critical",
+  "dims": [
+   "reliability"
+  ],
+  "check": "next_for_processes",
+  "regression": "The atomic queued->running step must hold between processes, not just threads."
+ },
+ {
+  "id": "N-038",
+  "area": "N",
+  "title": "Runner's completion races the owner's cancel",
+  "scenario": "20 trials: the runner's 'completed' and the owner's 'cancelled' for one running task arrive at the same instant on two connections.",
+  "expected": "Exactly one wins each time, the other is refused; state, newest event and the single final audit row agree.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "ux"
+  ],
+  "check": "report_cancel_race",
+  "args": {
+   "trials": 20
+  },
+  "regression": "A final state must never be overwritten by a racing writer."
+ },
+ {
+  "id": "N-039",
+  "area": "N",
+  "title": "Simultaneous attempt reports respect the retry budget",
+  "scenario": "10 threads on two connections report a new attempt for a task with max_attempts 3.",
+  "expected": "Exactly 3 accepted, attempts == 3, the 7 others refused with 'retry budget used up'.",
+  "risk": "high",
+  "dims": [
+   "resources",
+   "reliability"
+  ],
+  "check": "attempts_concurrent",
+  "regression": "Bounded retries must hold under concurrency."
+ },
+ {
+  "id": "N-040",
+  "area": "N",
+  "title": "Deadline sweep races a completion",
+  "scenario": "20 trials: Tasks.expire on one connection and the runner's 'completed' on another, for a task just past its deadline.",
+  "expected": "Exactly one ending each time (completed or failed); one final audit row; the newest event matches the state.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "ux"
+  ],
+  "check": "expire_complete_race",
+  "args": {
+   "trials": 20
+  },
+  "regression": "The record must never say both 'completed' and 'time budget used up'."
+ },
+ {
+  "id": "N-041",
+  "area": "N",
+  "title": "Cancel races the hand-out of a queued job",
+  "scenario": "20 trials: the owner's cancel and the node's poll for the same queued job at the same instant (two connections).",
+  "expected": "Either cancelled and never handed out, or handed out with a stop request recorded; never cancelled-and-running.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "autonomy"
+  ],
+  "check": "cancel_handout_race",
+  "args": {
+   "trials": 20
+  },
+  "regression": "A cancelled job must not run behind the owner's back."
+ },
+ {
+  "id": "N-042",
+  "area": "N",
+  "title": "Orphaned jobs: grace period and lab runs",
+  "scenario": "The node says it is idle: one job handed out 5 s ago, one 60 s ago, and a lab run started 10 min ago.",
+  "expected": "Only the 60 s job is failed ('lost this job'); the fresh one and the lab run keep running.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "recovery"
+  ],
+  "check": "orphan_rules",
+  "regression": "Restart recovery must not fail work that is legitimately in flight."
+ },
+ {
+  "id": "N-043",
+  "area": "N",
+  "title": "Kernel restart while the laptop works",
+  "scenario": "A job is running when the kernel database is closed and reopened; the node then posts its result, and retries the post.",
+  "expected": "The first result is accepted, the retry refused; it is reported once; the stored result is the first.",
+  "risk": "high",
+  "dims": [
+   "recovery",
+   "reliability"
+  ],
+  "check": "restart_mid_job",
+  "regression": "No lost or duplicated outcome across a kernel restart."
+ },
+ {
+  "id": "N-044",
+  "area": "N",
+  "title": "Process dies inside a task update",
+  "scenario": "A child process completes a task through Tasks.update and dies (os._exit) at the audit append inside the transaction (fake crash point).",
+  "expected": "Afterwards the task is still running with no result and no 'completed' event; the chain verifies.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "recovery"
+  ],
+  "check": "crash_inside_task_update",
+  "regression": "State, event and audit row commit together or not at all."
+ },
+ {
+  "id": "N-045",
+  "area": "N",
+  "title": "The owner's stop reaches the job in hand through the node loop",
+  "scenario": "The node runs a diagnostic whose program sleeps 60 s (fake PowerShell); the node's report loop gets {cancel: [job]} from a fake kernel.",
+  "expected": "The job ends ok=false, cancelled=true, its child process is stopped, within 15 s; the job slot is free.",
+  "risk": "critical",
+  "dims": [
+   "autonomy",
+   "reliability"
+  ],
+  "check": "node_loop_cancel",
+  "regression": "End-to-end cancel path on the node: report -> runtime.cancel -> child killed."
+ },
+ {
+  "id": "N-046",
+  "area": "N",
+  "title": "A node program that hangs is stopped by its time limit",
+  "scenario": "runtime.run of a 30 s program with a 0.5 s limit.",
+  "expected": "TimeoutExpired within 5 s and the child process is gone.",
+  "risk": "high",
+  "dims": [
+   "resources",
+   "reliability"
+  ],
+  "check": "node_run_timeout",
+  "regression": "Bounded job time with no orphaned processes."
+ },
+ {
+  "id": "N-047",
+  "area": "N",
+  "title": "Cancel stops every program the job started",
+  "scenario": "A job starts two long programs; cancel is sent for another id, then for this job; then it tries to start a third.",
+  "expected": "The wrong id is ignored; both programs stop within 5 s; the third is refused (Cancelled).",
+  "risk": "critical",
+  "dims": [
+   "autonomy",
+   "reliability"
+  ],
+  "check": "node_cancel_children",
+  "regression": "Cancelled work must stop all its children and start nothing new."
+ },
+ {
+  "id": "N-048",
+  "area": "N",
+  "title": "A late cancel never hits the next job",
+  "scenario": "Job j1 ends; the owner's cancel for j1 arrives afterwards; job j2 runs a program.",
+  "expected": "The late cancel is refused; j2 is not cancelled and its program runs.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "node_cancel_no_leak",
+  "regression": "A stale stop must not kill the wrong work."
+ },
+ {
+  "id": "N-049",
+  "area": "N",
+  "title": "Cancelled command: its late answer is ignored",
+  "scenario": "Owner plane with a fake JARVIS agent whose first answer is very slow; a second command while busy; the owner cancels the first; a new command; then the slow answer arrives.",
+  "expected": "Busy -> 409; cancel accepted; the new command completes; the cancelled one stays cancelled with no reply ('owner_command_late' audited); the gate is free.",
+  "risk": "high",
+  "dims": [
+   "autonomy",
+   "ux"
+  ],
+  "check": "owner_command_cancel",
+  "regression": "A cancelled request must not come back to life when its answer finally arrives."
+ },
+ {
+  "id": "N-050",
+  "area": "N",
+  "title": "A crashing agent fails the command and frees JARVIS",
+  "scenario": "The fake JARVIS agent raises RuntimeError with a URL in the text; then another command.",
+  "expected": "The command is 'failed' with the error class; the next command runs ('done').",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "ux"
+  ],
+  "check": "owner_command_crash",
+  "regression": "A crash must not wedge the single command gate or report success."
+ },
+ {
+  "id": "N-051",
+  "area": "N",
+  "title": "Ten simultaneous commands: one runs",
+  "scenario": "10 threads send owner commands at the same instant (fake slow agent).",
+  "expected": "Exactly one accepted ('running'), nine 409; one command row.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "owner_commands_concurrent",
+  "regression": "No double execution through the owner's command path."
+ },
+ {
+  "id": "N-052",
+  "area": "N",
+  "title": "Stop all leaves nothing able to run",
+  "scenario": "A task running at the lab, a queued PC job and a pending approval; the owner presses stop all; then the runner reports, the node polls and someone approves and uses the approval.",
+  "expected": "Task cancelled, approval denied, queued job expired; the late runner report is refused; nothing is handed out; the denied approval cannot be used.",
+  "risk": "critical",
+  "dims": [
+   "security",
+   "autonomy"
+  ],
+  "check": "stop_all_state",
+  "regression": "The emergency stop must hold against every late actor."
+ },
+ {
+  "id": "N-053",
+  "area": "N",
+  "title": "Three kernel processes tick the same slot",
+  "scenario": "3 processes run the automation scheduler for the same due slot at the same instant.",
+  "expected": "Exactly one fires; one run and one job in total.",
+  "risk": "critical",
+  "dims": [
+   "reliability",
+   "autonomy"
+  ],
+  "check": "tick_processes",
+  "regression": "Scheduler idempotency across processes (D-036 covers only restarts)."
+ },
+ {
+  "id": "N-054",
+  "area": "N",
+  "title": "A file arrival reported repeatedly runs once",
+  "scenario": "A file-arrival automation (overlap queue): the node reports the same invoice.pdf arrival four times (retries) around scheduler ticks; then a second file.",
+  "expected": "Recorded once; one run for it; the second file makes a second run; 2 jobs in total.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "autonomy"
+  ],
+  "check": "file_event_once",
+  "regression": "Event-triggered work must be idempotent per event."
+ },
+ {
+  "id": "N-055",
+  "area": "N",
+  "title": "The firing fence stops a double fire",
+  "scenario": "One claimed run is fired, then fired again from another connection (a retry loop in another process), then again.",
+  "expected": "First 'fired', the others 'skipped'; exactly one job.",
+  "risk": "critical",
+  "dims": [
+   "reliability"
+  ],
+  "check": "fire_fence",
+  "regression": "The claimed->firing fence is the last guard against duplicate unattended side effects."
+ },
+ {
+  "id": "N-056",
+  "area": "N",
+  "title": "Died after the fence: unknown, never re-fired",
+  "scenario": "A run is left 'firing' (the process died after the fence, before creating the job); the kernel restarts and ticks within and after the 15 min grace.",
+  "expected": "It stays 'firing' within the grace, then becomes 'unknown'; it never gets a job; the failure streak counts it.",
+  "risk": "critical",
+  "dims": [
+   "recovery",
+   "reliability"
+  ],
+  "check": "firing_crash",
+  "regression": "Complements D-040 ('claimed' crash) for the later crash point."
+ },
+ {
+  "id": "N-057",
+  "area": "N",
+  "title": "Refused unattended runs pause the automation",
+  "scenario": "A lab-task automation whose lab path (fake dispatch) keeps refusing; pause after 2 failures; 4 slots pass.",
+  "expected": "Dispatch tried exactly twice; two 'refused' runs; the automation is paused ('2 failed runs'); later slots do nothing.",
+  "risk": "high",
+  "dims": [
+   "resources",
+   "autonomy"
+  ],
+  "check": "refused_runs_pause",
+  "regression": "Bounded retries for refusals (D-042 covers failed jobs)."
+ },
+ {
+  "id": "N-058",
+  "area": "N",
+  "title": "Retry and time budgets cannot be unbounded",
+  "scenario": "Tasks.create with max_attempts 0, 6, 100 and budgets 59 s, 6 h + 1 s, 10^9 s; then the edge values 1/60 s and 5/6 h.",
+  "expected": "Every out-of-range budget is refused; the edge values are accepted.",
+  "risk": "medium",
+  "dims": [
+   "resources"
+  ],
+  "check": "task_budget_bounds",
+  "regression": "An agent must not be able to create a task that retries or runs forever."
+ },
+ {
+  "id": "N-059",
+  "area": "N",
+  "title": "A result for a job cancelled before it started is refused",
+  "scenario": "The owner cancels a queued job; the node polls; a (late or forged) result for it arrives.",
+  "expected": "Nothing is handed out; the result is refused; the job stays 'cancelled before it started'.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "job_cancelled_before_start",
+  "regression": "A cancelled job cannot be turned into 'done'."
+ },
+ {
+  "id": "N-060",
+  "area": "N",
+  "title": "Cancelling a running job ends as 'cancelled'",
+  "scenario": "A running job is cancelled; the node is told on its next report and confirms {cancelled: true}; then cancel is pressed again.",
+  "expected": "First 'cancelling' and listed for the node; then state 'cancelled' and no longer listed; the second cancel says nothing to cancel.",
+  "risk": "high",
+  "dims": [
+   "autonomy",
+   "ux"
+  ],
+  "check": "job_running_cancel",
+  "regression": "Cancelled work is reported as cancelled, not failed or done."
+ },
+ {
+  "id": "N-061",
+  "area": "N",
+  "title": "Stuck-job limits: PC jobs 30 min, lab runs 2 h",
+  "scenario": "A PC job silent for 31 min and a lab run for 1 h, swept; then the sweep 2 h after the lab run started.",
+  "expected": "First sweep fails only the PC job; the later one fails the lab run too.",
+  "risk": "high",
+  "dims": [
+   "resources",
+   "reliability"
+  ],
+  "check": "lab_ttl",
+  "regression": "Every running job has a bound, with the longer bound only for lab runs."
+ },
+ {
+  "id": "N-062",
+  "area": "N",
+  "title": "Only a real true counts as success",
+  "scenario": "Node results {ok: 'false'}, {ok: 1} and {ok: true} for three running jobs.",
+  "expected": "Recorded as failed, failed and done.",
+  "risk": "high",
+  "dims": [
+   "reliability",
+   "ux"
+  ],
+  "check": "ok_must_be_true",
+  "regression": "Found 2026-10-17: a truthy string was recorded as done (fixed in jobs.py)."
+ },
+ {
+  "id": "N-063",
+  "area": "N",
+  "title": "Kill switch: results still land, new jobs do not start",
+  "scenario": "A job is running and another queued when the kill switch goes on; the node posts its result and polls; then resume.",
+  "expected": "The result is recorded 'done'; nothing is handed out while killed; after resume the queued job is handed out once.",
+  "risk": "critical",
+  "dims": [
+   "security",
+   "reliability"
+  ],
+  "check": "result_while_killed",
+  "regression": "The record stays truthful during an emergency stop and no work leaks through it."
+ },
+ {
+  "id": "N-064",
+  "area": "N",
+  "title": "One approval used by four processes at once",
+  "scenario": "4 separate processes authorize the same approved action at the same instant.",
+  "expected": "Exactly one True, three False; the chain verifies.",
+  "risk": "critical",
+  "dims": [
+   "security",
+   "reliability"
+  ],
+  "check": "approval_once_processes",
+  "regression": "Single-use approvals across processes (N-001 covers threads)."
+ },
+ {
+  "id": "N-065",
+  "area": "N",
+  "title": "Tasks written by four processes",
+  "scenario": "4 processes each create 25 tasks and move them to running at the same instant.",
+  "expected": "100 running tasks, 200 events, chain verifies, all exit 0.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "tasks_processes",
+  "regression": "The task store keeps every row and event under process concurrency."
+ },
+ {
+  "id": "N-066",
+  "area": "N",
+  "title": "Two deadline sweepers fail each task once",
+  "scenario": "20 overdue tasks; two sweepers on two connections run Tasks.expire at the same instant.",
+  "expected": "20 distinct ids failed in total, 20 'task_failed' audit rows, 20 events.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "expire_two_connections",
+  "regression": "No duplicate or lost failures when sweepers overlap."
+ },
+ {
+  "id": "N-067",
+  "area": "N",
+  "title": "Lost result post: reported honestly, side effect not repeated",
+  "scenario": "The node saves an output file, but its result post fails (fake network); later it reports idle.",
+  "expected": "The job is failed with 'nothing was reported'; a late result is refused; exactly one file was written.",
+  "risk": "high",
+  "dims": [
+   "recovery",
+   "ux"
+  ],
+  "check": "lost_result_post",
+  "regression": "The kernel neither claims success nor re-runs a side effect it cannot confirm."
+ },
+ {
+  "id": "N-068",
+  "area": "N",
+  "title": "A crashing job handler is contained",
+  "scenario": "The node's output_save handler raises ValueError with a path in the text (fake handler); then another job.",
+  "expected": "Result {ok: false, error: 'ValueError'} (no detail); the job slot is free; the next job is handled.",
+  "risk": "medium",
+  "dims": [
+   "reliability",
+   "security"
+  ],
+  "check": "node_handler_crash",
+  "regression": "One bad job must not wedge the node or leak details."
+ },
+ {
+  "id": "N-069",
+  "area": "N",
+  "title": "The same task request five times at once",
+  "scenario": "5 simultaneous 'task create' calls with the same request text to the real agent endpoint (127.0.0.1).",
+  "expected": "Exactly one 200 and four 409 naming the existing task; one task row.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "duplicate_task_create",
+  "regression": "Found live earlier as sequential duplicates; checks the concurrent case too."
+ },
+ {
+  "id": "N-070",
+  "area": "N",
+  "title": "The runner cannot exceed the retry budget",
+  "scenario": "Real runner endpoints, fake lab runner, max_attempts 2: attempt, verify, repair, attempt, verify, repair, attempt, failed.",
+  "expected": "The third repair and attempt are refused 409; the honest failure report is accepted; the task is failed after 2 attempts.",
+  "risk": "high",
+  "dims": [
+   "resources",
+   "recovery"
+  ],
+  "check": "runner_attempt_budget",
+  "regression": "Bounded retries enforced by the kernel, not by the runner's goodwill."
+ },
+ {
+  "id": "N-071",
+  "area": "N",
+  "title": "Six runners, one lab job",
+  "scenario": "6 fake lab runners poll /v1/jarvis/runner/next at the same instant for one queued lab job.",
+  "expected": "Exactly one gets it; the others get none.",
+  "risk": "critical",
+  "dims": [
+   "reliability"
+  ],
+  "check": "runner_next_race",
+  "regression": "A lab task must never be worked twice in parallel."
+ },
+ {
+  "id": "N-072",
+  "area": "N",
+  "title": "A late success does not resurrect a cancelled task",
+  "scenario": "The owner cancels while the fake lab runner works; the runner then reports 'completed' with a passed verification and finishes ok.",
+  "expected": "The report is refused 409; finish accepted; the task stays cancelled with no verification; the lab job is done.",
+  "risk": "critical",
+  "dims": [
+   "autonomy",
+   "ux"
+  ],
+  "check": "lab_success_after_cancel",
+  "regression": "The owner's cancel stands; the owner is never told a cancelled task completed."
+ },
+ {
+  "id": "N-073",
+  "area": "N",
+  "title": "Mixed concurrent load keeps everything consistent",
+  "scenario": "6 threads x 15 operations mixing task lifecycles, job create/hand-out/finish and approval request/approve/use on one kernel.",
+  "expected": "No errors; 30 failed tasks, 30 done jobs, 30 used approvals; the audit chain verifies.",
+  "risk": "high",
+  "dims": [
+   "reliability"
+  ],
+  "check": "mixed_load",
+  "regression": "Cross-module interference under load (shared connection and lock)."
  }
 ]

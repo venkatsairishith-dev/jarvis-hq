@@ -703,3 +703,864 @@ def connector_busy(a):
         th.join(10)
         c3 = svc.call_tool("hermes", "private", "fake", "echo", {"text": "3"})[0]
     return res == [200] and c2 == 429 and c3 == 200 and len(calls) == 2, f"first={res}, overlapping={c2}, after={c3}, server calls={len(calls)}"
+
+
+# ================================================================ 2026-10-17: duplicates, races on the real store, restart, cancel,
+# timeouts and bounded retries for jobs, tasks, owner commands, automations and the node's job runner (N-034..N-073).
+T0 = 1791676800.0          # 2026-10-11 00:00 UTC
+JOB = {"name": "repo check", "action_kind": "job", "trigger_kind": "interval", "schedule": "600", "tz": "UTC",
+       "action": {"kind": "project_check", "params": {"project": "jarvis-hq"}, "node": "laptop"}}
+
+
+@contextlib.contextmanager
+def two_kernels():
+    """Two Kernel instances (two SQLite connections) on one data folder, as two kernel processes would have."""
+    with tempfile.TemporaryDirectory() as d:
+        dd = os.path.join(d, "k")
+        k1, k2 = Kernel(dd), Kernel(dd)
+        try:
+            yield k1, k2, dd
+        finally:
+            k1.db.close()
+            k2.db.close()
+
+
+def _tj(k):
+    from jarvis_kernel.jobs import Jobs
+    from jarvis_kernel.tasks import Tasks
+    return Tasks(k), Jobs(k)
+
+
+def _lab_job(J, tid="a1b2c3d4e5f6"):
+    return J.create("lab", "lab_run", {"task": tid, "agent": "hermes", "instructions": "build it", "criteria": ["tests pass"],
+                                       "max_attempts": 2, "timeout_s": 600}, owner="hermes", lane="public")
+
+
+def _state(k, jid):
+    return k.db.execute("SELECT state FROM jobs WHERE id=?", (jid,)).fetchone()[0]
+
+
+def _at(start):
+    return f"START={start!r}\nwhile time.time() < START:\n    time.sleep(0.002)\n"
+
+
+# ---------------------------------------------------------------- duplicates and idempotency
+def owner_approval_reuse(a):
+    from jarvis_kernel.owner import OwnerError
+    with kernel() as k:
+        o = _owner(k)
+        body = {"op": "repair", "action": "edit_file", "target": "C:/notes/todo.txt", "args": {"find": "teh", "replace": "the"}}
+        first = o.pc(dict(body))
+        aid = first.get("approval_id")
+        k.approve(aid)
+        job = o.pc(dict(body, approval_id=aid))
+        try:
+            o.pc(dict(body, approval_id=aid))                       # the same request retried (double tap, network retry)
+            again = "queued again"
+        except OwnerError as e:
+            again = f"{e.code} {e}"
+        n = k.db.execute("SELECT COUNT(*) FROM jobs WHERE kind='repair'").fetchone()[0]
+    ok = first["status"] == "needs_approval" and job["status"] == "queued" and again.startswith("403") and n == 1
+    return ok, f"first {first['status']}; with the approval {job['status']}; the same approval again -> '{again[:80]}'; repair jobs {n}"
+
+
+def duplicate_results_concurrent(a):
+    with kernel() as k:
+        _, J = _tj(k)
+        jid = J.create("laptop", "project_check", {"project": "a"})
+        J.next_for("laptop")
+        out, errs = _threads(8, lambda i: J.finish("laptop", jid, {"ok": True, "copy": i}))
+        acc = [json.loads(p)["accepted"] for kd, p in k.db.execute("SELECT kind, payload FROM audit").fetchall() if kd == "job_finished"]
+        res = json.loads(k.db.execute("SELECT result FROM jobs WHERE id=?", (jid,)).fetchone()[0])
+    ok = out.count(True) == 1 and not errs and acc.count(True) == 1 and len(acc) == 8 and res["copy"] == out.index(True)
+    return ok, f"8 identical result posts at once: accepted {out.count(True)}; audit accepted flags {acc.count(True)}/{len(acc)}; errors {errs[:1]}"
+
+
+def file_event_once(a):
+    from jarvis_kernel.automations import Automations
+    from jarvis_kernel.nodes import record_watch_events
+    with kernel() as k:
+        T, J = _tj(k)
+        A = Automations(k, T, J, owner=None, dispatch=None)
+        aid = A.create({"name": "pdf arrivals", "action_kind": "job", "trigger_kind": "event", "event_spec": {"watch": "inbox", "glob": "*.pdf"}, "overlap": "queue",
+                        "action": {"kind": "project_check", "params": {"project": "jarvis-hq"}, "node": "laptop"}})["id"]
+        f = {"watch": "inbox", "files": [{"rel": "invoice.pdf", "size": 1200, "mtime_ns": 1791676800000000000}]}
+        recorded = [record_watch_events(k, "laptop", f) for _ in range(3)]        # the node retried its report
+        A.tick()
+        recorded.append(record_watch_events(k, "laptop", f))
+        A.tick()
+        runs1 = len(A.runs(aid))
+        record_watch_events(k, "laptop", {"watch": "inbox", "files": [{"rel": "receipt.pdf", "size": 900, "mtime_ns": 1791676900000000000}]})
+        A.tick()
+        runs2 = len(A.runs(aid))
+        jobs = k.db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+    ok = recorded == [1, 0, 0, 0] and runs1 == 1 and runs2 == 2 and jobs == 2
+    return ok, f"same file reported 4 times -> new events {recorded}; runs {runs1}; a second file -> runs {runs2}; jobs {jobs}"
+
+
+def fire_fence(a):
+    from jarvis_kernel.automations import Automations
+    now = [T0]
+    with two_kernels() as (k1, k2, _):
+        T1, J1 = _tj(k1)
+        T2, J2 = _tj(k2)
+        A1 = Automations(k1, T1, J1, owner=None, dispatch=None, clock=lambda: now[0])
+        A2 = Automations(k2, T2, J2, owner=None, dispatch=None, clock=lambda: now[0])
+        aid = A1.create(JOB)["id"]
+        a1 = A1.get(aid)
+        key = f"{aid}:retry-slot"
+        A1._claim(a1, key, a1["next_run"], "schedule")
+        s1 = A1._fire(a1, key)
+        s2 = A2._fire(A2.get(aid), key)                          # a retry loop in another process fires the same run
+        s3 = A1._fire(a1, key)
+        jobs = k1.db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+    return s1 == "fired" and s2 == s3 == "skipped" and jobs == 1, f"first {s1}, other process {s2}, again {s3}; jobs {jobs}"
+
+
+def firing_crash(a):
+    from jarvis_kernel.automations import CLAIM_GRACE, Automations
+    now = [T0]
+    with tempfile.TemporaryDirectory() as d:
+        dd = os.path.join(d, "k")
+        k = Kernel(dd)
+        T, J = _tj(k)
+        A = Automations(k, T, J, owner=None, dispatch=None, clock=lambda: now[0])
+        aid = A.create(dict(JOB, schedule="86400"))["id"]
+        a_ = A.get(aid)
+        slot = a_["next_run"]
+        A._claim(a_, f"{aid}:crash", slot, "schedule")
+        k.db.execute("UPDATE automation_runs SET status='firing', fired_at=? WHERE run_key=?", (slot, f"{aid}:crash"))   # died after the fence
+        k.db.close()
+        k = Kernel(dd)                                            # restart
+        T, J = _tj(k)
+        A = Automations(k, T, J, owner=None, dispatch=None, clock=lambda: now[0])
+        try:
+            now[0] = slot + 60
+            A.tick()
+            mid = [(r["status"], r["job_id"]) for r in A.runs(aid) if r["run_key"].endswith(":crash")]
+            now[0] = slot + CLAIM_GRACE + 120
+            A.tick()
+            late = [(r["status"], r["job_id"]) for r in A.runs(aid) if r["run_key"].endswith(":crash")]
+            streak = A.get(aid)["failure_streak"]
+        finally:
+            k.db.close()
+    ok = mid == [("firing", None)] and late == [("unknown", None)] and streak >= 1
+    return ok, f"run that died after 'firing': {mid} within the grace, {late} after it (never re-fired); failure streak {streak}"
+
+
+def job_cancelled_before_start(a):
+    with kernel() as k:
+        _, J = _tj(k)
+        jid = J.create("laptop", "project_check", {"project": "a"})
+        c = J.cancel(jid)
+        got = J.next_for("laptop")
+        late = J.finish("laptop", jid, {"ok": True})
+        st, res = k.db.execute("SELECT state, result FROM jobs WHERE id=?", (jid,)).fetchone()
+    ok = c["state"] == "cancelled" and got is None and not late and st == "cancelled" and "before it started" in res
+    return ok, f"cancel -> {c['state']}; handed to the node {got}; a result for it accepted {late}; stored {st} {res[:60]}"
+
+
+# ---------------------------------------------------------------- races on the real store
+def next_for_two_connections(a):
+    with two_kernels() as (k1, k2, _):
+        _, J1 = _tj(k1)
+        _, J2 = _tj(k2)
+        ids = [J1.create("laptop", "project_check", {"project": f"p{i}"}) for i in range(10)]
+
+        def work(i):
+            J = J1 if i % 2 else J2
+            got = []
+            while True:
+                j = J.next_for("laptop")
+                if not j:
+                    return got
+                got.append(j["id"])
+        out, errs = _threads(8, work)
+        handed = [x for lst in out if lst for x in lst]
+    ok = sorted(handed) == sorted(ids) and len(set(handed)) == 10 and not errs
+    return ok, f"10 jobs, 8 pollers on 2 connections: handed out {len(handed)} ({len(set(handed))} distinct); errors {errs[:1]}"
+
+
+def next_for_processes(a):
+    with tempfile.TemporaryDirectory() as d:
+        dd = os.path.join(d, "k")
+        k = Kernel(dd)
+        _, J = _tj(k)
+        ids = [J.create("laptop", "project_check", {"project": f"p{i}"}) for i in range(20)]
+        k.db.close()
+        start = time.time() + 2.0
+        code = ("from jarvis_kernel.jobs import Jobs\nJ = Jobs(K)\n" + _at(start) +
+                "got = []\nwhile True:\n    j = J.next_for('laptop')\n    if not j: break\n    got.append(j['id'])\nprint(json.dumps(got))\n")
+        ps = [_child(code, dd, wait=False) for _ in range(4)]
+        outs = [p.communicate(timeout=120) for p in ps]
+    handed = [x for o, _ in outs for x in json.loads(o.strip().splitlines()[-1] or "[]")] if all(o.strip() for o, _ in outs) else []
+    ok = sorted(handed) == sorted(ids) and len(set(handed)) == 20
+    return ok, f"20 jobs, 4 processes polling at once: handed out {len(handed)} ({len(set(handed))} distinct) {'' if handed else outs[0][1][-200:]}"
+
+
+def report_cancel_race(a):
+    trials, bad = int(a.get("trials", 20)), []
+    with two_kernels() as (k1, k2, _):
+        T1, _ = _tj(k1)
+        T2, _ = _tj(k2)
+        for t in range(trials):
+            tid = T1.create("hermes", "public", "", f"goal {t}")
+            T1.update(None, tid, state="running", attempt=True)
+            out, errs = _threads(2, lambda i: (T1 if i == 0 else T2).update(None, tid, state="completed" if i == 0 else "cancelled",
+                                                                              result="runner: verified" if i == 0 else None))
+            g = T1.get(tid)
+            finals = k1.db.execute("SELECT COUNT(*) FROM audit WHERE kind IN ('task_completed','task_cancelled') AND payload LIKE ?", (f"%{tid}%",)).fetchone()[0]
+            win = [i for i in (0, 1) if out[i] is not None]
+            want = ["completed", "cancelled"][win[0]] if len(win) == 1 else None
+            if len(win) != 1 or len(errs) != 1 or g["state"] != want or finals != 1 or g["events"][0]["state"] != want:
+                bad.append(f"trial {t}: winners {win} state {g['state']} finals {finals} errs {errs[:1]}")
+    return not bad, (f"{trials} races of the runner's 'completed' against the owner's cancel: one winner each time, never overwritten" if not bad
+                     else "; ".join(bad)[:400])
+
+
+def attempts_concurrent(a):
+    with two_kernels() as (k1, k2, _):
+        T1, _ = _tj(k1)
+        T2, _ = _tj(k2)
+        tid = T1.create("hermes", "public", "", "flaky build", max_attempts=3)
+        T1.update(None, tid, state="running")
+        out, errs = _threads(10, lambda i: (T1 if i % 2 else T2).update(None, tid, attempt=True))
+        g = T1.get(tid)
+    ok_n = sum(1 for x in out if x is not None)
+    ok = ok_n == 3 and g["attempts"] == 3 and len(errs) == 7 and all("budget" in e for e in errs)
+    return ok, f"10 simultaneous attempt reports, budget 3: accepted {ok_n}, attempts {g['attempts']}, refusals {len(errs)} ({errs[:1]})"
+
+
+def expire_complete_race(a):
+    trials, bad = int(a.get("trials", 20)), []
+    with two_kernels() as (k1, k2, _):
+        T1, _ = _tj(k1)
+        T2, _ = _tj(k2)
+        for t in range(trials):
+            tid = T1.create("hermes", "public", "", f"goal {t}", budget_s=60)
+            T1.update(None, tid, state="running", attempt=True)
+            T1.update(None, tid, state="verifying")
+            k1.db.execute("UPDATE tasks SET deadline=? WHERE id=?", (time.time() - 1, tid))
+            out, errs = _threads(2, lambda i: T1.expire() if i == 0 else T2.update(None, tid, state="completed", result="verified"))
+            g = T1.get(tid)
+            finals = k1.db.execute("SELECT COUNT(*) FROM audit WHERE kind IN ('task_completed','task_failed') AND payload LIKE ?", (f"%{tid}%",)).fetchone()[0]
+            if g["state"] not in ("completed", "failed") or finals != 1 or g["events"][0]["state"] != g["state"] \
+                    or (g["state"] == "failed") != (out[0] == [tid]):
+                bad.append(f"trial {t}: state {g['state']} finals {finals} expire->{out[0]} errs {errs[:1]}")
+    return not bad, (f"{trials} races of the deadline sweep against a completion: exactly one end each time, state, event and audit agree"
+                     if not bad else "; ".join(bad)[:400])
+
+
+def cancel_handout_race(a):
+    trials, bad = int(a.get("trials", 20)), []
+    with two_kernels() as (k1, k2, _):
+        _, J1 = _tj(k1)
+        _, J2 = _tj(k2)
+        for t in range(trials):
+            jid = J1.create("laptop", "project_check", {"project": f"p{t}"})
+            out, errs = _threads(2, lambda i: J1.cancel(jid) if i == 0 else J2.next_for("laptop"))
+            st, req = k1.db.execute("SELECT state, cancel_requested FROM jobs WHERE id=?", (jid,)).fetchone()
+            handed = bool(out[1] and out[1]["id"] == jid)
+            fine = (out[0]["state"] == "cancelled" and not handed and st == "cancelled") or \
+                   (out[0]["state"] == "cancelling" and handed and st == "running" and req is not None)
+            if not fine or errs:
+                bad.append(f"trial {t}: cancel {out[0] and out[0]['state']}, handed {handed}, state {st}, errs {errs[:1]}")
+            if handed:
+                J1.finish("laptop", jid, {"ok": False, "cancelled": True})
+    return not bad, (f"{trials} races of cancel against hand-out: cancelled-and-never-run or running-with-a-stop-request, never both"
+                     if not bad else "; ".join(bad)[:400])
+
+
+def expire_two_connections(a):
+    with two_kernels() as (k1, k2, _):
+        T1, _ = _tj(k1)
+        T2, _ = _tj(k2)
+        ids = [T1.create("hermes", "public", "", f"g{i}") for i in range(20)]
+        k1.db.execute("UPDATE tasks SET deadline=?", (time.time() - 1,))
+        out, errs = _threads(2, lambda i: (T1 if i == 0 else T2).expire())
+        got = (out[0] or []) + (out[1] or [])
+        rows = k1.db.execute("SELECT COUNT(*) FROM audit WHERE kind='task_failed'").fetchone()[0]
+        ev = k1.db.execute("SELECT COUNT(*) FROM task_events WHERE note='time budget used up'").fetchone()[0]
+    ok = sorted(got) == sorted(ids) and len(set(got)) == 20 and rows == 20 and ev == 20 and not errs
+    return ok, f"2 sweepers on 2 connections, 20 overdue tasks: failed {len(got)} ({len(set(got))} distinct), audit rows {rows}, events {ev}"
+
+
+def mixed_load(a):
+    from jarvis_kernel.policy import Action
+    with kernel() as k:
+        T, J = _tj(k)
+
+        def work(i):
+            for n in range(15):
+                kind = (i + n) % 3
+                if kind == 0:
+                    t = T.create("hermes", "public", "", f"g{i}-{n}")
+                    T.update(None, t, state="running", attempt=True)
+                    T.update(None, t, state="failed", result="x")
+                elif kind == 1:
+                    jid = J.create(f"node{i}", "project_check", {"project": f"p{i}{n}"})
+                    j = J.next_for(f"node{i}")
+                    assert j and j["id"] == jid
+                    assert J.finish(f"node{i}", jid, {"ok": True})
+                else:
+                    act = Action("fs", "write", f"notes/{i}-{n}.md")
+                    _, aid = k.request(act)
+                    assert k.approve(aid) and k.authorize(act, aid).allowed
+        _, errs = _threads(6, work)
+        ok_chain, msg = k.audit.verify()
+        n_t = k.db.execute("SELECT COUNT(*) FROM tasks WHERE state='failed'").fetchone()[0]
+        n_j = k.db.execute("SELECT COUNT(*) FROM jobs WHERE state='done'").fetchone()[0]
+        n_a = k.db.execute("SELECT COUNT(*) FROM approvals WHERE state='used'").fetchone()[0]
+    ok = not errs and ok_chain and n_t == n_j == n_a == 30
+    return ok, f"6 threads x 15 mixed operations: tasks {n_t}, jobs {n_j}, approvals used {n_a} (30 each); chain {msg}; errors {errs[:1]}"
+
+
+def approval_once_processes(a):
+    with tempfile.TemporaryDirectory() as d:
+        dd = os.path.join(d, "k")
+        k = Kernel(dd)
+        act = Action("fs", "write", "notes/x.md", {"text": "once"})
+        _, aid = k.request(act)
+        k.approve(aid)
+        k.db.close()
+        start = time.time() + 2.0
+        code = ("from jarvis_kernel.policy import Action\na = Action('fs', 'write', 'notes/x.md', {'text': 'once'})\n" + _at(start) +
+                f"print(K.authorize(a, {aid!r}).allowed)\n")
+        ps = [_child(code, dd, wait=False) for _ in range(4)]
+        outs = [p.communicate(timeout=120)[0].strip() for p in ps]
+        k = Kernel(dd)
+        try:
+            ok_chain = k.audit.verify()[0]
+        finally:
+            k.db.close()
+    return outs.count("True") == 1 and outs.count("False") == 3 and ok_chain, f"4 processes use one approval at once: {outs}; chain ok={ok_chain}"
+
+
+def tasks_processes(a):
+    with tempfile.TemporaryDirectory() as d:
+        dd = os.path.join(d, "k")
+        _tj(Kernel(dd))[0].k.db.close()
+        start = time.time() + 2.0
+        code = ("from jarvis_kernel.tasks import Tasks\nT = Tasks(K)\n" + _at(start) +
+                "for i in range(25):\n    t = T.create('p%d' % os.getpid(), 'public', '', 'goal %d' % i)\n    T.update(None, t, state='running')\nprint('ok')\n")
+        ps = [_child(code, dd, wait=False) for _ in range(4)]
+        outs = [p.communicate(timeout=120) for p in ps]
+        k = Kernel(dd)
+        try:
+            n = k.db.execute("SELECT COUNT(*) FROM tasks WHERE state='running'").fetchone()[0]
+            ev = k.db.execute("SELECT COUNT(*) FROM task_events").fetchone()[0]
+            ok_chain, msg = k.audit.verify()
+        finally:
+            k.db.close()
+    rc = [p.returncode for p in ps]
+    return n == 100 and ev == 200 and ok_chain and rc == [0] * 4, f"4 processes x 25 tasks: running {n}, events {ev}, chain {msg}, exit codes {rc} {outs[0][1][-150:] if rc[0] else ''}"
+
+
+def tick_processes(a):
+    from jarvis_kernel.automations import Automations
+    with tempfile.TemporaryDirectory() as d:
+        dd = os.path.join(d, "k")
+        k = Kernel(dd)
+        T, J = _tj(k)
+        aid = Automations(k, T, J, owner=None, dispatch=None, clock=lambda: T0).create(JOB)["id"]
+        k.db.close()
+        start = time.time() + 2.0
+        code = ("from jarvis_kernel.tasks import Tasks\nfrom jarvis_kernel.jobs import Jobs\nfrom jarvis_kernel.automations import Automations\n"
+                f"A = Automations(K, Tasks(K), Jobs(K), owner=None, dispatch=None, clock=lambda: {T0 + 610!r})\n" + _at(start) +
+                "print(json.dumps(A.tick()['fired']))\n")
+        ps = [_child(code, dd, wait=False) for _ in range(3)]
+        outs = [p.communicate(timeout=120) for p in ps]
+        k = Kernel(dd)
+        try:
+            runs = k.db.execute("SELECT COUNT(*) FROM automation_runs WHERE automation_id=?", (aid,)).fetchone()[0]
+            jobs = k.db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        finally:
+            k.db.close()
+    fired = [len(json.loads(o.strip().splitlines()[-1])) if o.strip() else -1 for o, _ in outs]
+    return sorted(fired) == [0, 0, 1] and runs == 1 and jobs == 1, f"3 kernel processes tick the same due slot at once: fired {fired}; runs {runs}; jobs {jobs} {outs[0][1][-150:] if -1 in fired else ''}"
+
+
+# ---------------------------------------------------------------- crashes and restarts
+def crash_inside_task_update(a):
+    with tempfile.TemporaryDirectory() as d:
+        dd = os.path.join(d, "k")
+        k = Kernel(dd)
+        T, _ = _tj(k)
+        tid = T.create("hermes", "public", "", "goal")
+        T.update(None, tid, state="running", attempt=True)
+        k.db.close()
+        rc, out, err = _child("from jarvis_kernel.tasks import Tasks\nT = Tasks(K)\norig = K.audit.append\n"
+                              "def die(kind, payload):\n    if kind == 'task_completed':\n        os._exit(9)\n    return orig(kind, payload)\n"
+                              f"K.audit.append = die\nT.update(None, {tid!r}, state='completed', result='claimed done')\n", dd)
+        k = Kernel(dd)
+        try:
+            g = _tj(k)[0].get(tid)
+            ok_chain = k.audit.verify()[0]
+        finally:
+            k.db.close()
+    ok = rc == 9 and g["state"] == "running" and g["result"] == "" and all(e["state"] != "completed" for e in g["events"]) and ok_chain
+    return ok, f"child exit {rc}; task after the crash: {g['state']} result '{g['result']}'; completed event {any(e['state'] == 'completed' for e in g['events'])}; chain ok={ok_chain}"
+
+
+def restart_mid_job(a):
+    with tempfile.TemporaryDirectory() as d:
+        dd = os.path.join(d, "k")
+        k = Kernel(dd)
+        _, J = _tj(k)
+        jid = J.create("laptop", "project_check", {"project": "a"})
+        J.next_for("laptop")
+        k.db.close()
+        k = Kernel(dd)                                             # the kernel restarts while the laptop works
+        try:
+            _, J = _tj(k)
+            first = J.finish("laptop", jid, {"ok": True, "n": 1})
+            dup = J.finish("laptop", jid, {"ok": True, "n": 2})     # the node's retry of the same post
+            rep = [(r[0], r[2]) for r in J.to_report()]
+            J.mark_notified(jid)
+            again = J.to_report()
+            n = json.loads(k.db.execute("SELECT result FROM jobs WHERE id=?", (jid,)).fetchone()[0])["n"]
+        finally:
+            k.db.close()
+    ok = first and not dup and rep == [(jid, "done")] and again == [] and n == 1
+    return ok, f"after restart: result accepted {first}, duplicate accepted {dup}; reported {rep} then {again}; stored n={n}"
+
+
+def orphan_rules(a):
+    with kernel() as k:
+        _, J = _tj(k)
+        new = J.create("laptop", "project_check", {"project": "a"})
+        J.next_for("laptop")
+        old = J.create("laptop", "project_check", {"project": "b"})
+        J.next_for("laptop")
+        lab = _lab_job(J)
+        J.next_for("lab")
+        now = time.time()
+        k.db.execute("UPDATE jobs SET started=? WHERE id=?", (now - 5, new))
+        k.db.execute("UPDATE jobs SET started=? WHERE id=?", (now - 60, old))
+        k.db.execute("UPDATE jobs SET started=? WHERE id=?", (now - 600, lab))
+        n = J.fail_orphans("laptop", now) + J.fail_orphans("lab", now)
+        st = {x: _state(k, x) for x in (new, old, lab)}
+        err = json.loads(k.db.execute("SELECT result FROM jobs WHERE id=?", (old,)).fetchone()[0])["error"]
+    ok = n == 1 and st[new] == "running" and st[old] == "failed" and st[lab] == "running" and "lost this job" in err
+    return ok, f"node says idle: failed {n}; just handed over {st[new]}, 60 s old {st[old]} ('{err[:60]}'), lab run {st[lab]}"
+
+
+def lost_result_post(a):
+    from unittest import mock
+    from jarvis_node import agent as NA
+    with kernel() as k, tempfile.TemporaryDirectory() as out_dir:
+        _, J = _tj(k)
+        jid = J.create("laptop", "output_save", {"agent": "hermes", "name": "report.md", "content": "hello"})
+        job = J.next_for("laptop")
+        posts = []
+
+        def fake_post(url, path, obj, token=None):                   # fake network: the result post never arrives
+            posts.append(path)
+            raise OSError("network unreachable")
+        with mock.patch.dict(os.environ, {"JARVIS_OUTPUTS": out_dir}), mock.patch.object(NA, "_post", fake_post):
+            NA._do_job("http://kernel.invalid", "tok", job)
+        mid = _state(k, jid)
+        n = J.fail_orphans("laptop", time.time() + 60)                 # the node then reports that it is idle
+        res = json.loads(k.db.execute("SELECT result FROM jobs WHERE id=?", (jid,)).fetchone()[0] or "{}")
+        late = J.finish("laptop", jid, {"ok": True, "saved": "report.md"})
+        files = [f for _, _, fs in os.walk(out_dir) for f in fs]
+    ok = posts == ["/jobs/result"] and mid == "running" and n == 1 and "nothing was reported" in res.get("error", "") and not late and files == ["report.md"]
+    return ok, f"result posts tried {posts}; job while unreported {mid}; idle report failed {n} ('{res.get('error', '')[:70]}'); late result accepted {late}; files {files}"
+
+
+# ---------------------------------------------------------------- cancellation and timeouts (node runtime, jobs, owner)
+def node_loop_cancel(a):
+    from unittest import mock
+    from jarvis_node import agent as NA, jobs as NJ, runtime as RT, watch as NW
+
+    class FakeWatcher:
+        def __init__(self, *x, **kw): pass
+        def names(self): return []
+        def scan(self): return {}
+        def ack(self, r): pass
+    out = {}
+    slow = lambda script, env=None, timeout=30: RT.run([sys.executable, "-c", "import time; time.sleep(60)"], timeout=timeout)  # noqa: E731
+    with tempfile.TemporaryDirectory() as d:
+        tok = os.path.join(d, "node_token.txt")
+        with open(tok, "w") as fh:
+            fh.write("synthetic-node-token")
+        posts = []
+
+        def fake_post(url, path, obj, token=None):                   # fake kernel: the owner asked to stop job j-loop
+            posts.append(path)
+            return {"ok": True, "killed": False, "cancel": ["j-loop"]} if path == "/report" else {}
+        with mock.patch.object(RT, "powershell", slow), mock.patch.object(NA, "TOKEN_FILE", tok), mock.patch.object(NA, "_post", fake_post), \
+                mock.patch.object(NA, "collect", lambda: {"cpu": 1}), mock.patch.object(NW, "Watcher", FakeWatcher), \
+                mock.patch.object(NW, "load_watches", lambda *x: {}):
+            th = threading.Thread(target=lambda: out.update(r=NJ.run_job({"id": "j-loop", "kind": "diag", "params": {"op": "processes", "target": ""}})))
+            th.start()
+            end = time.time() + 10
+            while time.time() < end and not RT._current["procs"]:
+                time.sleep(0.05)
+            child = RT._current["procs"][0] if RT._current["procs"] else None
+            t0 = time.time()
+            NA.run("http://kernel.invalid", "laptop", once=True, sleep=lambda s: None)
+            th.join(20)
+            sec = time.time() - t0
+    r = out.get("r") or {}
+    dead = child is not None and child.poll() is not None
+    ok = "/report" in posts and r.get("cancelled") is True and r.get("ok") is False and dead and sec < 15 and RT.current() is None
+    return ok, f"report loop posted {posts}; job result {r}; child process stopped {dead}; {sec:.1f} s"
+
+
+def node_run_timeout(a):
+    from jarvis_node import runtime as RT
+    RT.begin("j-timeout")
+    t0, err = time.time(), None
+    try:
+        RT.run([sys.executable, "-c", "import time; time.sleep(30)"], timeout=0.5)
+    except subprocess.TimeoutExpired:
+        err = "TimeoutExpired"
+    child = RT._current["procs"][0] if RT._current["procs"] else None
+    sec = time.time() - t0
+    RT.end()
+    dead = child is not None and child.poll() is not None
+    return err == "TimeoutExpired" and dead and sec < 5, f"30 s program with a 0.5 s limit: {err} after {sec:.1f} s; child stopped {dead}"
+
+
+def node_cancel_children(a):
+    from jarvis_node import runtime as RT
+    RT.begin("j-two")
+    p1 = RT.popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    p2 = RT.popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    wrong = RT.cancel("j-other")
+    right = RT.cancel("j-two")
+    t0 = time.time()
+    while time.time() - t0 < 5 and (p1.poll() is None or p2.poll() is None):
+        time.sleep(0.05)
+    try:
+        RT.popen([sys.executable, "-c", "print(1)"])
+        third = "started"
+    except RT.Cancelled:
+        third = "refused"
+    RT.end()
+    ok = not wrong and right and p1.poll() is not None and p2.poll() is not None and third == "refused" and RT.current() is None
+    return ok, f"cancel of another id {wrong}; cancel {right}; both children stopped {p1.poll() is not None and p2.poll() is not None}; a new program after cancel {third}"
+
+
+def node_cancel_no_leak(a):
+    from jarvis_node import runtime as RT
+    RT.begin("j1")
+    RT.end()
+    late = RT.cancel("j1")                                    # the owner's stop arrives after j1 finished
+    RT.begin("j2")
+    flag = RT.cancelled()
+    r = RT.run([sys.executable, "-c", "print('fine')"], timeout=20)
+    RT.end()
+    return not late and not flag and r.stdout.strip() == "fine", f"late cancel of a finished job accepted {late}; next job sees cancelled {flag}; it ran: '{r.stdout.strip()}'"
+
+
+def node_handler_crash(a):
+    from unittest import mock
+    from jarvis_node import jobs as NJ, runtime as RT
+
+    def boom(p, root=None):
+        raise ValueError("C:/Users/owner/secret path in the message")
+    with mock.patch.object(NJ, "output_save", boom):
+        r1 = NJ.run_job({"id": "j-crash", "kind": "output_save", "params": {"agent": "hermes", "name": "a.md", "content": "x"}})
+    cur = RT.current()
+    r2 = NJ.run_job({"id": "j-next", "kind": "nonsense", "params": {}})
+    ok = r1 == {"ok": False, "error": "ValueError"} and cur is None and r2 == {"ok": False, "error": "unknown job kind"} and RT.current() is None
+    return ok, f"crashing handler -> {r1}; job slot free after {cur is None}; next job -> {r2}"
+
+
+def job_running_cancel(a):
+    with kernel() as k:
+        _, J = _tj(k)
+        jid = J.create("laptop", "project_check", {"project": "a"})
+        J.next_for("laptop")
+        c1 = J.cancel(jid)
+        told = J.cancels_for("laptop")
+        fin = J.finish("laptop", jid, {"ok": False, "cancelled": True, "error": "cancelled by the owner"})
+        st = _state(k, jid)
+        after = J.cancels_for("laptop")
+        c2 = J.cancel(jid)
+    ok = c1["state"] == "cancelling" and told == [jid] and fin and st == "cancelled" and after == [] and c2["state"] == "cancelled" and "nothing" in c2.get("note", "")
+    return ok, f"cancel while running -> {c1['state']}; node told {told == [jid]}; node confirms -> {st}; still told {after}; cancel again -> {c2}"
+
+
+def lab_ttl(a):
+    from jarvis_kernel.jobs import LAB_RUN_TTL, RUN_TTL
+    with kernel() as k:
+        _, J = _tj(k)
+        pc = J.create("laptop", "project_check", {"project": "a"})
+        J.next_for("laptop")
+        lab = _lab_job(J)
+        J.next_for("lab")
+        now = time.time()
+        k.db.execute("UPDATE jobs SET started=? WHERE id=?", (now - RUN_TTL - 60, pc))
+        k.db.execute("UPDATE jobs SET started=? WHERE id=?", (now - 3600, lab))
+        s1 = J.sweep(now)
+        mid = (_state(k, pc), _state(k, lab))
+        s2 = J.sweep(now - 3600 + LAB_RUN_TTL + 60)
+        end = (_state(k, pc), _state(k, lab))
+    ok = s1["stuck_failed"] == 1 and mid == ("failed", "running") and s2["stuck_failed"] == 1 and end == ("failed", "failed")
+    return ok, f"pc job 31 min silent / lab run 1 h: {mid}; lab run past {LAB_RUN_TTL // 3600} h: {end}"
+
+
+def ok_must_be_true(a):
+    with kernel() as k:
+        _, J = _tj(k)
+        st = []
+        for res in ({"ok": "false"}, {"ok": 1}, {"ok": True}):
+            jid = J.create("laptop", "project_check", {"project": "a"})
+            J.next_for("laptop")
+            J.finish("laptop", jid, res)
+            st.append(_state(k, jid))
+    return st == ["failed", "failed", "done"], f"node results ok='false', ok=1, ok=true recorded as {st}"
+
+
+def result_while_killed(a):
+    with kernel() as k:
+        _, J = _tj(k)
+        jid = J.create("laptop", "project_check", {"project": "a"})
+        J.next_for("laptop")
+        other = J.create("laptop", "project_check", {"project": "b"})
+        k.kill("bench")
+        fin = J.finish("laptop", jid, {"ok": True})
+        handed = J.next_for("laptop")
+        k.resume()
+        after = J.next_for("laptop")
+        again = J.next_for("laptop")
+        st = _state(k, jid)
+    ok = fin and st == "done" and handed is None and after and after["id"] == other and again is None
+    return ok, f"while killed: result recorded {fin}, new job handed out {handed and handed['id']}; after resume: {after and after['id'] == other}, then {again}"
+
+
+def owner_command_cancel(a):
+    from jarvis_kernel.owner import OwnerError
+    with kernel() as k:
+        gate, calls = threading.Event(), []
+
+        def hermes(text):                                           # fake agent: the first answer is very slow
+            calls.append(text)
+            if len(calls) == 1:
+                gate.wait(20)
+                return "first answer, very late"
+            return "second answer"
+        o = _owner(k, pin=False)
+        o.hermes = hermes
+        c1 = o.command("open the downloads folder")["id"]
+        end = time.time() + 10
+        while not calls and time.time() < end:
+            time.sleep(0.02)
+        try:
+            o.command("check the disk please")
+            busy = 200
+        except OwnerError as e:
+            busy = e.code
+        cancelled = o.cancel_command(c1)["cancelled"]
+        c2 = o.command("check the disk please")["id"]
+        end = time.time() + 20
+        while time.time() < end and k.db.execute("SELECT state FROM owner_commands WHERE id=?", (c2,)).fetchone()[0] == "running":
+            time.sleep(0.05)
+        gate.set()
+        end = time.time() + 20
+        late = []
+        while time.time() < end and not late:
+            late = [p for kd, p in k.db.execute("SELECT kind, payload FROM audit").fetchall() if kd == "owner_command_late" and c1 in p]
+            time.sleep(0.05)
+        r1 = k.db.execute("SELECT state, reply FROM owner_commands WHERE id=?", (c1,)).fetchone()
+        r2 = k.db.execute("SELECT state FROM owner_commands WHERE id=?", (c2,)).fetchone()[0]
+        free = not o.busy.locked()
+    ok = busy == 409 and cancelled and r1 == ("cancelled", None) and r2 == "done" and late and free
+    return ok, f"second command while busy -> {busy}; cancel -> {cancelled}; new command -> {r2}; late answer of the cancelled one ignored: {r1}, audited {bool(late)}; gate free {free}"
+
+
+def owner_command_crash(a):
+    from jarvis_kernel.owner import OwnerError
+    with kernel() as k:
+        o = _owner(k, pin=False)
+        o.spawn = lambda fn: fn()
+
+        def bad(text):
+            raise RuntimeError("provider 500 at https://api.example.test/v1?key=SYNTHETIC")
+        o.hermes = bad
+        c1 = o.command("summarise my day")["id"]
+        row = k.db.execute("SELECT state, error FROM owner_commands WHERE id=?", (c1,)).fetchone()
+        o.hermes = lambda t: "fine"
+        try:
+            c2 = o.command("summarise my day again")["id"]
+            st2 = k.db.execute("SELECT state FROM owner_commands WHERE id=?", (c2,)).fetchone()[0]
+        except OwnerError as e:
+            st2 = f"refused {e.code}"
+    ok = row[0] == "failed" and (row[1] or "").startswith("RuntimeError") and st2 == "done"
+    return ok, f"agent crashed -> {row[0]} ('{row[1][:60]}'); next command -> {st2}"
+
+
+def owner_commands_concurrent(a):
+    from jarvis_kernel.owner import OwnerError
+    with kernel() as k:
+        gate = threading.Event()
+        o = _owner(k, pin=False)
+        o.hermes = lambda text: gate.wait(20) and "ok"
+
+        def send(i):
+            try:
+                return o.command(f"command number {i} please")["state"]
+            except OwnerError as e:
+                return e.code
+        out, errs = _threads(10, send)
+        gate.set()
+        end = time.time() + 20
+        while time.time() < end and o.busy.locked():
+            time.sleep(0.05)
+        n = k.db.execute("SELECT COUNT(*) FROM owner_commands").fetchone()[0]
+    ok = out.count("running") == 1 and out.count(409) == 9 and n == 1 and not errs
+    return ok, f"10 commands at once: accepted {out.count('running')}, 409 {out.count(409)}; rows {n}; errors {errs[:1]}"
+
+
+def stop_all_state(a):
+    with kernel() as k:
+        o = _owner(k, pin=False)
+        T, J = o.tasks, o.jobs
+        tid = T.create("hermes", "public", "", "A tool", criteria=["tests pass"])
+        lab = _lab_job(J, tid)
+        T.update("hermes", tid, state="queued")
+        J.next_for("lab")
+        T.update(None, tid, state="running", attempt=True)
+        pc = J.create("laptop", "project_check", {"project": "a"})
+        act = Action("fs", "write", "notes/x.md")
+        _, aid = k.request(act)
+        out = o.stop_all()
+        try:
+            T.update(None, tid, state="verifying")
+            late = "accepted"
+        except Exception as e:  # noqa: BLE001
+            late = str(e)[:40]
+        handed = J.next_for("laptop")
+        k.approve(aid)
+        used = k.authorize(act, aid).allowed
+        st = (T.get(tid)["state"], _state(k, pc), k.approval_info(aid)["state"])
+    ok = out["cancelled_tasks"] == [tid] and out["denied_approvals"] == 1 and out["expired_jobs"] >= 1 and "already cancelled" in late \
+        and handed is None and not used and st == ("cancelled", "expired", "denied")
+    return ok, f"stop all -> {out}; runner's late report '{late}'; queued job handed out {handed}; denied approval usable {used}; states {st}"
+
+
+def refused_runs_pause(a):
+    from jarvis_kernel.automations import Automations
+    now, calls = [T0], []
+
+    def dispatch(agent, lane, tid, p):                            # fake lab path that keeps refusing
+        calls.append(tid)
+        return 409, {"reason": "the lab is not reachable"}
+    with kernel() as k:
+        T, J = _tj(k)
+        A = Automations(k, T, J, owner=None, dispatch=dispatch, clock=lambda: now[0])
+        aid = A.create({"name": "nightly", "action_kind": "lab_task", "trigger_kind": "interval", "schedule": "600", "pause_after_failures": 2,
+                        "action": {"goal": "Build", "instructions": "build the site", "criteria": ["it builds"], "agent": "hermes"}})["id"]
+        for _ in range(4):
+            now[0] += 610
+            A.tick()
+        cur = A.get(aid)
+        st = [r["status"] for r in A.runs(aid)]
+    ok = len(calls) == 2 and st == ["refused", "refused"] and (cur["enabled"], cur["state"]) == (0, "paused") and "2 failed" in (cur["paused_reason"] or "")
+    return ok, f"4 slots, the lab refuses: dispatch tried {len(calls)}x; runs {st}; automation {cur['state']} ({cur['paused_reason']})"
+
+
+def task_budget_bounds(a):
+    from jarvis_kernel.tasks import TaskError
+    with kernel() as k:
+        T, _ = _tj(k)
+        bad, good = [], []
+        for ma, bs in ((0, 600), (6, 600), (3, 59), (3, 6 * 3600 + 1), (100, 10 ** 9)):
+            try:
+                T.create("hermes", "public", "", "g", max_attempts=ma, budget_s=bs)
+                bad.append((ma, bs))
+            except TaskError:
+                pass
+        for ma, bs in ((1, 60), (5, 6 * 3600)):
+            try:
+                good.append(T.get(T.create("hermes", "public", "", "g", max_attempts=ma, budget_s=bs))["max_attempts"])
+            except TaskError:
+                pass
+    return not bad and good == [1, 5], f"unbounded budgets accepted {bad or 'none'}; edge budgets accepted max_attempts {good}"
+
+
+# ---------------------------------------------------------------- the agent/runner HTTP endpoints (127.0.0.1)
+@contextlib.contextmanager
+def proxy():
+    from http.server import ThreadingHTTPServer
+    from types import SimpleNamespace
+    from jarvis_kernel.llm_proxy import make_handler
+    with kernel() as k:
+        H, tokens = make_handler(k, [], owner_hermes=None)
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        url = f"http://127.0.0.1:{srv.server_address[1]}"
+
+        def post(path, body, tok):
+            r = urllib.request.Request(url + path, data=json.dumps(body).encode(), method="POST",
+                                       headers={"Content-Type": "application/json", "Authorization": "Bearer " + tok})
+            try:
+                resp = urllib.request.urlopen(r, timeout=60)
+                return resp.status, json.loads(resp.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read() or b"{}")
+        P = SimpleNamespace(k=k, post=post, owner=tokens.issue("hermes"), runner=tokens.issue("lab-runner", "runner"))
+        P.T, P.J = _tj(k)
+        P.act = lambda op, target, params: post("/v1/jarvis/actions", {"tool": "task", "op": op, "target": target, "params": params}, P.owner)
+        P.run = lambda path, body: post("/v1/jarvis/runner/" + path, body, P.runner)
+        try:
+            yield P
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+
+def _dispatched(P, attempts=2):
+    tid = P.act("create", "t", {"goal": "A tool", "criteria": ["tests pass"], "max_attempts": attempts, "request": f"tool {time.time()}"})[1]["task"]
+    P.act("dispatch", tid, {"instructions": "build it and test it", "public_ok": True})
+    return tid
+
+
+def duplicate_task_create(a):
+    with proxy() as P:
+        req = "please build me a currency converter with tests"
+        out, errs = _threads(5, lambda i: P.act("create", "t", {"goal": "Currency converter", "criteria": ["tests pass"], "request": req}))
+        codes = sorted(c for c, _ in out if c)
+        n = P.k.db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+    return codes == [200, 409, 409, 409, 409] and n == 1, f"the same request 5 times at once -> {codes}; tasks created {n}; errors {errs[:1]}"
+
+
+def runner_attempt_budget(a):
+    with proxy() as P:
+        tid = _dispatched(P, attempts=2)
+        job = P.run("next", {})[1]["job"]["id"]
+        seq = []
+        for body in ({"state": "running", "attempt": True}, {"state": "verifying"}, {"state": "repairing", "note": "test 3 fails"},
+                     {"state": "running", "attempt": True}, {"state": "verifying"}, {"state": "repairing"}, {"attempt": True},
+                     {"state": "failed", "result": "not verified after 2 attempt(s): test 3 fails"}):
+            seq.append(P.run("report", dict(body, job=job))[0])
+        g = P.T.get(tid)
+    ok = seq == [200, 200, 200, 200, 200, 409, 409, 200] and (g["state"], g["attempts"]) == ("failed", 2) and "2 attempt" in g["result"]
+    return ok, f"runner reports -> {seq}; task {g['state']} after {g['attempts']} attempts: '{g['result'][:60]}'"
+
+
+def runner_next_race(a):
+    with proxy() as P:
+        _dispatched(P)
+        out, errs = _threads(6, lambda i: P.run("next", {}))
+        got = [r.get("job") for c, r in out if c == 200]
+    jobs = [j for j in got if j]
+    return len(jobs) == 1 and len(got) == 6 and not errs, f"6 runners poll at once for 1 lab job: {len(jobs)} got it, {len(got) - len(jobs)} got none; errors {errs[:1]}"
+
+
+def lab_success_after_cancel(a):
+    with proxy() as P:
+        from jarvis_kernel.owner import Owner
+        tid = _dispatched(P)
+        job = P.run("next", {})[1]["job"]["id"]
+        P.run("report", {"job": job, "state": "running", "attempt": True})
+        Owner(P.k, P.T, P.J).task_control(tid, "cancel")
+        rep = P.run("report", {"job": job, "state": "completed", "result": "verified", "verification": {"passed": True}})[0]
+        fin = P.run("finish", {"job": job, "result": {"ok": True, "summary": "verified after 1 attempt(s)"}})[0]
+        g = P.T.get(tid)
+        js = _state(P.k, job)
+    ok = rep == 409 and fin == 200 and g["state"] == "cancelled" and g["verification"] == {} and js == "done"
+    return ok, f"runner's 'completed' after the owner's cancel -> {rep}; finish -> {fin}; task stays {g['state']} (verification {g['verification']}); lab job {js}"

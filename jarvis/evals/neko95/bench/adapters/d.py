@@ -652,3 +652,766 @@ def auto_case(a):
         raise ValueError(m)
     finally:
         k.db.close()
+
+
+# ================================================================ 2026-10-17: dependencies, partial work, bounded retries, cancel and
+# resume (D-044..D-083). Executor and run store: the real main_agent code with fake dispatchers. Kernel tasks, lab jobs and
+# automations: a real kernel database in a temp folder, the real agent/runner HTTP endpoints on 127.0.0.1, fake lab runner.
+def _arun(plan, dispatch, **kw):
+    kw.setdefault("backoff", FAST)
+    return asyncio.run(run_plan(plan, dispatch, **kw))
+
+
+def _fmt(r):
+    return ", ".join(f"{k}:{v.outcome}{'(held)' if v.held else ''}x{v.attempts}" for k, v in r.items())
+
+
+def exec2(a):
+    m = a["mode"]
+    if m == "diamond":
+        log = {}
+
+        async def dispatch(step, inputs):
+            log[step.id] = [time.monotonic(), None, dict(inputs)]
+            await asyncio.sleep(0.25 if step.id == "c" else 0.1)
+            log[step.id][1] = time.monotonic()
+            return f"out-{step.id}"
+        r = _by(_arun(_plan(S("a"), S("b", ["a"]), S("c", ["a"]), S("d", ["b", "c"])), dispatch, parallel=3))
+        ok = all(v.ok for v in r.values()) and log["b"][0] >= log["a"][1] and log["c"][0] >= log["a"][1] \
+            and log["d"][0] >= max(log["b"][1], log["c"][1]) and log["d"][2] == {"b": "out-b", "c": "out-c"} and abs(log["b"][0] - log["c"][0]) < 0.08
+        return ok, (f"b started {log['b'][0] - log['a'][1]:+.3f}s after a ended, d started {log['d'][0] - max(log['b'][1], log['c'][1]):+.3f}s "
+                    f"after b,c ended; b/c start gap {abs(log['b'][0] - log['c'][0]):.3f}s; inputs of d {log['d'][2]}")
+    if m == "chain_fail":
+        calls = []
+
+        async def dispatch(step, inputs):
+            calls.append(step.id)
+            if step.id == "c":
+                raise StepFailed("the page would not load")
+            return f"out-{step.id}"
+        p = _plan(S("a"), S("b", ["a"]), S("c", ["b"]), S("d", ["c"]), S("e", ["d"]), S("x"), S("y", ["x"]))
+        res = _arun(p, dispatch)
+        r, t = _by(res), final_text(p, res)
+        ok = r["a"].ok and r["b"].ok and r["c"].outcome == "failure" and r["d"].outcome == r["e"].outcome == "not_executed" \
+            and "d" not in calls and "e" not in calls and r["y"].ok and run_state(p, res) == "partial" and "out-y" in t \
+            and "c (failure: the page would not load)" in t and "d (not executed: a step it needed did not finish)" in t and "e (not executed" in t
+        return ok, _fmt(r) + f"; state {run_state(p, res)}; final '{t[:220]}'"
+    if m == "explicit_unknown":
+        calls = []
+
+        async def dispatch(step, inputs):
+            calls.append(step.id)
+            if step.id == "send":
+                raise StepUnknown("the server closed the connection after the request was sent")
+            return "ok"
+        p = _plan(S("send", kind="plugin", effect="non_idempotent"), S("after", ["send"]), S("other"))
+        res = _arun(p, dispatch, parallel=1)
+        r, t = _by(res), final_text(p, res)
+        ok = calls == ["send"] and r["send"].outcome == "unknown" and r["send"].held and r["send"].attempts == 1 \
+            and r["after"].outcome == r["other"].outcome == "not_executed" and "Needs your attention" in t \
+            and "the server closed the connection" in t and run_state(p, res) == "held"
+        return ok, _fmt(r) + f"; dispatched {calls}; final '{t[:200]}'"
+    if m == "retry_limit":
+        out = {}
+        for n in (2, 0):
+            calls = []
+
+            async def dispatch(step, inputs):
+                calls.append(1)
+                raise StepFailed("upstream 503")
+            r = _arun(_plan(S("a")), dispatch, retries=n)[0]
+            out[n] = (len(calls), r.outcome, r.attempts, r.error)
+        ok = out[2] == (3, "failure", 3, "upstream 503") and out[0] == (1, "failure", 1, "upstream 503")
+        return ok, f"retries=2 -> (dispatches, outcome, attempts, error) {out[2]}; retries=0 -> {out[0]}"
+    if m == "retry_no_time":
+        out = {}
+        for total in (1.5, 10.0):
+            calls = []
+
+            async def dispatch(step, inputs):
+                calls.append(1)
+                raise StepFailed("transient")
+            r = _arun(_plan(S("a")), dispatch, total_timeout=total)[0]
+            out[total] = (len(calls), r.attempts)
+        return out[1.5] == (1, 1) and out[10.0] == (2, 2), f"1.5 s total limit -> (dispatches, attempts) {out[1.5]}; 10 s limit -> {out[10.0]}"
+    if m == "cancel_no_retry":
+        calls, holder = [], {}
+
+        async def main():
+            ev = asyncio.Event()
+
+            async def dispatch(step, inputs):
+                calls.append(step.id)
+                if step.id == "a":
+                    ev.set()                                   # the owner says stop while a is failing
+                    raise RuntimeError("transient")
+                return "ok"
+            p = _plan(S("a"), S("b", ["a"]), S("c"))
+            return p, await run_plan(p, dispatch, cancel=ev, parallel=1, retries=3, backoff=FAST)
+        p, res = asyncio.run(main())
+        r = _by(res)
+        ok = calls == ["a"] and r["a"].attempts == 1 and r["b"].outcome == "not_executed" and r["c"].outcome == "not_executed" \
+            and "cancelled" in r["c"].error and run_state(p, res, cancelled=True) == "cancelled"
+        return ok, _fmt(r) + f"; dispatched {calls}; c '{r['c'].error}'"
+    if m == "exc_kinds":
+        calls = []
+
+        async def dispatch(step, inputs):
+            calls.append(step.id)
+            raise RuntimeError("boom with detail")
+        rr = _arun(_plan(S("read")), dispatch)[0]
+        rw = _arun(_plan(S("write", kind="plugin", effect="non_idempotent")), dispatch)[0]
+        ok = (rr.outcome, rr.attempts, rr.held, rr.error) == ("failure", 2, False, "RuntimeError") \
+            and (rw.outcome, rw.attempts, rw.held, rw.error) == ("unknown", 1, True, "RuntimeError") and calls.count("write") == 1
+        return ok, f"read-only: {rr.outcome} x{rr.attempts} held {rr.held}; with side effects: {rw.outcome} x{rw.attempts} held {rw.held}; errors '{rr.error}'/'{rw.error}'"
+    if m == "parallel_cap":
+        cur, peak = [0], [0]
+
+        async def dispatch(step, inputs):
+            cur[0] += 1
+            peak[0] = max(peak[0], cur[0])
+            await asyncio.sleep(0.1)
+            cur[0] -= 1
+            return "ok"
+        t0 = time.monotonic()
+        res = _arun(_plan(*[S(f"s{i}") for i in range(6)]), dispatch, parallel=2)
+        sec = time.monotonic() - t0
+        return peak[0] == 2 and all(x.ok for x in res) and sec >= 0.28, f"peak concurrency {peak[0]} (limit 2), {len(res)} steps in {sec:.2f} s"
+    if m == "read_timeout":
+        calls = []
+
+        async def dispatch(step, inputs):
+            calls.append(step.id)
+            await asyncio.sleep(1.0)
+            return "late"
+        t0 = time.monotonic()
+        r = _by(_arun(_plan(S("a"), S("b", ["a"])), dispatch, step_timeout=0.2))
+        sec = time.monotonic() - t0
+        ok = r["a"].outcome == "unknown" and not r["a"].held and calls == ["a", "a"] and r["b"].outcome == "not_executed" \
+            and "did not finish" in r["b"].error and sec < 1.5
+        return ok, _fmt(r) + f"; dispatched {calls} in {sec:.2f} s"
+    if m == "cancel_before":
+        calls = []
+
+        async def main():
+            ev = asyncio.Event()
+            ev.set()
+
+            async def dispatch(step, inputs):
+                calls.append(step.id)
+                return "ok"
+            p = _plan(S("a"), S("b", ["a"]), S("c"))
+            return p, await run_plan(p, dispatch, cancel=ev)
+        p, res = asyncio.run(main())
+        r = _by(res)
+        ok = calls == [] and len(res) == 3 and all(x.outcome == "not_executed" for x in res) and run_state(p, res, cancelled=True) == "cancelled" \
+            and all("cancelled" in x.error or "did not finish" in x.error for x in res)
+        return ok, _fmt(r) + f"; dispatched {calls}; errors {[x.error for x in res]}"
+    if m == "child_cancelled":
+        flags = []
+
+        async def dispatch(step, inputs):
+            try:
+                await asyncio.sleep(5)
+                flags.append("finished")
+            except asyncio.CancelledError:
+                flags.append("cancelled")
+                raise
+            return "late"
+        t0 = time.monotonic()
+        r = _arun(_plan(S("a")), dispatch, total_timeout=0.4)[0]
+        sec = time.monotonic() - t0
+        return flags == ["cancelled"] and r.outcome == "unknown" and r.attempts == 1 and sec < 1.5, \
+            f"child {flags}, outcome {r.outcome} x{r.attempts}, {sec:.2f} s (limit 0.4 s)"
+    if m == "callbacks_raise":
+        def boom(*x):
+            raise RuntimeError("the UI went away")
+
+        async def dispatch(step, inputs):
+            return f"out-{step.id}"
+        res = _arun(_plan(S("a"), S("b", ["a"])), dispatch, on_start=boom, on_progress=boom)
+        return all(x.ok for x in res) and len(res) == 2, _fmt(_by(res))
+    if m == "final_all_failed":
+        async def dispatch(step, inputs):
+            raise StepFailed(f"{step.id} could not reach the site")
+        p = _plan(S("a"), S("b"))
+        res = _arun(p, dispatch)
+        t = final_text(p, res)
+        ok = t.startswith("I could not finish this:") and "a (failure: a could not reach the site)" in t and "b (failure" in t \
+            and run_state(p, res) == "failed" and "Not everything worked" not in t
+        return ok, f"state {run_state(p, res)}; final '{t[:200]}'"
+    if m == "state_lost_step":
+        p = _plan(S("a"), S("b"), S("c"))
+        two = [StepResult("a", "success", "x"), StepResult("b", "success", "y")]
+        lost, full = run_state(p, two), run_state(p, two + [StepResult("c", "success", "z")])
+        return lost == "partial" and full == "done", f"2 of 3 results, all ok -> '{lost}'; 3 of 3 -> '{full}'"
+    if m == "prior_failure":
+        calls = []
+
+        async def dispatch(step, inputs):
+            calls.append(step.id)
+            return "ok"
+        p = _plan(S("a", kind="plugin", effect="non_idempotent"), S("b", ["a"]), S("c"))
+        res = _arun(p, dispatch, prior={"a": StepResult("a", "failure", error="the disk is full")})
+        r = _by(res)
+        ok = calls == ["c"] and r["a"].outcome == "failure" and r["a"].error == "the disk is full" and r["b"].outcome == "not_executed" \
+            and r["c"].ok and run_state(p, res) == "partial"
+        return ok, _fmt(r) + f"; dispatched {calls}"
+    raise ValueError(m)
+
+
+def store_roundtrip(a):
+    """A run checkpointed after every step is restored exactly (outcome, attempts, waited, held) and only the missing step runs."""
+    store = RunStore(_dir() / "runs")
+    first = _plan(S("a"), S("b", ["a"]))
+    run = {"run_id": "rt", "plan": plan_to_dict(first), "results": {}, "running": [], "state": "running"}
+    store.save(run)
+    seen = []
+
+    async def dispatch(step, inputs, ctx):
+        seen.append(step.id)
+        if step.id == "a" and seen.count("a") == 1:
+            raise RuntimeError("transient")                  # a needs 2 attempts: the count must survive the checkpoint
+        ctx.add_waiting(0.05 if step.id == "b" else 0)
+        return f"out-{step.id}"
+
+    def save(step, res):
+        run["results"][step.id] = result_to_dict(res)
+        store.save(run)
+    before = _by(_arun(first, dispatch, on_progress=save))
+    rec = RunStore(store.dir).load("rt")                       # another process reads the checkpoint
+    prior = {sid: result_from_dict({"id": sid, **rd}) for sid, rd in rec["results"].items()}
+    seen.clear()
+    full = _plan(S("a"), S("b", ["a"]), S("c", ["b"]))
+    after = _by(_arun(full, dispatch, prior=prior))
+    same = all(result_to_dict(prior[k]) == result_to_dict(before[k]) for k in ("a", "b"))
+    ok = same and prior["a"].attempts == 2 and prior["b"].waited > 0 and seen == ["c"] and after["c"].ok and after["a"].text == "out-a"
+    return ok, f"restored exactly {same} (a attempts {prior['a'].attempts}, b waited {prior['b'].waited:.2f}); resume dispatched {seen}"
+
+
+STORE_CHILD2 = r'''
+import asyncio, sys
+from pathlib import Path
+sys.path.insert(0, @ROOT@)
+from plugin.plugins.main_agent.executor import run_plan
+from plugin.plugins.main_agent.planner import Plan, Step
+from plugin.plugins.main_agent.store import RunStore, plan_to_dict, result_to_dict
+d = Path(@TMP@)
+plan = Plan("bench", [Step("send", "plugin", "send the summary", ref="x:send_message", effect="non_idempotent"),
+                      Step("fetch", "think", "read the replies", depends_on=["send"]),
+                      Step("report", "think", "report", depends_on=["fetch"])])
+store = RunStore(d / "runs")
+run = {"run_id": "r2", "plan": plan_to_dict(plan), "results": {}, "running": [], "state": "running"}
+store.save(run)
+def on_start(step):
+    run["running"].append(step.id); store.save(run)
+def on_progress(step, res):
+    run["results"][step.id] = result_to_dict(res)
+    if step.id in run["running"]:
+        run["running"].remove(step.id)
+    store.save(run)
+async def dispatch(step, inputs):
+    with (d / "acts.log").open("a") as f:
+        f.write(step.id + "\n")
+    if step.id == "fetch":
+        await asyncio.sleep(60)          # killed here: a read, harmless to repeat
+    return "ok-" + step.id
+asyncio.run(run_plan(plan, dispatch, on_start=on_start, on_progress=on_progress))
+'''
+
+
+def store_kill_readonly(a):
+    """Killed (SIGKILL) while a READ step runs after a send finished: recover marks the read unknown but not held; a resume
+    that re-runs read-only unknowns (the plugin's resume rule, applied here) repeats the read, never the send."""
+    d = _dir()
+    p = subprocess.Popen([sys.executable, "-c", STORE_CHILD2.replace("@ROOT@", repr(str(ROOT))).replace("@TMP@", repr(str(d)))],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    store = RunStore(d / "runs")
+    end = time.time() + 60
+    while time.time() < end and (store.load("r2") or {}).get("running") != ["fetch"]:
+        time.sleep(0.05)
+    p.kill()
+    p.wait()
+    rec_ids = store.recover()
+    res = store.load("r2")["results"]
+    plan = Plan("bench", [Step("send", "plugin", "send", effect="non_idempotent"), Step("fetch", "think", "read", depends_on=["send"]),
+                          Step("report", "think", "report", depends_on=["fetch"])])
+    effects = {s.id: s.effect for s in plan.steps}
+    prior = {}
+    for sid, rd in res.items():
+        r = result_from_dict({"id": sid, **rd})
+        if r.outcome in ("unknown", "failure") and effects[sid] == "none":
+            continue
+        prior[sid] = r
+    calls = []
+
+    async def dispatch(step, inputs):
+        calls.append(step.id)
+        with (d / "acts.log").open("a") as f:
+            f.write(step.id + "\n")
+        return "ok"
+    out = _arun(plan, dispatch, prior=prior)
+    acts = (d / "acts.log").read_text().split()
+    ok = rec_ids == ["r2"] and res["send"]["outcome"] == "success" and res["fetch"]["outcome"] == "unknown" and res["fetch"]["held"] is False \
+        and calls == ["fetch", "report"] and acts.count("send") == 1 and run_state(plan, out) == "done"
+    return ok, (f"recovered {rec_ids}; send {res['send']['outcome']}, fetch {res['fetch']['outcome']} held {res['fetch'].get('held')}; "
+                f"resume dispatched {calls}; sends in total {acts.count('send')}; state {run_state(plan, out)}")
+
+
+def store_recover_twice(a):
+    """A step that finished but was still listed as running (crash between the two writes) stays a success; a second restart changes nothing."""
+    s = RunStore(_dir() / "runs")
+    s.save({"run_id": "r3", "state": "running", "plan": plan_to_dict(_plan(S("a", kind="plugin", effect="non_idempotent"), S("b"))),
+            "running": ["a", "b"], "results": {"a": result_to_dict(StepResult("a", "success", "sent"))}})
+    first = s.recover()
+    snap = json.dumps(s.load("r3")["results"], sort_keys=True)
+    second = s.recover()
+    rec = s.load("r3")
+    ok = first == ["r3"] and second == [] and rec["results"]["a"]["outcome"] == "success" and rec["results"]["b"]["outcome"] == "unknown" \
+        and not rec["results"]["b"]["held"] and json.dumps(rec["results"], sort_keys=True) == snap and rec["state"] == "interrupted"
+    return ok, f"first restart {first}, second {second}; a {rec['results']['a']['outcome']}, b {rec['results']['b']['outcome']}; unchanged by 2nd {json.dumps(rec['results'], sort_keys=True) == snap}"
+
+
+def store_atomic_save(a):
+    """The process dies in the middle of writing a checkpoint (fake: os.replace fails after the temp file is written): the
+    previous checkpoint stays whole and readable, and the half-written temp file is never taken for a run."""
+    from unittest import mock
+    from plugin.plugins.main_agent import store as ST
+    s = RunStore(_dir() / "runs")
+    s.save({"run_id": "r4", "state": "running", "step": 1, "results": {}, "running": [], "plan": plan_to_dict(_plan(S("a")))})
+    crashed = False
+    with mock.patch.object(ST.os, "replace", side_effect=OSError("power cut")):
+        try:
+            s.save({"run_id": "r4", "state": "running", "step": 2, "results": {}, "running": [], "plan": plan_to_dict(_plan(S("a")))})
+        except OSError:
+            crashed = True
+    rec = s.load("r4")
+    ok = crashed and rec is not None and rec["step"] == 1 and s.ids() == ["r4"]
+    return ok, f"crash during save {crashed}; checkpoint after it: step {rec and rec.get('step')}; runs listed {s.ids()}"
+
+
+# ---------------------------------------------------------------- missions (2026-10-17)
+def mission_cancel_planning(a):
+    with _engine() as (e, d):
+        calls = []
+        e.agents = {"check_pc": lambda s: calls.append(1) or {"ok": True}}
+        e.plan_fn = lambda g, c: (time.sleep(0.6), [{"tool": "check_pc", "check": "disk"}, {"tool": "check_pc", "check": "cpu"}])[1]
+        mid = M.start("check the disk and the cpu")
+        time.sleep(0.2)
+        accepted = M.cancel(mid)
+        r = _wait(mid)
+        ok = accepted and r["status"] == "cancelled" and not calls and not r["steps"] and "Not finished" in r.get("explain", "") \
+            and C.current_task(e.lock_path) is None
+        return ok, _short(r) + f"; agent calls {len(calls)}; explain '{r.get('explain', '')[:100]}'"
+
+
+def mission_done_journal(a):
+    """The process died after a step's effect was journaled done but before DBOS recorded the step: the resumed mission
+    replays the journaled result instead of acting again."""
+    with _engine() as (e, d):
+        calls = []
+        step = {"tool": "type_text", "app": "notepad", "text": "Dear sir"}
+        e.agents = {"type_text": lambda s: calls.append("type") or {"ok": True}, "check_pc": lambda s: calls.append("check") or {"ok": True}}
+        e.plan_fn = lambda g, c: [dict(step), {"tool": "check_pc", "check": "disk"}]
+        mid = "m-bench-donejournal"
+        M._q("insert into missions (id, goal, status, created, updated, record) values (?,?,?,?,?,?)", (mid, "g", "queued", time.time(), time.time(), "{}"))
+        M._q("insert into effects (key, mission, tool, state, result, at) values (?,?,?,?,?,?)",
+             (f"{mid}:{M._sig(step)}:0", mid, "type_text", "done", json.dumps({"ok": True, "typed": 8}), 0))
+        with SetWorkflowID(mid):
+            DBOS.start_workflow(M.run_mission, mid, "resume test")
+        r = _wait(mid)
+        rep = (r.get("steps") or [{}])[0].get("result", {}).get("replayed")
+        return r["status"] == "completed" and calls == ["check"] and rep is True, _short(r) + f"; agent calls {calls}; first step replayed {rep}"
+
+
+def mission_same_step_twice(a):
+    """The plan types the same text twice on purpose: each occurrence is its own effect (no false de-duplication)."""
+    with _engine() as (e, d):
+        calls = []
+        e.agents = {"type_text": lambda s: calls.append(s["text"]) or {"ok": True}, "check_pc": lambda s: calls.append(s["check"]) or {"ok": True}}
+        e.plan_fn = lambda g, c: [{"tool": "type_text", "app": "notepad", "text": "-----"}, {"tool": "check_pc", "check": "disk"},
+                                  {"tool": "type_text", "app": "notepad", "text": "-----"}]
+        r = _wait(M.start("type a divider, check the disk, type another divider"))
+        return r["status"] == "completed" and calls == ["-----", "disk", "-----"], _short(r) + f"; agent calls {calls}"
+
+
+def mission_plan_crash(a):
+    """The planner itself crashes: the mission must end in a final, explained state (never stay 'queued') and leave the PC free."""
+    with _engine() as (e, d):
+        logging.getLogger("dbos").setLevel(logging.CRITICAL)        # the expected workflow error is not bench output
+
+        def bad(g, c):
+            raise RuntimeError("planner model returned garbage")
+        e.plan_fn = bad
+        mid = M.start("do something")
+        end, r = time.time() + 8, None
+        while time.time() < end:
+            r = M.load(mid)
+            if r and r.get("status") not in ("queued", "running"):
+                break
+            time.sleep(0.1)
+        st = (r or {}).get("status")
+        ok = st not in (None, "queued", "running", "completed") and C.current_task(e.lock_path) is None
+        return ok, f"status 8 s after the planner crashed: '{st}' (error {str((r or {}).get('error'))[:80]}); PC lock free {C.current_task(e.lock_path) is None}"
+
+
+# ---------------------------------------------------------------- kernel outcome tasks and lab jobs (2026-10-17)
+@contextmanager
+def _proxy():
+    """A real kernel and its agent/runner HTTP endpoints on 127.0.0.1 (the lab runner is played by this check)."""
+    import threading
+    import urllib.error
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from types import SimpleNamespace
+    from jarvis_kernel.llm_proxy import make_handler
+    d = _dir()
+    k = Kernel(str(d / "k"))
+    H, tokens = make_handler(k, [], owner_hermes=None)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+
+    def post(path, body, tok):
+        r = urllib.request.Request(url + path, data=json.dumps(body).encode(), method="POST",
+                                   headers={"Content-Type": "application/json", "Authorization": "Bearer " + tok})
+        try:
+            resp = urllib.request.urlopen(r, timeout=30)
+            return resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read() or b"{}")
+    P = SimpleNamespace(k=k, d=d, post=post, owner=tokens.issue("hermes"), runner=tokens.issue("lab-runner", "runner"), T=Tasks(k), J=Jobs(k))
+    P.act = lambda op, target, params, tok=None: post("/v1/jarvis/actions", {"tool": "task", "op": op, "target": target, "params": params}, tok or P.owner)
+    P.run = lambda path, body: post("/v1/jarvis/runner/" + path, body, P.runner)
+    try:
+        yield P
+    finally:
+        srv.shutdown()
+        srv.server_close()
+        k.db.close()
+
+
+def _lab_task(P, attempts=2, start=True):
+    tid = P.act("create", "t", {"goal": "A small tool", "criteria": ["tests pass"], "max_attempts": attempts,
+                                "request": f"build me a small tool {time.time()}"})[1]["task"]
+    code, r = P.act("dispatch", tid, {"instructions": "build it and test it", "public_ok": True})
+    job = None
+    if start:
+        job = P.run("next", {})[1]["job"]["id"]
+        P.run("report", {"job": job, "state": "running", "attempt": True, "step": "attempt 1"})
+    return tid, (job or r.get("job"))
+
+
+def task_retry_restart(a):
+    """The retry budget is kept in the kernel database: a restart between attempts does not reset it."""
+    d = _dir() / "k"
+    k = Kernel(str(d))
+    T = Tasks(k)
+    t = T.create("hermes", "public", "", "A tool", criteria=["tests pass"], max_attempts=2)
+    T.update(None, t, state="running", attempt=True)
+    T.update(None, t, state="verifying")
+    k.db.close()
+    k = Kernel(str(d))                                             # restart
+    T = Tasks(k)
+    T.update(None, t, state="repairing", note="tests fail")
+    T.update(None, t, state="running", attempt=True)
+    T.update(None, t, state="verifying")
+    k.db.close()
+    k = Kernel(str(d))                                             # restart again
+    T = Tasks(k)
+    refused = []
+    for kw in ({"state": "repairing"}, {"attempt": True}):
+        try:
+            T.update(None, t, **kw)
+        except Exception as e:  # noqa: BLE001
+            refused.append(str(e)[:40])
+    T.update(None, t, state="failed", result="not verified after 2 attempt(s): tests fail")
+    g = T.get(t)
+    k.db.close()
+    ok = len(refused) == 2 and all("budget" in x for x in refused) and (g["state"], g["attempts"]) == ("failed", 2) and "2 attempt" in g["result"]
+    return ok, f"after two restarts: extra attempt refused {refused}; final {g['state']} attempts {g['attempts']}/{g['max_attempts']}"
+
+
+def task_expire_partial(a):
+    d = _dir() / "k"
+    k = Kernel(str(d))
+    try:
+        T = Tasks(k)
+        t = T.create("hermes", "private", "", "Write three pages", budget_s=60)
+        T.update("hermes", t, state="running", result="draft of page 1 of 3 written")
+        gone = T.expire(time.time() + 61)
+        g = T.get(t)
+    finally:
+        k.db.close()
+    ok = gone == [t] and g["state"] == "failed" and "time budget" in g["result"] and "page 1 of 3" in g["result"]
+    return ok, f"state {g['state']}; result '{g['result'][:120]}'"
+
+
+def task_final_stays(a):
+    d = _dir() / "k"
+    k = Kernel(str(d))
+    try:
+        T = Tasks(k)
+        out = {}
+        for end in ("cancelled", "completed", "failed"):
+            t = T.create("hermes", "public", "", f"goal {end}")
+            T.update(None, t, state="running", attempt=True)
+            if end == "completed":
+                T.update(None, t, state="verifying")
+            T.update(None, t, state=end, result=f"ended {end}")
+            late = []
+            for st in ("running", "completed", "failed", "verifying"):
+                try:
+                    T.update(None, t, state=st, result="late runner report")
+                    late.append(st)
+                except Exception:  # noqa: BLE001
+                    pass
+            g = T.get(t)
+            finals = k.db.execute("SELECT COUNT(*) FROM audit WHERE kind IN ('task_completed','task_failed','task_cancelled') AND payload LIKE ?",
+                                  (f'%{t}%',)).fetchone()[0]
+            out[end] = (g["state"], g["result"], late, finals)
+    finally:
+        k.db.close()
+    ok = all(v[0] == e and v[1] == f"ended {e}" and v[2] == [] and v[3] == 1 for e, v in out.items())
+    return ok, "; ".join(f"{e}: state {v[0]}, result '{v[1]}', late reports accepted {v[2]}, final audit rows {v[3]}" for e, v in out.items())
+
+
+def task_checkpoint_honest(a):
+    d = _dir() / "k"
+    k = Kernel(str(d))
+    try:
+        T = Tasks(k)
+        f = T.create("hermes", "public", "", "Deploy the site", criteria=["site returns 200"])
+        T.update("hermes", f, state="running", attempt=True, step="attempt 1: building")
+        T.update("hermes", f, state="verifying")
+        T.update("hermes", f, state="repairing", note="page 2 returns 500")
+        T.update("hermes", f, state="running", attempt=True)
+        T.update("hermes", f, state="failed", result="not verified after 2 attempt(s): page 2 returns 500")
+        o = T.create("hermes", "public", "", "Write the report", criteria=["3 sections"])
+        T.update("hermes", o, state="running", attempt=True)
+        cp = T.checkpoint("hermes")
+    finally:
+        k.db.close()
+    by = {c["id"]: c for c in cp["tasks"]}
+    txt = cp["text"]
+    ok = by[f]["state"] == "failed" and by[f]["attempts"] == "2/3" and "page 2 returns 500" in by[f]["result"] \
+        and by[f]["next"].startswith("tell the owner the exact blocker") and by[o]["next"].startswith("wait: the lab is working") \
+        and f"Task {f} [failed, attempts 2/3]" in txt and "not verified" in txt
+    return ok, f"checkpoint text: '{txt[:260]}'"
+
+
+def lab_cancel_midrun(a):
+    with _proxy() as P:
+        from jarvis_kernel.owner import Owner
+        tid, job = _lab_task(P)
+        Owner(P.k, P.T, P.J).task_control(tid, "cancel")
+        status = P.run("status", {"job": job})[1].get("state")
+        late = P.run("report", {"job": job, "state": "verifying", "step": "attempt 1: independent check"})[0]
+        fin = P.run("finish", {"job": job, "result": {"ok": False, "summary": "stopped by the owner", "error": "stopped by the owner"}})[0]
+        g = P.T.get(tid)
+        js = P.k.db.execute("SELECT state FROM jobs WHERE id=?", (job,)).fetchone()[0]
+    ok = status == "cancelled" and late == 409 and fin == 200 and g["state"] == "cancelled" and js == "failed"
+    return ok, f"runner sees '{status}'; late report -> {late}; finish -> {fin}; task {g['state']}; lab job {js}"
+
+
+def lab_runner_crash(a):
+    """The lab runner crashes after starting attempt 1 and only manages to post its finish (ok false). The task must not keep
+    saying 'running' until its deadline."""
+    with _proxy() as P:
+        tid, job = _lab_task(P)
+        fin = P.run("finish", {"job": job, "result": {"ok": False, "summary": "runner error: KeyError", "error": "runner error: KeyError"}})[0]
+        g = P.T.get(tid)
+    ok = fin == 200 and g["state"] == "failed" and "runner error: KeyError" in g["result"]
+    return ok, f"finish -> {fin}; task state '{g['state']}', result '{g['result'][:120]}'"
+
+
+def lab_job_expired(a):
+    """The lab runner is offline: the queued lab job expires. After the kernel's sweep the task must say so, not 'queued'."""
+    with _proxy() as P:
+        tid, job = _lab_task(P, start=False)
+        P.k.db.execute("UPDATE jobs SET expires=? WHERE id=?", (time.time() - 1, job))
+        sw = P.J.sweep()
+        g = P.T.get(tid)
+    ok = sw["expired"] == 1 and g["state"] == "failed" and "expired" in g["result"]
+    return ok, f"sweep {sw}; task state '{g['state']}', result '{g['result'][:120]}'"
+
+
+def lab_job_cancelled(a):
+    with _proxy() as P:
+        from jarvis_kernel.owner import Owner
+        tid, job = _lab_task(P, start=False)
+        out = Owner(P.k, P.T, P.J).cancel_job(job)
+        g = P.T.get(tid)
+        nxt = P.run("next", {})[1].get("job")
+    ok = out["state"] == "cancelled" and g["state"] == "cancelled" and nxt is None
+    return ok, f"cancel_job -> {out['state']}; task '{g['state']}'; runner then gets {nxt}"
+
+
+def lab_runner_killed(a):
+    """The kill switch is on: the lab runner must not be handed new work; after resume it is."""
+    with _proxy() as P:
+        tid, job = _lab_task(P, start=False)
+        P.k.kill("bench")
+        code, r = P.run("next", {})
+        got = (r or {}).get("job")
+        st = P.k.db.execute("SELECT state FROM jobs WHERE id=?", (job,)).fetchone()[0]
+        P.k.resume()
+        after = P.run("next", {})[1].get("job")
+    ok = got is None and st == "queued" and after and after["id"] == job
+    return ok, f"while killed: /runner/next -> {code} job {got and got['id']}, job state {st}; after resume -> {after and after['id']}"
+
+
+def lab_dispatch_restart(a):
+    """The same task is dispatched again after a kernel restart: the active lab job is found in the database, not in memory."""
+    from http.server import ThreadingHTTPServer
+    with _proxy() as P:
+        tid, job = _lab_task(P, start=False)
+        d = P.d
+    import threading
+    import urllib.error
+    import urllib.request
+    from jarvis_kernel.llm_proxy import make_handler
+    k = Kernel(str(d / "k"))                                     # restart: a new kernel process on the same data
+    try:
+        H, tokens = make_handler(k, [], owner_hermes=None)
+        tok = tokens.issue("hermes")
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}/v1/jarvis/actions", method="POST",
+                                         data=json.dumps({"tool": "task", "op": "dispatch", "target": tid,
+                                                          "params": {"instructions": "build it again", "public_ok": True}}).encode(),
+                                         headers={"Content-Type": "application/json", "Authorization": "Bearer " + tok})
+            try:
+                code = urllib.request.urlopen(req, timeout=30).status
+            except urllib.error.HTTPError as e:
+                code = e.code
+        finally:
+            srv.shutdown()
+            srv.server_close()
+        n = k.db.execute("SELECT COUNT(*) FROM jobs WHERE kind='lab_run'").fetchone()[0]
+    finally:
+        k.db.close()
+    return code == 409 and n == 1, f"second dispatch after the restart -> {code}; lab jobs {n}"
+
+
+def lab_deadline_midrun(a):
+    with _proxy() as P:
+        tid, job = _lab_task(P)
+        P.k.db.execute("UPDATE tasks SET deadline=? WHERE id=?", (time.time() - 1, tid))
+        late = P.run("report", {"job": job, "state": "verifying"})[0]
+        status = P.run("status", {"job": job})[1].get("state")
+        fin = P.run("finish", {"job": job, "result": {"ok": False, "summary": "task closed", "error": "task closed"}})[0]
+        g = P.T.get(tid)
+    ok = late == 409 and status == "failed" and fin == 200 and g["state"] == "failed" and g["result"].startswith("time budget used up")
+    return ok, f"report after the deadline -> {late}; runner sees '{status}'; task {g['state']} '{g['result'][:80]}'"
+
+
+# ---------------------------------------------------------------- automations (2026-10-17)
+LAB = {"name": "nightly build", "action_kind": "lab_task", "trigger_kind": "interval", "schedule": "86400",
+       "action": {"goal": "Build the site", "instructions": "build the static site and run its checks", "criteria": ["the site builds"], "agent": "hermes"}}
+CMD = {"name": "morning brief", "action_kind": "command", "trigger_kind": "interval", "schedule": "86400",
+       "action": {"text": "summarise what changed overnight"}}
+
+
+def auto2(a):
+    m, d, now = a["mode"], _dir() / "k", [T0]
+    k = Kernel(str(d))
+    T, J = Tasks(k), Jobs(k)
+    try:
+        if m == "lab_refused":
+            calls = []
+
+            def dispatch(agent, lane, tid, p):                     # fake lab path: the lab is busy
+                calls.append(tid)
+                return 409, {"status": "refused", "reason": "the lab is busy with another task"}
+            A = Automations(k, T, J, owner=None, dispatch=dispatch, clock=lambda: now[0])
+            aid = A.create(LAB)["id"]
+            now[0] = A.get(aid)["next_run"] + 5
+            A.tick()
+            run = A.runs(aid)[0]
+            t = T.get(run["task_id"]) if run["task_id"] else {}
+            ok = len(calls) == 1 and run["status"] == "refused" and "busy" in (run["detail"] or "") and t.get("state") == "failed" \
+                and "not dispatched" in (t.get("result") or "")
+            return ok, f"run {run['status']} ({run['detail']}); task {t.get('state')} '{t.get('result')}'"
+        A = Automations(k, T, J, owner=None, dispatch=None, clock=lambda: now[0])
+        if m == "cancelled_job":
+            aid = A.create(dict(JOB, trigger_kind="interval", schedule="600"))["id"]
+            now[0] += 610
+            first = A.tick()["fired"]
+            J.cancel(A.runs(aid)[0]["job_id"])                    # the owner stops the job before the laptop ran it
+            A.tick()
+            now[0] += 600
+            second = A.tick()["fired"]
+            st = [r["status"] for r in A.runs(aid)]
+            ok = len(first) == 1 and len(second) == 1 and _jobs(k) == 2
+            return ok, f"after the owner cancelled run 1's job: next slot fired {len(second)}; run statuses (newest first) {st}; jobs {_jobs(k)}"
+        if m == "killed":
+            from jarvis_kernel.automations import AutomationError
+            aid = A.create(dict(JOB, trigger_kind="interval", schedule="600"))["id"]
+            now[0] += 610
+            k.kill("bench")
+            try:
+                A.run_now(aid)
+                manual = "ran"
+            except AutomationError as e:
+                manual = e.code
+            off = A.tick()["fired"]
+            n_off = (len(A.runs(aid)), _jobs(k))
+            k.resume()
+            on = A.tick()["fired"]
+            again = A.tick()["fired"]
+            ok = manual == 503 and off == [] and n_off == (0, 0) and len(on) == 1 and again == [] and _jobs(k) == 1
+            return ok, f"run now while killed -> {manual}; tick while killed fired {len(off)} (runs, jobs {n_off}); after resume {len(on)} then {len(again)}; jobs {_jobs(k)}"
+        if m == "daily_limit":
+            aid = A.create(dict(JOB, trigger_kind="interval", schedule="600", catchup="all", overlap="queue", max_runs_per_day=3))["id"]
+            now[0] += 10 * 600 + 5
+            A.tick()
+            st = [r["status"] for r in A.runs(aid, 50)]
+            ok = st.count("fired") == 3 and st.count("skipped_limit") == 7 and _jobs(k) == 3
+            return ok, f"10 missed slots, limit 3 per day: fired {st.count('fired')}, skipped_limit {st.count('skipped_limit')}, jobs {_jobs(k)}"
+        raise ValueError(m)
+    finally:
+        k.db.close()
+
+
+def auto_command(a):
+    """A command automation while JARVIS (fake agent) is busy waits, then fires exactly once; if JARVIS stays busy past the
+    claim grace the run fails (bounded) instead of retrying forever."""
+    from jarvis_kernel.automations import CLAIM_GRACE
+    from jarvis_kernel.owner import Owner
+    d, now = _dir() / "k", [T0]
+    k = Kernel(str(d))
+    try:
+        sent = []
+        o = Owner(k, Tasks(k), Jobs(k), hermes=lambda text: sent.append(text) or "done", clock=lambda: now[0], spawn=lambda fn: fn())
+        A = Automations(k, o.tasks, o.jobs, owner=o, dispatch=None, clock=lambda: now[0])
+        aid = A.create(CMD)["id"]
+        slot = A.get(aid)["next_run"]
+        o.busy.acquire()                                          # JARVIS is answering another command
+        now[0] = slot + 5
+        A.tick()
+        now[0] = slot + 65
+        A.tick()
+        waiting = A.runs(aid)[0]["status"]
+        if a["mode"] == "fires_once":
+            o.busy.release()
+            now[0] = slot + 125
+            A.tick()
+            now[0] = slot + 185
+            A.tick()
+            A.tick()
+            n = k.db.execute("SELECT COUNT(*) FROM owner_commands").fetchone()[0]
+            st = A.runs(aid)[0]["status"]
+            ok = waiting == "claimed" and len(sent) == 1 and n == 1 and st in ("fired", "done")
+            return ok, f"while busy: {waiting}; after: run {st}, agent calls {len(sent)}, command rows {n}"
+        now[0] = slot + CLAIM_GRACE + 60
+        A.tick()
+        st, det = A.runs(aid)[0]["status"], A.runs(aid)[0]["detail"]
+        o.busy.release()
+        A.tick()
+        streak = A.get(aid)["failure_streak"]
+        ok = waiting == "claimed" and st == "failed" and "busy too long" in (det or "") and not sent and streak == 1
+        return ok, f"while busy: {waiting}; after the grace: {st} ({det}); agent calls {len(sent)}; failure streak {streak}"
+    finally:
+        k.db.close()
