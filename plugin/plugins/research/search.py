@@ -50,8 +50,14 @@ def tavily_search(query: str, n: int, opener=urllib.request.urlopen) -> list[dic
         raise SearchError(f"Tavily HTTP {e.code}") from None
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
         raise SearchError(f"Tavily {type(e).__name__}") from None
-    return [{"title": r.get("title") or "", "url": r.get("url") or "", "snippet": (r.get("content") or "")[:400],
-             "date": (r.get("published_date") or "")[:10]} for r in data.get("results") or [] if r.get("url")]
+    items = data.get("results") if isinstance(data, dict) else None      # a reply of another shape is no results, not a crash
+    return [{"title": _text(r.get("title")), "url": r["url"], "snippet": _text(r.get("content"))[:400],
+             "date": _text(r.get("published_date"))[:10]}
+            for r in (items if isinstance(items, list) else []) if isinstance(r, dict) and isinstance(r.get("url"), str) and r["url"]]
+
+
+def _text(v) -> str:
+    return v if isinstance(v, str) else ""
 
 
 def with_retry(fn: Callable[[], list[dict]], retries: int = 1, pause: float = 1.0) -> list[dict]:
@@ -80,8 +86,11 @@ def merged_search(query: str, n: int, primary: Callable[[str, int], list[dict]],
     out, seen = [], set()
 
     def add(results, who):
-        for r in results:
-            u = norm(r.get("url", ""))
+        # one malformed item (a string, None, a number as the URL) used to end the loop and drop every result after it
+        for r in results if isinstance(results, list) else []:
+            if not isinstance(r, dict) or not isinstance(r.get("url"), str):
+                continue
+            u = norm(r["url"])
             if u and u not in seen:
                 seen.add(u)
                 out.append({**r, "found_by": who})

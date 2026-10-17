@@ -57,3 +57,27 @@ def test_tavily_without_key_is_skipped_quietly(monkeypatch):
     notes = []
     out = search.merged_search("q", 4, lambda q, n: [], search.tavily_search, notes)
     assert out == [] and notes == []                 # a missing optional key is not an error
+
+
+def test_junk_items_in_a_reply_do_not_drop_the_good_results():
+    """One malformed item (a string, None, a number as the URL) ended the loop: every good result after it was lost."""
+    out = search.merged_search("q", 6, lambda q, n: res("https://a.org/1") + ["junk", None, {"url": 7}, {"title": "no url"}] + res("https://b.org/2"))
+    assert [r["url"] for r in out] == ["https://a.org/1", "https://b.org/2"]
+
+
+def test_a_tavily_reply_of_the_wrong_shape_is_no_results_not_a_crash(monkeypatch):
+    """A list, results as an object, or non-object items raised AttributeError, which escaped merged_search and lost the
+    first provider's results too."""
+    import json
+
+    class Resp:
+        def __init__(self, data): self.data = data
+        def read(self): return self.data
+        def __enter__(self): return self
+        def __exit__(self, *e): return False
+    monkeypatch.setattr(search, "tavily_key", lambda: "synthetic")
+    for body in ([1, 2], {"results": {"a": 1}}, {"results": [None, "x", {"url": "https://t.org/1", "content": 5}]}, None):
+        got = search.tavily_search("q", 5, opener=lambda req, timeout=None, b=json.dumps(body).encode(): Resp(b))
+        assert all(isinstance(r["snippet"], str) for r in got) and [r["url"] for r in got] in ([], ["https://t.org/1"])
+    bad = lambda q, n: search.tavily_search(q, n, opener=lambda req, timeout=None: Resp(b'{"results": [null]}'))  # noqa: E731
+    assert [r["url"] for r in search.merged_search("q", 6, lambda q, n: res("https://a.org/1"), bad)] == ["https://a.org/1"]

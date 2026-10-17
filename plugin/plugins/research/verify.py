@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from functools import lru_cache
 
 import numpy as np
@@ -116,7 +117,7 @@ def numbers_match(sentence: str, passage: str) -> bool:
 
 
 _MARK = re.compile(r"\[(?:\d{1,3}|[a-z]|citation needed|note \d+)\]", re.I)    # wiki-style reference markers
-_SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
+_SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(\uFF10-\uFF19\uFF21-\uFF3A])")     # full-width capitals start a sentence too
 
 
 def windows(passage: str) -> list[str]:
@@ -135,10 +136,20 @@ INJECTED = re.compile(
     r"|\byou are (now )?(chatgpt|an ai|a language model|an assistant)\b|\bas an ai (assistant|model)\b|\bsystem prompt\b")
 
 
+# Zero-width characters and soft hyphens inside words, and full-width letters, hid the same instruction from INJECTED
+# (bench H-051, 2026-10-17): sentences are matched in a plain form (NFKC, those characters removed); the text kept is
+# the original.
+_INVISIBLE = re.compile("[\u00ad\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]")
+
+
+def _plain(s: str) -> str:
+    return _INVISIBLE.sub("", unicodedata.normalize("NFKC", s))
+
+
 def strip_injected(text: str) -> tuple[str, int]:
     """The text without sentences addressed to an AI reader, and how many were removed."""
     sents = _SENT.split(text or "")
-    keep = [x for x in sents if not INJECTED.search(x)]
+    keep = [x for x in sents if not INJECTED.search(_plain(x))]
     return " ".join(keep), len(sents) - len(keep)
 
 
@@ -164,9 +175,50 @@ def qualifiers_match(sentence: str, passage: str) -> bool:
     return True
 
 
+# A bound the sentence puts on a number ("more than 40 percent", "at least 300 watts") must be the bound the source puts
+# on it: "about 40 percent" or "up to 300 watts" was confirmed as "more than"/"at least" (bench H-041, 2026-10-17).
+_CMP = {"more than": ">", "over": ">", "above": ">", "at least": ">", "greater than": ">", "exceeding": ">", "in excess of": ">",
+        "upwards of": ">", "no fewer than": ">", "no less than": ">", "less than": "<", "fewer than": "<", "under": "<",
+        "below": "<", "at most": "<", "up to": "<", "no more than": "<"}
+_CMP_RE = re.compile(r"(?i)\b(" + "|".join(sorted(map(re.escape, _CMP), key=len, reverse=True)) + r")\s+(?:[$£€₹]\s*)?(\d[\d,]*(?:\.\d+)?)")
+
+
+def _bounds(text: str) -> set[tuple[str, str]]:
+    return {(repr(float(n.replace(",", ""))), _CMP[c.lower()]) for c, n in _CMP_RE.findall(text or "")}
+
+
+def comparators_match(sentence: str, passage: str) -> bool:
+    have = _bounds(passage)
+    return all(b in have for b in _bounds(sentence) if b[0] in _numbers(passage))
+
+
+# A source that hedges a statement ("studies suggest coffee may reduce the risk") does not confirm it stated as certain
+# ("coffee reduces the risk"): the checker accepted both (bench H-040, 2026-10-17). A sentence of the source counts as the
+# statement when it shares at least half of the claim's longer words. Lower case only: "in May 2014" is a date.
+_HEDGE = re.compile(r"\b(?:may|might|could|possibly|perhaps|probably|likely|unlikely|suggests?|suggested|indicates? that|"
+                    r"appears? to|seems? to|reportedly|allegedly|is thought to|are thought to|is believed to|are believed to)\b")
+_LONG = re.compile(r"[a-z]{4,}")
+
+
+def hedges_match(sentence: str, passage: str) -> bool:
+    if _HEDGE.search(sentence or ""):
+        return True
+    claim = set(_LONG.findall((sentence or "").lower()))
+    for s in _SENT.split(passage or ""):
+        if _HEDGE.search(s) and claim and len(claim & set(_LONG.findall(s.lower()))) >= 0.5 * len(claim):
+            return False
+    return True
+
+
+def _agrees(sentence: str, text: str) -> bool:
+    """What the model cannot be trusted with: numbers and units, bounds on numbers, and hedges."""
+    return numbers_match(sentence, text) and comparators_match(sentence, text) and hedges_match(sentence, text)
+
+
 def supported(sentence: str, passages: list[str]) -> tuple[bool, float]:
     """(supported, best entailment probability) over the passages the sentence cites: each whole passage, then its
-    sentence windows. The numbers in the sentence must appear in the same text that entails it."""
+    sentence windows. The numbers in the sentence must appear in the same text that entails it, with the same units and
+    bounds, and that text must not hedge what the sentence states as certain."""
     best, ok = 0.0, False
     passages = [strip_injected(p)[0] for p in passages]
     passages = [p for p in passages if p.strip()]
@@ -175,12 +227,12 @@ def supported(sentence: str, passages: list[str]) -> tuple[bool, float]:
             continue
         e = entailment(p, sentence)
         best = max(best, e)
-        if e >= ENTAIL_MIN and numbers_match(sentence, p):
+        if e >= ENTAIL_MIN and _agrees(sentence, p):
             return True, e
         for w in windows(p):
             e = entailment(w, sentence)
             best = max(best, e)
-            if e >= WINDOW_MIN and numbers_match(sentence, w):
+            if e >= WINDOW_MIN and _agrees(sentence, w):
                 return True, e
     if len(passages) > 1:                                    # a sentence may combine what two passages say
         joined = " ".join(passages)
@@ -188,5 +240,5 @@ def supported(sentence: str, passages: list[str]) -> tuple[bool, float]:
             return False, best
         e = entailment(joined, sentence)
         best = max(best, e)
-        ok = e >= ENTAIL_MIN and numbers_match(sentence, joined)
+        ok = e >= ENTAIL_MIN and _agrees(sentence, joined)
     return ok, best

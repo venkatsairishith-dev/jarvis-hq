@@ -334,5 +334,190 @@
    "ux"
   ],
   "platform": "windows"
+ },
+ {
+  "id": "I-019",
+  "area": "I",
+  "title": "Wrongly typed spec fields are refused, not crashed on",
+  "scenario": "Deck specs with layout 5, bullet level 'high', chart type 3; report specs with section kind 3 and bullet level 'x' (a model's malformed tool arguments).",
+  "expected": "Each is refused with SpecError (the error the plugin entry reports), never AttributeError/ValueError.",
+  "risk": "high",
+  "check": "spec_wrong_types",
+  "dims": [
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-020",
+  "area": "I",
+  "title": "Non-finite chart numbers are refused before building",
+  "scenario": "Chart values 'nan', 'inf', 1e309 and '-inf'.",
+  "expected": "Each is refused with SpecError before any file is made.",
+  "risk": "medium",
+  "check": "chart_nonfinite_refused",
+  "dims": [
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-021",
+  "area": "I",
+  "title": "Control characters from extracted text never show on slides",
+  "scenario": "A slide title, bullets and notes with vertical tab, form feed, NUL, bell and SOH characters (as text copied out of documents carries).",
+  "expected": "The deck builds and reopens with python-pptx; no '_x00NN_' code appears in any slide text or note; the words are kept.",
+  "risk": "medium",
+  "check": "control_chars_in_deck",
+  "dims": [
+   "ux",
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-022",
+  "area": "I",
+  "title": "Report HTML keeps only web links and loads nothing remote",
+  "scenario": "Untrusted report text with markdown links to javascript:, file:, data:, vbscript:, an image at http://127.0.0.1 and a tracker image in a callout.",
+  "expected": "Every href is http(s) or in-page (#); no img/iframe/script/link/object/embed loads from another address (the HTML is saved next to the PDF and can be opened).",
+  "risk": "high",
+  "check": "report_no_remote_images",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "I-023",
+  "area": "I",
+  "title": "Printing a report makes no network request",
+  "scenario": "A report whose text embeds an image and a link to a local server is printed (JS off, all requests blocked; Chrome stands in for Edge).",
+  "expected": "The PDF is made and the local server receives no request.",
+  "risk": "high",
+  "check": "report_print_offline",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "I-024",
+  "area": "I",
+  "title": "Markup in report fields cannot break out of attributes",
+  "scenario": "A source URL with '\" onmouseover=\"alert(1)', a title with </title><script>, a heading with <img onerror>, a table cell with an <iframe>.",
+  "expected": "Parsed with lxml, the report HTML has no on* attribute and no script, iframe or img element.",
+  "risk": "critical",
+  "check": "report_attribute_breakout",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "I-025",
+  "area": "I",
+  "title": "The page footer prints the title as text",
+  "scenario": "Report title 'Plan <b>bold</b> <img src=x>' printed (Chrome stand-in for Edge).",
+  "expected": "The last page's text contains '<b>bold</b>' and '<img src=x>' literally (escaped, not markup).",
+  "risk": "medium",
+  "check": "footer_title_escaped",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "I-026",
+  "area": "I",
+  "title": "Links out of the outputs folder cannot be opened",
+  "scenario": "Inside a deliverable folder: report.pdf is a symlink to a file outside, and 'more' is a symlink to an outside folder.",
+  "expected": "inside_outputs refuses both.",
+  "risk": "critical",
+  "check": "outputs_symlink_refused",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "I-027",
+  "area": "I",
+  "title": "Regenerate only from a deliverable folder",
+  "scenario": "regenerate() on a folder outside the outputs root holding a spec.json, and on a symlinked folder inside the root pointing outside (report maker replaced by a fake that counts builds).",
+  "expected": "Both are refused with ToolError; nothing is built.",
+  "risk": "high",
+  "check": "regenerate_outside_refused",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "I-028",
+  "area": "I",
+  "title": "QA reports text drawn off the page",
+  "scenario": "Two PDFs made with matplotlib: one with a word placed beyond the right page edge, one clean.",
+  "expected": "words_off_page reports 'OVERFLOW' for the first and nothing for the clean one.",
+  "risk": "medium",
+  "check": "qa_off_page_text",
+  "dims": [
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-029",
+  "area": "I",
+  "title": "QA on a damaged PDF says 'not passed'",
+  "scenario": "check_report on a PDF cut in half and on random bytes behind a %PDF header.",
+  "expected": "Each result is 'not passed' with a reason; never 'passed' and never a raw parser exception.",
+  "risk": "high",
+  "check": "qa_damaged_pdf",
+  "dims": [
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-030",
+  "area": "I",
+  "title": "Only the listed sources become deck hyperlinks",
+  "scenario": "Bullets and notes carry a markdown javascript: link, an HTML anchor to file:///etc/passwd and a bare phishing URL.",
+  "expected": "The built .pptx's external link targets are a non-empty subset of the spec's source URLs.",
+  "risk": "high",
+  "check": "deck_only_source_links",
+  "dims": [
+   "security"
+  ]
+ },
+ {
+  "id": "I-031",
+  "area": "I",
+  "title": "A research report becomes a valid deck that keeps its citations",
+  "scenario": "research core.to_deck on a checked report with a 453-character summary statement and long section statements ending in [S1][S2].",
+  "expected": "deliverables spec.deck accepts the deck spec; long statements are cut (at least two) and every cut statement keeps both citation markers.",
+  "risk": "high",
+  "check": "research_deck_keeps_citations",
+  "dims": [
+   "research",
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-032",
+  "area": "I",
+  "title": "Simultaneous deliverables with the same title get their own folders",
+  "scenario": "Five rounds of eight threads calling new_job_dir('Same title') at the same moment.",
+  "expected": "No error and 40 distinct folders.",
+  "risk": "medium",
+  "check": "job_dirs_concurrent",
+  "dims": [
+   "reliability"
+  ]
+ },
+ {
+  "id": "I-033",
+  "area": "I",
+  "title": "The largest allowed deck builds in time",
+  "scenario": "40 bullet slides of 12 points each, with notes (the spec's maximum).",
+  "expected": "At least the 40 content slides are built (the builder adds its own), the .pptx is intact, text fit is reported for every built slide, in under 60 s on one CPU.",
+  "risk": "low",
+  "check": "deck_max_size",
+  "dims": [
+   "speed"
+  ],
+  "args": {
+   "max_s": 60
+  }
  }
 ]

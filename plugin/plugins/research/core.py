@@ -19,6 +19,7 @@ from . import rank
 DEPTH = {"quick": {"queries": 2, "results": 5, "pages": 4, "passages": 10, "seconds": 180},
          "standard": {"queries": 4, "results": 6, "pages": 8, "passages": 18, "seconds": 420}}
 CITE = re.compile(r"\[(S\d{1,3})\]")
+MAX_SECTIONS, MAX_SUMMARY = 28, 3000          # the deliverables report spec allows 30 sections (two more may follow) and 3000 characters
 SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
 
 
@@ -179,6 +180,16 @@ def check_report(draft: dict, passages: list[dict], verifier: Callable[[str, lis
         else:
             sections.append({"heading": str(sec["heading"])[:160], "kind": shown(kind), "paragraphs": [" ".join(kept)], "bullets": []})
     summary = " ".join(cite(t, kept_ids) for t, ids in _summary_points(draft) for kept_ids in [keep(t, ids, "fact")] if kept_ids is not None)
+    # The report maker takes at most 30 sections and a 3000-character summary: a longer reply made the whole deliverable
+    # fail (bench H-059). What does not fit is left out and counted, never silently.
+    if len(sections) > MAX_SECTIONS:
+        stats["sections_left_out"] = len(sections) - MAX_SECTIONS
+        sections = sections[:MAX_SECTIONS]
+    if len(summary) > MAX_SUMMARY:
+        cut = summary[:MAX_SUMMARY + 1]
+        cut = cut[:max(cut.rfind("] ") + 1, cut.rfind(". ") + 1)] or summary[:MAX_SUMMARY].rsplit(" ", 1)[0]
+        stats["summary_chars_left_out"] = len(summary) - len(cut)
+        summary = cut.strip()
     if disputed:
         stats["disagreements"] = len(disputed)
         sections.append({"heading": "Sources disagree", "kind": "uncertain",
@@ -257,6 +268,10 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
     for pg in pages:                                            # text written to steer an AI reader is never a source
         pg["text"], n = strip_injected(pg.get("text", ""))
         removed += n
+        for k in ("title", "search_title"):                     # nor a title: it reaches the writer and the reference list
+            if strip_injected(str(pg.get(k) or ""))[1]:         # (bench H-052/H-053); the host name stands in
+                pg[k] = ""
+                removed += 1
     if removed:
         notes.append(f"{removed} sentence(s) addressed to AI assistants were removed from the pages read (possible prompt injection)")
 
@@ -299,6 +314,9 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
     report, stats = check_report(draft, passages, verifier)
     if verifier is None and stats["cited"]:
         notes.append("the claim checker is not available, so the cited sentences were NOT checked against their sources")
+    if stats.get("sections_left_out") or stats.get("summary_chars_left_out"):
+        notes.append(f"the writer's reply was longer than a report holds: {stats.get('sections_left_out', 0)} section(s) and "
+                     f"{stats.get('summary_chars_left_out', 0)} summary characters were left out")
     if stats.get("disagreements"):
         notes.append(f"the sources disagree on {stats['disagreements']} statements; they are listed under 'Sources disagree'")
     if verifier is not None and stats["cited"] and stats["supported"] < stats["cited"] / 2:
@@ -327,16 +345,18 @@ def _try(fn, url):
 
 def to_deck(spec: dict) -> dict:
     """A deterministic deck from a checked report: summary slide, one slide per section, sources."""
+    def fit(i: str) -> str:                                     # a slide bullet holds 400 characters; markers are kept
+        return i if len(i) <= 220 else i[:217].rsplit(" ", 1)[0] + "…" + "".join(f"[{c}]" for c in CITE.findall(i[217:]))
     slides = [{"layout": "title", "title": spec["title"], "subtitle": spec.get("subtitle") or "Research summary"}]
     summ = sentences(spec.get("summary") or "")
-    if summ:
-        slides.append({"layout": "bullets", "title": "At a glance", "bullets": summ[:5]})
+    if summ:                        # cut like the section items: one long summary statement made the deck refused (bench I-031)
+        slides.append({"layout": "bullets", "title": "At a glance", "bullets": [fit(x) for x in summ[:5]]})
     for sec in spec["sections"]:
         items = []
         for p in sec["paragraphs"]:
             items += sentences(p)
         items += sec["bullets"]
-        items = [i if len(i) <= 220 else i[:217].rsplit(" ", 1)[0] + "…" + "".join(f"[{c}]" for c in CITE.findall(i[217:])) for i in items]
+        items = [fit(i) for i in items]
         if items:
             label = {"opinion": " (opinion)", "uncertain": " (uncertain)", "recommendation": " (recommendation)"}.get(sec["kind"], "")
             slides.append({"layout": "bullets", "title": sec["heading"][:120] + label, "bullets": items[:6],
