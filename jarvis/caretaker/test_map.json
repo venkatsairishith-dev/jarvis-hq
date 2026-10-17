@@ -1,0 +1,49 @@
+{
+  "about": "Which tests and benchmark v2 areas a caretaker fix must run, per registry category (jarvis/tools/registry.json), with overrides for registry names that contain a given text. Commands run from the repository root of the lab's clone. The base commands always run. Areas: A intent, B desktop, C browser, D long-horizon, E repair, F memory, G voice, H research, I documents, J routing, K security, L UI, M skills, N reliability, X context.",
+  "base": [
+    "cd jarvis/kernel && python -B -m unittest discover -s tests",
+    "python -m pytest jarvis/tools -q -p no:cacheprovider",
+    "python -m pytest jarvis/caretaker/tests -q -p no:cacheprovider"
+  ],
+  "bench_command": "python jarvis/evals/neko95/bench/bench.py --area {area}",
+  "categories": {
+    "base": {"tests": ["python -m pytest plugin/plugins/desktop/tests -q -p no:cacheprovider"], "bench_areas": ["A", "B", "D", "F", "K", "N"]},
+    "shell": {"tests": [], "bench_areas": ["L"], "windows_only": true},
+    "inference": {"tests": ["python -m pytest jarvis/local_models -q -p no:cacheprovider"], "bench_areas": ["J", "N"]},
+    "model": {"tests": ["python -m pytest jarvis/local_models -q -p no:cacheprovider"], "bench_areas": ["A", "J"]},
+    "python": {"tests": [], "bench_areas": ["N"]},
+    "orchestration": {"tests": ["python -m pytest plugin/plugins/desktop/tests -q -p no:cacheprovider"], "bench_areas": ["D"]},
+    "documents": {"tests": ["python -m pytest plugin/plugins/deliverables/tests -q -p no:cacheprovider"], "bench_areas": ["I"]},
+    "research": {"tests": ["python -m pytest plugin/plugins/research/tests -q -p no:cacheprovider"], "bench_areas": ["H"]},
+    "context": {"tests": [], "bench_areas": ["X"]},
+    "dev": {"tests": [], "bench_areas": ["N"]},
+    "security": {"tests": [], "bench_areas": ["K"]},
+    "system": {"tests": [], "bench_areas": ["E", "N"]},
+    "skills": {"tests": [], "bench_areas": ["M"]},
+    "agents": {"tests": ["python -m pytest jarvis/lab/tests/test_lab_runner.py jarvis/lab/tests/test_repair_loop.py -q -p no:cacheprovider"], "bench_areas": ["D", "K"]},
+    "infra": {"tests": [], "bench_areas": ["J", "N"]},
+    "mcp": {"tests": [], "bench_areas": ["K"]},
+    "providers": {"tests": [], "bench_areas": ["J"]},
+    "privacy": {"tests": [], "bench_areas": ["K"]},
+    "voice": {"tests": [], "bench_areas": ["G"]},
+    "browser": {"tests": [], "bench_areas": ["C"]},
+    "computer": {"tests": ["python -m pytest plugin/plugins/desktop/tests -q -p no:cacheprovider"], "bench_areas": ["B"]},
+    "ui": {"tests": ["cd jarvis/ui && npm ci && npm test"], "bench_areas": ["L"]},
+    "eval": {"tests": [], "bench_areas": []},
+    "memory": {"tests": [], "bench_areas": ["F"]}
+  },
+  "name_overrides": {
+    "nli-deberta": {"bench_areas": ["H"], "tests": ["python -m pytest plugin/plugins/research/tests -q -p no:cacheprovider"]},
+    "MiniCheck": {"bench_areas": ["H"], "tests": ["python -m pytest plugin/plugins/research/tests -q -p no:cacheprovider"]},
+    "GLiNER": {"bench_areas": ["K"]},
+    "embedding": {"bench_areas": ["F"]},
+    "bge-small": {"bench_areas": ["F"]},
+    "UI-Venus": {"bench_areas": ["B"]},
+    "sherpa": {"bench_areas": ["G"]},
+    "Playwright": {"bench_areas": ["C"]},
+    "trim-1": {"bench_areas": ["X"]},
+    "gitleaks": {"bench_areas": ["K"]},
+    "Node.js": {"tests": ["cd jarvis/ui && npm ci && npm test"], "bench_areas": ["L"]},
+    "pytest": {"bench_areas": []}
+  }
+}

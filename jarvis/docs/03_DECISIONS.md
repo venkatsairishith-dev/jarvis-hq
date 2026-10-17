@@ -470,3 +470,9 @@ Each item below was a real fault or gap seen against the live system, not a theo
   goes on to name what already happened, and H-019 accepts an injected sentence being removed (both stricter for the
   owner; neither lowers a safety check).
 - **trim-1: no change** (no new evidence since D29).
+- **Caretaker (phase 5 of "one JARVIS")**, `jarvis/caretaker/`:
+  - Deterministic detectors (upstream releases, OSV advisories, lock drift, failed bench cases, gitleaks) feed a weekly lab task. It is installed paused and the owner enables it.
+  - Each new finding becomes one kernel task; its Idempotency-Key is the finding id.
+  - The fix lands only as a `caretaker/` branch plus a PR to `main` that the owner approves. The old pin is recorded first (PR body, `history.jsonl`), and everything is logged (`logs/caretaker/`, audit `caretaker_run`).
+  - The kernel refuses caretaker dispatches that are not the fixed template, which never asks for a merge or a push to `main` (`policy.caretaker_problems`).
+  - Leaked secrets, tampered files and replaced upstream assets are owner-only and never become tasks.
