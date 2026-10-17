@@ -236,6 +236,28 @@ class Race(Base):
         self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM jobs WHERE kind='lab_run'").fetchone()[0], 1)
 
 
+    def test_the_same_request_sent_at_once_becomes_one_task(self):
+        """Bench N-069 (2026-10-17): the duplicate check and the create were two steps; requests at once made two tasks."""
+        from unittest import mock
+        from jarvis_kernel import tasks as tasks_mod
+        real = tasks_mod.Tasks.create
+
+        def slow(self_, *a, **kw):                    # widen the window between the duplicate check and the insert
+            time.sleep(0.2)
+            return real(self_, *a, **kw)
+        codes, threads, go = [], [], threading.Event()
+
+        def send():
+            go.wait(); codes.append(self.act("create", "Fix it", {"goal": "Fix it", "request": "please fix my failing build"}, self.owner)[0])
+        with mock.patch.object(tasks_mod.Tasks, "create", slow):
+            for _ in range(5):
+                th = threading.Thread(target=send); th.start(); threads.append(th)
+            go.set()
+            for th in threads:
+                th.join()
+        self.assertEqual(sorted(codes), [200, 409, 409, 409, 409])
+        self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0], 1)
+
 class Skills(Base):
     def skill(self, op, name, risk, tok, aid=None, where="lab"):
         body = {"tool": "skill", "op": op, "target": name, "params": {"risk": risk, "where": where, "sha256": "ab" * 32}}

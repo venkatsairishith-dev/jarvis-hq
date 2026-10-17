@@ -83,6 +83,31 @@ def test_replans_are_bounded(eng):
     assert r["status"] == "failed" and r["replans"] == M.MAX_REPLANS and len(r["steps"]) == M.MAX_REPLANS + 1
 
 
+def test_a_planner_crash_ends_the_mission_honestly(eng):
+    """Bench D-066 (2026-10-17): the planner raised and the mission stayed 'queued' forever."""
+    def boom(goal, ctx):
+        raise RuntimeError("planner down")
+    eng.agents = {}
+    eng.plan_fn = boom
+    r = run("anything")
+    assert r["status"] == "failed" and "planner failed" in r["error"] and not r["steps"]
+    assert not os.path.exists(eng.lock_path)
+
+
+def test_a_replan_crash_keeps_the_done_steps_and_ends_failed(eng):
+    calls = []
+
+    def plan(goal, ctx):
+        calls.append(ctx)
+        if ctx:
+            raise RuntimeError("planner down")
+        return [{"tool": "check_pc", "check": "disk"}, {"tool": "open_app", "app": "never"}]
+    eng.agents = {"check_pc": lambda s: {"ok": True}, "open_app": lambda s: {"ok": True, "verified": "not seen"}}
+    eng.plan_fn = plan
+    r = run("check the disk then open something")
+    assert r["status"] == "failed" and "re-plan failed" in r["error"] and r["steps"][0]["passed"] and len(calls) == 2
+
+
 def test_loop_is_detected(eng):
     eng.agents = {"check_pc": lambda s: {"ok": True, "same": 1}}
     eng.plan_fn = lambda goal, ctx: [{"tool": "check_pc", "check": "disk"}] * 6

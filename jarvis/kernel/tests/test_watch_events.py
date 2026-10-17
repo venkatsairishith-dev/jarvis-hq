@@ -176,6 +176,22 @@ class KernelEvents(unittest.TestCase):
         self.A.tick()
         self.assertEqual(len(self.cmds), 1)
 
+    def test_a_file_that_arrives_during_a_run_still_gets_its_own_run(self):
+        """2026-10-17: the default overlap 'skip' dropped a second file that arrived while the first one's run was still
+        going, although the preview promised one run per file."""
+        a = self.A.create(self.definition())
+        self.now[0] += 5
+        record_watch_events(self.k, "laptop", {"watch": "downloads", "files": [{"rel": "a.pdf", "size": 1, "mtime_ns": 1}]})
+        self.A.tick()
+        self.now[0] += 5
+        record_watch_events(self.k, "laptop", {"watch": "downloads", "files": [{"rel": "b.pdf", "size": 1, "mtime_ns": 2}]})
+        self.A.tick()                                                          # a.pdf's run is still 'fired'
+        self.assertEqual(len(self.cmds), 2)
+        self.assertNotIn("skipped_overlap", [r["status"] for r in self.A.runs(a["id"])])
+        skip = self.A.preview(self.definition(overlap="skip"))                 # still possible, and said plainly
+        self.assertIn("SKIPPED", skip["side_effects"][0])
+        self.assertNotIn("SKIPPED", self.A.preview(self.definition())["side_effects"][0])
+
     def test_event_report_validation(self):
         bad = [{"watch": "x;y", "files": []}, {"watch": "downloads", "files": "no"},
                {"watch": "downloads", "files": [{"rel": "../../etc/passwd", "size": 1, "mtime_ns": 1}]},

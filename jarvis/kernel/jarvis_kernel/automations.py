@@ -198,7 +198,9 @@ class Automations:
         a = {"name": name, "owner": str(owner)[:40], "action_kind": kind, "trigger_kind": trig, "schedule": sched, "tz": tz,
              "node": "laptop" if trig == "event" else "server", "event_spec": spec, "anchor": anchor, "action": self._check_action(kind, d.get("action"))}
         a["catchup"] = str(d.get("catchup") or ("skip" if trig == "once" else "one"))
-        a["overlap"] = str(d.get("overlap") or "skip")
+        # a file trigger promises one run per file: by default a file that arrives while the previous run still goes waits
+        # its turn instead of being skipped (2026-10-17); "skip" stays available and the preview says what it means
+        a["overlap"] = str(d.get("overlap") or ("queue" if trig == "event" else "skip"))
         if a["catchup"] not in ("skip", "one", "all") or a["overlap"] not in ("skip", "queue"):
             raise AutomationError("catchup is skip, one or all; overlap is skip or queue")
         for key, lo, hi, dflt in (("grace_s", 0, 86400, 300), ("max_runs_per_day", 1, 1000, 24), ("pause_after_failures", 1, 20, 3)):
@@ -280,7 +282,9 @@ class Automations:
                    "command": ["sends the command text to JARVIS (your own agent), which acts only through kernel-gated tools"]}[a["action_kind"]]
         if a["trigger_kind"] == "event":
             effects = [f"runs once for each file that arrives in the laptop's '{a['event_spec']['watch']}' folder matching '{a['event_spec']['glob']}' "
-                       "(a file must stop changing for a few seconds first; the same file is never run twice)"] + effects
+                       "(a file must stop changing for a few seconds first; the same file is never run twice)"
+                       + ("; a file that arrives while the previous run is still going is SKIPPED (shown in the run history)"
+                          if a["overlap"] == "skip" else "")] + effects
         return {"definition": a, "next_runs": [{"utc": iso_utc(t), "local": dt.datetime.fromtimestamp(t, zone).strftime("%Y-%m-%d %H:%M %Z")} for t in runs],
                 "side_effects": effects,
                 "limits": {"runs_per_day": a["max_runs_per_day"], "pause_after_failures": a["pause_after_failures"],
@@ -568,7 +572,8 @@ class Automations:
                 end = None if not s else {"completed": "done", "failed": "failed", "cancelled": "failed"}.get(s[0])
             elif jid:
                 s = self.k.db.execute("SELECT state FROM jobs WHERE id=?", (jid,)).fetchone()
-                end = None if not s else {"done": "done", "failed": "failed", "expired": "failed"}.get(s[0])
+                # a job the owner cancelled is over too: left "fired", every later slot was skipped as an overlap (bench D-078)
+                end = None if not s else {"done": "done", "failed": "failed", "expired": "failed", "cancelled": "failed"}.get(s[0])
             elif cid:
                 s = self.k.db.execute("SELECT state FROM owner_commands WHERE id=?", (cid,)).fetchone()
                 end = None if not s else {"done": "done", "failed": "failed", "cancelled": "failed"}.get(s[0])

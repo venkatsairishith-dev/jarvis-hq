@@ -186,6 +186,18 @@ class Engine(unittest.TestCase):
         self.assertIn("skipped_overlap", st)
         self.assertEqual(st.count("fired"), 1)
 
+    def test_a_cancelled_job_ends_its_run_so_later_slots_fire(self):
+        """Bench D-078 (2026-10-17): settle() ignored 'cancelled'; the run stayed 'fired' and every later slot was skipped."""
+        a = self.A.create(self.job_def(trigger_kind="interval", schedule="600", max_runs_per_day=50))
+        self.now[0] += 610; self.A.tick()
+        jid = self.A.runs(a["id"])[0]["job_id"]
+        self.k.db.execute("UPDATE jobs SET state='cancelled' WHERE id=?", (jid,))
+        self.A.settle()
+        self.now[0] += 600; self.A.tick()
+        st = [r["status"] for r in self.A.runs(a["id"])]
+        self.assertNotIn("skipped_overlap", st)
+        self.assertEqual(st.count("fired"), 1)                        # the new slot; the cancelled one is settled
+
     def test_failures_pause_the_automation(self):
         a = self.A.create(self.job_def(trigger_kind="interval", schedule="600", pause_after_failures=2, overlap="queue", max_runs_per_day=50))
         for _ in range(2):

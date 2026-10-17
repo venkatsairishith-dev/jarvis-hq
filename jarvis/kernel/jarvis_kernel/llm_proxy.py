@@ -266,6 +266,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
     kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
     dispatch_lock = threading.Lock()            # one dispatch decision at a time (the server answers on many threads)
+    create_lock = threading.Lock()              # the duplicate-request check and the create are one step (bench N-069)
     cooling = {}                                # provider name -> clock() until which it is not asked (it said 429)
     outage = {}                                 # provider name -> clock() until which it rests after server errors
     calls = {}   # agent -> list of timestamps
@@ -507,6 +508,21 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
             "Tell the owner in one or two lines that the lab has started (give the task id) and END your turn now. "
             "Do not wait, poll or dispatch again: you will be told the verified outcome in this conversation.")}
 
+    def create_task(agent, lane, target, p):
+        """A new outcome task, unless the same request already has an open one."""
+        req = " ".join(str(p.get("request", "")).lower().split())
+        dup = kernel.db.execute("SELECT id, state FROM tasks WHERE owner=? AND state NOT IN ('completed','failed','cancelled') AND created>? "
+                                "AND lower(request)=? LIMIT 1", (agent, clock() - 7200, req)).fetchone() if len(req) >= 12 else None
+        if dup:                      # found live: the same request became two tasks and the lab queued both
+            return 409, {"status": "refused", "task": dup[0], "reason": f"this request already has an open task ({dup[0]}, {dup[1]}): "
+                         "use that one (task get) instead of creating another; the lab works on one task at a time and will tell you the outcome"}
+        tid = tasks.create(agent, lane, p.get("request", ""), p.get("goal", target), p.get("plan"), p.get("criteria"),
+                           str(p.get("source") or "agent"), int(p.get("max_attempts") or 3), int(p.get("budget_s") or 3600))
+        return 200, {"status": "done", "task": tid, "next": (
+            "Hands-on work (writing and running code, tests, browsing, files) goes to the lab now: "
+            "lab_work(task_id, instructions, public_ok=true). You cannot run or test anything yourself, and this task "
+            "can only be marked completed with independent verification or finished job ids as evidence.")}
+
     def task_action(agent, lane, op, target, p):
         """Outcome tasks (tasks.py): create, update, get, dispatch to the lab. Each goes through policy first."""
         if op == "checkpoint":                            # the agent's open tasks, compact, for a fresh or compacted session
@@ -521,18 +537,8 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
         if not d.allowed:
             return 403, {"status": "refused", "reason": d.reason}
         if op == "create":
-            req = " ".join(str(p.get("request", "")).lower().split())
-            dup = kernel.db.execute("SELECT id, state FROM tasks WHERE owner=? AND state NOT IN ('completed','failed','cancelled') AND created>? "
-                                    "AND lower(request)=? LIMIT 1", (agent, clock() - 7200, req)).fetchone() if len(req) >= 12 else None
-            if dup:                      # found live: the same request became two tasks and the lab queued both
-                return 409, {"status": "refused", "task": dup[0], "reason": f"this request already has an open task ({dup[0]}, {dup[1]}): "
-                             "use that one (task get) instead of creating another; the lab works on one task at a time and will tell you the outcome"}
-            tid = tasks.create(agent, lane, p.get("request", ""), p.get("goal", target), p.get("plan"), p.get("criteria"),
-                               str(p.get("source") or "agent"), int(p.get("max_attempts") or 3), int(p.get("budget_s") or 3600))
-            return 200, {"status": "done", "task": tid, "next": (
-                "Hands-on work (writing and running code, tests, browsing, files) goes to the lab now: "
-                "lab_work(task_id, instructions, public_ok=true). You cannot run or test anything yourself, and this task "
-                "can only be marked completed with independent verification or finished job ids as evidence.")}
+            with create_lock:
+                return create_task(agent, lane, target, p)
         if op == "get":
             t = tasks.get(target, owner=agent)
             return (200, {"status": "done", "task": t}) if t else (404, {"status": "refused", "reason": "no such task"})

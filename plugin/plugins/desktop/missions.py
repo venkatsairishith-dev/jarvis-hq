@@ -137,7 +137,14 @@ def _loop(history: list[str]) -> str:
 @DBOS.workflow()
 def run_mission(mid: str, goal: str) -> dict:
     started = _now()
-    steps = _plan(goal, "")
+    try:
+        steps = _plan(goal, "")
+    except Exception as e:  # noqa: BLE001 - a planner crash ends the mission honestly; it never stays "queued"
+        rec = {"id": mid, "goal": goal, "status": "failed", "error": f"the planner failed ({type(e).__name__})", "started": started,
+               "plans": [], "steps": [], "replans": 0, "finished": E.clock()}
+        rec["explain"] = explain(rec)
+        _save(mid, **rec)
+        return rec
     rec = {"id": mid, "goal": goal, "status": "running", "started": started, "plans": [steps], "steps": [], "replans": 0}
     _save(mid, **rec)
     if not steps:
@@ -191,7 +198,12 @@ def run_mission(mid: str, goal: str) -> dict:
             rec["replans"] += 1
             done = "; ".join(f"{s['tool']} ok" for s in rec["steps"] if s["passed"]) or "nothing yet"
             ctx = f"Done so far: {done}. The step {step['tool']} {json.dumps(step.get('app') or step.get('url') or step.get('query') or '')} failed: {(unc or checked)[:160]}. Plan only the remaining steps, differently."
-            steps = steps[:i] + _plan(goal, ctx)
+            try:
+                more = _plan(goal, ctx)
+            except Exception as e:  # noqa: BLE001 - the steps already done stay on record; the mission ends failed
+                rec.update(status="failed", error=f"the re-plan failed ({type(e).__name__})")
+                break
+            steps = steps[:i] + more
             rec["plans"].append(steps[i:])
             _save(mid, **rec)
             if i >= len(steps):
