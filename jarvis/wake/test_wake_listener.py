@@ -135,6 +135,21 @@ def test_long_sentence_starting_with_stop_word_is_a_task_when_nothing_runs():
     asyncio.run(go())
 
 
+def test_short_commands_starting_with_a_cancel_word_are_tasks_when_nothing_runs():
+    async def go():
+        for said in ("cancel my meeting", "stop the music", "cancel my dentist appointment tomorrow"):
+            w, calls, _ = make(text=said)
+            await w.start()
+            await feed(w, [QUIET] * 5 + seconds(1, SPEECH) + seconds(1.2, QUIET))
+            assert calls["submit"] == [said] and w.counts["cancelled"] == 0, said
+        for said in ("cancel", "Never mind.", "nevermind", "Forget it!", "no thanks", "quiet", "stop it", "cancel that"):
+            w, calls, _ = make(text=said)
+            await w.start()
+            await feed(w, [QUIET] * 5 + seconds(1, SPEECH) + seconds(1.2, QUIET))
+            assert calls["submit"] == [] and w.counts["cancelled"] == 1, said
+    asyncio.run(go())
+
+
 def test_ignored_while_neko_speaks():
     async def go():
         w, calls, _ = make(speaking=True)

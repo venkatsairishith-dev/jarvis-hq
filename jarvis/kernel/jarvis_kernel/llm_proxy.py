@@ -825,8 +825,14 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                     payload["stream"] = False                        # read the whole summary to check it before passing it on
                 headers = {"Content-Type": "application/json", "User-Agent": "jarvis-llm-proxy/0.1"}
                 if p.key_file:
-                    with open(p.key_path(), encoding="utf-8-sig") as fh:
-                        headers["Authorization"] = "Bearer " + fh.read().strip()
+                    try:
+                        with open(p.key_path(), encoding="utf-8-sig") as fh:
+                            headers["Authorization"] = "Bearer " + fh.read().strip()
+                    except (OSError, ValueError) as e:            # key withdrawn or unreadable: this provider fails, try the next
+                        last, why = f"key unreadable ({type(e).__name__})", "other"
+                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": "no_key"})
+                        outcomes.append(why)
+                        continue
                 req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
                 resp, t_call = None, time.time()
                 for attempt in (1, 2):
@@ -889,15 +895,24 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                     if stream:
                         self.send_header("Cache-Control", "no-cache")
                     self.end_headers()
-                    sent, tail = 0, b""
-                    while True:
-                        chunk = resp.read1(65536) if hasattr(resp, "read1") else resp.read(65536)
-                        if not chunk:
-                            break
-                        self.wfile.write(chunk)
-                        self.wfile.flush()
-                        sent += len(chunk)
-                        tail = (tail + chunk)[-8192:]                  # the provider's own token count sits at the end of the body/stream
+                    sent, tail, broke = 0, b"", None
+                    try:
+                        while True:
+                            chunk = resp.read1(65536) if hasattr(resp, "read1") else resp.read(65536)
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                            sent += len(chunk)
+                            tail = (tail + chunk)[-8192:]              # the provider's own token count sits at the end of the body/stream
+                    except Exception as e:                             # stalled/cut mid-answer: end here, never invent a [DONE]
+                        broke = type(e).__name__
+                        self.close_connection = True                   # the agent sees a cut-off answer, not a complete one
+                if broke:
+                    kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": broke,
+                                                                    "class": "stream_broken", "stream": stream, "bytes_out": sent,
+                                                                    "est_tokens": est, "ms": int((time.time() - t_call) * 1000)})
+                    return
                 kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "stream": stream, "bytes_out": sent,
                                                          "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
                                                          "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings,

@@ -16,6 +16,7 @@ import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Callable
 
@@ -255,7 +256,15 @@ def ask_local(task: str, specialist: str = "auto", *, think: bool = False, post:
 # ---------- the public adviser, only through the privacy gateway ----------
 
 def adviser_allowed(base_url: str) -> bool:
-    return any(h in str(base_url or "") for h in GATEWAY_HOSTS)
+    """True only when the URL's host and port ARE the privacy gateway (not merely contain it in a path, query or longer name)."""
+    try:
+        u = urllib.parse.urlsplit(str(base_url or "").strip())
+        port = u.port
+    except ValueError:
+        return False
+    if u.scheme != "http" or u.username is not None or u.password is not None or not u.hostname:
+        return False
+    return f"{u.hostname}:{port}" in GATEWAY_HOSTS
 
 
 # Kept short and explicit: on 2026-10-16 MiniMax spent its whole 2000-token budget deliberating whether a task that mentioned

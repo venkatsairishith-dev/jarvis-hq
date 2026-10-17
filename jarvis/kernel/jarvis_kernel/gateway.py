@@ -155,8 +155,9 @@ def probe(p: Provider, chat: bool = False, timeout: float = 20.0) -> dict:
     headers = {"Content-Type": "application/json", "User-Agent": "jarvis-probe/0.1"}
     if p.key_file:
         try:
-            headers["Authorization"] = "Bearer " + open(p.key_path(), encoding="utf-8-sig").read().strip()
-        except OSError:
+            with open(p.key_path(), encoding="utf-8-sig") as fh:
+                headers["Authorization"] = "Bearer " + fh.read().strip()
+        except (OSError, ValueError):
             out["why"] = "key file unreadable"
             return out
     base = p.base_url.rstrip("/")
@@ -212,7 +213,13 @@ def call(kernel, providers, task_lane: str, prompt: str, purpose: str | None = N
             continue
         headers = {"Content-Type": "application/json", "User-Agent": "jarvis-gateway/0.1"}
         if p.key_file:
-            headers["Authorization"] = "Bearer " + open(p.key_path(), encoding="utf-8-sig").read().strip()
+            try:                                  # withdrawn or unreadable key: this provider fails, try the next one
+                with open(p.key_path(), encoding="utf-8-sig") as fh:
+                    headers["Authorization"] = "Bearer " + fh.read().strip()
+            except (OSError, ValueError) as e:
+                last = f"key unreadable ({type(e).__name__})"
+                kernel.audit.append("model_call_failed", {"provider": p.name, "lane": task_lane, "error": last})
+                continue
         payload = {"model": use_model, "max_tokens": int(max_tokens), "messages": [{"role": "user", "content": clean}]}
         payload.update(p.extra_body)
         body = json.dumps(payload).encode()

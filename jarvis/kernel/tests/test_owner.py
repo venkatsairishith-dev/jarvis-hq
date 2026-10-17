@@ -188,6 +188,18 @@ class Plane(unittest.TestCase):
         self.assertTrue(self.said[0].endswith("open my Downloads folder"))                    # the command, behind the state rule
         self.assertIn("Never answer that something is already open", self.said[0])
 
+    def test_bench_l_a_failed_agent_call_keeps_the_error_class_only(self):
+        def boom(text):
+            raise ConnectionRefusedError("[Errno 111] could not reach http://10.20.30.40:8642/v1 (internal gateway)")
+        self.plane.hermes = boom
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "open my Downloads folder"})
+        self.assertEqual(code, 202)
+        c = self.wait_command(r["id"])
+        self.assertEqual((c["state"], c["reply"] or ""), ("failed", ""))
+        self.assertTrue(c["error"].startswith("ConnectionRefusedError"))
+        self.assertNotIn("10.20.30.40", json.dumps(c))
+        self.assertNotIn("8642", json.dumps(c))
+
     def test_an_action_request_with_nothing_run_says_so_and_a_plain_question_does_not(self):
         code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "open my Downloads folder"})
         c = self.wait_command(r["id"])

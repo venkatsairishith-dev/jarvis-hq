@@ -14,10 +14,14 @@ Reused idea: Voyager-style skill admission (a skill is admitted only with a pass
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import os
 import re
 import sys
+import tempfile
+import threading
 import time
 import urllib.parse
 from pathlib import Path
@@ -34,17 +38,58 @@ class SkillError(Exception):
 
 
 def _reg(root: Path) -> dict:
+    """The registry; a missing one is empty. A damaged one is REFUSED, never silently reset: starting over would reuse
+    version names and overwrite the history the owner rolls back to."""
     try:
-        return json.loads((root / "registry.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        reg = json.loads((root / "registry.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
         return {"versions": {}, "active": None, "history": []}
+    except (OSError, ValueError) as e:
+        raise SkillError(f"registry.json in {root} is damaged ({type(e).__name__}); refusing to change anything. "
+                         "The version files are untouched; the owner must repair or restore the registry") from None
+    if not isinstance(reg, dict) or not isinstance(reg.get("versions"), dict) or not isinstance(reg.get("history", []), list):
+        raise SkillError(f"registry.json in {root} is damaged (unexpected shape); refusing to change anything")
+    reg.setdefault("history", [])
+    return reg
 
 
 def _save_reg(root: Path, reg: dict):
     root.mkdir(parents=True, exist_ok=True)
-    tmp = root / "registry.json.tmp"
-    tmp.write_text(json.dumps(reg, indent=1), encoding="utf-8")
-    tmp.replace(root / "registry.json")
+    fd, tmp = tempfile.mkstemp(dir=root, prefix="registry.", suffix=".tmp")      # a temp file of its own per writer
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(reg, indent=1))
+        os.replace(tmp, root / "registry.json")
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+_THREAD_LOCK = threading.Lock()
+
+
+@contextlib.contextmanager
+def _locked(root: Path):
+    """One registry read-modify-write at a time: across threads (a process lock) and across processes (a file lock)."""
+    root.mkdir(parents=True, exist_ok=True)
+    with _THREAD_LOCK, open(root / "registry.lock", "a+b") as f:
+        if os.name == "nt":
+            import msvcrt
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)        # retries for about 10 s, then raises OSError
+            try:
+                yield
+            finally:
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
 def _audit(root: Path, what: str):
@@ -108,20 +153,26 @@ def propose(change: dict, reason: str, root: Path = ROOT, builtin_sites: dict | 
         from . import decide
         builtin_sites = decide.SITES
     content = check(change, builtin_sites)
-    reg = _reg(root)
-    base = reg.get("active")
-    if base:                                              # a version builds on the active one
-        prev = load(base, root)
-        content = {"sites": {**prev["sites"], **content["sites"]},
-                   "examples": (prev["examples"] + content["examples"])[-MAX_EXAMPLES:]}
-    n = 1 + max([int(v[1:]) for v in reg["versions"]] or [0])
-    ver = f"v{n}"
-    body = json.dumps({"version": ver, "base": base, "reason": str(reason)[:300], "content": content}, indent=1, sort_keys=True)
-    (root / "versions").mkdir(parents=True, exist_ok=True)
-    (root / "versions" / f"{ver}.json").write_text(body, encoding="utf-8")
-    reg["versions"][ver] = {"sha256": hashlib.sha256(body.encode()).hexdigest(), "status": "staged", "created": time.time(), "base": base}
-    _save_reg(root, reg)
-    _audit(root, f"proposed {ver} (base {base}): {str(reason)[:120]}")
+    with _locked(root):
+        reg = _reg(root)
+        base = reg.get("active")
+        if base:                                              # a version builds on the active one
+            prev = load(base, root)
+            content = {"sites": {**prev["sites"], **content["sites"]},
+                       "examples": (prev["examples"] + content["examples"])[-MAX_EXAMPLES:]}
+        (root / "versions").mkdir(parents=True, exist_ok=True)
+        on_disk = [p.stem for p in (root / "versions").glob("v*.json")]
+        nums = [int(v[1:]) for v in [*reg["versions"], *on_disk] if re.fullmatch(r"v\d+", v)]
+        ver = f"v{1 + max(nums or [0])}"
+        body = json.dumps({"version": ver, "base": base, "reason": str(reason)[:300], "content": content}, indent=1, sort_keys=True)
+        try:
+            with (root / "versions" / f"{ver}.json").open("x", encoding="utf-8") as f:   # never overwrite a version file
+                f.write(body)
+        except FileExistsError:
+            raise SkillError(f"versions/{ver}.json already exists; refusing to overwrite the history") from None
+        reg["versions"][ver] = {"sha256": hashlib.sha256(body.encode()).hexdigest(), "status": "staged", "created": time.time(), "base": base}
+        _save_reg(root, reg)
+        _audit(root, f"proposed {ver} (base {base}): {str(reason)[:120]}")
     return ver
 
 
@@ -138,10 +189,10 @@ def load(ver: str, root: Path = ROOT) -> dict:
 
 def active(root: Path = ROOT) -> dict:
     """The content the decider uses now ({} when nothing is promoted or the active file fails its hash)."""
-    ver = _reg(root).get("active")
-    if not ver:
-        return {}
     try:
+        ver = _reg(root).get("active")
+        if not ver:
+            return {}
         return load(ver, root)
     except (SkillError, OSError, ValueError):
         return {}
@@ -156,50 +207,55 @@ def gate(ver: str, run_suite, root: Path = ROOT) -> dict:
     base = reg.get("active")
     baseline = run_suite(load(base, root) if base else {})
     regressed = sorted(c for c, ok in baseline.items() if ok and not staged.get(c, False))
-    passed = not regressed and sum(staged.values()) >= sum(baseline.values())
+    # a suite that ran no cases (model down, case files missing) is no evidence: it never passes
+    passed = bool(staged) and not regressed and sum(staged.values()) >= sum(baseline.values())
     report = {"version": ver, "base": base, "sha256": reg["versions"][ver]["sha256"], "passed": passed, "regressed": regressed,
               "staged_pass": sum(staged.values()), "baseline_pass": sum(baseline.values()), "cases": len(staged), "time": time.time()}
     (root / "gates").mkdir(parents=True, exist_ok=True)
     (root / "gates" / f"{ver}.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
-    reg["versions"][ver]["status"] = "gate_passed" if passed else "gate_failed"
-    _save_reg(root, reg)
+    with _locked(root):                                   # re-read: proposals may have arrived while the suite ran
+        reg = _reg(root)
+        reg["versions"][ver]["status"] = "gate_passed" if passed else "gate_failed"
+        _save_reg(root, reg)
     _audit(root, f"gate {ver}: {'passed' if passed else 'FAILED'} ({report['staged_pass']} vs {report['baseline_pass']}; regressed {regressed})")
     return report
 
 
 def promote(ver: str, root: Path = ROOT) -> str:
-    reg = _reg(root)
-    meta = reg["versions"].get(ver)
-    if not meta:
-        raise SkillError(f"no version {ver}")
-    try:
-        rep = json.loads((root / "gates" / f"{ver}.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        raise SkillError(f"{ver} has not been through the regression gate") from None
-    if not rep.get("passed") or rep.get("sha256") != meta["sha256"]:
-        raise SkillError(f"{ver} did not pass the gate (or changed since)")
-    if rep.get("base") != reg.get("active"):              # the gate compared it with another active version
-        raise SkillError(f"{ver} was gated against {rep.get('base')}, but {reg.get('active')} is active now; run the gate again")
-    load(ver, root)                                       # hash check
-    reg["history"].append(reg.get("active"))
-    reg["active"] = ver
-    meta["status"] = "active"
-    _save_reg(root, reg)
-    _audit(root, f"promoted {ver} by the owner")
-    return ver
+    with _locked(root):
+        reg = _reg(root)
+        meta = reg["versions"].get(ver)
+        if not meta:
+            raise SkillError(f"no version {ver}")
+        try:
+            rep = json.loads((root / "gates" / f"{ver}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise SkillError(f"{ver} has not been through the regression gate") from None
+        if not rep.get("passed") or rep.get("sha256") != meta["sha256"]:
+            raise SkillError(f"{ver} did not pass the gate (or changed since)")
+        if rep.get("base") != reg.get("active"):              # the gate compared it with another active version
+            raise SkillError(f"{ver} was gated against {rep.get('base')}, but {reg.get('active')} is active now; run the gate again")
+        load(ver, root)                                       # hash check
+        reg["history"].append(reg.get("active"))
+        reg["active"] = ver
+        meta["status"] = "active"
+        _save_reg(root, reg)
+        _audit(root, f"promoted {ver} by the owner")
+        return ver
 
 
 def rollback(root: Path = ROOT) -> str | None:
-    reg = _reg(root)
-    if not reg["history"]:
-        raise SkillError("nothing to roll back to")
-    old = reg.get("active")
-    reg["active"] = reg["history"].pop()
-    if old:
-        reg["versions"][old]["status"] = "rolled_back"
-    _save_reg(root, reg)
-    _audit(root, f"rolled back {old} -> {reg['active']} by the owner")
-    return reg["active"]
+    with _locked(root):
+        reg = _reg(root)
+        if not reg["history"]:
+            raise SkillError("nothing to roll back to")
+        old = reg.get("active")
+        reg["active"] = reg["history"].pop()
+        if old:
+            reg["versions"][old]["status"] = "rolled_back"
+        _save_reg(root, reg)
+        _audit(root, f"rolled back {old} -> {reg['active']} by the owner")
+        return reg["active"]
 
 
 def _cli(argv):

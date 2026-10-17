@@ -110,3 +110,54 @@ def test_bench_m_a_gate_made_against_another_active_version_cannot_be_promoted(t
     with pytest.raises(S.SkillError, match="gate again"):
         S.promote(v2, tmp_path)                                  # would silently drop v3's site
     assert "tildes" in S.active(tmp_path)["sites"]
+
+
+def test_bench_m_a_gate_that_ran_no_cases_never_passes(tmp_path):
+    v1 = S.propose(GOOD, "x", root=tmp_path, builtin_sites=D.SITES)
+    rep = S.gate(v1, suite(lambda c: {}), tmp_path)              # the decision model was down: no results at all
+    assert rep["passed"] is False and rep["cases"] == 0
+    with pytest.raises(S.SkillError):
+        S.promote(v1, tmp_path)
+    assert S.active(tmp_path) == {}
+
+
+def test_bench_m_a_damaged_registry_never_overwrites_a_version_file(tmp_path):
+    v1 = S.propose(GOOD, "x", root=tmp_path, builtin_sites=D.SITES)
+    S.gate(v1, suite(lambda c: {"a": True}), tmp_path)
+    S.promote(v1, tmp_path)
+    before = (tmp_path / "versions" / "v1.json").read_bytes()
+    (tmp_path / "registry.json").write_text('{"versions": {"v1": {"sha256": "', encoding="utf-8")   # cut off mid-write
+    with pytest.raises(S.SkillError, match="damaged"):
+        S.propose({"sites": {"lobsters": "https://lobste.rs/"}}, "x", root=tmp_path, builtin_sites=D.SITES)
+    assert (tmp_path / "versions" / "v1.json").read_bytes() == before
+    assert sorted(p.name for p in (tmp_path / "versions").iterdir()) == ["v1.json"]
+    assert S.active(tmp_path) == {}                              # the decider falls back to built-ins, nothing unchecked
+
+
+def test_bench_m_a_lost_registry_never_reuses_an_existing_version_name(tmp_path):
+    S.propose(GOOD, "x", root=tmp_path, builtin_sites=D.SITES)
+    before = (tmp_path / "versions" / "v1.json").read_bytes()
+    (tmp_path / "registry.json").unlink()
+    v = S.propose({"sites": {"lobsters": "https://lobste.rs/"}}, "x", root=tmp_path, builtin_sites=D.SITES)
+    assert v == "v2" and (tmp_path / "versions" / "v1.json").read_bytes() == before
+
+
+def test_bench_m_simultaneous_proposals_each_get_their_own_version(tmp_path):
+    import threading
+    n, outs = 6, []
+    bar = threading.Barrier(n)
+
+    def go(i):
+        bar.wait()
+        try:
+            outs.append(S.propose({"sites": {f"club {i}x": f"https://club{i}.example.org/"}}, "x", root=tmp_path,
+                                  builtin_sites=D.SITES))
+        except Exception as e:  # noqa: BLE001
+            outs.append(type(e).__name__)
+    th = [threading.Thread(target=go, args=(i,)) for i in range(n)]
+    [t.start() for t in th]
+    [t.join(30) for t in th]
+    reg = json.loads((tmp_path / "registry.json").read_text(encoding="utf-8"))
+    assert sorted(outs) == sorted(f"v{i}" for i in range(1, n + 1))
+    assert sorted(reg["versions"]) == sorted(outs)
+    assert all(S.load(v, tmp_path) for v in outs)

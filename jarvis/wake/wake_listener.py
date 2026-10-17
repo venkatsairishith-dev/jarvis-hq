@@ -47,6 +47,9 @@ WIDGET = "http://127.0.0.1:48940"
 DEFAULT_KEYWORDS = ("HH EY1 N EH1 K OW0 @hey_neko", "HH EY1 N EH1 K OW1 @hey_neko", "HH EY1 N EY1 K OW0 @hey_neko",
                     "HH EY1 N IY1 K OW0 @hey_neko")
 CANCEL_WORDS = re.compile(r"^\W*(cancel|never ?mind|nothing|forget it|stop|no thanks?|quiet)\b", re.I)
+# The whole utterance is a cancel ("stop", "cancel that", "never mind", "Forget it!"); "cancel my meeting" is a task.
+PURE_CANCEL = re.compile(r"^\W*(?:cancel|never ?mind|nothing|forget it|stop|no thanks?|no thank you|quiet)"
+                         r"(?:\s+(?:it|that|this))?(?:\s+please)?\W*$", re.I)
 STOP_WORDS = re.compile(r"^\W*(stop|cancel|abort|halt)\b", re.I)
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
 
@@ -405,7 +408,8 @@ class WakeLoop:
             res = {"ok": True, "dry_run": True} if self.dry_run else await asyncio.to_thread(self.stop)
             self.outcome("stop the running task", ok=bool(res.get("ok")), note=str(res.get("note") or res.get("error") or "")[:120])
             return self._back()
-        if CANCEL_WORDS.match(text) and len(text.split()) <= 3:
+        if PURE_CANCEL.match(text) or (CANCEL_WORDS.match(text) and len(text.split()) <= 3
+                                         and await asyncio.to_thread(self.running)):
             self.counts["cancelled"] += 1
             self.outcome("cancelled by voice")
             return self._back()

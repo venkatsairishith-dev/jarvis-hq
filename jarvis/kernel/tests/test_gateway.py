@@ -58,6 +58,18 @@ class G(unittest.TestCase):
         self.assertTrue(allowed("public", "public") and allowed("public", "local"))
         self.assertFalse(allowed("whatever", "local"))
 
+    def test_bench_j_a_key_withdrawn_after_planning_falls_back_and_never_crashes(self):
+        class Withdrawn(Provider):
+            def available(self):                    # planned while the key file existed; it is gone at call time
+                return True
+        gone = Withdrawn("priv", "private", self.u_priv, os.path.join(self.tmp.name, "gone.key"), ["any"], priority=1)
+        out = call(self.k, [gone, Provider("loc", "local", self.u_loc, None, ["any"], priority=2)], "private", "summarise my notes")
+        self.assertEqual(out, "hello from loc")
+        self.assertNotIn("priv", SEEN)
+        with self.assertRaises(RouteError):                         # nothing else to try: a RouteError, not a file error
+            call(self.k, [gone], "private", "summarise my notes")
+        self.assertEqual(gateway.probe(gone)["why"], "key file unreadable")
+
     def test_private_task_never_planned_on_public(self):
         names = [p.name for p in plan(self.provs(), "private")]
         self.assertEqual(names, ["loc", "priv"])

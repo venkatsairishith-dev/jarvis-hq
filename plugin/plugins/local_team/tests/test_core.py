@@ -101,6 +101,18 @@ def test_adviser_refuses_a_direct_public_url():
     assert post.calls == []                      # nothing was sent
 
 
+@pytest.mark.parametrize("url", ["http://evil.example/127.0.0.1:48950/v1", "https://127.0.0.1:48950.evil.example/v1",
+                                 "http://evil.example/v1?via=localhost:48950", "http://127.0.0.1:48950@evil.example/v1",
+                                 "https://127.0.0.1:48950/v1", "http://127.0.0.1:4895/v1", "http://127.0.0.1/v1"])
+def test_adviser_url_must_be_the_gateway_not_contain_it(url):
+    post = FakePost()
+    assert core.adviser_allowed(url) is False
+    with pytest.raises(core.TeamError, match="privacy gateway"):
+        core.advise("my password = x", url, "m", "k", stream=post.stream)
+    assert post.calls == []
+    assert core.adviser_allowed("http://127.0.0.1:48950/v1") and core.adviser_allowed("http://localhost:48950/v1")
+
+
 def test_adviser_goes_through_gateway_streamed_and_strips_think():
     post = FakePost(adviser_plan="1. Step one")
     a = core.advise("task", "http://127.0.0.1:48950/v1", "m", "k", stream=post.stream,

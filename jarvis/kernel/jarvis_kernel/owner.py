@@ -236,7 +236,7 @@ class Owner:
                 reply = scrub(reply + self._facts(started, text), deep=True)[0][:MAX_REPLY]
                 state, err = "done", None
             except Exception as e:                                   # the agent's own error text may name hosts: keep the class only
-                reply, state, err = "", "failed", f"{type(e).__name__}: {str(e)[:160]}"
+                reply, state, err = "", "failed", type(e).__name__
             cur = self.k.db.execute("UPDATE owner_commands SET state=?, reply=?, error=?, finished=? WHERE id=? AND state='running'",
                                     (state, reply, err, self.clock(), cid))
             self.k.audit.append("owner_command_done" if cur.rowcount else "owner_command_late",

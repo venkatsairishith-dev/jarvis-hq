@@ -153,6 +153,63 @@ class P(unittest.TestCase):
         # public never tried; paid model never sent; the failing provider gets one more try before the fallback
         self.assertEqual(used, [("bad", "default"), ("bad", "default"), ("good", "openai/gpt-oss-120b")])
 
+    def test_bench_j_a_key_withdrawn_after_planning_falls_back_to_the_next_provider(self):
+        class Withdrawn(Provider):
+            def available(self):                    # it was there when the chain was planned; the file is gone now
+                return True
+        gone_up, gone_url = upstream("withdrawn", self.seen)
+        self.servers.append(gone_up)
+        self.proxy([Withdrawn("withdrawn", "private", gone_url, os.path.join(self.tmp.name, "gone.key"), ["any"], priority=1),
+                    self.good(priority=2)])
+        out, _ = self.call({"messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(json.loads(out), TOOL_REPLY)
+        self.assertEqual([n for n, b, a in self.seen], ["good"])                 # the withdrawn provider was never asked
+        rows = [json.loads(r[0]) for r in self.k.db.execute("SELECT payload FROM audit WHERE kind='agent_model_call_failed'")]
+        self.assertTrue(any(r.get("provider") == "withdrawn" for r in rows))
+
+    def test_bench_j_a_stream_that_stalls_mid_answer_ends_audited_without_a_fake_done(self):
+        import time
+        stalls = [1]
+        class Stall(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.0"
+            def log_message(self, *a): pass
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                if not stalls[0]:                   # the next request is answered normally
+                    out = json.dumps(TOOL_REPLY).encode()
+                    self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(out)))
+                    self.end_headers(); self.wfile.write(out); return
+                stalls[0] = 0
+                self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
+                self.wfile.write(SSE[0]); self.wfile.flush()
+                time.sleep(3)                       # longer than the provider's timeout_s
+                try:
+                    for c in SSE[1:]: self.wfile.write(c)
+                except OSError:
+                    pass
+        st = ThreadingHTTPServer(("127.0.0.1", 0), Stall); threading.Thread(target=st.serve_forever, daemon=True).start()
+        self.servers.append(st)
+        self.proxy([Provider("stall", "private", f"http://127.0.0.1:{st.server_address[1]}/v1", None, ["any"], priority=1, timeout_s=1),
+                    self.good(priority=2)])
+        r = urllib.request.Request(self.url + "/v1/chat/completions", method="POST", headers={"Content-Type": "application/json",
+                                   "Authorization": "Bearer " + self.tok},
+                                   data=json.dumps({"messages": [{"role": "user", "content": "hi"}], "stream": True}).encode())
+        got, t0 = b"", time.monotonic()
+        try:
+            with urllib.request.urlopen(r, timeout=10) as resp:
+                while True:
+                    c = resp.read1(65536)
+                    if not c:
+                        break
+                    got += c
+        except Exception:  # noqa: BLE001 - a cut connection is how a broken stream may look
+            pass
+        self.assertLess(time.monotonic() - t0, 2.9)
+        self.assertEqual(got, SSE[0])                                               # no invented second token or [DONE]
+        rows = [json.loads(r[0]) for r in self.k.db.execute("SELECT payload FROM audit WHERE kind='agent_model_call_failed'")]
+        self.assertTrue(any(r.get("provider") == "stall" for r in rows), rows)
+        self.assertEqual(json.loads(self.call({"messages": [{"role": "user", "content": "next"}]})[0]), TOOL_REPLY)   # still up
+
     def test_a_failed_sample_is_retried_once_on_the_same_provider_but_a_bad_request_is_not(self):
         flaky, flaky_url = upstream("flaky", self.seen, fail_first=1)
         refuses, refuses_url = upstream("refuses", self.seen, status=400)

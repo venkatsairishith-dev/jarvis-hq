@@ -272,7 +272,8 @@ class _Scripted(BaseHTTPRequestHandler):
         self.server.got.append({"auth": self.headers.get("Authorization"), "model": body.get("model"), "text": json.dumps(body)})
         code = self.server.script.pop(0) if self.server.script else 200
         raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": f"from {self.server.name}"}}]}
-                         if code == 200 else {"error": {"message": f"status {code}"}}).encode()
+                         if code == 200 else {"error": {"message": f"status {code}" + (f" (got Authorization: {self.headers.get('Authorization')})"
+                                                                                       if getattr(self.server, "echo", False) else "")}}).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(raw)))
@@ -340,6 +341,21 @@ class ProviderFallback(unittest.TestCase):
         code, _, out = self.call()                                 # second cooling down: only the first is tried
         self.assertEqual(code, 503)
         self.assertEqual(len(self.servers[1].got), 1)
+
+    def test_bench_j_a_fallback_error_page_never_echoes_the_fallback_key(self):
+        self.servers[0].script = [503]
+        self.servers[1].script = [401]
+        self.servers[1].echo = True                                # a careless proxy echoes the Authorization header
+        req = urllib.request.Request(self.url, data=json.dumps({"model": "m", "messages": [{"role": "user", "content": "hi"}]}).encode(),
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer caller-key"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=10)
+        body, hdrs = cm.exception.read().decode(), str(dict(cm.exception.headers))
+        self.assertEqual(cm.exception.code, 401)
+        self.assertEqual(self.servers[1].got[0]["auth"], "Bearer second-test-key")   # it was really sent upstream
+        self.assertNotIn("second-test-key", body)
+        self.assertNotIn("second-test-key", hdrs)
+        self.assertIn("REDACTED", body)
 
     def test_bad_request_is_not_retried(self):
         self.servers[0].script = [400]

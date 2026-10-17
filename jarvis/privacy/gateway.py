@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -189,6 +190,16 @@ def read_key(p: dict) -> str:
     return key
 
 
+_BEARER = re.compile(rb"(?i)(bearer\s+)[A-Za-z0-9._~+/=:-]{6,}")
+
+
+def scrub_keys(payload: bytes, keys) -> bytes:
+    """An error page relayed to the caller never carries a provider key: a careless proxy may echo the Authorization header."""
+    for k in sorted({str(k) for k in keys if k and len(str(k)) >= 6}, key=len, reverse=True):
+        payload = payload.replace(k.encode("utf-8"), b"[REDACTED_KEY]")
+    return _BEARER.sub(rb"\1[REDACTED_KEY]", payload)
+
+
 # ---------- HTTP ----------
 
 def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: float = 60.0):
@@ -296,7 +307,8 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                         tried.append(f"{prov['name']}: HTTP {e.code}")
                         e.close()
                         continue
-                    payload = e.read()
+                    used = [read_key(q) for q in chain[1:i + 1] if q.get("key_file")]   # every fallback key read so far
+                    payload = scrub_keys(e.read(), used)
                     self.send_response(e.code)
                     self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
                     self.send_header("Content-Length", str(len(payload)))
