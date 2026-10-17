@@ -1,6 +1,6 @@
 """Neko capability benchmark v2 (2026-10-16): versioned cases run against the real code, one recorded result per case.
 
-    python jarvis/evals/neko95/bench/bench.py [--area K] [--id K-001] [--repeat 1] [--list]
+    python jarvis/evals/neko95/bench/bench.py [--area K] [--id K-001[,K-002]] [--repeat 1] [--list] [--progress]
 
 Cases live in cases/<area>.json; each names a check in adapters/<area>.py that drives the REAL module (kernel policy,
 stores, plugins, browser with local fixture pages, ...) and returns (passed, observed). Dangerous or external side
@@ -110,25 +110,32 @@ def main(argv=None) -> int:
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--no-save", action="store_true")
+    ap.add_argument("--progress", action="store_true", help="print '@@start i/n ID' and '@@done i/n ID status' per case (console)")
     a = ap.parse_args(argv)
     sys.path.insert(0, str(HERE))
-    cases = [c for c in load_cases(a.area) if not a.id or c["id"] == a.id]
+    ids = set(a.id.split(",")) if a.id else None
+    cases = [c for c in load_cases(a.area) if not ids or c["id"] in ids]
     if a.list:
         for c in cases:
             print(c["id"], c["risk"], c.get("platform", "any"), c["title"])
         print(len(cases), "cases")
         return 0
     rows = []
-    for c in cases:
+    for i, c in enumerate(cases, 1):
+        if a.progress:
+            print(f"@@start {i}/{len(cases)} {c['id']}", flush=True)
         r = run_case(c, a.repeat)
         rows.append(r)
+        if a.progress:
+            print(f"@@done {i}/{len(cases)} {c['id']} {r['status']}", flush=True)
         if r["status"] not in ("pass", "deferred"):
             print(f"{r['status'].upper():5} {r['id']} {r['title']}: {r['observed'][:200]}", flush=True)
     counts = {s: sum(r["status"] == s for r in rows) for s in ("pass", "fail", "error", "deferred")}
     print(json.dumps(counts))
     if not a.no_save:
         RESULTS.mkdir(exist_ok=True)
-        out = RESULTS / f"bench-{time.strftime('%Y%m%d-%H%M%S')}{'-' + a.area if a.area else ''}.json"
+        # a selection of ids is never named like a full run (scorecard.py takes the newest bench-<time>.json as one)
+        out = RESULTS / f"bench-{time.strftime('%Y%m%d-%H%M%S')}{'-' + a.area if a.area else ''}{'-sel' if a.id and not a.area else ''}.json"
         out.write_text(json.dumps({"bench_version": BENCH_VERSION, "time": time.strftime("%Y-%m-%d %H:%M:%S"),
                                    "host": f"{platform.system()} {platform.machine()} py{platform.python_version()}",
                                    "selection": {"area": a.area, "id": a.id}, "counts": counts, "cases": rows},

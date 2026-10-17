@@ -13,6 +13,7 @@ import { Memory } from "./screens/Memory";
 import { Models } from "./screens/Models";
 import { Settings } from "./screens/Settings";
 import { Connectors } from "./screens/Connectors";
+import { Bench } from "./screens/Bench";
 
 const SCREENS = [
   { id: "command", label: "Command Center", key: "1", el: <CommandCenter /> },
@@ -24,6 +25,7 @@ const SCREENS = [
   { id: "memory", label: "Memory", key: "7", el: <Memory /> },
   { id: "models", label: "Models & skills", key: "8", el: <Models /> },
   { id: "settings", label: "Settings & health", key: "9", el: <Settings /> },
+  { id: "bench", label: "Bench", key: "", el: <Bench /> },          // no Alt shortcut: Alt+0 stays Connectors (the last entry)
   { id: "connectors", label: "Connectors", key: "0", el: <Connectors /> },
 ] as const;
 
@@ -94,7 +96,7 @@ export default function App() {
   };
 
   return (
-    <div className="grid h-dvh grid-rows-[auto_minmax(0,1fr)] md:grid-cols-[232px_minmax(0,1fr)] md:grid-rows-[56px_minmax(0,1fr)]">
+    <div className="grid h-dvh grid-rows-[auto_auto_minmax(0,1fr)] md:grid-cols-[232px_minmax(0,1fr)] md:grid-rows-[56px_minmax(0,1fr)]">
       <header className="col-span-full flex items-center gap-3 border-b border-line bg-bg2/80 px-4 backdrop-blur md:col-span-2">
         <div className="flex items-center gap-2">
           <span aria-hidden className="grid size-7 place-items-center rounded-lg bg-accent text-white"><svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></svg></span>
@@ -116,7 +118,7 @@ export default function App() {
         {SCREENS.map((s) => (
           <a key={s.id} href={`#/${s.id}`} aria-current={current.id === s.id ? "page" : undefined}
             className={`flex shrink-0 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm ${current.id === s.id ? "bg-accent-bg font-medium text-accent-fg" : "text-fg2 hover:bg-hover"}`}>
-            <span>{s.label}</span><Kbd>Alt+{s.key}</Kbd>
+            <span>{s.label}</span>{s.key && <Kbd>Alt+{s.key}</Kbd>}
           </a>
         ))}
       </nav>

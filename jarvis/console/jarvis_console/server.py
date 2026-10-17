@@ -14,6 +14,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from . import bench as benchmod
 from . import files as filesmod
 from .config import Config
 from . import intent, scoring
@@ -48,8 +49,9 @@ class Server(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
-def make_server(cfg: Config = None, kernel=None, voice=None):
+def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
     cfg = cfg or Config()
+    bench = bench or benchmod.Bench(cfg)
     kernel = kernel or Kernel(cfg)
     voice = voice or Voice(cfg.voice_dir, cfg.piper_python, cfg.voice_threads, cfg.voice_idle_unload_s)
     started = time.time()
@@ -161,6 +163,9 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
         def do_POST(self):
             self._route("POST")
 
+        def do_DELETE(self):
+            self._route("DELETE")
+
         def _route(self, method):
             self._body_taken = False
             try:
@@ -183,7 +188,7 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
             u = urllib.parse.urlsplit(self.path)
             path, q = u.path, dict(urllib.parse.parse_qsl(u.query))
             try:
-                if method == "POST" and not self._origin_ok():
+                if method in ("POST", "DELETE") and not self._origin_ok():
                     return self._refuse(403, {"error": "cross-site request refused"})
                 if path.startswith("/api/"):
                     return self._api(method, path[5:], q)
@@ -223,6 +228,8 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
 
         # ---- API
         def _api(self, method, name, q):
+            if method == "DELETE" and not name.startswith("bench/"):       # only a saved challenge is ever deleted here
+                return self._json(405, {"error": "method not allowed"})
             if name == "health":
                 return self._json(200, health())
             if name == "config":
@@ -246,6 +253,8 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
                 return self._json(200, skills())
             if name == "local-models":
                 return self._json(200, local_models())
+            if name.startswith("bench/"):
+                return benchmod.route(self, bench, method, name[6:], q)
             return self._json(404, {"error": "not found"})
 
         def _connectors(self, method, name):
@@ -504,7 +513,7 @@ def make_server(cfg: Config = None, kernel=None, voice=None):
                 "voice": voice.status()}
 
     srv = Server((cfg.host, cfg.port), H)
-    srv.voice, srv.kernel, srv.cfg = voice, kernel, cfg
+    srv.voice, srv.kernel, srv.cfg, srv.bench = voice, kernel, cfg, bench
 
     def janitor():
         while True:

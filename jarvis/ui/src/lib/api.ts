@@ -9,7 +9,7 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(method: "GET" | "POST", path: string, body?: unknown, init: RequestInit = {}): Promise<T> {
+async function call<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -34,6 +34,7 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown, ini
 export const api = {
   get: <T>(path: string) => call<T>("GET", path),
   post: <T>(path: string, body?: unknown) => call<T>("POST", path, body ?? {}),
+  del: <T>(path: string) => call<T>("DELETE", path),
   audio: (path: string, body: Blob) => call<{ text: string; speech: boolean; language: string; model: string; ms: number; audio_s: number }>("POST", path, body),
   speech: (text: string, lang: string) => call<Blob>("POST", "/api/voice/speak", { text, lang }),
 };
