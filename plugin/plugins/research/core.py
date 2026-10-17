@@ -252,6 +252,13 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
                 failures[res] = failures.get(res, 0) + 1
     if not pages:
         raise ResearchError("None of the found pages could be read.")
+    from .verify import strip_injected
+    removed = 0
+    for pg in pages:                                            # text written to steer an AI reader is never a source
+        pg["text"], n = strip_injected(pg.get("text", ""))
+        removed += n
+    if removed:
+        notes.append(f"{removed} sentence(s) addressed to AI assistants were removed from the pages read (possible prompt injection)")
 
     query_text = question + " " + " ".join(queries)
     passages = rank.best_passages(query_text, pages, total=b["passages"])
