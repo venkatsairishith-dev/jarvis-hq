@@ -1,0 +1,805 @@
+{
+ "time": "2026-10-17 05:37:46",
+ "host": "Xeon Gold 6244 CPU",
+ "threads": 6,
+ "llama_cpp": "b11669 (620d222) CPU build",
+ "prompt_version": 3,
+ "sets": [
+  "plan_cases",
+  "dev",
+  "holdout",
+  "holdout2"
+ ],
+ "models": [
+  {
+   "model": "qwen3-4b-2507",
+   "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+   "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+   "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "17/17",
+    "dev": "68/70",
+    "holdout": "29/30",
+    "holdout2": "38/40"
+   },
+   "correct": 152,
+   "total": 157,
+   "model_path_correct": "103/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 2.5,
+   "cold_first_call_s": 11.0,
+   "first_call_status": "ok",
+   "p50_s": 2.97,
+   "p95_s": 5.52,
+   "gen_tps_p50": 13.2,
+   "gen_tokens_p50": 26.0,
+   "prompt_ms_p50": 405.0,
+   "peak_rss_mb": 4573,
+   "server_cpu_s": 1784.4,
+   "failures": [
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A25",
+     "why": "tool window != open_file"
+    },
+    {
+     "set": "holdout",
+     "id": "H05",
+     "why": "tool open_app != open_website"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool window != check_pc"
+    }
+   ]
+  },
+  {
+   "model": "qwen3-1.7b",
+   "repo": "unsloth/Qwen3-1.7B-GGUF",
+   "file": "Qwen3-1.7B-Q4_K_M.gguf",
+   "sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "13/17",
+    "dev": "57/70",
+    "holdout": "24/30",
+    "holdout2": "36/40"
+   },
+   "correct": 130,
+   "total": 157,
+   "model_path_correct": "81/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 1.5,
+   "cold_first_call_s": 9.5,
+   "first_call_status": "ok",
+   "p50_s": 1.02,
+   "p95_s": 1.85,
+   "gen_tps_p50": 25.2,
+   "gen_tokens_p50": 22.0,
+   "prompt_ms_p50": 176.0,
+   "peak_rss_mb": 2091,
+   "server_cpu_s": 740.5,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-play-not-just-open",
+     "why": "tools ['open_website'] lack play_media"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-play-not-just-open",
+     "why": "tools ['open_website'] lack play_media"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "app ['screen']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "tool open_file != research"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "tool open_app != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A41",
+     "why": "tool play_media != browser"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "target ['']"
+    },
+    {
+     "set": "dev",
+     "id": "A44",
+     "why": "tool open_website != play_media"
+    },
+    {
+     "set": "dev",
+     "id": "A45",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A47",
+     "why": "tools ['check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A49",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "tool troubleshoot not in ['answer', 'clarify', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "tool browser != answer"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A60",
+     "why": "tool troubleshoot != check_pc"
+    },
+    {
+     "set": "holdout",
+     "id": "H10",
+     "why": "tool research != answer"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "tool browser != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H21",
+     "why": "tool browser != window"
+    },
+    {
+     "set": "holdout",
+     "id": "H23",
+     "why": "target ['']"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "target ['']"
+    },
+    {
+     "set": "holdout",
+     "id": "H27",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "holdout2",
+     "id": "K38",
+     "why": "tools ['open_app'] lack open_website"
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-2b",
+   "repo": "unsloth/Qwen3.5-2B-GGUF",
+   "file": "Qwen3.5-2B-Q4_K_M.gguf",
+   "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "15/17",
+    "dev": "58/70",
+    "holdout": "24/30",
+    "holdout2": "34/40"
+   },
+   "correct": 131,
+   "total": 157,
+   "model_path_correct": "82/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 2.0,
+   "cold_first_call_s": 6.6,
+   "first_call_status": "ok",
+   "p50_s": 3.97,
+   "p95_s": 7.63,
+   "gen_tps_p50": 11.3,
+   "gen_tokens_p50": 43.0,
+   "prompt_ms_p50": 426.0,
+   "peak_rss_mb": 2069,
+   "server_cpu_s": 1735.8,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "tool check_pc != troubleshoot"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "tool open_file != research"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A16",
+     "why": "tool answer != research"
+    },
+    {
+     "set": "dev",
+     "id": "A25",
+     "why": "tool check_pc != open_file"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "tool open_app != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A36",
+     "why": "action ['restore']"
+    },
+    {
+     "set": "dev",
+     "id": "A41",
+     "why": "tool open_website != browser"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "action ['read']"
+    },
+    {
+     "set": "dev",
+     "id": "A45",
+     "why": "tool open_website != play_media"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "tool troubleshoot not in ['answer', 'clarify', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "tool open_website != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A65",
+     "why": "tool answer != research"
+    },
+    {
+     "set": "dev",
+     "id": "A68",
+     "why": "status clarify: Which app?"
+    },
+    {
+     "set": "holdout",
+     "id": "H05",
+     "why": "tool open_app != open_website"
+    },
+    {
+     "set": "holdout",
+     "id": "H09",
+     "why": "tool answer != research"
+    },
+    {
+     "set": "holdout",
+     "id": "H17",
+     "why": "tool check_pc != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "tool browser != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H23",
+     "why": "action ['read']"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "action ['read']"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "tool open_website != press_key"
+    },
+    {
+     "set": "holdout2",
+     "id": "K24",
+     "why": "action ['restore']"
+    },
+    {
+     "set": "holdout2",
+     "id": "K30",
+     "why": "status clarify: Which file?"
+    },
+    {
+     "set": "holdout2",
+     "id": "K35",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout2",
+     "id": "K39",
+     "why": "tool open_website not in ['play_media', 'open_app', 'clarify']"
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-4b",
+   "repo": "unsloth/Qwen3.5-4B-GGUF",
+   "file": "Qwen3.5-4B-Q4_K_M.gguf",
+   "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "16/17",
+    "dev": "64/70",
+    "holdout": "29/30",
+    "holdout2": "37/40"
+   },
+   "correct": 146,
+   "total": 157,
+   "model_path_correct": "97/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 3.0,
+   "cold_first_call_s": 31.9,
+   "first_call_status": "ok",
+   "p50_s": 2.32,
+   "p95_s": 6.29,
+   "gen_tps_p50": 12.0,
+   "gen_tokens_p50": 21.0,
+   "prompt_ms_p50": 536.0,
+   "peak_rss_mb": 4460,
+   "server_cpu_s": 1694.4,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "status clarify: Which app is showing the error?"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A24",
+     "why": "tool open_app != open_file"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "status clarify: What file should I save?"
+    },
+    {
+     "set": "dev",
+     "id": "A40",
+     "why": "status clarify: Which web page would you like me to read?"
+    },
+    {
+     "set": "dev",
+     "id": "A41",
+     "why": "status clarify: Which website or video should I click the subscribe button on?"
+    },
+    {
+     "set": "dev",
+     "id": "A68",
+     "why": "status clarify: Which app?"
+    },
+    {
+     "set": "holdout",
+     "id": "H05",
+     "why": "tool open_app != open_website"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K36",
+     "why": "tool open_app != open_file"
+    },
+    {
+     "set": "holdout2",
+     "id": "K39",
+     "why": "tool open_website not in ['play_media', 'open_app', 'clarify']"
+    }
+   ]
+  },
+  {
+   "model": "lfm2.5-1.2b",
+   "repo": "LiquidAI/LFM2.5-1.2B-Instruct-GGUF",
+   "file": "LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
+   "sha256": "b1b3de114215d9507409a662a501a631095a479a419584e8a2ded6304b19b4f5",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "13/17",
+    "dev": "38/70",
+    "holdout": "15/30",
+    "holdout2": "32/40"
+   },
+   "correct": 98,
+   "total": 157,
+   "model_path_correct": "49/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 1.0,
+   "cold_first_call_s": 3.6,
+   "first_call_status": "ok",
+   "p50_s": 2.42,
+   "p95_s": 3.8,
+   "gen_tps_p50": 50.6,
+   "gen_tokens_p50": 51.0,
+   "prompt_ms_p50": 1381.0,
+   "peak_rss_mb": 1348,
+   "server_cpu_s": 1603.6,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-type-not-just-open",
+     "why": "app ['Notepad', 'Notepad']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-account-verify-step",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "app ['excel', None]"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "tool open_app != research"
+    },
+    {
+     "set": "dev",
+     "id": "A07",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A09",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default', None, 'Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A14",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "dev",
+     "id": "A16",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A17",
+     "why": "status clarify: What is the capital of Italy?"
+    },
+    {
+     "set": "dev",
+     "id": "A18",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A21",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A22",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A25",
+     "why": "name ['tax notes', None, None]"
+    },
+    {
+     "set": "dev",
+     "id": "A26",
+     "why": "app ['excel']"
+    },
+    {
+     "set": "dev",
+     "id": "A30",
+     "why": "tool troubleshoot != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "tool play_media != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "tool open_app != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A36",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A38",
+     "why": "status clarify: What does the error dialog in the sample app say?"
+    },
+    {
+     "set": "dev",
+     "id": "A39",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A40",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "tool open_app != browser"
+    },
+    {
+     "set": "dev",
+     "id": "A45",
+     "why": "status clarify: What should I play?"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "tool open_website not in ['answer', 'clarify', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A54",
+     "why": "tool open_app != open_website"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "status clarify: What time is it?"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A58",
+     "why": "check ['network']"
+    },
+    {
+     "set": "dev",
+     "id": "A59",
+     "why": "app ['']"
+    },
+    {
+     "set": "dev",
+     "id": "A60",
+     "why": "tool troubleshoot != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A63",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A65",
+     "why": "tool open_app != research"
+    },
+    {
+     "set": "dev",
+     "id": "A67",
+     "why": "tool open_website not in ['browser', 'press_key', 'window']"
+    },
+    {
+     "set": "dev",
+     "id": "A68",
+     "why": "tool open_app not in ['press_key', 'browser']"
+    },
+    {
+     "set": "dev",
+     "id": "A69",
+     "why": "tool open_app not in ['press_key', 'window', 'clarify']"
+    },
+    {
+     "set": "holdout",
+     "id": "H04",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "holdout",
+     "id": "H09",
+     "why": "tool open_app != research"
+    },
+    {
+     "set": "holdout",
+     "id": "H10",
+     "why": "status clarify: Who wrote the Ramayana?"
+    },
+    {
+     "set": "holdout",
+     "id": "H12",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "holdout",
+     "id": "H15",
+     "why": "check ['network']"
+    },
+    {
+     "set": "holdout",
+     "id": "H17",
+     "why": "tool open_app != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "tool open_website != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H19",
+     "why": "app ['Notepad', 'Notepad']"
+    },
+    {
+     "set": "holdout",
+     "id": "H21",
+     "why": "tool open_app != window"
+    },
+    {
+     "set": "holdout",
+     "id": "H23",
+     "why": "tool press_key != browser"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "holdout",
+     "id": "H26",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H28",
+     "why": "tool open_app != check_pc"
+    },
+    {
+     "set": "holdout",
+     "id": "H29",
+     "why": "tool open_app != research"
+    },
+    {
+     "set": "holdout",
+     "id": "H30",
+     "why": "check ['network', 'processes', None]"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "tool open_website != press_key"
+    },
+    {
+     "set": "holdout2",
+     "id": "K24",
+     "why": "tool open_app != window"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool play_media != check_pc"
+    },
+    {
+     "set": "holdout2",
+     "id": "K28",
+     "why": "tool play_media != stop"
+    },
+    {
+     "set": "holdout2",
+     "id": "K29",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "holdout2",
+     "id": "K35",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout2",
+     "id": "K40",
+     "why": "tool open_app not in ['window', 'press_key', 'clarify']"
+    }
+   ]
+  }
+ ]
+}

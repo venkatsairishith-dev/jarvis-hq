@@ -1,0 +1,1825 @@
+{
+ "time": "2026-10-17 06:14:07",
+ "host": "Xeon Gold 6244 CPU",
+ "threads": 6,
+ "llama_cpp": "b11669 (620d222) CPU build",
+ "prompt_version": 3,
+ "sets": [
+  "plan_cases",
+  "dev",
+  "holdout",
+  "holdout2"
+ ],
+ "models": [
+  {
+   "model": "lfm2.5-350m",
+   "repo": "LiquidAI/LFM2.5-350M-GGUF",
+   "file": "LFM2.5-350M-Q4_K_M.gguf",
+   "sha256": "7e6f72643caafc9a68256686638c4d7916f2cec76d1df478d4c3ddcd95a6aed4",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "12/17",
+    "dev": "39/70",
+    "holdout": "12/30",
+    "holdout2": "31/40"
+   },
+   "correct": 94,
+   "total": 157,
+   "model_path_correct": "45/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 0.5,
+   "cold_first_call_s": 1.3,
+   "first_call_status": "ok",
+   "p50_s": 0.87,
+   "p95_s": 1.57,
+   "gen_tps_p50": 128.4,
+   "gen_tokens_p50": 49.5,
+   "prompt_ms_p50": 435.0,
+   "peak_rss_mb": 497,
+   "server_cpu_s": 604.7,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-type-not-just-open",
+     "why": "text [None, 'hello']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-type-not-just-open",
+     "why": "text [None, 'meeting']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-account-verify-step",
+     "why": "tools ['browser', 'play_media', 'open_app', 'type_text']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "tool check_pc != troubleshoot"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "dev",
+     "id": "A07",
+     "why": "tool play_media != open_website"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default', 'Default', 'Default', None] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A14",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "dev",
+     "id": "A15",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "dev",
+     "id": "A16",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "dev",
+     "id": "A17",
+     "why": "tool open_website != answer"
+    },
+    {
+     "set": "dev",
+     "id": "A18",
+     "why": "tool open_website != answer"
+    },
+    {
+     "set": "dev",
+     "id": "A21",
+     "why": "status clarify: Which app?"
+    },
+    {
+     "set": "dev",
+     "id": "A22",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A24",
+     "why": "tool open_app != open_file"
+    },
+    {
+     "set": "dev",
+     "id": "A26",
+     "why": "tool check_pc != troubleshoot"
+    },
+    {
+     "set": "dev",
+     "id": "A27",
+     "why": "tool check_pc != troubleshoot"
+    },
+    {
+     "set": "dev",
+     "id": "A30",
+     "why": "check ['network', 'app_info', None]"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "tool play_media != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A34",
+     "why": "text ['hello']"
+    },
+    {
+     "set": "dev",
+     "id": "A36",
+     "why": "tool open_website != window"
+    },
+    {
+     "set": "dev",
+     "id": "A38",
+     "why": "app ['paint']"
+    },
+    {
+     "set": "dev",
+     "id": "A39",
+     "why": "tool open_website != browser"
+    },
+    {
+     "set": "dev",
+     "id": "A40",
+     "why": "tool open_website != browser"
+    },
+    {
+     "set": "dev",
+     "id": "A41",
+     "why": "tool open_app != browser"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A45",
+     "why": "tool open_website != play_media"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "tool open_website not in ['answer', 'clarify', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A54",
+     "why": "url ['https://www.javassist.org', None, None]"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "tool check_pc != answer"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A58",
+     "why": "check ['network', 'app_info', 'crashes', None]"
+    },
+    {
+     "set": "dev",
+     "id": "A59",
+     "why": "tool play_media != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A63",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A65",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "dev",
+     "id": "A67",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "holdout",
+     "id": "H09",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "holdout",
+     "id": "H10",
+     "why": "tool play_media != answer"
+    },
+    {
+     "set": "holdout",
+     "id": "H12",
+     "why": "tool window not in ['stop']"
+    },
+    {
+     "set": "holdout",
+     "id": "H13",
+     "why": "tool open_app != open_file"
+    },
+    {
+     "set": "holdout",
+     "id": "H14",
+     "why": "tool press_key != troubleshoot"
+    },
+    {
+     "set": "holdout",
+     "id": "H15",
+     "why": "check ['network', 'app_info', 'crashes', None]"
+    },
+    {
+     "set": "holdout",
+     "id": "H16",
+     "why": "check ['network', None]"
+    },
+    {
+     "set": "holdout",
+     "id": "H17",
+     "why": "key ['ctrl+s']"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H19",
+     "why": "text [None, 'hello']"
+    },
+    {
+     "set": "holdout",
+     "id": "H21",
+     "why": "tool press_key != window"
+    },
+    {
+     "set": "holdout",
+     "id": "H22",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "holdout",
+     "id": "H23",
+     "why": "tool press_key != browser"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "tool open_website != browser"
+    },
+    {
+     "set": "holdout",
+     "id": "H26",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H28",
+     "why": "tool open_app != check_pc"
+    },
+    {
+     "set": "holdout",
+     "id": "H29",
+     "why": "status clarify: What should I open?"
+    },
+    {
+     "set": "holdout",
+     "id": "H30",
+     "why": "check ['network']"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "holdout2",
+     "id": "K24",
+     "why": "tool open_app != window"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool play_media != check_pc"
+    },
+    {
+     "set": "holdout2",
+     "id": "K29",
+     "why": "tool press_key != stop"
+    },
+    {
+     "set": "holdout2",
+     "id": "K30",
+     "why": "tool open_app != open_file"
+    },
+    {
+     "set": "holdout2",
+     "id": "K31",
+     "why": "tools ['browser', 'play_media', 'open_app', 'type_text']"
+    },
+    {
+     "set": "holdout2",
+     "id": "K35",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout2",
+     "id": "K36",
+     "why": "tool open_app != open_file"
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-0.8b",
+   "repo": "unsloth/Qwen3.5-0.8B-GGUF",
+   "file": "Qwen3.5-0.8B-Q4_K_M.gguf",
+   "sha256": "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "11/17",
+    "dev": "47/70",
+    "holdout": "21/30",
+    "holdout2": "33/40"
+   },
+   "correct": 112,
+   "total": 157,
+   "model_path_correct": "63/107",
+   "json_valid": "106/107",
+   "errors": 0,
+   "load_s": 1.5,
+   "cold_first_call_s": 3.6,
+   "first_call_status": "ok",
+   "p50_s": 1.53,
+   "p95_s": 5.54,
+   "gen_tps_p50": 37.4,
+   "gen_tokens_p50": 51.5,
+   "prompt_ms_p50": 136.0,
+   "peak_rss_mb": 1029,
+   "server_cpu_s": 1204.0,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-play-not-just-open",
+     "why": "query ['Ilayaraja']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-account-verify-step",
+     "why": "tools ['open_website', 'browser', 'browser']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-account-verify-step",
+     "why": "tools ['open_website', 'browser']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-google-account",
+     "why": "tool browser != open_website"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "tool browser != troubleshoot"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A15",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A22",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A24",
+     "why": "tool open_app != open_file"
+    },
+    {
+     "set": "dev",
+     "id": "A26",
+     "why": "app ['notepad']"
+    },
+    {
+     "set": "dev",
+     "id": "A30",
+     "why": "check ['app_info']"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "tool play_media != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "tool open_app != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A36",
+     "why": "tool browser != window"
+    },
+    {
+     "set": "dev",
+     "id": "A38",
+     "why": "tool browser != window"
+    },
+    {
+     "set": "dev",
+     "id": "A41",
+     "why": "target ['']"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "target ['']"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "tool open_app not in ['answer', 'clarify', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A54",
+     "why": "url ['https://javisr.com', None, None, None]"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "tool browser != answer"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A58",
+     "why": "check ['app_info']"
+    },
+    {
+     "set": "dev",
+     "id": "A59",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A60",
+     "why": "check ['app_info']"
+    },
+    {
+     "set": "dev",
+     "id": "A62",
+     "why": "tool browser != open_website"
+    },
+    {
+     "set": "dev",
+     "id": "A63",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A65",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "dev",
+     "id": "A69",
+     "why": "tool browser not in ['press_key', 'window', 'clarify']"
+    },
+    {
+     "set": "holdout",
+     "id": "H15",
+     "why": "check ['app_info']"
+    },
+    {
+     "set": "holdout",
+     "id": "H16",
+     "why": "check ['app_info']"
+    },
+    {
+     "set": "holdout",
+     "id": "H17",
+     "why": "tool browser != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "tool browser != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H21",
+     "why": "tool browser != window"
+    },
+    {
+     "set": "holdout",
+     "id": "H23",
+     "why": "target ['']"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "target ['']"
+    },
+    {
+     "set": "holdout",
+     "id": "H26",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H30",
+     "why": "check ['app_info']"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "tool answer != press_key"
+    },
+    {
+     "set": "holdout2",
+     "id": "K24",
+     "why": "tool open_app != window"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool play_media != check_pc"
+    },
+    {
+     "set": "holdout2",
+     "id": "K35",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout2",
+     "id": "K36",
+     "why": "tool open_app != open_file"
+    },
+    {
+     "set": "holdout2",
+     "id": "K40",
+     "why": "tool browser not in ['window', 'press_key', 'clarify']"
+    }
+   ]
+  },
+  {
+   "model": "minicpm5-1b",
+   "repo": "openbmb/MiniCPM5-1B-GGUF",
+   "file": "MiniCPM5-1B-Q4_K_M.gguf",
+   "sha256": "81b64d05a23b17b34c475f42b3e72fbde62d4b92cc34541f7a8031d0752deafa",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "9/17",
+    "dev": "43/70",
+    "holdout": "15/30",
+    "holdout2": "31/40"
+   },
+   "correct": 98,
+   "total": 157,
+   "model_path_correct": "49/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 1.0,
+   "cold_first_call_s": 5.5,
+   "first_call_status": "ok",
+   "p50_s": 0.9,
+   "p95_s": 3.79,
+   "gen_tps_p50": 35.8,
+   "gen_tokens_p50": 28.5,
+   "prompt_ms_p50": 147.0,
+   "peak_rss_mb": 1168,
+   "server_cpu_s": 678.9,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-play-not-just-open",
+     "why": "tools ['open_website'] lack play_media"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-play-not-just-open",
+     "why": "query ['youtube music']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-type-not-just-open",
+     "why": "tools ['type_text']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-account-verify-step",
+     "why": "tools ['browser']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-google-account",
+     "why": "tool browser != open_website"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "tool window != troubleshoot"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-file-not-site",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A07",
+     "why": "tool browser != open_website"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A16",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A21",
+     "why": "status clarify: What is your goal or request?"
+    },
+    {
+     "set": "dev",
+     "id": "A22",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A24",
+     "why": "tool open_app != open_file"
+    },
+    {
+     "set": "dev",
+     "id": "A25",
+     "why": "tool browser != open_file"
+    },
+    {
+     "set": "dev",
+     "id": "A26",
+     "why": "app ['the app that keeps showing an error', 'the same app', 'the same app', 'the same app']"
+    },
+    {
+     "set": "dev",
+     "id": "A27",
+     "why": "tool window != troubleshoot"
+    },
+    {
+     "set": "dev",
+     "id": "A30",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "tool play_media != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "tool open_app != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A36",
+     "why": "tool browser != window"
+    },
+    {
+     "set": "dev",
+     "id": "A40",
+     "why": "tool open_website != browser"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "target ['the current page']"
+    },
+    {
+     "set": "dev",
+     "id": "A47",
+     "why": "tools ['check_pc', 'check_pc', 'check_pc', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A52",
+     "why": "tool open_website not in ['open_file', 'clarify', 'answer']"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "tool browser not in ['answer', 'clarify', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A54",
+     "why": "tool open_app != open_website"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "tool browser != answer"
+    },
+    {
+     "set": "dev",
+     "id": "A58",
+     "why": "check ['network']"
+    },
+    {
+     "set": "dev",
+     "id": "A59",
+     "why": "app ['']"
+    },
+    {
+     "set": "dev",
+     "id": "A60",
+     "why": "check ['app_info']"
+    },
+    {
+     "set": "dev",
+     "id": "A62",
+     "why": "tool browser != open_website"
+    },
+    {
+     "set": "dev",
+     "id": "A65",
+     "why": "tool browser != research"
+    },
+    {
+     "set": "dev",
+     "id": "A68",
+     "why": "status clarify: Which app?"
+    },
+    {
+     "set": "dev",
+     "id": "A69",
+     "why": "tool open_app not in ['press_key', 'window', 'clarify']"
+    },
+    {
+     "set": "holdout",
+     "id": "H08",
+     "why": "tool open_website != play_media"
+    },
+    {
+     "set": "holdout",
+     "id": "H09",
+     "why": "tool open_website != research"
+    },
+    {
+     "set": "holdout",
+     "id": "H10",
+     "why": "tool browser != answer"
+    },
+    {
+     "set": "holdout",
+     "id": "H12",
+     "why": "status clarify: What is your account?"
+    },
+    {
+     "set": "holdout",
+     "id": "H13",
+     "why": "tool open_app != open_file"
+    },
+    {
+     "set": "holdout",
+     "id": "H14",
+     "why": "tool browser != troubleshoot"
+    },
+    {
+     "set": "holdout",
+     "id": "H15",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "holdout",
+     "id": "H16",
+     "why": "check ['disk']"
+    },
+    {
+     "set": "holdout",
+     "id": "H17",
+     "why": "key ['ctrl+mute']"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "tool window != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H19",
+     "why": "app ['word']"
+    },
+    {
+     "set": "holdout",
+     "id": "H21",
+     "why": "tool browser != window"
+    },
+    {
+     "set": "holdout",
+     "id": "H23",
+     "why": "tool press_key != browser"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "status clarify: Which website should I open?"
+    },
+    {
+     "set": "holdout",
+     "id": "H29",
+     "why": "tool browser != research"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "status clarify: What is the error in the track?"
+    },
+    {
+     "set": "holdout2",
+     "id": "K24",
+     "why": "tool open_app != window"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "holdout2",
+     "id": "K28",
+     "why": "tool browser != stop"
+    },
+    {
+     "set": "holdout2",
+     "id": "K29",
+     "why": "status clarify: What is the issue with the computer?"
+    },
+    {
+     "set": "holdout2",
+     "id": "K36",
+     "why": "tool open_website != open_file"
+    },
+    {
+     "set": "holdout2",
+     "id": "K38",
+     "why": "tools ['browser'] lack open_website"
+    },
+    {
+     "set": "holdout2",
+     "id": "K40",
+     "why": "tool open_app not in ['window', 'press_key', 'clarify']"
+    }
+   ]
+  },
+  {
+   "model": "minicpm5-2b",
+   "repo": "openbmb/MiniCPM5-2B-GGUF",
+   "file": "MiniCPM5-2B-Q4_K_M.gguf",
+   "sha256": "ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "14/17",
+    "dev": "56/70",
+    "holdout": "24/30",
+    "holdout2": "36/40"
+   },
+   "correct": 130,
+   "total": 157,
+   "model_path_correct": "81/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 1.5,
+   "cold_first_call_s": 6.9,
+   "first_call_status": "ok",
+   "p50_s": 1.77,
+   "p95_s": 2.95,
+   "gen_tps_p50": 23.1,
+   "gen_tokens_p50": 28.0,
+   "prompt_ms_p50": 229.0,
+   "peak_rss_mb": 2677,
+   "server_cpu_s": 1115.1,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-google-account",
+     "why": "tool browser != open_website"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "app ['Paint']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "tool open_file != research"
+    },
+    {
+     "set": "dev",
+     "id": "A06",
+     "why": "tool browser != open_website"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A16",
+     "why": "tool answer != research"
+    },
+    {
+     "set": "dev",
+     "id": "A27",
+     "why": "tool check_pc != troubleshoot"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "tool play_media != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "tool open_app != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A38",
+     "why": "tool check_pc != window"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "target ['']"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "tool open_app not in ['answer', 'clarify', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A54",
+     "why": "tool browser != open_website"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "tool check_pc != answer"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A65",
+     "why": "tool answer != research"
+    },
+    {
+     "set": "dev",
+     "id": "A68",
+     "why": "status clarify: Which app?"
+    },
+    {
+     "set": "holdout",
+     "id": "H05",
+     "why": "tool open_app != open_website"
+    },
+    {
+     "set": "holdout",
+     "id": "H09",
+     "why": "tool answer != research"
+    },
+    {
+     "set": "holdout",
+     "id": "H14",
+     "why": "tool check_pc != troubleshoot"
+    },
+    {
+     "set": "holdout",
+     "id": "H17",
+     "why": "tool browser != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "target ['']"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "holdout2",
+     "id": "K31",
+     "why": "tools ['browser']"
+    }
+   ]
+  },
+  {
+   "model": "lfm2.5-2.6b",
+   "repo": "LiquidAI/LFM2.5-2.6B-GGUF",
+   "file": "LFM2.5-2.6B-Q4_K_M.gguf",
+   "sha256": "02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "12/17",
+    "dev": "47/70",
+    "holdout": "21/30",
+    "holdout2": "34/40"
+   },
+   "correct": 114,
+   "total": 157,
+   "model_path_correct": "65/107",
+   "json_valid": "77/107",
+   "errors": 0,
+   "load_s": 2.0,
+   "cold_first_call_s": 12.3,
+   "first_call_status": "ok",
+   "p50_s": 19.68,
+   "p95_s": 44.48,
+   "gen_tps_p50": 14.8,
+   "gen_tokens_p50": 163.0,
+   "prompt_ms_p50": 5454.0,
+   "peak_rss_mb": 2948,
+   "server_cpu_s": 10235.5,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-play-not-just-open",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-account-verify-step",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "tool check_pc != troubleshoot"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-no-topic",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A07",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A09",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A16",
+     "why": "tool answer != research"
+    },
+    {
+     "set": "dev",
+     "id": "A26",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A38",
+     "why": "status clarify: Which sample app are you referring to? Please specify the app name or provide more context so I can chec"
+    },
+    {
+     "set": "dev",
+     "id": "A40",
+     "why": "status clarify: Which web page or website would you like me to read?"
+    },
+    {
+     "set": "dev",
+     "id": "A41",
+     "why": "target ['default']"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "target ['']"
+    },
+    {
+     "set": "dev",
+     "id": "A45",
+     "why": "tool open_app != play_media"
+    },
+    {
+     "set": "dev",
+     "id": "A51",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A54",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A63",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A64",
+     "why": "status fallback"
+    },
+    {
+     "set": "dev",
+     "id": "A65",
+     "why": "tool answer != research"
+    },
+    {
+     "set": "dev",
+     "id": "A67",
+     "why": "status clarify: Which app or page would you like me to scroll down on?"
+    },
+    {
+     "set": "dev",
+     "id": "A68",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A70",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H05",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H06",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H09",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H12",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H21",
+     "why": "tool open_app != window"
+    },
+    {
+     "set": "holdout",
+     "id": "H23",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H27",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "status clarify: Which track would you like to skip? Please provide the name of the track or the media player you're refe"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout2",
+     "id": "K35",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "holdout2",
+     "id": "K37",
+     "why": "status fallback"
+    },
+    {
+     "set": "holdout2",
+     "id": "K38",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    }
+   ]
+  },
+  {
+   "model": "granite-4.2-3b",
+   "repo": "ibm-granite/granite-4.2-3b-GGUF",
+   "file": "granite-4.2-3b-Q4_K_M.gguf",
+   "sha256": "e0406663965846ae22a403456eb826ccce5f450840491f71952f18a7cb78e7d5",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "16/17",
+    "dev": "59/70",
+    "holdout": "25/30",
+    "holdout2": "35/40"
+   },
+   "correct": 135,
+   "total": 157,
+   "model_path_correct": "86/107",
+   "json_valid": "107/107",
+   "errors": 0,
+   "load_s": 2.0,
+   "cold_first_call_s": 30.2,
+   "first_call_status": "ok",
+   "p50_s": 6.86,
+   "p95_s": 15.44,
+   "gen_tps_p50": 9.0,
+   "gen_tokens_p50": 49.5,
+   "prompt_ms_p50": 693.0,
+   "peak_rss_mb": 3933,
+   "server_cpu_s": 3571.7,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "tool window != troubleshoot"
+    },
+    {
+     "set": "dev",
+     "id": "A09",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "tool open_app != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A36",
+     "why": "action ['maximize']"
+    },
+    {
+     "set": "dev",
+     "id": "A51",
+     "why": "tool play_media not in ['open_website', 'browser', 'clarify']"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "tool troubleshoot not in ['answer', 'clarify', 'check_pc']"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "tool check_pc != answer"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "dev",
+     "id": "A63",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A68",
+     "why": "status clarify: Which app?"
+    },
+    {
+     "set": "holdout",
+     "id": "H15",
+     "why": "check ['app_info']"
+    },
+    {
+     "set": "holdout",
+     "id": "H17",
+     "why": "tool window != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "holdout",
+     "id": "H26",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H27",
+     "why": "status ok != clarify"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "tool play_media != press_key"
+    },
+    {
+     "set": "holdout2",
+     "id": "K24",
+     "why": "action ['maximize']"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "tool browser != check_pc"
+    },
+    {
+     "set": "holdout2",
+     "id": "K35",
+     "why": "status ok != clarify"
+    }
+   ]
+  },
+  {
+   "model": "lfm2.5-8b-a1b",
+   "repo": "LiquidAI/LFM2.5-8B-A1B-GGUF",
+   "file": "LFM2.5-8B-A1B-Q4_K_M.gguf",
+   "sha256": "4923ec14f06b968b74d663e5949867d2d9c3bf13a20b8be1a9f9af39989b2bb0",
+   "threads": 6,
+   "sets": {
+    "plan_cases": "11/17",
+    "dev": "37/70",
+    "holdout": "15/30",
+    "holdout2": "33/40"
+   },
+   "correct": 96,
+   "total": 157,
+   "model_path_correct": "47/107",
+   "json_valid": "63/107",
+   "errors": 0,
+   "load_s": 5.6,
+   "cold_first_call_s": 21.5,
+   "first_call_status": "ok",
+   "p50_s": 14.41,
+   "p95_s": 20.27,
+   "gen_tps_p50": 30.2,
+   "gen_tokens_p50": 351.0,
+   "prompt_ms_p50": 3775.0,
+   "peak_rss_mb": 8864,
+   "server_cpu_s": 8671.9,
+   "failures": [
+    {
+     "set": "plan_cases",
+     "id": "P-type-not-just-open",
+     "why": "tools ['type_text']"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-type-not-just-open",
+     "why": "status clarify: Which app?"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-account-verify-step",
+     "why": "status clarify: Which RiverMoon account or website should I open?"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-google-account",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-error-on-screen",
+     "why": "status clarify: Which application or system are you referring to?"
+    },
+    {
+     "set": "plan_cases",
+     "id": "P-pdf-with-topic",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A07",
+     "why": "status clarify: Which RiverMoon account or website should I open?"
+    },
+    {
+     "set": "dev",
+     "id": "A09",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "dev",
+     "id": "A10",
+     "why": "profile ['Default'] != Profile 6"
+    },
+    {
+     "set": "dev",
+     "id": "A16",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A17",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A25",
+     "why": "status clarify: Which file?"
+    },
+    {
+     "set": "dev",
+     "id": "A26",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A30",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A31",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A33",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A38",
+     "why": "status clarify: Which app's error dialog are you referring to?"
+    },
+    {
+     "set": "dev",
+     "id": "A39",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A40",
+     "why": "status clarify: Which web page would you like me to read?"
+    },
+    {
+     "set": "dev",
+     "id": "A41",
+     "why": "status clarify: Which website or app do you want to click the subscribe button on?"
+    },
+    {
+     "set": "dev",
+     "id": "A42",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A45",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A47",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A50",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A52",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A53",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A54",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A55",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A57",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A58",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A59",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A60",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A62",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A64",
+     "why": "status fallback"
+    },
+    {
+     "set": "dev",
+     "id": "A65",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A66",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A67",
+     "why": "status clarify: Which page would you like me to scroll down on?"
+    },
+    {
+     "set": "dev",
+     "id": "A68",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "dev",
+     "id": "A70",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H04",
+     "why": "status clarify: Which app?"
+    },
+    {
+     "set": "holdout",
+     "id": "H05",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H06",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H12",
+     "why": "status clarify: What would you like me to stop?"
+    },
+    {
+     "set": "holdout",
+     "id": "H15",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H16",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H17",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H18",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H21",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H23",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H24",
+     "why": "status clarify: Which page should I search for the refund policy?"
+    },
+    {
+     "set": "holdout",
+     "id": "H26",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H27",
+     "why": "status fallback != clarify"
+    },
+    {
+     "set": "holdout",
+     "id": "H28",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout",
+     "id": "H30",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout2",
+     "id": "K05",
+     "why": "tool open_website != open_app"
+    },
+    {
+     "set": "holdout2",
+     "id": "K18",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout2",
+     "id": "K27",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout2",
+     "id": "K29",
+     "why": "status clarify: What should I cancel?"
+    },
+    {
+     "set": "holdout2",
+     "id": "K30",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    },
+    {
+     "set": "holdout2",
+     "id": "K31",
+     "why": "tools ['browser', 'play_media']"
+    },
+    {
+     "set": "holdout2",
+     "id": "K39",
+     "why": "status fallback: [\"the model's answer was not JSON\"]"
+    }
+   ]
+  }
+ ]
+}

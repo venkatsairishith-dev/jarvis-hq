@@ -1,0 +1,134 @@
+{
+ "qwen3-4b-2507": {
+  "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+  "revision": "a06e946bb6b655725eafa393f4a9745d460374c9",
+  "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+  "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+  "bytes": 2497281120,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [],
+  "note": "current decider (laptop)"
+ },
+ "qwen3-1.7b": {
+  "repo": "unsloth/Qwen3-1.7B-GGUF",
+  "revision": "d7f544eead698dbd1f15126ef60b45a1e1933222",
+  "file": "Qwen3-1.7B-Q4_K_M.gguf",
+  "sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+  "bytes": 1107409472,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [],
+  "note": "earlier candidate: 6x faster, 17-20% less accurate on the laptop"
+ },
+ "qwen3.5-2b": {
+  "repo": "unsloth/Qwen3.5-2B-GGUF",
+  "revision": "f6d5376be1edb4d416d56da11e5397a961aca8ae",
+  "file": "Qwen3.5-2B-Q4_K_M.gguf",
+  "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+  "bytes": 1280835840,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [],
+  "note": "project profile cpu8"
+ },
+ "qwen3.5-4b": {
+  "repo": "unsloth/Qwen3.5-4B-GGUF",
+  "revision": "e87f176479d0855a907a41277aca2f8ee7a09523",
+  "file": "Qwen3.5-4B-Q4_K_M.gguf",
+  "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+  "bytes": 2740937888,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [],
+  "note": "project profile cpu16; measured 10.7 tok/s on the laptop"
+ },
+ "lfm2.5-1.2b": {
+  "repo": "LiquidAI/LFM2.5-1.2B-Instruct-GGUF",
+  "revision": "8ed288026e23958ad9dfa92d53ed773a8eee7125",
+  "file": "LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
+  "sha256": "b1b3de114215d9507409a662a501a631095a479a419584e8a2ded6304b19b4f5",
+  "bytes": 730895168,
+  "license": "other",
+  "ctx": 2048,
+  "args": [],
+  "note": "earlier candidate (36/70 in an older round)"
+ },
+ "lfm2.5-2.6b": {
+  "repo": "LiquidAI/LFM2.5-2.6B-GGUF",
+  "revision": "e7caca5d835a3901a8e0d63e94009429bafafdfc",
+  "file": "LFM2.5-2.6B-Q4_K_M.gguf",
+  "sha256": "02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed",
+  "bytes": 1674455040,
+  "license": "other (lfm1.0)",
+  "ctx": 2048,
+  "args": [],
+  "note": "research shortlist #1 (3-4B class): vendor BFCLv4 56.9, IFBench 59.2; LFM Open licence (<$10M revenue)"
+ },
+ "minicpm5-2b": {
+  "repo": "openbmb/MiniCPM5-2B-GGUF",
+  "revision": "2079a22f3beaa4e306449978533478fe0522f4b3",
+  "file": "MiniCPM5-2B-Q4_K_M.gguf",
+  "sha256": "ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd",
+  "bytes": 1561318368,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [],
+  "note": "research shortlist: vendor BFCLv4 66.6 (probably thinking mode)"
+ },
+ "granite-4.2-3b": {
+  "repo": "ibm-granite/granite-4.2-3b-GGUF",
+  "revision": "c40945d71cd90f249a56985e8155551a9188dc30",
+  "file": "granite-4.2-3b-Q4_K_M.gguf",
+  "sha256": "e0406663965846ae22a403456eb826ccce5f450840491f71952f18a7cb78e7d5",
+  "bytes": 2244011552,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [],
+  "note": "research shortlist: vendor BFCLv4 52.4; card recommends temperature 1.0 (we use 0)"
+ },
+ "lfm2.5-8b-a1b": {
+  "repo": "LiquidAI/LFM2.5-8B-A1B-GGUF",
+  "revision": "49c14831707011e64d70b2ebd8462ba08d608434",
+  "file": "LFM2.5-8B-A1B-Q4_K_M.gguf",
+  "sha256": "4923ec14f06b968b74d663e5949867d2d9c3bf13a20b8be1a9f9af39989b2bb0",
+  "bytes": 5155564768,
+  "license": "other (lfm1.0)",
+  "ctx": 2048,
+  "args": [],
+  "note": "MoE, ~1.5B active: CPU-friendly; 5.2 GB, does not fit the laptop's 4 GB VRAM"
+ },
+ "lfm2.5-350m": {
+  "repo": "LiquidAI/LFM2.5-350M-GGUF",
+  "revision": "657e078c94084481950a2d555a941481f715536b",
+  "file": "LFM2.5-350M-Q4_K_M.gguf",
+  "sha256": "7e6f72643caafc9a68256686638c4d7916f2cec76d1df478d4c3ddcd95a6aed4",
+  "bytes": 229312224,
+  "license": "other (lfm1.0)",
+  "ctx": 2048,
+  "args": [],
+  "note": "routing-size candidate (sub-1B)"
+ },
+ "qwen3.5-0.8b": {
+  "repo": "unsloth/Qwen3.5-0.8B-GGUF",
+  "revision": "6ab461498e2023f6e3c1baea90a8f0fe38ab64d0",
+  "file": "Qwen3.5-0.8B-Q4_K_M.gguf",
+  "sha256": "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
+  "bytes": 532517120,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [],
+  "note": "routing-size candidate (sub-1B)"
+ },
+ "minicpm5-1b": {
+  "repo": "openbmb/MiniCPM5-1B-GGUF",
+  "revision": "3d55fac80935ae6456986ad2384b5cbcc4d6c948",
+  "file": "MiniCPM5-1B-Q4_K_M.gguf",
+  "sha256": "81b64d05a23b17b34c475f42b3e72fbde62d4b92cc34541f7a8031d0752deafa",
+  "bytes": 688065920,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [],
+  "note": "routing-size candidate (1B)"
+ }
+}
