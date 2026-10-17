@@ -1,0 +1,14 @@
+# piper-venv (laptop: D:\jarvis\tools\piper-venv; Python version not recorded in the repo).
+# Separate on purpose: the Piper runtime (OHF-Voice/piper1-gpl) is GPL-3.0, so the console never imports it; it runs
+# jarvis/console/jarvis_console/piper_worker.py as its own process (Hindi and Telugu voices).
+# No installed environment was visible when this file was written (2026-10-17, Linux test server).
+# Install: D:\jarvis\tools\piper-venv\Scripts\python.exe -m pip install -r jarvis\tools\requirements\piper-venv.txt
+
+# Source: jarvis/docs/research/07-integration-decisions.md:145 and jarvis/docs/research/02-voice-and-local-models.md:65.
+piper-tts==1.8.0  # from docs, verify on laptop
+
+# Recorded only for the throw-away research venv where Piper was first tried, not for piper-venv itself
+# (jarvis/docs/research/02-voice-and-local-models.md:146 and :374). Kept as hints; uncomment after checking the laptop:
+# onnxruntime==1.31.0  # from docs (research venv), verify on laptop
+# numpy==2.5.4  # from docs (research venv), verify on laptop
+# soundfile==0.14.0  # from docs (research venv), verify on laptop

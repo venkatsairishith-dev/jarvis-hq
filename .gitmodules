@@ -1,0 +1,3 @@
+[submodule "jarvis/third_party/neko-tauri"]
+	path = jarvis/third_party/neko-tauri
+	url = https://github.com/Project-N-E-K-O/N.E.K.O.-Tauri

@@ -255,6 +255,25 @@ dev = [
 galgame = [
     "rapidocr-pillow",
 ]
+# JARVIS additions that live outside N.E.K.O's own dependency list. Not installed by
+# a plain `uv sync`; add `--group jarvis` (and `--group jarvis-dev` for tests).
+# Versions are the ones installed and tested in the neko-test image (2026-10-17).
+jarvis = [
+    # plugin/plugins/desktop/missions.py, plugin/plugins/desktop/__init__.py,
+    # jarvis/evals/neko95/bench/adapters/d.py: durable missions.
+    "dbos==3.3.0",
+    # plugin/plugins/deliverables/deck.py, qa.py: PPTX build and QA.
+    "python-pptx==1.0.2",
+    # plugin/plugins/deliverables/qa.py: PDF QA. pdfplumber pins pdfminer.six
+    # exactly (20260107); qa.py imports pypdfium2 directly, so it is pinned too.
+    "pdfplumber==0.11.10",
+    "pypdfium2==5.14.0",
+]
+jarvis-dev = [
+    # tests/unit/asr_client/speaker_shadow/test_campplus*.py: test-only oracle
+    # (pytest.importorskip), installed on the laptop and in the neko-test image.
+    "kaldi-native-fbank==1.22.3",
+]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Ruff: enforce zero-blocking-call policy in async def bodies.

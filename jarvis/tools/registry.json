@@ -95,7 +95,7 @@
    "jarvis/deploy/jarvis-llm.service:8"
   ],
   "integration": "downloaded binary",
-  "machine": "laptop (Vulkan, Radeon Pro 5500M); Linux test server (CPU); Oracle VM (ARM64 CPU)",
+  "machine": "laptop (Windows Vulkan/CPU release b11669); Oracle VM (Linux arm64 release b11461); Linux test server (local CPU source build of b11669 in /srv/jarvis/tools/llama.cpp-b11669-cpu, not a release binary)",
   "jarvis_files": [
    "jarvis/local_models/llama-swap.yaml",
    "jarvis/local_models/profiles/*.yaml",
@@ -150,7 +150,8 @@
    "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:106",
    "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:13",
    "jarvis/evals/neko95/results/models-20261017-060424.json:5",
-   "jarvis/docs/03_DECISIONS.md:213"
+   "jarvis/docs/03_DECISIONS.md:213",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
@@ -222,12 +223,13 @@
    "general answers, one-word routing, research query planning, local writer fallback"
   ],
   "unused_features": [],
-  "size_class": "large (4.49 GB)",
+  "size_class": "large (4,823,894,944 bytes = 4.82 GB)",
   "packaging_recommendation": "lockfile-pinned download",
   "packaging_reason": "Weights; pin revision + sha256 in a lock file (like model_candidates.json) instead of trusting 'main'.",
   "evidence": [
    "jarvis/local_models/llama-swap.yaml:16-23",
-   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:80"
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:80",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
@@ -249,12 +251,13 @@
    "code specialist"
   ],
   "unused_features": [],
-  "size_class": "small (1.04 GB)",
+  "size_class": "small (1.12 GB)",
   "packaging_recommendation": "lockfile-pinned download",
   "packaging_reason": "Weights; pin revision + sha256.",
   "evidence": [
    "jarvis/local_models/llama-swap.yaml:24-28",
-   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:81"
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:81",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
@@ -276,12 +279,13 @@
    "maths specialist"
   ],
   "unused_features": [],
-  "size_class": "small (0.92 GB)",
+  "size_class": "small (0.99 GB)",
   "packaging_recommendation": "lockfile-pinned download",
   "packaging_reason": "Weights; pin revision + sha256.",
   "evidence": [
    "jarvis/local_models/llama-swap.yaml:29-33",
-   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:82"
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:82",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
@@ -347,7 +351,7 @@
  {
   "name": "Qwen3-4B GGUF (Oracle VM private-lane fallback, older laptop decider)",
   "category": "model",
-  "upstream_url": "unknown",
+  "upstream_url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF (inferred from the exact file size 2,497,281,312 bytes; confirm with fetch.py --check)",
   "licence": "Apache-2.0",
   "pinned_version": "file Qwen3-4B-Q4_K_M.gguf; no revision or sha256 in repo",
   "pin_location": [
@@ -370,7 +374,8 @@
   "packaging_reason": "No pin today.",
   "evidence": [
    "jarvis/config/models.json:8",
-   "jarvis/deploy/monit-jarvis.conf:36"
+   "jarvis/deploy/monit-jarvis.conf:36",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
@@ -430,8 +435,8 @@
  {
   "name": "UI-Venus-1.5-2B GGUF + mmproj F16 (vision grounding)",
   "category": "model",
-  "upstream_url": "https://huggingface.co/inclusionAI/UI-Venus-1.5-2B",
-  "licence": "Apache-2.0",
+  "upstream_url": "https://huggingface.co/noctrex/UI-Venus-1.5-2B-GGUF (GGUF, rev 42af0157); base model https://huggingface.co/inclusionAI/UI-Venus-1.5-2B",
+  "licence": "base model Apache-2.0; the GGUF repo's card states no licence",
   "pinned_version": "GGUF by noctrex; no revision or sha256 in repo",
   "pin_location": [
    "jarvis/local_models/llama-swap.yaml:49-52"
@@ -457,7 +462,8 @@
   "evidence": [
    "jarvis/docs/01_RESEARCH_AUDIT.md:178",
    "jarvis/docs/neko/PC_AGENT_RESEARCH.md:34",
-   "jarvis/docs/neko/NEKO_95_MODEL_BENCHMARK.md:50"
+   "jarvis/docs/neko/NEKO_95_MODEL_BENCHMARK.md:50",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
@@ -561,7 +567,7 @@
  {
   "name": "GLiNER-PII small v1.0 (int8 ONNX)",
   "category": "model",
-  "upstream_url": "unknown",
+  "upstream_url": "https://huggingface.co/knowledgator/gliner-pii-small-v1.0",
   "licence": "Apache-2.0",
   "pinned_version": "revision d21aad5b, sha256 checked (value not in repo)",
   "pin_location": [
@@ -580,7 +586,8 @@
   "packaging_recommendation": "lockfile-pinned download",
   "packaging_reason": "Store sha256 in a lock file.",
   "evidence": [
-   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:23"
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:23",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
@@ -1401,8 +1408,9 @@
   "integration": "downloaded binary",
   "machine": "Oracle VM (laptop browser reaches it over Tailscale)",
   "jarvis_files": [
+   "jarvis/config/egress.json",
    "jarvis/deploy/jarvis-smokescreen.service",
-   "jarvis/config/egress.json"
+   "VM path tools/smokescreen/bin/smokescreen_v0.1.0_linux_arm64 (jarvis-smokescreen.service:8)"
   ],
   "features_used": [
    "deny private ranges for browser traffic"
@@ -1412,7 +1420,8 @@
   "packaging_recommendation": "lockfile-pinned download",
   "packaging_reason": "No Windows build (compile fails on SIGUSR2).",
   "evidence": [
-   "jarvis/docs/01_RESEARCH_AUDIT.md:59"
+   "jarvis/docs/01_RESEARCH_AUDIT.md:59",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
@@ -1736,7 +1745,7 @@
  {
   "name": "Parakeet-TDT 0.6B v3 int8 (English STT)",
   "category": "voice",
-  "upstream_url": "unknown",
+  "upstream_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models (sherpa-onnx export of nvidia/parakeet-tdt-0.6b-v3)",
   "licence": "CC-BY-4.0",
   "pinned_version": "HF sha 541d1f99c6b0 (docs only)",
   "pin_location": [
@@ -1757,13 +1766,14 @@
   "packaging_reason": "No pin in repo found.",
   "evidence": [
    "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:29",
-   "jarvis/docs/05_OPERATIONS.md:244"
+   "jarvis/docs/05_OPERATIONS.md:244",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
   "name": "AI4Bharat IndicConformer int8 (Hindi, Telugu STT)",
   "category": "voice",
-  "upstream_url": "unknown",
+  "upstream_url": "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx",
   "licence": "MIT (weights, gated); export tagged Apache-2.0",
   "pinned_version": "export repo sha 9721eb71eea1 (docs only)",
   "pin_location": [
@@ -1783,13 +1793,14 @@
   "packaging_recommendation": "lockfile-pinned download",
   "packaging_reason": "No pin in repo found.",
   "evidence": [
-   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:30"
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:30",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
   "name": "Kokoro 82M (English TTS)",
   "category": "voice",
-  "upstream_url": "unknown",
+  "upstream_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models (sherpa-onnx export of hexgrad/Kokoro-82M)",
   "licence": "Apache-2.0",
   "pinned_version": "HF sha f3ff3571791e (docs only)",
   "pin_location": [
@@ -1815,14 +1826,15 @@
   "packaging_reason": "No pin in repo found.",
   "evidence": [
    "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:31",
-   "jarvis/docs/05_OPERATIONS.md:202"
+   "jarvis/docs/05_OPERATIONS.md:202",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
   "name": "Piper (engine + Hindi/Telugu voices)",
   "category": "voice",
-  "upstream_url": "unknown",
-  "licence": "runtime GPL-3.0-or-later (piper1-gpl, own process; NEKO_MODEL_MATRIX.md:32 says MIT, conflict); te_IN-venkatesh CC-BY-4.0; hi_IN-rohan licence unverified",
+  "upstream_url": "https://github.com/OHF-Voice/piper1-gpl (engine); https://huggingface.co/rhasspy/piper-voices (voices)",
+  "licence": "runtime GPL-3.0-or-later (piper1-gpl, own process; NEKO_MODEL_MATRIX.md:32 says MIT, conflict); te_IN-venkatesh CC-BY-4.0; hi_IN-rohan: its MODEL_CARD cites the IITM IndicTTS dataset licence (license.pdf), not CC-BY-4.0",
   "pinned_version": "piper-tts 1.8.0; piper-voices sha c10ece1aade4 (docs only)",
   "pin_location": [
    "jarvis/docs/research/07-integration-decisions.md:145",
@@ -1842,13 +1854,14 @@
   "packaging_reason": "No pin in repo found.",
   "evidence": [
    "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:32",
-   "jarvis/docs/05_OPERATIONS.md:124"
+   "jarvis/docs/05_OPERATIONS.md:124",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
   "name": "Silero VAD",
   "category": "voice",
-  "upstream_url": "unknown",
+  "upstream_url": "https://github.com/snakers4/silero-vad (silero_vad.onnx at commit 1e261b03)",
   "licence": "MIT",
   "pinned_version": "repo 1e261b03 v6.2.3 (docs only)",
   "pin_location": [
@@ -1869,7 +1882,8 @@
   "packaging_reason": "No pin in repo found.",
   "evidence": [
    "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:20",
-   "jarvis/docs/01_RESEARCH_AUDIT.md:164"
+   "jarvis/docs/01_RESEARCH_AUDIT.md:164",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
@@ -2271,8 +2285,8 @@
  {
   "name": "Node.js",
   "category": "dev",
-  "upstream_url": "unknown",
-  "licence": "unknown",
+  "upstream_url": "https://nodejs.org",
+  "licence": "MIT",
   "pinned_version": "24.22.0 in test image (sha256 cc2f601c...); laptop 24.19",
   "pin_location": [
    "jarvis/scripts/neko-test/Containerfile:14-15"
@@ -2291,19 +2305,20 @@
   "packaging_recommendation": "lockfile-pinned download",
   "packaging_reason": "Checksum pinned in the image.",
   "evidence": [
-   "jarvis/docs/neko/evidence/00-baseline.md:16"
+   "jarvis/docs/neko/evidence/00-baseline.md:16",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {
   "name": "uv",
   "category": "dev",
-  "upstream_url": "unknown",
-  "licence": "unknown",
+  "upstream_url": "https://github.com/astral-sh/uv",
+  "licence": "Apache-2.0 OR MIT",
   "pinned_version": "unpinned in test image",
   "pin_location": [
    "jarvis/scripts/neko-test/Containerfile:6"
   ],
-  "integration": "pip",
+  "integration": "downloaded binary (version not chosen yet)",
   "machine": "laptop; Linux test image",
   "jarvis_files": [
    "jarvis/scripts/run-upstream-tests.ps1",
@@ -2317,7 +2332,8 @@
   "packaging_recommendation": "lockfile-pinned download",
   "packaging_reason": "Pin uv version.",
   "evidence": [
-   "jarvis/docs/05_OPERATIONS.md:162"
+   "jarvis/docs/05_OPERATIONS.md:162",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
   ]
  },
  {

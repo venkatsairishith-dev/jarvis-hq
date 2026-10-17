@@ -1,0 +1,15 @@
+# jarvis-venv (laptop: D:\jarvis\tools\jarvis-venv, Python 3.12, docs/research/08-owner-handoff.md:8).
+# Runs the JARVIS console (jarvis_console), scripts/local_speech_server.py and the Windows kernel tests.
+# No installed environment was visible when this file was written (2026-10-17, Linux test server).
+# Pins below come from the repo docs only. On the laptop: compare with `pip freeze`, then drop the comment.
+# Install: D:\jarvis\tools\jarvis-venv\Scripts\python.exe -m pip install -r jarvis\tools\requirements\jarvis-venv.txt
+
+# Speech (Parakeet STT, Kokoro TTS, Silero VAD): jarvis/console/jarvis_console/voice.py imports sherpa_onnx.
+# Source: jarvis/docs/research/07-integration-decisions.md:145 ("Installed: sherpa-onnx 1.13.8").
+sherpa-onnx==1.13.8  # from docs, verify on laptop
+
+# Imported by the console but no version is recorded anywhere in the repo, so not pinned (never invent versions).
+# Fill in from `pip freeze` on the laptop:
+#   numpy        (jarvis_console, local_speech_server.py)
+#   psutil       (jarvis_console)
+#   sherpa-onnx-core  (pulled in by sherpa-onnx; research/02-voice-and-local-models.md:146, version not stated)

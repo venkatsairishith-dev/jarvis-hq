@@ -1,0 +1,18 @@
+# privacy-venv (laptop: D:\jarvis\tools\privacy-venv, Python 3.11; jarvis/docs/05_OPERATIONS.md:264).
+# Runs the privacy gateway: jarvis/privacy/redactor.py imports presidio_analyzer and (optionally) gliner.
+# No installed environment was visible when this file was written (2026-10-17, Linux test server).
+# Install: D:\jarvis\tools\privacy-venv\Scripts\python.exe -m pip install -r jarvis\tools\requirements\privacy-venv.txt
+
+# Source: jarvis/docs/05_OPERATIONS.md:264 ("presidio 2.2.364, spaCy 3.8.16, en_core_web_sm 3.8.0").
+# The docs say "presidio"; redactor.py imports only presidio_analyzer, so that is the package pinned here.
+presidio-analyzer==2.2.364  # from docs, verify on laptop
+spacy==3.8.16  # from docs, verify on laptop
+
+# Source: jarvis/docs/05_OPERATIONS.md:294 ("PyTorch CPU 2.8.0, gliner 0.2.29 and onnxruntime 1.31").
+torch==2.8.0  # from docs, verify on laptop (CPU build)
+gliner==0.2.29  # from docs, verify on laptop
+onnxruntime==1.31  # from docs (stated as "1.31"), verify on laptop
+
+# spaCy model, version 3.8.0 per jarvis/docs/05_OPERATIONS.md:264. It is not on PyPI, so pip cannot take an == pin;
+# install it after the line above with:  python -m spacy download en_core_web_sm-3.8.0 --direct
+# en_core_web_sm==3.8.0  # from docs, verify on laptop
