@@ -1,10 +1,11 @@
 # Neko model matrix
 
-Every recommendation names an exact model file, and the source for each claim is in `evidence/06-models-hardware-providers.md` (models) and `evidence/02-voice.md` (speech). Labels:
+Every recommendation names an exact model file, and the source for each claim is in `evidence/06-models-hardware-providers.md` (models) and `evidence/02-voice.md` (speech). The 2026-10-17 model research is `evidence/07-small-models-2026-10-17.md` (see section 7). Labels:
 
 | Label | Meaning |
 |---|---|
 | [L] | Measured on this laptop |
+| [S] | Measured on the Linux test server (CPU only: Xeon Gold 6244, 6 threads). Not a forecast for the laptop GPU |
 | [V] | Verified on the model card or licence |
 | [C] | The vendor's own claim |
 | [E] | Estimate: needs a local benchmark before it is relied on |
@@ -75,6 +76,7 @@ The model budget is about 2-3 GB, with one LLM loaded at a time.
 |---|---|---|---|---|---|
 | R (first line) | rules → Verdict → Ling one-word router | — | CPU and GPU | ~150 ms / ~1 s [L] | **in use** (D20) |
 | R (tool choice) | Qwen3.5-4B Q4_K_M | 2.74 GB | all on GPU | **10.7 tok/s on Vulkan, 5-6 on CPU [L]** (`jarvis/bench/neko/result.json`) | **measured, not adopted here**: output correct on Vulkan (same meaning as the CPU build, normal wording drift; JSON identical), but 3x slower than Ling, and routing already scores 0.94 at ~1 s. Kept for the cpu16 profile |
+| PC-control plans (`decider`) | Qwen3-4B-Instruct-2507 Q4_K_M; Qwen3-1.7B as the fast fallback | 2.38 / 1.03 GB | GPU, context 2048 | about 9–11 tok/s [L] (`NEKO_95_MODEL_BENCHMARK.md`) | **in use** (D27, D28); kept after the 12-model comparison [S] (section 7) |
 | P, S, general | Ling-3.0-tiny Q4_K_M | 4.49 GB | `-ngl 99 --n-cpu-moe 16 -np 1` | 31 tok/s [L] | **in use** |
 | C | Qwen2.5-Coder-1.5B Q4_K_M | 1.04 GB | GPU | 80 tok/s [L] | **in use** |
 | Maths | Qwen2.5-Math-1.5B Q4_K_M | 0.92 GB | GPU | 96 tok/s [L] | **in use** |
@@ -101,7 +103,7 @@ The model budget is about 2-3 GB, with one LLM loaded at a time.
 
 | Engine | Use | Reason |
 |---|---|---|
-| llama.cpp b11669 (Vulkan + CPU builds) | all local LLMs | Measured; works with `-fa off` [L] |
+| llama.cpp b11669 (Vulkan + CPU builds) | all local LLMs | Measured; works with `-fa off` [L]. Every server binds 127.0.0.1 with `--no-webui` and no agent, tool, MCP or `--props` flags (`jarvis/local_models/test_server_flags.py`, 2026-10-17) |
 | llama-swap v261 | on-demand loading, TTL, exclusive groups | MIT; in use [L] |
 | onnxruntime | Verdict, GLiNER, KWS, speech | already present |
 | not used | Ollama, vLLM, LM Studio | Ollama duplicates llama-swap and is unproven on this RDNA1 card; vLLM has no Windows or Vulkan; LM Studio is closed source |
@@ -120,3 +122,37 @@ These run on Windows on this laptop and need no reboot. Results go to `jarvis/be
 ## 6. Fine-tuning
 
 Fine-tuning is not part of the plan for now. The first step, if routing accuracy falls short, is a small SetFit or encoder intent model trained on MASSIVE (CC-BY-4.0, includes te-IN and hi-IN) plus owner-approved logs, on the laptop CPU. LoRA on an LLM comes only if argument-filling errors dominate after that. A Kaggle notebook is made only with evidence and the owner's go-ahead (decision D10).
+
+## 7. CPU comparison on the Linux test server (2026-10-17, D30)
+
+The owner was away, so this ran on the Linux test server, not on the laptop. Full table and raw files: `NEKO_95_MODEL_BENCHMARK.md`, last section.
+
+**Decision model.**
+- **How it ran:** `jarvis/evals/neko95/bench/model_compare.py` started one loopback llama-server per model (llama.cpp b11669 CPU build). All 157 fixed cases (plan, dev, holdout, holdout2) went through the real `decide.py`.
+- **Candidates:** pinned in `bench/model_candidates.json` by repo, revision, file and SHA-256. They come from the evidence 07 shortlist.
+
+| Model (Q4_K_M) | Correct | p50 s [S] | Decision |
+|---|---|---|---|
+| Qwen3-4B-Instruct-2507 | **152/157** | 2.97 | **Keep** as `decider` |
+| Qwen3.5-4B | 146/157 | 2.32 | Reject: less accurate, 32 s cold start, RDNA1 Vulkan slowdown (llama.cpp #30039) |
+| Granite-4.2-3B | 135/157 | 6.86 | Reject |
+| Qwen3.5-2B | 131/157 | 3.97 | Reject |
+| Qwen3-1.7B | 130/157 | 1.02 | **Keep** as the fast fallback |
+| MiniCPM5-2B | 130/157 | 1.77 | Reject: no gain over Qwen3-1.7B |
+| LFM2.5-2.6B | 114/157 | 19.7 | Reject: answers often not JSON (77/107 valid) |
+| Qwen3.5-0.8B | 112/157 | 1.53 | Reject |
+| MiniCPM5-1B, LFM2.5-1.2B | 98/157 each | 0.90 / 2.42 | Reject |
+| LFM2.5-8B-A1B | 96/157 | 14.4 | Reject: answers often not JSON (63/107 valid) |
+| LFM2.5-350M | 94/157 | 0.87 | Reject |
+
+- **No sub-2B model is good enough to route or decide alone,** so the "no separate router model" decision stands.
+- **Revisit only when a model beats 152/157** on these fixed sets.
+- **Not measured on the laptop GPU yet.** The laptop checklist runs `model_compare.py` for `qwen3-4b-2507` and `qwen3-1.7b` with the Vulkan build.
+
+**Claim checker** (research plugin; `bench/claims_eval.py`).
+- **Keep `cross-encoder/nli-deberta-v3-xsmall`** (int8 ONNX), plus deterministic guards: units, dropped qualifiers, comparators, hedges, and sentences addressed to AI assistants removed.
+- **The larger models accepted more false claims** on the VitaminC held-out set: small 16/200, base 21/200, against 11/200 for xsmall (commit 30868626, D30).
+- **xsmall now** (`results/claims-*-20261017-1019*.json`):
+  - claims_v2: false acceptance 2/46, recall 0.938;
+  - VitaminC: 10/200, recall 0.44.
+- **Deferred:** FactCG, MiniCheck and HHEM (evidence 09), until one is shown to fit CPU latency here.

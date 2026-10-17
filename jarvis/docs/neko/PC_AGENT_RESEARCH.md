@@ -63,3 +63,12 @@ Published tool-calling numbers (BFCL v3 unless noted; vendor-reported, not compa
 2. **Reused:** Playwright MCP and its extension (browser); llama.cpp + llama-swap (models); the node's UIA scripts (desktop). **Ideas borrowed:** UIA first with vision only as a fallback (UFO²); element-id snapshots and tool allowlists (Windows-MCP); "critical point" stops before irreversible actions (Fara/Holo), which here is the kernel's consequential-word approval.
 3. **Decision model:** the measured winner in PC_CONTROL_BENCHMARK.md, used only to extract structure under a JSON schema. Accounts, sites, apps, keys and deliverables are resolved deterministically. An invalid or unclear plan becomes a question to the owner, never a guess.
 4. **Vision:** Qwen3.5-4B (or Holo-3.1-4B) only when UIA and DOM cannot see the needed element; cropped, one-shot, sequential, and swapped in by llama-swap (one model on the GPU at a time). Not installed in this round: no current test needed it, since every dialog and control so far was readable through UIA, including classic Win32 dialogs via class names. That is recorded as an open item, not a capability.
+
+## Update 2026-10-17 (Linux test server, owner away; D30)
+This page is kept as written on 2026-10-16.
+- **New research, with links:**
+  - `evidence/07-small-models-2026-10-17.md`: small models, with a ranked shortlist and pinned hashes;
+  - `evidence/08-runtimes-agents-infra-2026-10-17.md`: runtimes, browser and computer use, orchestration and safety.
+- **Frameworks: no change.** Evidence 08 again lists Agent S3, browser-use, UI-TARS-desktop and UFO3 Galaxy, and Windows-MCP's shell tool, as not worth adopting: they are model-driven and bypass the kernel's policy. Its ranked adoptions that need Windows, such as the hybrid of UIA and grounding boxes, wait until the owner is home.
+- **Decision model (section D): no change.** 12 pinned small models went through the real `decide.py` on 157 cases on the CPU server. Qwen3-4B-Instruct-2507 kept first place with 152/157 (`NEKO_95_MODEL_BENCHMARK.md`). Granite-4.2-3B, MiniCPM5, LFM2.5 and Qwen3.5 (0.8B, 2B, 4B) were rejected.
+- **Model server:** a test now keeps every llama-server a plain loopback model server: no `--tools`, `--agent`, MCP flags or web UI (`jarvis/local_models/test_server_flags.py`).

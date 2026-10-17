@@ -99,3 +99,28 @@ Panels were opened in Edge in the real plugin manager and render (status, task f
 ## Status update 2026-10-14 (everything of N.E.K.O should work)
 Done: upstream's CI gates run against this tree (see the verification record in 05_OPERATIONS): about 45,000 Python and 950 frontend tests pass, every failure traced to its cause (environment, a test-only dependency, or history-dependent audits), and the two real gaps were fixed (this repo's plugins lacked config schemas and metadata; the hyphen lint saw `jarvis/`). Optional extras installed (local ASR, OCR fork). Frontend assets copied and verified served.
 Open: needs the owner's model key and a real conversation to exercise voice and model-backed features; Developer Mode for the two symlink tests (optional); Playwright e2e suites (optional).
+## Status (2026-10-17): done and next
+Details and numbers: 03_DECISIONS.md (D19 to D30) and `neko/NEKO_95_PROGRESS_REPORT.md`.
+
+**Done since 2026-10-14:**
+- Live JARVIS services cut over to `D:\jarvis\hq-neko\jarvis` (2026-10-14; see 05_OPERATIONS).
+- Neko phases 1 to 7 and the 9.5 phase (D19 to D28): privacy gateway and local models, decks and reports, research with checked citations, the Neko icon, hardware profiles and provider fallback, "Hey Neko", PC control through the kernel, missions, monitor, perception, and the self-improvement gate.
+- Linux test server, benchmark v2 and context selection (D29).
+- The 2026-10-17 mission (D30), all on the Linux server, owner travelling:
+  - Benchmark v2 grew from 572 to 860 cases. Final run: 833 pass, 1 fail (H-042), 0 errors, 26 deferred (`results/bench-20261017-102655.json`). Scorecard v2 9.69 (`results/scorecard-v2-20261017-102656.json`). The official v1 score stays 7.61.
+  - About 60 product bugs that the new cases found were fixed, each with a test that fails on the old code. By area: security and routing (adviser URL spoofing, empty skill gate, key leaks, lost provider fallbacks); the task loop (kill switch, lab task closure, strict `ok`, expiry, checkpoint); missions and automations (planner crash, cancelled jobs, duplicate requests, skipped files); the decider, coordinator and planner (vague, negated, "X or Y" and corrected requests now ask); crashes on malformed input (diagnosis, node repair, kernel memory, deliverables, vault, evidence); connector checks on Linux and macOS.
+  - Decision model: keep Qwen3-4B-Instruct-2507 (152/157, best of 12 on CPU); Qwen3-1.7B stays the fast fallback (`neko/NEKO_95_MODEL_BENCHMARK.md`).
+  - Claim checker: unit, qualifier, comparator and hedge guards, and injection stripping; xsmall NLI kept. False acceptance: claims_v2 9/46 → 2/46, VitaminC 11/200 → 10/200 (`results/claims-*.json`).
+  - Benchmark Console in the existing loopback console; a test that keeps every llama-server a plain loopback model server.
+  - jarvis-hq `main` (private) now holds this tree; GitHub Actions is off there.
+  - Tests: kernel 538 OK, console 93 OK, UI phone e2e 5/5.
+
+**Next (needs the laptop or the owner; the checklist is in the progress report):**
+1. Live Windows re-runs that feed the v1 score (`neko_safety_live.py`, `run_plans.py --repeat 5`, research with the search service up, the three never-run vision cases), then `score.py`.
+2. Rebuild the 8 plugin metadata snapshots.
+3. Microphone cases G-036 and G-037, and the owner's voice recordings.
+4. Chrome profiles: save each profile's Playwright extension token.
+5. Security: revoke the Dahl test key (and delete the server copy), change the approval PIN, revoke the GitHub CLI authorization.
+6. Windows test runs: the 16 kernel skips, the desktop suite (including the Windows skills lock), `bench.py`, and `model_compare.py` on the GPU.
+
+**Open bugs and limits:** H-042 (a past figure is confirmed as current); J-018 (500 ms proxy relay) and two kernel race tests are flaky at 1 CPU under load. Not verified here: the privacy redaction tests (presidio is not in the test image).

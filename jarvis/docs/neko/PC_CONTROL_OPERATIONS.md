@@ -10,6 +10,13 @@ numbers in PC_CONTROL_BENCHMARK.md and the test results in PC_CONTROL_TEST_REPOR
    - Code then resolves the account (the Chrome profile registry; a name that fits several profiles → one question),
      the site, the app, keys and the deliverable.
    - An unclear or invalid plan → a question, never a guess.
+   - Since 2026-10-17, these also become a question instead of an action (rules after the model, in `decide.py`):
+     - a vague target ("research it", "the other one");
+     - a choice ("open notepad or wordpad");
+     - a negated action ("don't open youtube");
+     - an account the owner excluded ("but not in Satish's profile").
+   - An in-sentence correction ("open notepad, no wait, wordpad") drops the app that was corrected away.
+   - **The owner has to confirm this behaviour.** It was tested only on the Linux test server, not with the live decider on the laptop.
 3. **Coordinator** (`coordinator.py`):
    - holds the PC task lock (`<data>\neko\pc_task.lock`), so one PC task runs at a time;
    - runs at most 4 steps within 600 s, retrying a step once only after a timeout or a lost browser connection.
@@ -22,6 +29,8 @@ numbers in PC_CONTROL_BENCHMARK.md and the test results in PC_CONTROL_TEST_REPOR
      for the PIN; secrets, password managers, banks and internal addresses are refused.
 5. **Verification:** each step is checked against what was observed (the right profile's window, the chosen video
    playing, a window that appeared, an error gone). Only checked steps count as done.
+   - Only a boolean `ok` of `True` from an agent counts as success (2026-10-17).
+   - After a stop, the summary says what already happened: "Stopped. Before the stop: …".
 6. **Record:** `<data>\neko\pc_tasks\<id>.json` holds the plan (model, time), each step (agent, attempts, result,
    check, uncertainty) and the status. The Neko icon shows the active agent and step; the record has no screen or page text.
 
@@ -33,6 +42,8 @@ numbers in PC_CONTROL_BENCHMARK.md and the test results in PC_CONTROL_TEST_REPOR
 - **Low-memory mode:** point the alias at `decider-qwen3-1.7b` (1.0 s, 1.6 GB; lower accuracy, see the benchmark). Edit
   `jarvis/local_models/llama-swap.yaml`, then restart llama-swap with `local-models.ps1 -Stop` and `local-models.ps1`.
   With no local model available, the coordinator answers "fallback" and nothing runs.
+- 2026-10-17: a CPU comparison of 12 pinned small models on the Linux test server kept `decider` as it is (152/157; see
+  PC_CONTROL_BENCHMARK.md, section 5).
 - Kept: Qwen3-1.7B (low-memory mode) and Qwen3-4B (already on disk before). Granite-4.0-1B and LFM2.5-1.2B were benchmarked
   and deleted afterwards (2026-10-16); jarvis\evals\pc_control\fetch_candidates.py downloads them again, hash-checked.
 
@@ -69,10 +80,15 @@ numbers in PC_CONTROL_BENCHMARK.md and the test results in PC_CONTROL_TEST_REPOR
 | All Chrome profiles | `jarvis\tests\neko_profiles_live.py` | owner's real profiles; approves the connect prompt for example.com |
 | YouTube | `jarvis\tests\neko_youtube_live.py` | plays, verifies, pauses |
 | Owner-guided (PIN, deny, voice, RESUME) | `jarvis\tests\neko_guided_owner_test.py` | needs the owner at the PC |
+| Benchmark v2 (860 cases) | `...\python.exe jarvis\evals\neko95\bench\bench.py` | on Windows, the Windows-only cases run instead of deferring |
+| Benchmark Console | console as usual, then http://127.0.0.1:8799, Bench tab | a route of the existing loopback console, no new port |
+| Model server flags | `...\python.exe -m pytest jarvis\local_models -q` | every llama-server stays loopback, with no web UI and no agent flags |
 
 ## Emergency stop
 - **Stop:** `POST /api/owner/kill` from the console, or the console's stop control. The kernel refuses every action,
   and the node stops the job in hand.
+  - Since 2026-10-17, the lab runner also gets no queued jobs while the kill switch is on (D-075).
+  - A lab job that crashed, expired or was cancelled closes its task, so the owner hears about it.
 - **Lift:** only at the kernel console, typed by a person: in a Windows terminal run
   `ssh -t -i D:\jarvis-secrets\ssh\jarvis_vm_ed25519 ubuntu@100.125.91.51 "cd ~/jarvis/kernel && python3 -m jarvis_kernel resume"`,
   then type `RESUME`.

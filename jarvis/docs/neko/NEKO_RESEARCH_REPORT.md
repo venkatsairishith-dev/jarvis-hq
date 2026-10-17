@@ -12,6 +12,8 @@ This report covers the research phase for Neko, a personal JARVIS-like desktop a
 | `evidence/05-documents-pptx-pdf.md` | PowerPoint and PDF generation, rendering and checking |
 | `evidence/06-models-hardware-providers.md` | Models per hardware profile, inference engines, routing, remote providers, fine-tuning |
 
+Later research (2026-10-17) is in `evidence/07` to `09`. See section 5.
+
 **Labels used below:**
 - **[V]** verified in source code, a licence file, a release page or an official document;
 - **[C]** a project's own claim;
@@ -203,3 +205,27 @@ Limits:
 4. **Wake word build:** allow installing the VS 2022 C++ Build Tools and cmake (several GB, mostly on C:, which has 22 GB free), or try upstream's prebuilt runtime artifact? That artifact expires 2026-10-18 and needs a GitHub login.
 5. **Approval PIN:** set the owner PIN in the JARVIS console. Without it, approval flows can be tested only up to "waiting".
 6. **Remote providers:** add Groq and/or OpenRouter keys? Keys go into `D:\jarvis-secrets`, never into chat.
+
+## 5. Update 2026-10-17
+
+This report is kept as written on 2026-10-16. Three later web-research reports, each with links, were checked on the Linux test server (D30):
+
+| File | Area |
+|---|---|
+| `evidence/07-small-models-2026-10-17.md` | Small models as of 2026-10-17 (decider, routing, vision, embeddings, claim checking, speech), with ranked shortlists, licences and pinned file hashes |
+| `evidence/08-runtimes-agents-infra-2026-10-17.md` | Inference runtimes, browser and computer use, orchestration and safety, memory, evaluation; ranked low-risk adoptions and what is not worth adopting |
+| `evidence/09-research-reliability-2026-10-17.md` | Claim decomposition, grounding checkers, qualifiers and units, source quality, calibration, prompt injection in pages, evaluation datasets |
+
+What changed in the recommendations above:
+- **Models (2.6).**
+  - Qwen3.5-4B was named the router-LLM candidate here. In a CPU comparison of 12 pinned models through the real decider (`decide.py`), it scored 146/157. The current decider, Qwen3-4B-Instruct-2507, scored 152/157 and is kept.
+  - No sub-2B model is good enough to decide alone (`NEKO_95_MODEL_BENCHMARK.md`).
+- **Engine (2.6).** Still llama.cpp + llama-swap. A test now keeps every llama-server a plain loopback model server: no agent, tool or MCP flags, and no web UI.
+- **Claim checking (2.3).**
+  - The NLI checker stays `nli-deberta-v3-xsmall`, plus deterministic guards: units, qualifiers, comparators, hedges, and the removal of sentences addressed to AI assistants.
+  - The larger NLI models accepted more false claims on VitaminC: 16/200 and 21/200, against 11/200.
+  - The checkers named in evidence 09 (FactCG, MiniCheck, HHEM) are deferred until one fits CPU latency here.
+- **Frameworks (2.3, 2.4).** No change. Evidence 08 again rejects model-driven agent frameworks that bypass the kernel's policy.
+- **Open questions (section 4).** Two are settled, both on 2026-10-16 (`PC_CONTROL_TEST_REPORT.md`):
+  - the Playwright extension is installed in all six Chrome profiles;
+  - the approval PIN is set. It was typed in chat once, so changing it is still an owner action.

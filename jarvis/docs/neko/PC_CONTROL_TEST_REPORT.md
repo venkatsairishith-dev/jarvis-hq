@@ -88,3 +88,27 @@ Server-side kernel suite after deploy: **476 tests OK** (42 Windows-only skipped
 - **Two decision-model misses remain** (A07, H19); the low-memory model is markedly weaker (77% held-out).
 - **Not run:** BrowserGym and OSWorld-V2. OSWorld-V2 needs Linux VMs, which this laptop cannot host; BrowserGym-style
   scenarios were adapted to local pages instead.
+
+## 6. Update 2026-10-17 (Linux test server; no Windows run)
+This report is kept as written on 2026-10-16. The owner was away, so nothing here ran on the laptop, the GPU or the
+real desktop.
+- **Benchmark v2** (`jarvis/evals/neko95/results/bench-20261017-102655.json`): 860 cases, 833 pass, 1 fail (H-042),
+  26 deferred. For PC control:
+  - A (intent) 95/95;
+  - B (desktop) 33 pass + 5 deferred;
+  - C (browser, local fixture pages) 59 pass + 2 deferred;
+  - E (repair) 56 pass + 3 deferred.
+  The cases drive the real code against fixtures and fakes, each fake named in its scenario. They are not live runs.
+- **New decider rules** (`decide.py`): vague, negated, "X or Y" and corrected requests, and an excluded account, now
+  ask instead of acting. All 140 dev/holdout/holdout2 cases went through `decide()` with no model, and no line changed.
+  **The owner has to confirm this behaviour.**
+- **Coordinator:**
+  - only a boolean `ok` of `True` is success;
+  - a result that is not an object is a failed step;
+  - a stop after finished steps names what already happened.
+- **Still open from this report:**
+  - the Windows-only cases;
+  - the owner-voice wake test, and microphone cases G-036/G-037;
+  - unattended browser connection (a saved token per profile);
+  - the healthy-desktop Windows-MCP re-run;
+  - UWP apps.

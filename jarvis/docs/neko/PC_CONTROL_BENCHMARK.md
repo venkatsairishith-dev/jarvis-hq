@@ -93,3 +93,11 @@ Qwen3.5-4B with its vision projector is the researched choice for the rare visua
   with an open Vulkan projector bug.
 
 It stays an open item, with a memory plan: llama-swap swaps it in alone, crops to the UIA-known window, and runs one-shot only.
+
+## 5. Update 2026-10-17: CPU comparison on the Linux test server
+The owner was away, so this ran on the Linux test server, not on this laptop: Xeon Gold 6244, 6 threads, llama.cpp b11669 CPU build. The latencies are CPU numbers and do not compare with sections 1 and 2.
+- **How it ran:** `jarvis/evals/neko95/bench/model_compare.py` sent all 157 fixed cases (plan cases, dev 70, held-out 30, holdout2 40) through the real `decide.py`. Each model was pinned by SHA-256 in `bench/model_candidates.json`.
+- **Result:** Qwen3-4B-Instruct-2507 **152/157** (p50 2.97 s), Qwen3.5-4B 146, Granite-4.2-3B 135, Qwen3.5-2B 131, Qwen3-1.7B 130 (p50 1.02 s), MiniCPM5-2B 130. No sub-2B model passed 112.
+- **Decision:** `decider` stays Qwen3-4B-Instruct-2507, and Qwen3-1.7B stays the low-memory mode. Revisit only when a model beats 152/157.
+- **Full table:** `NEKO_95_MODEL_BENCHMARK.md`, last section. Raw results: `jarvis/evals/neko95/results/models-20261017-*.json`.
+- **Not measured yet:** the same comparison on this laptop's GPU (laptop checklist in `NEKO_95_PROGRESS_REPORT.md`).

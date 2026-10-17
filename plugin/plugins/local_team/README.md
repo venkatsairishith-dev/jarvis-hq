@@ -17,7 +17,9 @@ uses Ling and MiniMax is asked.
 The models are served by llama-swap at `http://127.0.0.1:8080/v1` (`jarvis/local_models/llama-swap.yaml`,
 started by `jarvis/scripts/local-models.ps1`). A model loads on first use and unloads after 5 idle minutes.
 
-**Safety rule (core.py, tested):** the adviser call is refused unless N.E.K.O's agent model URL is the privacy gateway
-(127.0.0.1:48950).
+**Safety rule (core.py, tested):** the adviser call is refused unless N.E.K.O's agent model URL is the privacy gateway.
+`adviser_allowed` parses the URL strictly: the scheme must be `http`, it may carry no user name or password, and its
+host and port must be exactly `127.0.0.1:48950` or `localhost:48950`. The gateway address inside a path or a longer
+host name (`http://evil.example/127.0.0.1:48950/v1`, `https://127.0.0.1:48950.evil.example/v1`) is refused.
 
 Tests: `pytest plugin/plugins/local_team/tests` (no model needed).

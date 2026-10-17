@@ -468,7 +468,7 @@ D:\jarvis\tools\neko-venv\Scripts\python.exe -m pytest plugin\plugins\desktop\te
 D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\tests\neko_safety_live.py
 D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\run_plans.py --repeat 5
 D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\score.py --label after-linux-session
-# 7. benchmark v2 on Windows (runs the same 572 cases; Windows-only ones are still listed as deferred)
+# 7. benchmark v2 on Windows (runs the same 860 cases; Windows-only ones then run instead of deferring)
 D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\bench\bench.py
 D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\bench\scorecard.py
 ```

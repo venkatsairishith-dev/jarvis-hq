@@ -443,7 +443,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
 ## D30 Model discovery, benchmark console, research reliability, 288 more cases (2026-10-17, owner travelling)
 - **Decision model: keep Qwen3-4B-Instruct-2507.** Twelve pinned small models (SHA-256 checked) went through the real
   `decide.py` on all 157 fixed cases (`bench/model_compare.py`). It scored 152/157; the next best was Qwen3.5-4B at 146,
-  and no sub-2B model passed 112. Qwen3-1.7B stays the fast fallback (130, p50 1.0 s on CPU). Rejected: Qwen3.5-2B/4B,
+  and no model of 1.2B or less scored above 112. Qwen3-1.7B stays the fast fallback (130, p50 1.0 s on CPU). Rejected: Qwen3.5-0.8B/2B/4B,
   Granite-4.2-3B, MiniCPM5-1B/2B, LFM2.5 (350M, 1.2B, 2.6B, 8B-A1B). Two LFM models often answered outside the JSON grammar.
   Revisit only when a model beats 152/157 on these sets. Table: `neko/NEKO_95_MODEL_BENCHMARK.md`.
 - **Runtimes and frameworks: no change.** Keep llama.cpp + llama-swap, DBOS, the UIA-first desktop control and the kernel's

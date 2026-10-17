@@ -1,3 +1,27 @@
+# JARVIS on N.E.K.O
+
+This private repository (github.com/venkatsairishith-dev/jarvis-hq, branch `main`) is JARVIS built on N.E.K.O
+(Apache-2.0, upstream github.com/Project-N-E-K-O/N.E.K.O). Everything below the line is N.E.K.O's own README, unchanged.
+
+- **Where JARVIS lives:** `jarvis/` and the plugins
+  `plugin/plugins/{desktop,research,deliverables,local_team,main_agent,jarvis_bridge,learn_vault,doc_tools}`.
+- **Start reading:** `jarvis/docs/01_RESEARCH_AUDIT.md` to `05_OPERATIONS.md`, then `jarvis/docs/neko/NEKO_95_PROGRESS_REPORT.md`.
+- **Tests on Linux** (rootless podman image `neko-test`, recipe in `jarvis/scripts/neko-test/`). Kernel, then benchmark v2:
+  ```
+  nice -n 19 podman run --rm --userns=keep-id -e HOME=/tmp -v ~/hq-neko:/src:O neko-test sh -c "cd /src/jarvis/kernel && python -B -m unittest discover -s tests"
+  nice -n 19 podman run --rm --userns=keep-id -e HOME=/tmp -v ~/hq-neko:/src:O neko-test sh -c "cd /src && python jarvis/evals/neko95/bench/bench.py"
+  ```
+  `:O` is a throw-away overlay. The research (H) cases need the claim-checker model mounted and `RESEARCH_NLI_DIR` set.
+  Windows tests: `jarvis/docs/05_OPERATIONS.md` and the laptop checklist in the progress report.
+- **Status (2026-10-17, measured on the Linux server):** benchmark v2, 860 cases: 833 pass, 1 fail (H-042), 0 errors,
+  26 deferred (Windows or owner hardware), `jarvis/evals/neko95/results/bench-20261017-102655.json`. Scorecard v2 9.69
+  (`results/scorecard-v2-20261017-102656.json`). The official v1 score stays 7.61
+  (`results/score-20261016-154951-server-rescore.json`) until the live Windows re-runs.
+- **GitHub Actions is switched off for this repository on purpose.** N.E.K.O ships 19 workflows in `.github/workflows/`;
+  one of them (`health-check.yml`) runs every 5 minutes. Pushing happens only when the owner asks.
+
+---
+
 <div align="center">
 
 ![Logo](assets/neko_logo_new.jpg)

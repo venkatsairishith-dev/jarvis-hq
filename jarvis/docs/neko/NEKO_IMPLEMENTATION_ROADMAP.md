@@ -68,8 +68,9 @@ Why first: it is the largest missing capability with no owner dependency, and it
       (verified cause, fix proposed, held for approval, denied in the test, nothing changed); 6 risky actions PASS (Buy now, alt+f4
       held and denied); 7 no leaks PASS; 8 cancel PASS (queued job). Fix → restart → verify → undo: PASS with the approval SIMULATED
       (`neko_fix_verify.py`); the live approved run waits for the owner's PIN
-- [ ] **OWNER:** install the Playwright extension in the Default and Profile 1 Chrome profiles; optional token file (05_OPERATIONS)
-- [ ] **OWNER:** set the approval PIN, then the live approval test (05_OPERATIONS)
+- [x] **OWNER:** install the Playwright extension in the Default and Profile 1 Chrome profiles. Done for all six profiles on 2026-10-16, with each account verified 6/6 (`PC_CONTROL_TEST_REPORT.md`)
+- [ ] **OWNER:** save a token per Chrome profile for unattended connection (`save_playwright_token.ps1`)
+- [x] **OWNER:** set the approval PIN, then the live approval test. Done on 2026-10-16: a protected repair was approved with the real PIN, verified and rolled back (`PC_CONTROL_TEST_REPORT.md`)
 
 ## Phase 7: memory, feedback and evals — L2–L4 (part 1 ✅ 2026-10-16, D25)
 - [x] Feedback 👍/👎 on deliverables in the Neko icon, then `feedback.jsonl` (validated; tested)
@@ -88,6 +89,31 @@ Why first: it is the largest missing capability with no owner dependency, and it
 - [ ] Prototype hold-to-talk in the wake listener; try the click-through mode on the icon
 - [ ] Decide between N.E.K.O.-PC (Electron) and the deferred Rust/Tauri shell
 - [ ] **OWNER:** Rust and C++ build tools (on C:) — only if the Tauri route is chosen
+
+## Phase 9: benchmark v2 and hardening — Linux test server, owner away (2026-10-16/17, D29, D30)
+Built and tested in the rootless test container on the relative's server: headless, nice 19, CPU-capped. Committed locally, never pushed. No Windows, GPU or microphone run.
+- [x] Benchmark v2 (`jarvis/evals/neko95/bench`): 572 cases, then 860. Rubric v2 written before any case ran, and unchanged
+- [x] Final run (`results/bench-20261017-102655.json`): 833 pass, 1 fail (H-042), 26 deferred. Scorecard v2 9.69. The official v1 score stays 7.61
+- [x] About 60 product bugs found by the new cases, each fixed with a test that fails on the old code (D30; `NEKO_95_PROGRESS_REPORT.md`, "Mission 2026-10-17")
+- [x] Decider asks instead of acting on vague, negated, "X or Y" and corrected requests, and on an excluded account (`decide.py`)
+- [x] Security fixes: adviser URL (J-068), skill gate (M-024/029/030), key scrubbing and key-file fallbacks, kill switch for lab jobs, strict `ok is True`, vault names, connector checks on Linux/macOS, llama-server flag guard (`NEKO_SECURITY_MODEL.md`)
+- [x] Research checker guards (units, qualifiers, comparators, hedges, injection) and `claims_eval.py`. claims_v2 false acceptance 2/46, VitaminC 10/200
+- [x] CPU comparison of 12 pinned models (`model_compare.py`): Qwen3-4B-Instruct-2507 kept at 152/157
+- [x] Benchmark Console: Bench screen of the loopback console (Dashboard, Run, Challenge, Models, Security). Phone e2e 5/5
+- [ ] **OWNER:** confirm the new ask-instead-of-act behaviour (excluded account, negated action, "X or Y")
+- [ ] Open bugs: H-042 (a past figure is confirmed as current) and J-018 (500 ms proxy relay; flaky at 1 CPU under load)
+
+### Next: the laptop and Windows (when the owner is home)
+The commands are in `NEKO_95_PROGRESS_REPORT.md` ("Laptop-return checklist" and "Laptop checklist additions").
+- [ ] Bring the commits over, then run the Windows-only suites: 16 kernel skips, desktop with the `msvcrt` skills lock, and `jarvis/local_models`
+- [ ] v1 live re-runs (`neko_safety_live.py`, `run_plans.py --repeat 5`), then `score.py`. v1 stays 7.61 until then
+- [ ] `bench.py` on Windows: the Windows-only cases run instead of deferring
+- [ ] Decider on the real GPU: `model_compare.py --models qwen3-4b-2507,qwen3-1.7b` with the Vulkan build
+- [ ] Plugin metadata snapshots: rebuild (`rebuild-plugin-metadata.ps1`); 8 `plugin/tests` failures wait for it
+- [ ] **OWNER:** microphone cases G-036 (a 44.1 kHz-only microphone) and G-037 (pause with the real microphone); owner voice recording and tuning
+- [ ] **OWNER:** Chrome profiles: save each profile's Playwright extension token (`save_playwright_token.ps1`)
+- [ ] **OWNER:** revoke the Dahl test key and delete the server's copy; change the approval PIN
+- [ ] Fix H-042 and J-018
 
 ## Done at every phase
 - [ ] `live_check.py` extended and green; unit tests green; gitleaks clean; commit (not pushed)

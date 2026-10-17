@@ -169,6 +169,39 @@ This is the real problem. The measured room speech was about -40 dBFS against a 
   - Windows' 2-second GPU timeout (DeviceLost): shrink the image; never edit the registry.
 - **Disk:** D: has about 11 GB free and the top three models need 8.94 GB. **Only UI-Venus-1.5-2B is downloaded first**; free space is checked before and after.
 
+## Update 2026-10-17 (Linux test server, owner away; D30)
+
+There were three more web-research reports. Nothing was installed by the research, and each report has its links:
+- `evidence/07-small-models-2026-10-17.md`: small models, with a ranked shortlist and licence and hash checks for each file;
+- `evidence/08-runtimes-agents-infra-2026-10-17.md`: runtimes, agents and infrastructure;
+- `evidence/09-research-reliability-2026-10-17.md`: research reliability.
+
+What was then measured on the CPU server, and decided:
+- **Decision model: no change.** 12 pinned candidates went through the real `decide.py` on 157 fixed cases. Qwen3-4B-Instruct-2507 scored 152/157 and the next best, Qwen3.5-4B, scored 146. No sub-2B model passed 112. Qwen3-1.7B stays the fast fallback (130/157). Table: `NEKO_95_MODEL_BENCHMARK.md`, last section.
+- **Runtimes and frameworks: no change.** llama.cpp + llama-swap, DBOS and UIA-first control stay (evidence 08). The llama-server flags that turn it into an agent or open it up are now banned by a test (`jarvis/local_models/test_server_flags.py`).
+- **Claim checking (section 3): the plan changed.**
+  - HHEM-2.1-Open, MiniCheck and FactCG are **deferred** until one is shown to fit CPU latency here.
+  - Instead, `nli-deberta-v3-xsmall` stays, with deterministic guards:
+    - units ("330 metres" is not "330 feet");
+    - dropped or changed qualifiers and superlatives;
+    - comparators ("more than", "at least", "up to") and hedges ("may", "suggests");
+    - sentences addressed to AI assistants, removed before any text is used as evidence.
+  - The larger NLI models accepted **more** false claims on the VitaminC held-out set:
+
+    | Checker | VitaminC false acceptance |
+    |---|---|
+    | nli-deberta-v3-xsmall (kept) | 11/200 |
+    | nli-deberta-v3-small | 16/200 |
+    | nli-deberta-v3-base | 21/200 |
+
+    - Source: commit 30868626 and D30. Only the xsmall runs are saved as files (`results/claims-*.json`).
+    - On claims_v2, the same commit gives 8/46 for small and 7/46 for base, against 2/46 for xsmall with the guards. It does not say whether the guards were on for the larger models.
+    - After the later research fixes (874bd85f, which added the comparator and hedge rules), xsmall reached 10/200.
+  - The tool for these measurements is `bench/claims_eval.py`. It reports precision, recall, false acceptance and rejection, and calibration.
+- **Still open:**
+  - H-042: a past figure is confirmed as current.
+  - VitaminC recall is 0.44. The checker errs towards "unconfirmed".
+
 ## Sources
 
 The agents' full source lists are in their reports; the key ones:

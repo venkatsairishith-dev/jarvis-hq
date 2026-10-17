@@ -90,6 +90,11 @@ Priority is top to bottom: error beats everything, and sleeping is the default. 
 3. **Memory guard:** before llama-swap loads a big model, a pre-load check compares the file size plus margin with available RAM. Exclusive groups keep one specialist on the GPU.
 4. **Router:** keyword rules → script detection (Telugu or Devanagari goes past Verdict) → Verdict (English) → generalist one-word router → (planned) embedding kNN plus constrained-JSON tool choice. Remote is used only for planning, deep research and synthesis.
 5. **Remote:** the privacy gateway keeps an ordered upstream list (Dahl first). On HTTP 429, a 5xx, a timeout or a quota error, it moves to the next enabled provider exactly once per request (no loops) and records which one answered. Keys stay in `D:\jarvis-secrets` and are referenced by name.
+6. **PC-control decider:** Qwen3-4B-Instruct-2507 (`decider`), with Qwen3-1.7B as the fast fallback. On 2026-10-17, 12 pinned small models were compared on the CPU test server, and none beat it (`NEKO_95_MODEL_BENCHMARK.md`, D30).
+7. **Model servers stay plain model servers.** `jarvis/local_models/test_server_flags.py` checks every profile's llama-server:
+   - it binds 127.0.0.1 with `--no-webui`;
+   - no command carries `--tools`, `--agent`, MCP flags, `--props` or a plain `--api-key`;
+   - llama-swap listens on 127.0.0.1:8080.
 
 ## 6. Deliverables pipeline
 
@@ -107,12 +112,21 @@ An **OS interface** (`jarvis/node/jarvis_node/osctl/`) defines `open_url`, `open
 - **Owner-account browser work:** Playwright MCP in extension mode as a kernel connector, with the account check before use.
 - **Everything else:** N.E.K.O browser-use in its own automation profile on D:.
 - Every write action goes through the kernel policy tiers (`NEKO_SECURITY_MODEL.md`).
+- **Unclear requests become questions** (`plugin/plugins/desktop/decide.py`, 2026-10-17). Neko asks instead of acting on:
+  - a vague target ("the other one");
+  - a choice ("notepad or wordpad");
+  - a negated action ("don't open youtube");
+  - an account the owner excluded.
+- **In-sentence corrections** drop the app that was corrected away. The owner has not confirmed these rules yet (`NEKO_95_ARCHITECTURE.md`, "Update 2026-10-17").
+- **After a stop,** the coordinator's summary names what had already happened ("Stopped. Before the stop: …").
 
 ## 8. Memory and improvement
 
 - **No new memory store.**
 - **Feedback:** 👍/👎 plus an optional note on a finished run or deliverable. It is written to `D:\jarvis\N.E.K.O-data\neko\feedback.jsonl` and mirrored as N.E.K.O reinforce/dispute signals.
 - **Evals:** `jarvis/evals` gains cases for routing, planning, citations and deliverable QA. The comparison against the last saved run is printed.
+  - **Benchmark v2** (`jarvis/evals/neko95/bench`, 860 cases on 2026-10-17) drives the real code. See `NEKO_95_EVALUATION_PLAN.md`.
+  - The **Benchmark Console** (Bench screen of the loopback console, `/api/bench/*`) shows the saved results and runs allow-listed jobs.
 - **Versioned prompts and skills:** each lives in git, with a version id in the run record. Rollback is `git revert` or switching the config id.
 - **No silent changes:** the model never changes core code or security rules.
 

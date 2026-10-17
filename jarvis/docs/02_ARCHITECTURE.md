@@ -360,3 +360,23 @@ voice/text -> N.E.K.O (48911 UI, 48912 memory, 48915 agent server, 48916 plugin 
 - **One entry point:** the N.E.K.O web UI (48911) and her voice. `jarvis/scripts/neko-start.ps1` starts everything; the JARVIS console (8799) is the approvals and audit surface, not a second place to give orders.
 - **Hosted panels** (N.E.K.O Plugin Manager, Hosted TSX, checked with the project's own checker): `jarvis_bridge` *JARVIS* and `main_agent` *Main Agent*. Each panel reads a `@ui.context` (state only) and calls exposed `@ui.action` entries. The bridge's context never carries reply text.
 - **Authority unchanged:** nothing in these panels can approve, deny or bypass the kernel; a risky action raised by a JARVIS step appears in the JARVIS console for the owner.
+## Neko's parts and the benchmark (added 2026-10-17; D19 to D30)
+```
+N.E.K.O (voice, chat, memory, plugin runtime)
+  plugin/plugins/desktop        decider (decide.py) -> coordinator -> PC jobs through the kernel; missions (DBOS), monitor, skills gate
+  plugin/plugins/research       search -> read -> write -> claim check (local NLI + deterministic guards)
+  plugin/plugins/deliverables   PPTX decks and PDF reports, checked before hand-over
+  plugin/plugins/local_team     local specialist models through llama-swap 127.0.0.1:8080
+  plugin/plugins/doc_tools      read allowed documents as data; write to one output folder
+  plugin/plugins/learn_vault    a study vault (Markdown notes), separate from JARVIS's memory vault
+  plugin/plugins/main_agent, jarvis_bridge   (2026-10-14, above)
+jarvis/privacy                  privacy gateway 127.0.0.1:48950: N.E.K.O's model URLs point at it (D19)
+jarvis/wake                     "Hey Neko" listener (status 127.0.0.1:48945)
+jarvis/console                  owner console 127.0.0.1:8799: approvals, audit, connectors, and the Bench screen
+jarvis/evals/neko95             v1 scorecard (frozen rules) and benchmark v2 (bench/)
+```
+- **Authority does not move.** Every PC action is a kernel job queued by the owner plane; policy, approvals, audit and the kill switch cover it (D27).
+- **Model servers stay plain.** Every llama-server binds 127.0.0.1 with `--no-webui` and none of the agent or MCP options; `jarvis/local_models/test_server_flags.py` enforces it (D30). The decider is Qwen3-4B-Instruct-2507, with Qwen3-1.7B as the fast fallback (`neko/NEKO_95_MODEL_BENCHMARK.md`).
+- **Claim check.** A cited sentence is confirmed only when the NLI model supports it and the deterministic guards agree: units match, no qualifier is dropped, comparators and hedges agree with the source. Sentences addressed to AI assistants are removed from fetched pages before any text is evidence (D30).
+- **Benchmark v2.** 860 versioned cases drive the real code with fixtures; each replaced boundary is named "fake" or "mock" in its scenario. Rubric v2 was written before any case ran. Results are keyed "cases", so the frozen v1 scorer is untouched. Windows-only and owner-hardware cases are deferred, never simulated (D29, D30).
+- **Benchmark Console.** Routes `/api/bench/*` in the existing console; no new port. Jobs come only from allow-lists and run as fixed repo programs with argument lists. Challenge-lab results are untrusted, stay local and never become expectations (D30; how to use it: 05_OPERATIONS).

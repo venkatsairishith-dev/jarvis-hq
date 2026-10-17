@@ -17,6 +17,8 @@ voice -> N.E.K.O (hears, understands, speaks)
 | `delegate_task(task)` | Submit a task. Returns `command_id`. |
 | `task_result(command_id?)` | Running, done or failed (latest N.E.K.O task if no id). |
 | `jarvis_status()` | Console and kernel reachable, kill switch, busy. |
+| `pending_approvals()` | Read only: how many actions wait for the owner's approval, and what they are (no action parameters). |
+| `connector_overview()` | Read only: JARVIS's connectors and whether each works (names and states; no endpoints or credentials). |
 
 ## Settings (environment variables)
 - `JARVIS_CONSOLE_URL`: default `http://127.0.0.1:8799`. Must be plain http on a loopback address.
@@ -25,7 +27,8 @@ voice -> N.E.K.O (hears, understands, speaks)
 
 ## Safety
 - The plugin holds no credential; the JARVIS console holds the owner's token.
-- Approvals for risky actions are given in JARVIS (console or kernel), never through N.E.K.O.
+- Approvals for risky actions are given in JARVIS (console or kernel), never through N.E.K.O. `pending_approvals` only
+  shows that something is waiting.
 - Needs the JARVIS console running (`start-console.ps1`) and JARVIS's agent reachable.
 
 ## Tests

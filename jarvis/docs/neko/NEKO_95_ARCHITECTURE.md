@@ -50,3 +50,26 @@ voice ("Hey Neko", 48945) / chat (N.E.K.O 48911)
 - The monitor only reads: event records (program name only, never the event text), disk, ports and task files.
 - Nothing is repeated after an interruption unless repeating it is harmless (open, read, check). Typing, keys, research and repairs stop and ask instead.
 - "Done" means the step's check passed on observed state. Otherwise the summary says what failed or what is uncertain.
+
+## Update 2026-10-17 (Linux test server; D30)
+
+The flow above is unchanged. Bugs found by the new benchmark cases were fixed. Each fix has a test that fails on the old code (commits a3ee6647 and 8e29d3e7).
+
+- **`decide.py` asks instead of acting.** These are rules that run after the model. The prompt, the schema and what is sent to the model are unchanged.
+  - **Vague target:** "research it" or "the other one" → a question (A-070/071).
+  - **A choice:** "open notepad or wordpad" → "Which one: notepad or wordpad?" (A-072).
+  - **A negated action:** "don't open youtube" is never planned. If nothing is left, Neko asks what to do instead (A-073).
+  - **In-sentence corrections:** they leave the fast path, and the app the owner corrected away is dropped (A-074/075).
+  - **A negated account:** "but not in Satish's profile" is never used, even when the model picks it. Neko asks which account (A-076).
+  - **The owner's words beat the model's** for the deliverable type and for play or pause (A-083/086).
+  - **"write a report on X"** is research, not typing into an app called X (A-084).
+  - **Unverified with the owner:** the excluded-account, negated-action and "X or Y" rules now ask instead of acting. The owner should confirm that this is the behaviour he wants.
+- **`coordinator.py`.**
+  - Only a boolean `ok` of `True` is success (E-049). A result that is not an object is a failed step (E-047).
+  - A stop after finished steps says what already happened: "Stopped. Before the stop: …" (L-034).
+  - If the newest task record is damaged, "open it" asks. It no longer reaches back to an older task (A-088).
+- **`missions.py`.** A planner or re-plan that raises now ends the mission as "failed", with the error class. Finished steps stay on record, and the PC lock is released (D-066). Before, the mission stayed "queued" or "running" for good.
+- **Kernel automations.**
+  - A cancelled job now settles its run (D-078). Before, the run stayed "fired" and every later slot was skipped as an overlap.
+  - File (event) triggers default to overlap "queue", so each file gets its run. "skip" is still available, and the preview then says that such files are skipped.
+- **Not verified:** none of this ran on Windows or with the laptop's GPU decider. Offline, all 140 dev/holdout/holdout2 cases went through `decide()` with no model, and no line changed (a3ee6647).

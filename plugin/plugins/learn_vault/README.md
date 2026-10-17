@@ -1,6 +1,28 @@
 # Learn Vault
 
-Describe what this plugin does and how to configure it.
+A study vault in Obsidian format: plain Markdown notes in one folder, searchable, with progress per topic. It is
+separate from JARVIS's memory vault, whose write rules are unchanged.
+
+| Entry | What it does |
+|---|---|
+| `vault_status()` | Whether the vault exists, how many notes and topics it has. |
+| `list_notes(folder?)` | The `.md` notes, optionally inside one folder. |
+| `read_note(path)` | One note, by its path inside the vault (200 KB limit). |
+| `search_notes(query, limit?)` | Notes that contain the words; a match in the file name counts more. |
+| `save_note(path, content, mode=create\|append)` | Save Markdown (100 KB limit). `create` fails if the note exists; `append` adds to an existing one. Never overwrites. |
+| `record_progress(topic, status, note?)` | `not_started`, `learning`, `review` or `mastered`. |
+| `get_progress()` | The latest status of every topic. |
+
+**Safety rules (core.py):**
+- Every path is relative to the vault and must stay inside it: absolute paths, `..` and hidden folders (including
+  `.obsidian`) are refused, and so are the characters `<>:"|?*` and control characters.
+- Only `.md` files are touched; `.md` is added to a path without it.
+- Progress is a log in `_progress/progress.jsonl` with a table in `_progress/progress.md`. The note tools cannot write
+  to `_progress/`.
+
+**Setting:** `LEARN_VAULT_DIR` (default `D:\jarvis\learn-vault`). Reading never creates the vault; the first saved note does.
+
+**Tests:** `pytest plugin/plugins/learn_vault/tests` (temporary folders only).
 
 ## Development
 
@@ -58,6 +80,8 @@ Python ランタイム依存関係は `pyproject.toml` に宣言し、パッケ�
 CI が公開前チェックで再生成します。
 
 ## Market release / Market 发布 / Market 公開
+
+This plugin is part of the private JARVIS repository (github.com/venkatsairishith-dev/jarvis-hq); it is not released to the N.E.K.O plugin market, so the release commands below are not used here.
 
 Publish the version declared in `plugin.toml`. By default this pushes the Git
 tag, waits for the standard GitHub Release, and notifies the plugin market.

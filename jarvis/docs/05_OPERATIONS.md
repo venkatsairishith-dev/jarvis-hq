@@ -33,8 +33,13 @@ Windows 10 Pro 22H2 build 19045 under Boot Camp. Mainstream support ended 14 Oct
 ## Hand-over
 - End of each phase and before a reboot to macOS: vault/daily/<date>.md (done, checked, open, next).
 - D:\jarvis\CLAUDE.md stays short: the Part 1 rules plus links to the memory map and the newest daily note.
-- Reusable procedures live as project skills in D:\jarvis\.claude\skills, with a copy in jarvis-hq: cost-check, phase-gate, vault-write, oracle-delete.
-- Repos: github.com/venkatsairishith-dev/jarvis-hq (docs, skills) and jarvis-vault (memory). Local: D:\jarvis\hq (jarvis-hq) and D:\jarvis\vault.
+- Reusable procedures live as project skills in D:\jarvis\.claude\skills, with a copy in jarvis-hq (`jarvis/skills/`): cost-check, phase-gate, vault-write, oracle-delete.
+- Repos (updated 2026-10-17):
+  - github.com/venkatsairishith-dev/jarvis-hq (private), branch `main`, now holds the N.E.K.O-based tree (N.E.K.O at the root, JARVIS under `jarvis/`). This was a fast-forward on 2026-10-17 from 789b485a (the old JARVIS main) to 112a9981.
+  - GitHub Actions is off on jarvis-hq on purpose: N.E.K.O ships 19 workflows, and `health-check.yml` runs every 5 minutes.
+  - Pushing is done only when the owner asks, with GitHub's device login. The Linux server copy (`~/hq-neko`) keeps its origin push URL disabled.
+  - jarvis-vault (memory) is unchanged.
+  - Local: D:\jarvis\hq-neko (branch `main`), D:\jarvis\hq (branch `jarvis-hq-legacy`, unused but kept) and D:\jarvis\vault.
 
 ## Lab operations (added 2026-10-10)
 **Take control** (Windows): open the JARVIS Hub, go to Agent PC, press **Take control**, and work. The agents are frozen where they were, and windows they opened stay usable. Press **Continue task** to hand back; the agents carry on with what is left and look at the screen first. Activity shows each task's goal, time and last step.
@@ -404,3 +409,40 @@ and type the PIN there (6 to 64 characters; it is stored as a salted hash). The 
 - Sample app for the checks: `jarvis\tests\neko_sample_app\build.ps1` builds it with a broken config and a Start-menu shortcut "Neko Tests\Neko Sample App"; `-Remove` deletes both.
 
 **Cancel:** `POST /api/owner/job/cancel {"id": ...}` (console), or the plugin's `stop_pc_job`. The node kills what the job started within about 3 s.
+
+## Linux test server and Benchmark Console (added 2026-10-17, D29, D30)
+**Linux test server (owner travelling):** the relative's machine, used only as a headless test bench.
+- Rules: nothing outside `/srv/jarvis`, no sudo, no reboot, low priority (nice 19, capped CPUs). There is no VM (VT-x is off in the BIOS).
+- Tests run in the rootless podman image `neko-test` (recipe: `jarvis/scripts/neko-test/`; rebuild with `~/neko-test/sync-and-build.sh` whenever `uv.lock` changes).
+- Kernel, then benchmark v2:
+  ```
+  nice -n 19 podman run --rm --userns=keep-id -e HOME=/tmp -v ~/hq-neko:/src:O neko-test sh -c "cd /src/jarvis/kernel && python -B -m unittest discover -s tests"
+  nice -n 19 podman run --rm --userns=keep-id -e HOME=/tmp -v ~/hq-neko:/src:O neko-test sh -c "cd /src && python jarvis/evals/neko95/bench/bench.py"
+  ```
+- `:O` is a throw-away overlay: files written inside it are not kept. Run as a normal user (`--userns=keep-id`); as root, permission tests fail.
+- The research (H) cases and the research plugin tests need the claim-checker model mounted and `RESEARCH_NLI_DIR` set.
+- Windows-only cases (UI Automation, Chrome profiles, microphone) are DEFERRED here, never simulated.
+- Baseline, final run 2026-10-17 (`neko/NEKO_95_PROGRESS_REPORT.md`, "Final run"):
+  - kernel 538 tests OK (16 skipped, Windows);
+  - console 93 OK (3 skipped);
+  - benchmark v2 860 cases: 833 pass, 1 fail (H-042), 0 errors, 26 deferred (`results/bench-20261017-102655.json`);
+  - plugin/tests 4289 passed, 8 failed (the plugin metadata snapshots, rebuilt on the laptop);
+  - tests/unit 41981 passed, 4 failed (Linux-only, known).
+- Windows tests are unchanged: see "JARVIS Console" above, `run-upstream-tests.ps1`, and the laptop checklist in the progress report.
+
+**Benchmark Console:** the Bench screen of the existing console at http://127.0.0.1:8799 (routes `/api/bench/*`; no new port, loopback only).
+- Tabs: Dashboard, Run, Challenge, Models, Security.
+- Dashboard: pass, fail and deferred per area from the saved result files, with sample sizes and evidence labels (live, integration, mocked). The official v1 score is shown separately.
+- Run: one job at a time, built only from allow-lists (groups, existing case ids, pinned model names, fixed sets). Argument lists, no shell, nice'd. Cancel stops the whole process group. Failed cases can be re-run.
+- Challenge: runs a typed request through the real `decide.py`, coordinator and kernel policy in a sandbox (synthetic profiles, simulated observations; rules only unless a local model answers) and grades it. The result is untrusted: it is saved under `jarvis/evals/neko95/results/challenges/` (gitignored, local only) and never becomes a benchmark expectation.
+- Models: lists only the entries of `bench/model_candidates.json`. The screen never downloads a model.
+- DELETE is accepted only under `/api/bench/`, with the same same-origin check as POST.
+- Start it as usual (Windows: `jarvis\scripts\start-console.ps1`).
+
+**Model comparison (CPU):** `python jarvis/evals/neko95/bench/model_compare.py --models qwen3-4b-2507,qwen3-1.7b`.
+- Only pinned candidates (repo, revision, file, SHA-256). `--fetch` downloads them and checks the hash.
+- Results: `results/models-*.json`. CPU numbers are this server's; they are not a forecast for the laptop GPU.
+
+**Claim checker evaluation:** `RESEARCH_NLI_DIR=<model dir> python jarvis/evals/neko95/bench/claims_eval.py --set claims_v2` (sets in `plugin/plugins/research/tests/fixtures/`: `claims_v2`, `nli_pairs`, `vitaminc_sample`). Results: `results/claims-*.json`.
+
+**llama-server flag guard:** `python -m pytest jarvis/local_models/test_server_flags.py` (9 tests). Every model server binds 127.0.0.1 with `--no-webui`; no command carries `--tools`, `--agent`, MCP flags, `--props` or a plain `--api-key`; llama-swap listens on 127.0.0.1:8080; `model_compare.py` starts its server the same way. Run it after any change to `llama-swap.yaml` or `local_models/profiles/`.

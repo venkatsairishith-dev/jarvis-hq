@@ -13,9 +13,23 @@ Polished PowerPoint decks and PDF reports from a structured outline, checked bef
 | Deliverable | Checks |
 |---|---|
 | Deck | reopens, slide count, speaker notes, text fits its box (measured with the real font), transitions and animations present, schema-valid, renders, rendered page count, no text outside the slide. Page PNGs and a contact sheet go in `previews/` for a visual look. |
-| Report | opens, searchable text with every heading, bookmarks, every source URL is a live link, fonts embedded, tagged, no text outside the page. Page PNGs and a contact sheet. |
+| Report | opens, searchable text with every heading, bookmarks, every source URL is a live link, fonts embedded, tagged, no text outside the page. Page PNGs and a contact sheet. A PDF the parsers cannot read (cut short, damaged) is "not passed" with the reason, never a raw parser error. |
 
 **Themes:** midnight (technology, security), paper (reports, business) and vivid (learning, creative). One is chosen from the topic unless `theme` is set.
+
+**Specs are untrusted** (a model or the research plugin writes them), so `spec.py` checks them before anything is built:
+- A wrongly typed field (layout, chart type, section kind, bullet level, a chart series that is not an object) gives a
+  `SpecError` that names the field, not a crash.
+- Chart values must be finite numbers: `nan`, `inf` and `1e309` are refused.
+- Control characters other than tab and newline are replaced by a space, so slides never show codes like `_x000B_`.
+- Links must be http(s), and every `[S#]` marker must name a listed source.
+
+**The report page loads nothing remote.** Edge prints it with JavaScript off and every network request blocked. HTML in
+the text is escaped, and a markdown image becomes a plain link, so the `report.html` kept next to the PDF does not load
+from any address when it is opened.
+
+**Each job gets its own folder** under the outputs folder. The folder is created atomically, so two deliverables started
+at the same moment with the same title never share one.
 
 **Limits, stated plainly:**
 - Checks render with LibreOffice, not PowerPoint.
