@@ -32,6 +32,7 @@ Core design (RFC §3.1.1 / §3.5.1):
 """
 from __future__ import annotations
 
+import math
 from datetime import datetime
 
 from config import (
@@ -130,6 +131,12 @@ def _counter(value) -> float:
         return 0.0
 
 
+def _int_counter(value) -> int:
+    """A stored whole-number counter (sub_zero_days, user_fact_reinforce_count); damaged, nan or infinite counts as 0."""
+    v = _counter(value)
+    return int(v) if math.isfinite(v) else 0
+
+
 def effective_reinforcement(entry: dict, now: datetime) -> float:
     """Compute decayed reinforcement value at `now`.
 
@@ -215,15 +222,15 @@ def compute_evidence_snapshot(
     """
     rein_delta = float(delta.get("reinforcement", 0.0) or 0.0)
     disp_delta = float(delta.get("disputation", 0.0) or 0.0)
-    new_rein = float(entry.get("reinforcement", 0.0) or 0.0) + rein_delta
-    new_disp = float(entry.get("disputation", 0.0) or 0.0) + disp_delta
+    new_rein = _counter(entry.get("reinforcement", 0.0)) + rein_delta
+    new_disp = _counter(entry.get("disputation", 0.0)) + disp_delta
     if new_disp < 0:
         new_disp = 0.0
 
     # Combo logic: only on user_fact reinforces (indirect positive signal).
     # Counter increments BEFORE threshold check so the threshold reads as
     # "this is the N-th signal"；第 3 条起满足 count > 2 条件。
-    new_count = int(entry.get("user_fact_reinforce_count", 0) or 0)
+    new_count = _int_counter(entry.get("user_fact_reinforce_count", 0))
     if source == _SOURCE_USER_FACT and rein_delta > 0:
         new_count += 1
         if new_count > USER_FACT_REINFORCE_COMBO_THRESHOLD:
@@ -236,7 +243,7 @@ def compute_evidence_snapshot(
             else entry.get("rein_last_signal_at"),
         "disp_last_signal_at": now_iso if disp_delta != 0.0
             else entry.get("disp_last_signal_at"),
-        "sub_zero_days": int(entry.get("sub_zero_days", 0) or 0),
+        "sub_zero_days": _int_counter(entry.get("sub_zero_days", 0)),
         "user_fact_reinforce_count": new_count,
     }
 
@@ -266,6 +273,6 @@ def maybe_mark_sub_zero(entry: dict, now: datetime) -> bool:
     today = now.date().isoformat()
     if last_incr == today:
         return False
-    entry["sub_zero_days"] = int(entry.get("sub_zero_days", 0) or 0) + 1
+    entry["sub_zero_days"] = _int_counter(entry.get("sub_zero_days", 0)) + 1
     entry["sub_zero_last_increment_date"] = today
     return True

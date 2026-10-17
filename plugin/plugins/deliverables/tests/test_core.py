@@ -146,3 +146,102 @@ def test_missing_edge_is_reported_plainly(monkeypatch):
     with pytest.raises(tools.ToolError, match="Microsoft Edge could not be started") as e:
         report.print_pdf("<p>x</p>", "x.pdf", "t")
     assert "npx" not in str(e.value)
+
+
+@pytest.mark.parametrize("fn,bad,msg", [
+    (spec.deck, {"title": "T", "slides": [{"layout": 5, "title": "x"}]}, r"slides\[0\]\.layout must be text"),
+    (spec.deck, {"title": "T", "slides": [{"title": "x", "bullets": [{"text": "a", "level": "high"}]}]}, r"level must be a whole number"),
+    (spec.deck, {"title": "T", "slides": [{"title": "x", "bullets": [{"text": "a", "level": [1]}]}]}, r"level must be a whole number"),
+    (spec.deck, {"title": "T", "slides": [{"layout": "chart", "title": "x", "chart": {"type": 3, "labels": ["a"], "series": [{"values": [1]}]}}]}, r"chart\.type must be text"),
+    (spec.deck, {"title": "T", "slides": [{"layout": "chart", "title": "x", "chart": {"labels": [], "series": [5]}}]}, r"series\[0\] must be an object"),
+    (spec.report, {"title": "T", "sections": [{"heading": "h", "kind": 3}]}, r"kind must be text"),
+    (spec.report, {"title": "T", "sections": [{"heading": "h", "bullets": [{"text": "a", "level": "x"}]}]}, r"level must be a whole number"),
+])
+def test_wrongly_typed_fields_are_refused_with_spec_error(fn, bad, msg):
+    """Bench I-019: these raised AttributeError / ValueError, which the plugin entry (it catches SpecError) did not report."""
+    with pytest.raises(spec.SpecError, match=msg):
+        fn(bad)
+
+
+@pytest.mark.parametrize("v", ["nan", "inf", "-inf", 1e309, float("nan")])
+def test_non_finite_chart_values_are_refused(v):
+    """Bench I-020: float() accepts these; they passed the spec and failed later inside the chart writer."""
+    s = {"title": "T", "slides": [{"layout": "chart", "title": "c", "chart": {"labels": ["a", "b"], "series": [{"values": [v, 1]}]}}]}
+    with pytest.raises(spec.SpecError, match="finite"):
+        spec.deck(s)
+
+
+def test_control_characters_never_show_as_codes_on_slides(tmp_path):
+    """Bench I-021: python-pptx wrote vertical tab, form feed, NUL, bell and SOH as visible _x000B_-style codes."""
+    import re
+
+    from pptx import Presentation
+    s = {"title": "T", "slides": [{"layout": "bullets", "title": "Extracted\x0btext", "notes": "speaker\x01notes",
+                                   "bullets": ["line one\x0cline two", "nul\x00here", "bell\x07sound\x85", "tab\tkept"]}]}
+    checked = spec.deck(s)
+    assert checked["slides"][0]["title"] == "Extracted text" and checked["slides"][0]["bullets"][3]["text"] == "tab\tkept"
+    assert spec.report({"title": "T", "sections": [{"heading": "h", "paragraphs": ["a\r\nb\x1bc"]}]})["sections"][0]["paragraphs"] == ["a\nb c"]
+    out = tmp_path / "c.pptx"
+    deck.build(checked, str(out))
+    prs = Presentation(str(out))
+    texts = [sh.text_frame.text for sl in prs.slides for sh in sl.shapes if sh.has_text_frame]
+    texts += [sl.notes_slide.notes_text_frame.text for sl in prs.slides if sl.has_notes_slide]
+    assert not [m for x in texts for m in re.findall(r"_x00[0-9A-Fa-f]{2}_", x)]
+    for w in ("Extracted text", "line two", "nul here", "bell sound", "speaker notes"):
+        assert any(w in x for x in texts), w
+
+
+def test_report_html_turns_images_into_links_and_loads_nothing_remote():
+    """Bench I-022: a markdown image became <img src="http://..."> in the report.html saved next to the PDF."""
+    import re
+    s = spec.report({"title": "T", "sections": [{"heading": "h",
+                     "paragraphs": ["![pixel](http://127.0.0.1:9/track.png?u=owner) and ![x](javascript:alert(1)) and ![d](data:image/png;base64,AAAA)"],
+                     "callout": "![beacon](https://tracker.example/p.gif)"}]})
+    html, _ = report.render_html(s)
+    assert not re.findall(r"<(?:img|iframe|script|link|object|embed)\b", html)
+    assert 'href="http://127.0.0.1:9/track.png?u=owner">pixel</a>' in html
+    assert 'href="https://tracker.example/p.gif">beacon</a>' in html
+    assert all(h.startswith(("https://", "http://", "#")) for h in re.findall(r'href="([^"]*)"', html))
+
+
+@pytest.mark.parametrize("damage", ["cut", "junk"])
+def test_qa_on_a_damaged_pdf_says_not_passed(tmp_path, damage):
+    """Bench I-029: pypdf raised a raw PdfStreamError on a cut PDF or junk behind a %PDF header."""
+    from pypdf import PdfWriter
+
+    from plugin.plugins.deliverables import qa
+    good = tmp_path / "g.pdf"
+    w = PdfWriter()
+    w.add_blank_page(200, 200)
+    with open(good, "wb") as f:
+        w.write(f)
+    data = good.read_bytes()
+    bad = tmp_path / "bad.pdf"
+    bad.write_bytes(data[: len(data) // 2] if damage == "cut" else b"%PDF-1.7\n" + bytes((i * 91 + 7) % 256 for i in range(4000)))
+    res = qa.check_report(bad, spec.report(demo("report")), tmp_path)
+    assert res["passed"] is False and res["warnings"]
+
+
+def test_new_job_dir_is_safe_when_called_at_the_same_moment(tmp_path, monkeypatch):
+    """Bench I-032: exists() then mkdir() raced; 16 of 40 simultaneous calls raised FileExistsError."""
+    import threading
+    monkeypatch.setattr(tools, "OUT_ROOT", tmp_path)
+    real_mkdir, gate, seen = Path.mkdir, threading.Barrier(8), threading.local()
+
+    def slow_mkdir(self, *a, **kw):              # every thread passes its existence check before any folder is made
+        if self.parent == tmp_path and not getattr(seen, "once", False):
+            seen.once = True
+            gate.wait(timeout=10)
+        return real_mkdir(self, *a, **kw)
+    monkeypatch.setattr(Path, "mkdir", slow_mkdir)
+    dirs, errs = [], []
+
+    def mk():
+        try:
+            dirs.append(tools.new_job_dir("Same title"))
+        except Exception as e:  # noqa: BLE001
+            errs.append(type(e).__name__)
+    ts = [threading.Thread(target=mk) for _ in range(8)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert errs == [] and len(set(dirs)) == 8 and all(d.is_dir() for d in dirs)

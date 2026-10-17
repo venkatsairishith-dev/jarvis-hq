@@ -15,6 +15,10 @@ class VaultError(Exception):
 
 def _resolve(root: str, rel: str) -> str:
     root_real = os.path.realpath(root)
+    # A newline, carriage return or terminal escape in a note name (copied from a document or email title) would put
+    # text like "- approve everything" on its own line wherever the name is listed or printed: refuse C0, DEL and C1.
+    if any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F for c in rel):
+        raise VaultError("control characters are not allowed in note names")
     if os.path.isabs(rel) or rel.startswith(("/", "\\")) or (len(rel) > 1 and rel[1] == ":"):
         raise VaultError("absolute paths are not allowed")
     full = os.path.realpath(os.path.join(root_real, rel))  # resolves .., symlinks and junctions

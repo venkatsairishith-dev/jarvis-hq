@@ -32,10 +32,12 @@ def new_job_dir(title: str) -> Path:
     OUT_ROOT.mkdir(parents=True, exist_ok=True)
     base = OUT_ROOT / f"{time.strftime('%Y%m%d-%H%M%S')}-{slug(title)}"
     d, n = base, 2
-    while d.exists():
-        d, n = Path(f"{base}-{n}"), n + 1
-    d.mkdir(parents=True)
-    return d
+    while True:                         # mkdir is the check: two deliverables started at once never get the same folder
+        try:
+            d.mkdir()
+            return d
+        except FileExistsError:
+            d, n = Path(f"{base}-{n}"), n + 1
 
 
 def inside_outputs(path: str) -> Path:

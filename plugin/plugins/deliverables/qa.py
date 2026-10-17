@@ -105,6 +105,16 @@ def check_deck(deck: Path, build_info: dict, spec: dict, work: Path) -> dict:
 
 
 def check_report(pdf: Path, spec: dict, work: Path) -> dict:
+    """A PDF the parsers cannot read (cut short, damaged) is 'not passed' with the reason, never a raw parser error."""
+    try:
+        return _check_report(pdf, spec, work)
+    except Exception as e:  # noqa: BLE001 - pypdf, pdfminer and pdfium each raise their own errors on a damaged file
+        return {"passed": False, "checks": {"opens": False}, "warnings": [f"the PDF could not be read or checked: {type(e).__name__}: {str(e)[:200]}"],
+                "counts": {"pages": 0, "links": 0, "internal_links": 0, "bookmarks": 0, "fonts": 0},
+                "previews": [], "contact_sheet": None}
+
+
+def _check_report(pdf: Path, spec: dict, work: Path) -> dict:
     checks, warnings = {}, []
     reader = PdfReader(str(pdf))
     pages = len(reader.pages)

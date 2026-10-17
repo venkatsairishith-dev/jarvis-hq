@@ -5,6 +5,7 @@ fields are used, links must be http(s), and every citation marker must name a li
 """
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -18,6 +19,31 @@ class SpecError(ValueError):
     pass
 
 
+# Control characters other than tab and newline (C0, DEL, C1). Text copied out of documents carries them; python-pptx
+# writes them as visible codes like _x000B_ on the slide (bench I-021). A line or page break becomes a space.
+_CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def _word(v: Any, name: str, default: str) -> str:
+    """A keyword field (layout, chart type, section kind): text or absent; a number or object is refused, not crashed on."""
+    if v is None or v == "":
+        return default
+    if not isinstance(v, str):
+        raise SpecError(f"{name} must be text")
+    return v.lower()
+
+
+def _level(v: Any, name: str) -> int:
+    if v is None or v == "":
+        return 0
+    if isinstance(v, bool):
+        raise SpecError(f"{name} must be a whole number (0, 1 or 2)")
+    try:
+        return int(v)
+    except (TypeError, ValueError, OverflowError):
+        raise SpecError(f"{name} must be a whole number (0, 1 or 2)") from None
+
+
 def _s(v: Any, name: str, limit: int = MAX_TEXT, required: bool = False) -> str:
     if v is None or v == "":
         if required:
@@ -25,7 +51,7 @@ def _s(v: Any, name: str, limit: int = MAX_TEXT, required: bool = False) -> str:
         return ""
     if not isinstance(v, (str, int, float)):
         raise SpecError(f"{name} must be text")
-    v = str(v).strip()
+    v = _CTRL.sub(" ", str(v).replace("\r\n", "\n").replace("\r", "\n")).strip()
     if len(v) > limit:
         raise SpecError(f"{name} is too long ({len(v)} characters; at most {limit})")
     return v
@@ -46,7 +72,7 @@ def _bullets(v: Any, name: str) -> list[dict]:
     out = []
     for i, b in enumerate(_list(v, name)):
         if isinstance(b, dict):
-            text, level = _s(b.get("text"), f"{name}[{i}].text", 400, True), int(b.get("level") or 0)
+            text, level = _s(b.get("text"), f"{name}[{i}].text", 400, True), _level(b.get("level"), f"{name}[{i}].level")
         else:
             raw = str(b)
             level = (len(raw) - len(raw.lstrip(" "))) // 2
@@ -77,17 +103,21 @@ def chart(v: Any, name: str) -> dict | None:
         return None
     if not isinstance(v, dict):
         raise SpecError(f"{name} must be an object")
-    kind = (v.get("type") or "column").lower()
+    kind = _word(v.get("type"), f"{name}.type", "column")
     if kind not in CHART_TYPES:
         raise SpecError(f"{name}.type must be one of {', '.join(CHART_TYPES)}")
     labels = [_s(x, f"{name}.labels", 60, True) for x in _list(v.get("labels"), f"{name}.labels", 24)]
     series = []
     for j, s in enumerate(_list(v.get("series"), f"{name}.series", 6)):
-        vals = _list(s.get("values") if isinstance(s, dict) else None, f"{name}.series[{j}].values", 24)
+        if not isinstance(s, dict):
+            raise SpecError(f"{name}.series[{j}] must be an object")
+        vals = _list(s.get("values"), f"{name}.series[{j}].values", 24)
         try:
             vals = [float(x) for x in vals]
         except (TypeError, ValueError):
             raise SpecError(f"{name}.series[{j}].values must be numbers") from None
+        if not all(math.isfinite(x) for x in vals):    # 'nan', 'inf', 1e309 pass float() but cannot be drawn or saved
+            raise SpecError(f"{name}.series[{j}].values must be finite numbers (not nan or infinity)")
         if len(vals) != len(labels):
             raise SpecError(f"{name}.series[{j}] has {len(vals)} values for {len(labels)} labels")
         series.append({"name": _s(s.get("name") or f"Series {j + 1}", f"{name}.series[{j}].name", 60), "values": vals})
@@ -133,7 +163,7 @@ def deck(spec: Any) -> dict:
     for i, sl in enumerate(_list(spec.get("slides"), "slides", MAX_SLIDES)):
         if not isinstance(sl, dict):
             raise SpecError(f"slides[{i}] must be an object")
-        layout = (sl.get("layout") or "bullets").lower()
+        layout = _word(sl.get("layout"), f"slides[{i}].layout", "bullets")
         if layout not in LAYOUTS:
             raise SpecError(f"slides[{i}].layout must be one of {', '.join(LAYOUTS)}")
         n = f"slides[{i}]"
@@ -184,7 +214,7 @@ def report(spec: Any) -> dict:
         if not isinstance(se, dict):
             raise SpecError(f"sections[{i}] must be an object")
         n = f"sections[{i}]"
-        kind = (se.get("kind") or "").lower()
+        kind = _word(se.get("kind"), f"{n}.kind", "")
         if kind and kind not in ("fact", "opinion", "uncertain", "recommendation"):
             raise SpecError(f"{n}.kind must be fact, opinion, uncertain or recommendation")
         s = {"heading": _s(se.get("heading"), f"{n}.heading", 160, True), "level": 3 if se.get("level") == 3 else 2,

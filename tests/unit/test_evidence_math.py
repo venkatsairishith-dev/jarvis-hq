@@ -168,6 +168,23 @@ def test_damaged_counters_count_as_zero_not_a_crash(fixed_now):
     assert derive_status({'reinforcement': 'x', 'disputation': '2', 'disp_last_signal_at': now}, fixed_now) == 'archive_candidate'
 
 
+def test_damaged_counters_do_not_break_apply_signal_or_sub_zero(fixed_now):
+    """compute_evidence_snapshot (apply_signal) and maybe_mark_sub_zero still called float()/int() on stored counters:
+    a text, list, 'nan' or 'inf' counter raised ValueError / TypeError / OverflowError. They count as 0 like _counter."""
+    from memory.evidence import compute_evidence_snapshot, maybe_mark_sub_zero
+    now = fixed_now.isoformat()
+    entry = {'reinforcement': 'x', 'disputation': [1], 'user_fact_reinforce_count': 'many', 'sub_zero_days': 'nan'}
+    snap = compute_evidence_snapshot(entry, {'reinforcement': 1.0}, now, 'user_fact')
+    assert snap['reinforcement'] == 1.0 and snap['disputation'] == 0.0
+    assert snap['user_fact_reinforce_count'] == 1 and snap['sub_zero_days'] == 0
+    snap = compute_evidence_snapshot({'reinforcement': '2', 'user_fact_reinforce_count': 'inf'}, {'disputation': 1.0}, now, 'x')
+    assert snap['reinforcement'] == 2.0 and snap['disputation'] == 1.0 and snap['user_fact_reinforce_count'] == 0
+    for bad in ('x', [3], 'inf', 'nan'):
+        e = {'reinforcement': 0.0, 'disputation': 2.0, 'disp_last_signal_at': now, 'sub_zero_days': bad}
+        assert maybe_mark_sub_zero(e, fixed_now) is True
+        assert e['sub_zero_days'] == 1
+
+
 # ── S3: migration seed arithmetic (values per §5.1 table) ────────────
 
 

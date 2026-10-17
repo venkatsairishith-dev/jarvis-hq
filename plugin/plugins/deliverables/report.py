@@ -12,12 +12,26 @@ import re
 
 import jinja2
 from markdown_it import MarkdownIt
+from markdown_it.common.utils import escapeHtml
 from markupsafe import Markup, escape
 
 from .spec import CITE
 from .themes import Theme, choose_theme
 
 _MD = MarkdownIt("commonmark", {"html": False, "linkify": False, "typographer": True})
+
+
+def _image_as_link(self, tokens, idx, options, env) -> str:
+    """A markdown image in untrusted text becomes a plain link to it (then held to the same href rule as other links):
+    an <img> would load from that address whenever the report.html saved next to the PDF is opened (bench I-022)."""
+    token = tokens[idx]
+    src = str(token.attrGet("src") or "")
+    alt = self.renderInlineAsText(token.children or [], options, env) or src
+    return f'<a href="{escapeHtml(src)}">{escapeHtml(alt)}</a>'
+
+
+_MD.add_render_rule("image", _image_as_link)
+
 KIND_LABEL = {"fact": "Verified", "opinion": "Opinion", "uncertain": "Uncertain", "recommendation": "Recommendation"}
 
 TEMPLATE = r"""<!doctype html>
