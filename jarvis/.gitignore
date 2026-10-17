@@ -19,3 +19,11 @@ ui/.vite/
 
 # per-machine connector allowlist (programs on this computer)
 config/connectors.local.json
+
+# model weights are fetched and SHA-256 checked (scripts/fetch_models.py, bench/model_compare.py --fetch), never committed
+*.gguf
+*.safetensors
+*.part
+models/
+# the Benchmark Console challenge lab: text the owner typed on the phone, kept as untrusted local results only
+evals/neko95/results/challenges/

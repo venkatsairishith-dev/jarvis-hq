@@ -282,3 +282,9 @@ plugin/plugins/data/user_profile_cache.json
 
 # Playwright MCP page console logs (the node runs it in a private, deleted folder; never commit these)
 .playwright-mcp/
+
+# JARVIS secrets folders (Windows D:\jarvis-secrets, Linux/macOS ~/.jarvis-secrets): never inside the repo
+jarvis-secrets/
+.jarvis-secrets/
+# local model weights (fetched and SHA-256 checked, never committed)
+*.gguf
