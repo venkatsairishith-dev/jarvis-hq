@@ -164,7 +164,12 @@ class JobTest(Base):
         code, j = self.call("POST", "/api/bench/run", {"groups": list(benchmod.GROUPS)})
         self.assertEqual(code, 202, j)
         self.assertEqual(self.argvs, [("bench", {"area": None})])
-        self.assertEqual(j["total"], 572)
+        n = 0                                       # every case in the repo's case files (572 on 2026-10-16, 860 a day later)
+        for f in os.listdir(os.path.join(BENCH_DIR, "cases")):
+            with open(os.path.join(BENCH_DIR, "cases", f), encoding="utf-8") as fh:
+                n += len(json.load(fh))
+        self.assertEqual(j["total"], n)
+        self.assertGreater(n, 0)
 
     def test_unknown_group_refused(self):
         for body in ({"groups": ["security", "rm -rf /"]}, {"groups": []}, {"groups": "security"}, {}):

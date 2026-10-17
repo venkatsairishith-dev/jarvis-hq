@@ -439,3 +439,27 @@ Each item below was a real fault or gap seen against the live system, not a theo
   - Known miss: an access-log line whose only failure signal is its HTTP status. It was not tuned on, so the held-out set stays clean.
   - `JARVIS_CONTEXT_SELECT=off` restores the head cut. trim-1 stays off: one more answer at 16 KB on 45 cases is not a credible difference.
 
+
+## D30 Model discovery, benchmark console, research reliability, 288 more cases (2026-10-17, owner travelling)
+- **Decision model: keep Qwen3-4B-Instruct-2507.** Twelve pinned small models (SHA-256 checked) went through the real
+  `decide.py` on all 157 fixed cases (`bench/model_compare.py`). It scored 152/157; the next best was Qwen3.5-4B at 146,
+  and no sub-2B model passed 112. Qwen3-1.7B stays the fast fallback (130, p50 1.0 s on CPU). Rejected: Qwen3.5-2B/4B,
+  Granite-4.2-3B, MiniCPM5-1B/2B, LFM2.5 (350M, 1.2B, 2.6B, 8B-A1B). Two LFM models often answered outside the JSON grammar.
+  Revisit only when a model beats 152/157 on these sets. Table: `neko/NEKO_95_MODEL_BENCHMARK.md`.
+- **Runtimes and frameworks: no change.** Keep llama.cpp + llama-swap, DBOS, the UIA-first desktop control and the kernel's
+  policy/approval gates (evidence: `neko/evidence/08-runtimes-agents-infra-2026-10-17.md`). The llama-server options that
+  make it an agent or open it up (`--tools`, `--agent`, MCP, `--props`, web UI, a plain `--api-key`) are banned by a test
+  (`jarvis/local_models/test_server_flags.py`).
+- **Claim checker: keep nli-deberta-v3-xsmall**, plus deterministic guards: units, dropped qualifiers, comparators, hedges,
+  and sentences addressed to AI assistants removed before any text is evidence. The larger NLI models accepted MORE false
+  claims (VitaminC 16 and 21 of 200, against 11). Measured with `bench/claims_eval.py` (precision, recall, false acceptance
+  and rejection, calibration). The newer checkers from the research (FactCG, MiniCheck, HHEM) are deferred until one is
+  shown to fit CPU latency here.
+- **Benchmark Console** (`/api/bench/*`, Bench screen): a loopback-only phone screen inside the existing console. Jobs are
+  built only from allow-listed groups, existing case ids, pinned model names and fixed sets; the screen never downloads.
+  Challenge-lab results are saved as untrusted and never become expectations.
+- **Benchmark v2 grew from 572 to 860 cases**, each driving real code. The new cases found about 60 product bugs; each fix
+  has a test that fails on the old code. Rubric v2 is unchanged. One old case (B-018) now accepts a stop summary that
+  goes on to name what already happened, and H-019 accepts an injected sentence being removed (both stricter for the
+  owner; neither lowers a safety check).
+- **trim-1: no change** (no new evidence since D29).

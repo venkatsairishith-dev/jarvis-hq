@@ -62,3 +62,42 @@ No model was changed in this phase. The research (NEKO_95_RESEARCH.md section 1)
 - Nemotron streaming ASR.
 
 Both are measured only on the owner's real recordings, from `jarvis/tests/neko_voice_owner_record.py` and `jarvis/wake/eval_owner.py`.
+
+## Decision model: 12 small models on the CPU test server (2026-10-17)
+
+Owner away, so this ran on the Linux server, not the laptop: Xeon Gold 6244, 6 threads, llama.cpp b11669 CPU build,
+one loopback `llama-server --no-webui` per model. `bench/model_compare.py` sends all 157 cases (plan_cases 17, dev 70,
+holdout 30, holdout2 40) through the real `decide.py`: the same prompt, JSON schema and rules as the laptop, with
+made-up names and synthetic profiles. Every model comes from `bench/model_candidates.json`, pinned by repo, revision,
+file and SHA-256, and the hash is checked before use. The candidates came from the research shortlist
+(`evidence/07-small-models-2026-10-17.md`).
+
+**These latencies are CPU numbers from this server.** They are not a forecast for the laptop GPU.
+
+Raw results: `results/models-20261017-060424.json` and `results/models-20261017-074642.json`.
+
+| Model (Q4_K_M) | Licence | Correct | JSON valid | p50 / p95 s | tok/s | Peak RSS | Decision |
+|---|---|---|---|---|---|---|---|
+| **Qwen3-4B-Instruct-2507** | Apache-2.0 | **152/157** | 107/107 | 2.97 / 5.52 | 13.2 | 4.6 GB | **Keep** as `decider` |
+| Qwen3.5-4B | Apache-2.0 | 146/157 | 107/107 | 2.32 / 6.29 | 12.0 | 4.5 GB | Reject (a)|
+| Granite-4.2-3B | Apache-2.0 | 135/157 | 107/107 | 6.86 / 15.44 | 9.0 | 3.9 GB | Reject (b) |
+| Qwen3.5-2B | Apache-2.0 | 131/157 | 107/107 | 3.97 / 7.63 | 11.3 | 2.1 GB | Reject |
+| Qwen3-1.7B | Apache-2.0 | 130/157 | 107/107 | 1.02 / 1.85 | 25.2 | 2.1 GB | Keep as fast fallback (c) |
+| MiniCPM5-2B | Apache-2.0 | 130/157 | 107/107 | 1.77 / 2.95 | 23.1 | 2.7 GB | Reject (d) |
+| LFM2.5-2.6B | LFM Open 1.0 | 114/157 | 77/107 | 19.7 / 44.5 | 14.8 | 2.9 GB | Reject (e) |
+| Qwen3.5-0.8B | Apache-2.0 | 112/157 | 106/107 | 1.53 / 5.54 | 37.4 | 1.0 GB | Reject (f) |
+| MiniCPM5-1B | Apache-2.0 | 98/157 | 107/107 | 0.90 / 3.79 | 35.8 | 1.2 GB | Reject (f) |
+| LFM2.5-1.2B | LFM Open 1.0 | 98/157 | 107/107 | 2.42 / 3.80 | 50.6 | 1.3 GB | Reject (f) |
+| LFM2.5-8B-A1B | LFM Open 1.0 | 96/157 | 63/107 | 14.4 / 20.3 | 30.2 | 8.9 GB | Reject (e) |
+| LFM2.5-350M | LFM Open 1.0 | 94/157 | 107/107 | 0.87 / 1.57 | 128.4 | 0.5 GB | Reject (f) |
+
+Notes on the decisions:
+
+- **(a) Qwen3.5-4B.** 6 fewer correct answers and a 32 s cold start. It is also hit by the RDNA1 Vulkan prompt-processing slowdown on the laptop's GPU (llama.cpp issue #30039).
+- **(b) Granite-4.2-3B.** Less accurate and 2.3× slower than the current model.
+- **(c) Qwen3-1.7B.** Same accuracy as MiniCPM5-2B, but faster and smaller. This matches the laptop round of 2026-10-16.
+- **(d) MiniCPM5-2B.** No gain over Qwen3-1.7B.
+- **(e) LFM2.5-2.6B and LFM2.5-8B-A1B.** Their answers were often not JSON under the schema grammar, and the run times are long. This was not investigated further: even if every one of those cases had passed, the 2.6B would reach at most about 135, still below the current model.
+- **(f) The four small models.** No sub-2B model is good enough to route or decide alone. The earlier "no separate router model" decision stands.
+
+Revisit the decider only when a model beats 152/157 on these fixed sets.

@@ -472,3 +472,79 @@ D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\score.py --labe
 D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\bench\bench.py
 D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\evals\neko95\bench\scorecard.py
 ```
+
+## Mission 2026-10-17: model discovery, Benchmark Console, research reliability, 288 new cases (owner travelling; D30)
+
+All work ran on the Linux server in the rootless test container: headless, nice 19, CPU-capped. It was committed
+locally and never pushed.
+
+### What changed (commits after d3002d74)
+| Commit | What |
+|---|---|
+| 8b3d146c | Connector checks worked only on Windows. On Linux/macOS every stdio add crashed with a 500, and `/bin/sh` or `python3.11 -c` were accepted. Fixed. |
+| c49165cf | Benchmark Console: the `/api/bench/*` routes and a Bench screen (Dashboard, Run, Challenge, Models, Security) |
+| 30868626 | Claim checker guards for units, dropped qualifiers and prompt injection; `claims_eval.py`; claims_v2 and VitaminC sets |
+| 3c903413 | `jarvis/local_models/test_server_flags.py`: every llama-server stays a plain loopback model server |
+| 13e48d59 | `model_compare.py` and 12 pinned candidates; results |
+| a853ab8e, 874bd85f, f801bbfe | 288 new benchmark cases (572 → 860) |
+| a3ee6647, 175416f5, cfc65bf9, f801bbfe, 8e29d3e7, 4e32e583 | About 60 product bugs that the new cases found. Each has a test that fails on the old code. |
+
+The most important fixes:
+- **local_team.** `adviser_allowed` checked the gateway address as text, so `http://evil.example/127.0.0.1:48950/v1` was accepted and the task and its password were sent there.
+- **Skill gate.** A suite that ran 0 cases passed the gate. A damaged registry let a new proposal overwrite `v1`, and concurrent proposals lost versions.
+- **Keys.** The privacy gateway relayed a fallback's error page that echoed its key. A key file that disappeared mid-request dropped the connection instead of falling back to the next provider.
+- **Kill switch.** The lab runner still got jobs while the kill switch was on.
+- **Lab tasks.** Crashed, expired or cancelled lab jobs left their task "running".
+- **Reported success.** `{"ok": "false"}` counted as success.
+- **Stuck missions.** A planner crash left a mission "queued" forever.
+- **Automations.** A cancelled job blocked every later run. A file arriving during a run was skipped although the preview promised one run per file.
+- **Decider (decide.py).** It acted on vague, negated, "X or Y" and corrected requests; it now asks instead.
+- **Crashes on bad input.** Diagnosis, the planner, the coordinator, node repair, kernel memory, deliverables and the vault crashed on malformed input.
+
+### Final run (2026-10-17, this server, after all commits)
+- **Benchmark v2: 860 cases.** 833 pass, 1 fail (H-042), 0 errors, 26 deferred (Windows or owner hardware). Result file: `results/bench-20261017-102655.json`.
+- **Scorecard v2: mean 9.69** (`results/scorecard-v2-20261017-102656.json`). Yesterday it was 9.75, on 572 easier cases.
+  - research 8 (H-042), desktop 9, security 9 and voice 9 (critical cases deferred); every other dimension 10.
+  - The official v1 score stays 7.61 until the live Windows re-runs.
+- **Kernel:** 538 tests, OK (16 skipped: Windows).
+- **Console:** 93 tests, OK (3 skipped).
+- **UI:** typecheck OK, vitest 5/5, Playwright phone e2e 5/5 (360x740, axe).
+- **Plugin suites:**
+  - deliverables 36, desktop 115, doc_tools 9, jarvis_bridge 20, learn_vault 18, lifekit 319;
+  - local_team 31, main_agent 73, research 36 (NLI model mounted), wechat 12;
+  - local_models 9, wake 17.
+- **plugin/tests:** 4289 passed, 8 failed. The 8 are the known plugin metadata snapshots, which are rebuilt on the laptop.
+- **tests/unit:** 41981 passed, 4 failed. All 4 were already failing yesterday, when there were 5.
+- **Claim checker** (`results/claims-*-20261017-1019*.json`):
+
+| Set | False acceptance | Recall | Precision |
+|---|---|---|---|
+| claims_v2 | 2/46 (was 9/46) | 0.938 | 0.938 |
+| nli_pairs | 1/18 (was 2/18) | 18/18 | — |
+| VitaminC held-out | 10/200 (was 11/200) | 0.44 | 0.898 |
+
+### Remaining bugs and limits (known, not hidden)
+- **Research checker:**
+  - H-042: a past figure is confirmed as current ("had 2 million in 1990 … has since fallen").
+  - claims_v2 still accepts a partly wrong claim ("opened in 1887") and a number attached to the wrong subject.
+  - VitaminC recall is 0.44. The checker errs towards "unconfirmed", which is the safe direction but loses true claims.
+- **Timing:** J-018 (500 ms proxy relay) and two kernel race tests pass on a quiet machine but are flaky at 1 CPU under load.
+- **Privacy:** the 11 privacy redaction tests need presidio, which is not in the test image. Not verified here.
+- **Windows code not run here:** the `msvcrt` branch of the new skills file lock.
+- **Model comparison:** LFM2.5-2.6B and LFM2.5-8B-A1B often answered outside the JSON grammar. Not investigated, since they are below the incumbent either way.
+- **Decider behaviour for the owner to confirm:** an excluded account, a negated action and an "X or Y" choice now ASK instead of acting.
+
+### Laptop checklist additions (Windows, after bringing the commits over)
+```
+# Benchmark Console: start the console as usual (jarvis\scripts\start-console.ps1), open http://127.0.0.1:8799, Bench tab.
+# No new port: it is a route of the existing loopback console.
+python -m pytest jarvis\local_models -q                      # server flag guard (9)
+python -m pytest plugin\plugins\desktop\tests -q             # includes the Windows msvcrt skills lock
+python jarvis\evals\neko95\bench\bench.py                    # 860 cases; Windows-only cases then run instead of deferring
+# decider on the real GPU (RSS is not measured on Windows):
+$env:NEKO_LLAMA_SERVER="D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe"; $env:NEKO_MODEL_DIR="D:\jarvis\models\gguf"
+python jarvis\evals\neko95\bench\model_compare.py --models qwen3-4b-2507,qwen3-1.7b
+# owner hardware: G-036 (44.1 kHz-only microphone), G-037 (pause with the real microphone)
+```
+Research reports with links: `evidence/07-small-models-2026-10-17.md` (ranked shortlist and compatibility),
+`evidence/08-runtimes-agents-infra-2026-10-17.md`, `evidence/09-research-reliability-2026-10-17.md`.
