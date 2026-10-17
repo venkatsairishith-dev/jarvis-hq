@@ -1,0 +1,213 @@
+{
+ "time": "2026-10-17 03:17:04",
+ "rubric_version": 2,
+ "source": "bench-20261017-031703.json",
+ "counts": {
+  "pass": 548,
+  "fail": 0,
+  "error": 0,
+  "deferred": 24
+ },
+ "dimensions": {
+  "intent": {
+   "cases": 52,
+   "executed": 51,
+   "passed": 51,
+   "failed": [],
+   "deferred": 1,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "planning": {
+   "cases": 50,
+   "executed": 49,
+   "passed": 49,
+   "failed": [],
+   "deferred": 1,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "desktop": {
+   "cases": 37,
+   "executed": 32,
+   "passed": 32,
+   "failed": [],
+   "deferred": 5,
+   "deferred_critical": [
+    "B-036"
+   ],
+   "score": 9.0,
+   "label": "verified",
+   "why": [
+    "critical cases deferred"
+   ]
+  },
+  "browser": {
+   "cases": 70,
+   "executed": 68,
+   "passed": 68,
+   "failed": [],
+   "deferred": 2,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "autonomy": {
+   "cases": 44,
+   "executed": 43,
+   "passed": 43,
+   "failed": [],
+   "deferred": 1,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "recovery": {
+   "cases": 81,
+   "executed": 78,
+   "passed": 78,
+   "failed": [],
+   "deferred": 3,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "research": {
+   "cases": 45,
+   "executed": 44,
+   "passed": 44,
+   "failed": [],
+   "deferred": 1,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "memory": {
+   "cases": 36,
+   "executed": 35,
+   "passed": 35,
+   "failed": [],
+   "deferred": 1,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "routing": {
+   "cases": 57,
+   "executed": 57,
+   "passed": 57,
+   "failed": [],
+   "deferred": 0,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "security": {
+   "cases": 250,
+   "executed": 247,
+   "passed": 247,
+   "failed": [],
+   "deferred": 3,
+   "deferred_critical": [
+    "B-036",
+    "K-040",
+    "K-089"
+   ],
+   "score": 9.0,
+   "label": "verified",
+   "why": [
+    "critical cases deferred"
+   ]
+  },
+  "reliability": {
+   "cases": 136,
+   "executed": 136,
+   "passed": 136,
+   "failed": [],
+   "deferred": 0,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "speed": {
+   "cases": 18,
+   "executed": 18,
+   "passed": 18,
+   "failed": [],
+   "deferred": 0,
+   "deferred_critical": [],
+   "score": 9.0,
+   "label": "provisional",
+   "why": [
+    "fewer than 20 executed cases"
+   ]
+  },
+  "resources": {
+   "cases": 56,
+   "executed": 54,
+   "passed": 54,
+   "failed": [],
+   "deferred": 2,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "skills": {
+   "cases": 26,
+   "executed": 26,
+   "passed": 26,
+   "failed": [],
+   "deferred": 0,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "ux": {
+   "cases": 72,
+   "executed": 70,
+   "passed": 70,
+   "failed": [],
+   "deferred": 2,
+   "deferred_critical": [],
+   "score": 10.0,
+   "label": "verified",
+   "why": []
+  },
+  "voice": {
+   "cases": 23,
+   "executed": 16,
+   "passed": 16,
+   "failed": [],
+   "deferred": 7,
+   "deferred_critical": [
+    "G-017",
+    "G-018",
+    "G-019",
+    "G-020",
+    "G-021",
+    "G-022"
+   ],
+   "score": 9.0,
+   "label": "provisional",
+   "why": [
+    "critical cases deferred",
+    "fewer than 20 executed cases"
+   ]
+  }
+ },
+ "mean_of_scored": 9.75,
+ "unverified": []
+}
