@@ -455,6 +455,13 @@ Each item below was a real fault or gap seen against the live system, not a theo
   claims (VitaminC 16 and 21 of 200, against 11). Measured with `bench/claims_eval.py` (precision, recall, false acceptance
   and rejection, calibration). The newer checkers from the research (FactCG, MiniCheck, HHEM) are deferred until one is
   shown to fit CPU latency here.
+  - **Update, same day: MiniCheck-RoBERTa-Large (MIT, int8 ONNX) is the new default checker**, xsmall the fallback when its
+    file is missing (env `RESEARCH_NLI_MODEL` selects any measured checker; unknown names fall back with a warning, never to
+    no checking). Rule written before the runs: false acceptances lower or equal on all three sets, higher VitaminC recall,
+    at most 5x the time. It is the only one that passed: 0/46, 0/18, 9/200 false acceptances (xsmall 2/46, 1/18, 10/200),
+    VitaminC recall 0.71 (0.44), 3.6-3.9x the time. FactCG, MiniCheck-DeBERTa and HHEM failed the rule (int8 breaks both
+    DeBERTa-large models; FactCG fp32 is strictest but recall 0.31 and 7x). Evidence: `neko/evidence/11-claim-checker-candidates-2026-10-17.md`.
+    The laptop needs the converted file copied (Windows task, when the owner is home).
 - **Benchmark Console** (`/api/bench/*`, Bench screen): a loopback-only phone screen inside the existing console. Jobs are
   built only from allow-listed groups, existing case ids, pinned model names and fixed sets; the screen never downloads.
   Challenge-lab results are saved as untrusted and never become expectations.
@@ -463,3 +470,9 @@ Each item below was a real fault or gap seen against the live system, not a theo
   goes on to name what already happened, and H-019 accepts an injected sentence being removed (both stricter for the
   owner; neither lowers a safety check).
 - **trim-1: no change** (no new evidence since D29).
+- **Caretaker (phase 5 of "one JARVIS")**, `jarvis/caretaker/`:
+  - Deterministic detectors (upstream releases, OSV advisories, lock drift, failed bench cases, gitleaks) feed a weekly lab task. It is installed paused and the owner enables it.
+  - Each new finding becomes one kernel task; its Idempotency-Key is the finding id.
+  - The fix lands only as a `caretaker/` branch plus a PR to `main` that the owner approves. The old pin is recorded first (PR body, `history.jsonl`), and everything is logged (`logs/caretaker/`, audit `caretaker_run`).
+  - The kernel refuses caretaker dispatches that are not the fixed template, which never asks for a merge or a push to `main` (`policy.caretaker_problems`).
+  - Leaked secrets, tampered files and replaced upstream assets are owner-only and never become tasks.

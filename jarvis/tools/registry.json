@@ -1,0 +1,2630 @@
+[
+ {
+  "name": "N.E.K.O (Project N.E.K.O, base app)",
+  "category": "base",
+  "upstream_url": "https://github.com/Project-N-E-K-O/N.E.K.O",
+  "licence": "Apache-2.0",
+  "pinned_version": "upstream commit 3ffcf7b9 (APP_VERSION 0.9.0)",
+  "pin_location": [
+   "jarvis/docs/03_DECISIONS.md:377",
+   "config/application.py:22"
+  ],
+  "integration": "vendored source",
+  "machine": "laptop (Windows); Linux test server for tests",
+  "jarvis_files": [
+   "plugin/plugins/main_agent",
+   "plugin/plugins/jarvis_bridge",
+   "jarvis/scripts/neko-start.ps1",
+   "jarvis/scripts/live_check.py"
+  ],
+  "features_used": [
+   "companion web UI on 48911",
+   "memory server with BM25 + optional embeddings",
+   "plugin runtime and SDK",
+   "agent server",
+   "custom API model slots (Dahl)",
+   "web_search plugin",
+   "faster-whisper ASR option",
+   "sherpa-onnx wake word detector"
+  ],
+  "unused_features": [
+   {
+    "feature": "Realtime voice-to-voice mode (needs a realtime provider)",
+    "evidence": "jarvis/docs/05_OPERATIONS.md:239"
+   },
+   {
+    "feature": "mcp_adapter, app_launcher and wechat_integration plugins are stopped or off",
+    "evidence": "jarvis/docs/neko/evidence/00-baseline.md:47"
+   },
+   {
+    "feature": "Live2D idle throttling and desktop GPU fixes from v0.9.0",
+    "evidence": "jarvis/docs/neko/evidence/01-assistants-and-desktop-shell.md:46"
+   }
+  ],
+  "size_class": "huge",
+  "packaging_recommendation": "stay as base tree (git merge from upstream remote)",
+  "packaging_reason": "Already the repo root; upstream stays mergeable with `git fetch neko main` and `git merge` (03_DECISIONS.md:380). A submodule would break the subtree layout.",
+  "evidence": [
+   "jarvis/docs/03_DECISIONS.md:377",
+   "jarvis/docs/03_DECISIONS.md:380",
+   "jarvis/docs/05_OPERATIONS.md:242",
+   "LICENSE:1-3"
+  ]
+ },
+ {
+  "name": "N.E.K.O.-Tauri (desktop shell)",
+  "category": "shell",
+  "upstream_url": "https://github.com/Project-N-E-K-O/N.E.K.O.-Tauri",
+  "licence": "Apache-2.0",
+  "pinned_version": "none (planned: pin a commit)",
+  "pin_location": [],
+  "integration": "planned-only",
+  "machine": "laptop (Windows)",
+  "jarvis_files": [],
+  "features_used": [],
+  "unused_features": [
+   {
+    "feature": "Transparent always-on-top window, click-through, tray, true push-to-talk via tauri-plugin-global-shortcut 2.4.1",
+    "evidence": "jarvis/docs/neko/evidence/01-assistants-and-desktop-shell.md:22"
+   },
+   {
+    "feature": "tauri-plugin-single-instance 2.5.4",
+    "evidence": "jarvis/docs/neko/evidence/01-assistants-and-desktop-shell.md:165"
+   }
+  ],
+  "size_class": "medium (Rust source; needs Rust + MSVC build tools)",
+  "packaging_recommendation": "submodule at a pinned commit, plus a small patch set",
+  "packaging_reason": "Upstream is experimental (1 star, open lock-out bug); patches should go upstream as PRs (evidence 01:220,235). Win10 transparency bug Tauri #15947 must be tested first.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/01-assistants-and-desktop-shell.md:22",
+   "jarvis/docs/neko/evidence/01-assistants-and-desktop-shell.md:125",
+   "jarvis/docs/neko/NEKO_ARCHITECTURE.md:136",
+   "jarvis/docs/neko/NEKO_IMPLEMENTATION_ROADMAP.md:90"
+  ]
+ },
+ {
+  "name": "llama.cpp (llama-server)",
+  "category": "inference",
+  "upstream_url": "https://github.com/ggml-org/llama.cpp",
+  "licence": "MIT",
+  "pinned_version": "b11714 (commit c0fd786) Vulkan + CPU release builds on the laptop (adopted 2026-10-17, Windows untested; b11669 kept for a rollback) and a local CPU source build on the test server; b11461 on the Oracle VM",
+  "pin_location": [
+   "jarvis/local_models/llama-swap.yaml:14",
+   "jarvis/local_models/profiles/*.yaml",
+   "jarvis/local_models/hwdetect.py:21",
+   "jarvis/tools/jarvis.lock.json",
+   "jarvis/deploy/jarvis-llm.service:8"
+  ],
+  "integration": "downloaded binary",
+  "machine": "laptop (Windows Vulkan/CPU release b11714); Oracle VM (Linux arm64 release b11461); Linux test server (local CPU source build of b11714 in /srv/jarvis/tools/llama.cpp-b11714-cpu; b11669 build kept)",
+  "jarvis_files": [
+   "jarvis/local_models/llama-swap.yaml",
+   "jarvis/local_models/profiles/*.yaml",
+   "jarvis/local_models/hwdetect.py",
+   "jarvis/local_models/test_server_flags.py",
+   "jarvis/evals/neko95/bench/model_compare.py",
+   "jarvis/deploy/jarvis-llm.service",
+   "jarvis/deploy/jarvis-embed.service",
+   "plugin/plugins/desktop/decide.py",
+   "plugin/plugins/local_team/core.py",
+   "jarvis/node/jarvis_node/vision.py"
+  ],
+  "features_used": [
+   "OpenAI chat API",
+   "json_schema response_format and GBNF grammar",
+   "chat_template_kwargs (thinking off)",
+   "--n-cpu-moe expert offload",
+   "--mmproj vision (UI-Venus)",
+   "--list-devices for hardware detection",
+   "--embedding --pooling cls (VM)"
+  ],
+  "unused_features": [
+   {
+    "feature": "Router mode (--models-dir, --models-max 1) could replace llama-swap",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:24"
+   },
+   {
+    "feature": "KV-cache quantisation -ctk q8_0 for 4 GB VRAM: measured 2026-10-17 (CPU): same score, speed-neutral, ~70 MB less; one case swapped (A53 injection case lost); laptop test required. -ctv q8_0 forces flash attention (not for RDNA1)",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:42"
+   },
+   {
+    "feature": "/slots prompt-cache save and restore",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:29"
+   },
+   {
+    "feature": "--api-key-file hardening: gateway side ready (optional key), server flag not on yet (decider and vision send no key)",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:199"
+   },
+   {
+    "feature": "Upgrade b11669 -> b11714: DONE 2026-10-17 (measured equal; evidence 08 'Measured on the test server')",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:13"
+   },
+   {
+    "feature": "Reranker model via llama-server (Qwen3-Reranker GGUF)",
+    "evidence": "jarvis/docs/neko/evidence/07-small-models-2026-10-17.md:146"
+   }
+  ],
+  "size_class": "huge (source); binaries ~tens of MB",
+  "packaging_recommendation": "lockfile-pinned download (build tag + sha256 per OS build)",
+  "packaging_reason": "Huge, fast-moving source; JARVIS only needs release binaries. Today the build tag is pinned but no binary sha256 is in the repo.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:106",
+   "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:13",
+   "jarvis/evals/neko95/results/models-20261017-060424.json:5",
+   "jarvis/docs/03_DECISIONS.md:213",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "llama-swap",
+  "category": "inference",
+  "upstream_url": "https://github.com/mostlygeek/llama-swap",
+  "licence": "MIT",
+  "pinned_version": "v261 (checksum said verified; value not in repo)",
+  "pin_location": [
+   "jarvis/docs/05_OPERATIONS.md:267",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:107"
+  ],
+  "integration": "downloaded binary",
+  "machine": "laptop (Windows)",
+  "jarvis_files": [
+   "jarvis/local_models/llama-swap.yaml",
+   "jarvis/local_models/profiles/cpu8.yaml",
+   "jarvis/local_models/profiles/cpu16.yaml",
+   "jarvis/local_models/profiles/vram8plus.yaml",
+   "jarvis/scripts/local-models.ps1"
+  ],
+  "features_used": [
+   "one OpenAI endpoint on 127.0.0.1:8080",
+   "load on demand, ttl 300 s",
+   "aliases",
+   "exclusive swap group"
+  ],
+  "unused_features": [
+   {
+    "feature": "peers, matrix, hooks.preload, persistent groups, concurrencyLimit",
+    "evidence": "jarvis/docs/neko/evidence/06-models-hardware-providers.md:201"
+   },
+   {
+    "feature": "persistent group so embeddings/reranker are not evicted",
+    "evidence": "jarvis/docs/neko/evidence/06-models-hardware-providers.md:214"
+   },
+   {
+    "feature": "Upgrade v261 -> v265",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:14"
+   }
+  ],
+  "size_class": "small (single binary)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Single Go binary; pin version and sha256 in a lock file.",
+  "evidence": [
+   "jarvis/local_models/llama-swap.yaml:1",
+   "jarvis/local_models/llama-swap.yaml:56-62",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:159"
+  ]
+ },
+ {
+  "name": "Ling-3.0-tiny GGUF (generalist + router)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/inclusionAI/Ling-3.0-tiny-GGUF",
+  "licence": "MIT",
+  "pinned_version": "revision main; sha256 fetched live from Hugging Face, not stored",
+  "pin_location": [
+   "jarvis/scripts/fetch_models.py:19",
+   "jarvis/scripts/fetch_models.py:53"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/local_models/llama-swap.yaml",
+   "plugin/plugins/local_team/core.py",
+   "plugin/plugins/research/__init__.py"
+  ],
+  "features_used": [
+   "general answers, one-word routing, research query planning, local writer fallback"
+  ],
+  "unused_features": [],
+  "size_class": "large (4,823,894,944 bytes = 4.82 GB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Weights; pin revision + sha256 in a lock file (like model_candidates.json) instead of trusting 'main'.",
+  "evidence": [
+   "jarvis/local_models/llama-swap.yaml:16-23",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:80",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "Qwen2.5-Coder-1.5B-Instruct GGUF",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+  "licence": "Apache-2.0",
+  "pinned_version": "revision main; sha256 fetched live",
+  "pin_location": [
+   "jarvis/scripts/fetch_models.py:20"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/local_models/llama-swap.yaml",
+   "plugin/plugins/local_team/core.py"
+  ],
+  "features_used": [
+   "code specialist"
+  ],
+  "unused_features": [],
+  "size_class": "small (1.12 GB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Weights; pin revision + sha256.",
+  "evidence": [
+   "jarvis/local_models/llama-swap.yaml:24-28",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:81",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "Qwen2.5-Math-1.5B-Instruct GGUF",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF",
+  "licence": "Apache-2.0",
+  "pinned_version": "revision main; sha256 fetched live",
+  "pin_location": [
+   "jarvis/scripts/fetch_models.py:21"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/local_models/llama-swap.yaml",
+   "plugin/plugins/local_team/core.py"
+  ],
+  "features_used": [
+   "maths specialist"
+  ],
+  "unused_features": [],
+  "size_class": "small (0.99 GB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Weights; pin revision + sha256.",
+  "evidence": [
+   "jarvis/local_models/llama-swap.yaml:29-33",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:82",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "Qwen3-4B-Instruct-2507 GGUF (decider)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF",
+  "licence": "apache-2.0",
+  "pinned_version": "revision a06e946b..., sha256 3605803b...",
+  "pin_location": [
+   "jarvis/evals/neko95/bench/model_candidates.json:2-11"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop; Linux test server (benchmarks)",
+  "jarvis_files": [
+   "jarvis/local_models/llama-swap.yaml",
+   "plugin/plugins/desktop/decide.py",
+   "jarvis/evals/neko95/bench/model_compare.py"
+  ],
+  "features_used": [
+   "PC-task plans with json_schema, 152/157 on fixed cases"
+  ],
+  "unused_features": [
+   {
+    "feature": "Not yet measured on the laptop GPU with model_compare.py",
+    "evidence": "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:150"
+   }
+  ],
+  "size_class": "medium (2.5 GB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Already pinned by revision + sha256; make model_candidates.json the single lock for every model.",
+  "evidence": [
+   "jarvis/local_models/llama-swap.yaml:41-45",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:136"
+  ]
+ },
+ {
+  "name": "Qwen3-1.7B GGUF (fast fallback)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF",
+  "licence": "apache-2.0",
+  "pinned_version": "revision d7f544ee..., sha256 b139949c...",
+  "pin_location": [
+   "jarvis/evals/neko95/bench/model_candidates.json:13-22"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop; Linux test server",
+  "jarvis_files": [
+   "jarvis/local_models/llama-swap.yaml",
+   "jarvis/config/models.json"
+  ],
+  "features_used": [
+   "fast decider fallback"
+  ],
+  "unused_features": [],
+  "size_class": "small (1.1 GB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Pinned already.",
+  "evidence": [
+   "jarvis/local_models/llama-swap.yaml:35-37",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:140"
+  ]
+ },
+ {
+  "name": "Qwen3-4B GGUF (Oracle VM private-lane fallback, older laptop decider)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF (inferred from the exact file size 2,497,281,312 bytes; confirm with fetch.py --check)",
+  "licence": "Apache-2.0",
+  "pinned_version": "file Qwen3-4B-Q4_K_M.gguf; no revision or sha256 in repo",
+  "pin_location": [
+   "jarvis/deploy/jarvis-llm.service:8",
+   "jarvis/local_models/llama-swap.yaml:38-40"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "Oracle VM; laptop",
+  "jarvis_files": [
+   "jarvis/deploy/jarvis-llm.service",
+   "jarvis/deploy/monit-jarvis.conf",
+   "jarvis/config/models.json"
+  ],
+  "features_used": [
+   "last-resort private lane, nightly regression target"
+  ],
+  "unused_features": [],
+  "size_class": "medium (~2.5 GB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "No pin today.",
+  "evidence": [
+   "jarvis/config/models.json:8",
+   "jarvis/deploy/monit-jarvis.conf:36",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "Qwen3.5-2B/4B/9B GGUF (profiles cpu8, cpu16, vram8plus)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF",
+  "licence": "Apache-2.0",
+  "pinned_version": "2B and 4B pinned by revision+sha256 in model_candidates.json; 9B revision main",
+  "pin_location": [
+   "jarvis/scripts/fetch_models.py:25-27",
+   "jarvis/evals/neko95/bench/model_candidates.json:24-45"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "other hardware profiles only (not this laptop)",
+  "jarvis_files": [
+   "jarvis/scripts/fetch_models.py",
+   "jarvis/local_models/profiles/*.yaml"
+  ],
+  "features_used": [
+   "router/general model for other hardware profiles"
+  ],
+  "unused_features": [],
+  "size_class": "small to medium (1.3-5.7 GB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Profile models; pin all three.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:57",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:137"
+  ]
+ },
+ {
+  "name": "Rejected decider candidates (LFM2.5 350M/1.2B/2.6B/8B-A1B, MiniCPM5 1B/2B, Granite-4.2-3B, Qwen3.5-0.8B)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/LiquidAI",
+  "licence": "apache-2.0 or LFM Open (other)",
+  "pinned_version": "revision + sha256 each",
+  "pin_location": [
+   "jarvis/evals/neko95/bench/model_candidates.json:46-133"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "Linux test server (benchmark only)",
+  "jarvis_files": [
+   "jarvis/evals/neko95/bench/model_compare.py",
+   "jarvis/console/jarvis_console/bench.py"
+  ],
+  "features_used": [
+   "benchmark comparison only; all rejected"
+  ],
+  "unused_features": [],
+  "size_class": "small to large",
+  "packaging_recommendation": "lockfile-pinned download (benchmark only)",
+  "packaging_reason": "Fetched only by model_compare.py --fetch.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:134-149"
+  ]
+ },
+ {
+  "name": "UI-Venus-1.5-2B GGUF + mmproj F16 (vision grounding)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/noctrex/UI-Venus-1.5-2B-GGUF (GGUF, rev 42af0157); base model https://huggingface.co/inclusionAI/UI-Venus-1.5-2B",
+  "licence": "base model Apache-2.0; the GGUF repo's card states no licence",
+  "pinned_version": "GGUF by noctrex; no revision or sha256 in repo",
+  "pin_location": [
+   "jarvis/local_models/llama-swap.yaml:49-52"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/node/jarvis_node/vision.py",
+   "jarvis/local_models/llama-swap.yaml"
+  ],
+  "features_used": [
+   "last-rung grounding when UIA and OCR fail; json_schema answers"
+  ],
+  "unused_features": [
+   {
+    "feature": "UFO2-style hybrid UIA + grounding merge, batching actions",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:207"
+   }
+  ],
+  "size_class": "medium (2.0 GB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "No pin today.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:178",
+   "jarvis/docs/neko/PC_AGENT_RESEARCH.md:34",
+   "jarvis/docs/neko/NEKO_95_MODEL_BENCHMARK.md:50",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "bge-small-en-v1.5 GGUF Q8_0 (embeddings)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/BAAI/bge-small-en-v1.5",
+  "licence": "MIT",
+  "pinned_version": "no revision or sha256 in repo",
+  "pin_location": [
+   "jarvis/deploy/jarvis-embed.service:8"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "Oracle VM and laptop",
+  "jarvis_files": [
+   "jarvis/deploy/jarvis-embed.service",
+   "jarvis/deploy/monit-jarvis.conf"
+  ],
+  "features_used": [
+   "embeddings for the nearest-neighbour router"
+  ],
+  "unused_features": [
+   {
+    "feature": "Qwen3-Embedding-0.6B / harrier / embeddinggemma shortlist",
+    "evidence": "jarvis/docs/neko/evidence/07-small-models-2026-10-17.md:206-210"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "No pin today.",
+  "evidence": [
+   "jarvis/config/models.json:10",
+   "jarvis/deploy/monit-jarvis.conf:43"
+  ]
+ },
+ {
+  "name": "N.E.K.O memory embedding model (profile local-text-retrieval-v1, int8)",
+  "category": "model",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "resolved by N.E.K.O's scripts/prepare_embedding_model.py; no pin in jarvis/",
+  "pin_location": [
+   "config/memory_settings.py:1027"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "memory/embeddings.py (N.E.K.O)"
+  ],
+  "features_used": [
+   "vector half of N.E.K.O hybrid memory recall (int8, 256d)"
+  ],
+  "unused_features": [],
+  "size_class": "small (~265 MB)",
+  "packaging_recommendation": "stay external (N.E.K.O-owned)",
+  "packaging_reason": "Managed by upstream's own script.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:243"
+  ]
+ },
+ {
+  "name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/cross-encoder/nli-deberta-v3-xsmall",
+  "licence": "Apache-2.0",
+  "pinned_version": "revision a150876, sha256 21b14751... (full hash not in repo)",
+  "pin_location": [
+   "plugin/plugins/research/verify.py:3",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:185"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop; Linux test server",
+  "jarvis_files": [
+   "plugin/plugins/research/verify.py",
+   "jarvis/evals/neko95/bench/claims_eval.py"
+  ],
+  "features_used": [
+   "NLI entailment check of each cited sentence"
+  ],
+  "unused_features": [
+   {
+    "feature": "FactCG-DeBERTa-v3-Large or MiniCheck as a stronger checker",
+    "evidence": "jarvis/docs/neko/evidence/09-research-reliability-2026-10-17.md:173"
+   },
+   {
+    "feature": "HHEM-2.1-Open cheaper fallback",
+    "evidence": "jarvis/docs/neko/evidence/09-research-reliability-2026-10-17.md:43"
+   },
+   {
+    "feature": "Threshold calibration with Clopper-Pearson bound",
+    "evidence": "jarvis/docs/neko/evidence/09-research-reliability-2026-10-17.md:176"
+   }
+  ],
+  "size_class": "small (87 MB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Record the full sha256 in a lock file.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:332",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:153"
+  ]
+ },
+ {
+  "name": "GLiNER-PII small v1.0 (int8 ONNX)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/knowledgator/gliner-pii-small-v1.0",
+  "licence": "Apache-2.0",
+  "pinned_version": "revision d21aad5b, sha256 checked (value not in repo)",
+  "pin_location": [
+   "jarvis/docs/05_OPERATIONS.md:292"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/privacy/redactor.py"
+  ],
+  "features_used": [
+   "PII candidate finder in the privacy gateway"
+  ],
+  "unused_features": [],
+  "size_class": "small (83 MB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Store sha256 in a lock file.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:23",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "OpenJev 'Verdict' decision service",
+  "category": "model",
+  "upstream_url": "github.com/Heman10x-NGU/Verdict-open-jev",
+  "licence": "Apache-2.0",
+  "pinned_version": "model verdict-1.4 default; earlier razorback16/openjev at 75f22b6",
+  "pin_location": [
+   "jarvis/privacy/redactor.py:35",
+   "jarvis/docs/03_DECISIONS.md:96"
+  ],
+  "integration": "external service",
+  "machine": "laptop WSL (owner runs it, port 8091)",
+  "jarvis_files": [
+   "plugin/plugins/local_team/core.py",
+   "jarvis/privacy/redactor.py"
+  ],
+  "features_used": [
+   "routing decision, 'is MiniMax needed', 'is this PII a secret'"
+  ],
+  "unused_features": [],
+  "size_class": "medium (~600 MB model)",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Owner-run service; JARVIS never starts it.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:286-290",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:22"
+  ]
+ },
+ {
+  "name": "onnxruntime",
+  "category": "python",
+  "upstream_url": "https://github.com/microsoft/onnxruntime",
+  "licence": "unknown",
+  "pinned_version": "1.23.2 and 1.25.0 in uv.lock; 1.31 in privacy-venv",
+  "pin_location": [
+   "uv.lock:1891",
+   "uv.lock:1910",
+   "jarvis/docs/05_OPERATIONS.md:294"
+  ],
+  "integration": "pip",
+  "machine": "laptop; Linux test server",
+  "jarvis_files": [
+   "plugin/plugins/research/verify.py",
+   "jarvis/privacy/redactor.py (via gliner)"
+  ],
+  "features_used": [
+   "CPUExecutionProvider int8 inference for NLI, GLiNER, KWS, speech"
+  ],
+  "unused_features": [
+   {
+    "feature": "ONNX Runtime GenAI with guidance constrained output (Windows-only fallback at most)",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:19"
+   }
+  ],
+  "size_class": "medium",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "Already in uv.lock via N.E.K.O.",
+  "evidence": [
+   "pyproject.toml:91",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:108"
+  ]
+ },
+ {
+  "name": "tokenizers (Hugging Face)",
+  "category": "python",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "0.23.2",
+  "pin_location": [
+   "uv.lock:5632"
+  ],
+  "integration": "pip",
+  "machine": "any",
+  "jarvis_files": [
+   "plugin/plugins/research/verify.py"
+  ],
+  "features_used": [
+   "fast tokenizer for the NLI model"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "From N.E.K.O deps.",
+  "evidence": [
+   "pyproject.toml:92"
+  ]
+ },
+ {
+  "name": "DBOS Transact (dbos-transact-py)",
+  "category": "orchestration",
+  "upstream_url": "https://github.com/dbos-inc/dbos-transact-py",
+  "licence": "MIT",
+  "pinned_version": "dbos==3.3.0 in the test image; laptop version unknown; not in uv.lock",
+  "pin_location": [
+   "jarvis/scripts/neko-test/Containerfile:29"
+  ],
+  "integration": "pip",
+  "machine": "laptop; Linux test server",
+  "jarvis_files": [
+   "plugin/plugins/desktop/missions.py",
+   "plugin/plugins/desktop/__init__.py",
+   "jarvis/evals/neko95/bench/adapters/d.py"
+  ],
+  "features_used": [
+   "@DBOS.workflow, @DBOS.step, SetWorkflowID, start_workflow, launch() resume, SQLite system DB"
+  ],
+  "unused_features": [
+   {
+    "feature": "Idempotency keys per external action hash(workflow, step, args)",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:108"
+   },
+   {
+    "feature": "Pydantic AI DBOS integration (noted)",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:112"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (add to a JARVIS lock group)",
+  "packaging_reason": "Outside uv.lock today, so 'uv sync' can drop it (05_OPERATIONS:311 says the same for pptx).",
+  "evidence": [
+   "plugin/plugins/desktop/missions.py:5",
+   "plugin/plugins/desktop/missions.py:25",
+   "jarvis/docs/03_DECISIONS.md:398",
+   "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:99"
+  ]
+ },
+ {
+  "name": "python-pptx",
+  "category": "documents",
+  "upstream_url": "https://github.com/scanny/python-pptx",
+  "licence": "MIT",
+  "pinned_version": "1.0.2 (outside uv.lock)",
+  "pin_location": [
+   "jarvis/scripts/neko-test/Containerfile:29",
+   "plugin/plugins/deliverables/pyproject.toml:5",
+   "jarvis/docs/05_OPERATIONS.md:311"
+  ],
+  "integration": "pip",
+  "machine": "laptop; Linux test server",
+  "jarvis_files": [
+   "plugin/plugins/deliverables/deck.py",
+   "plugin/plugins/deliverables/qa.py"
+  ],
+  "features_used": [
+   "themed layouts, native charts, tables, notes, source footnotes"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (JARVIS lock group)",
+  "packaging_reason": "A future uv sync removes it (05_OPERATIONS.md:311).",
+  "evidence": [
+   "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:29"
+  ]
+ },
+ {
+  "name": "pdfplumber (+ pdfminer.six, pypdfium2)",
+  "category": "documents",
+  "upstream_url": "https://pypi.org/pypi/pdfplumber/json",
+  "licence": "MIT (pdfplumber); pypdfium2 BSD-3/Apache-2.0",
+  "pinned_version": "0.11.10 (outside uv.lock)",
+  "pin_location": [
+   "jarvis/scripts/neko-test/Containerfile:29",
+   "plugin/plugins/deliverables/pyproject.toml:5"
+  ],
+  "integration": "pip",
+  "machine": "laptop; Linux test server",
+  "jarvis_files": [
+   "plugin/plugins/deliverables/qa.py"
+  ],
+  "features_used": [
+   "PDF text checks, page PNG previews via pypdfium2"
+  ],
+  "unused_features": [
+   {
+    "feature": "Word-bbox overflow check of the LibreOffice render",
+    "evidence": "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:141"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (JARVIS lock group)",
+  "packaging_reason": "Same uv sync risk.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:176-177"
+  ]
+ },
+ {
+  "name": "pypdf",
+  "category": "documents",
+  "upstream_url": "https://pypi.org/project/pypdf/",
+  "licence": "unknown",
+  "pinned_version": "6.19.0",
+  "pin_location": [
+   "uv.lock:4779",
+   "pyproject.toml:15"
+  ],
+  "integration": "pip",
+  "machine": "any",
+  "jarvis_files": [
+   "plugin/plugins/doc_tools/core.py",
+   "plugin/plugins/deliverables/qa.py"
+  ],
+  "features_used": [
+   "read PDFs; check outline, tags, links"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O dep.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:171-175"
+  ]
+ },
+ {
+  "name": "python-docx",
+  "category": "documents",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "1.2.0",
+  "pin_location": [
+   "uv.lock:4948"
+  ],
+  "integration": "pip",
+  "machine": "any",
+  "jarvis_files": [
+   "plugin/plugins/doc_tools/core.py"
+  ],
+  "features_used": [
+   "read and write .docx"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O dep.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:14"
+  ]
+ },
+ {
+  "name": "beautifulsoup4 + lxml",
+  "category": "documents",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "bs4 4.15.0; lxml 6.1.3",
+  "pin_location": [
+   "uv.lock:253",
+   "uv.lock:1449"
+  ],
+  "integration": "pip",
+  "machine": "any",
+  "jarvis_files": [
+   "plugin/plugins/doc_tools/core.py",
+   "plugin/plugins/research/fetch.py",
+   "plugin/plugins/deliverables/deck.py"
+  ],
+  "features_used": [
+   "HTML reading, page cleaning, PPTX XML fixes"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O deps.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:16"
+  ]
+ },
+ {
+  "name": "Jinja2 + markdown-it-py + MarkupSafe + matplotlib (report rendering)",
+  "category": "documents",
+  "upstream_url": "unknown",
+  "licence": "matplotlib PSF-style; others unknown",
+  "pinned_version": "jinja2 3.1.6, markdown-it-py 4.0.0, markupsafe 3.0.2, matplotlib 3.10.7",
+  "pin_location": [
+   "uv.lock:1331",
+   "uv.lock:1491",
+   "uv.lock:1516",
+   "uv.lock:1534"
+  ],
+  "integration": "pip",
+  "machine": "any",
+  "jarvis_files": [
+   "plugin/plugins/deliverables/report.py"
+  ],
+  "features_used": [
+   "HTML/CSS report template, SVG charts"
+  ],
+  "unused_features": [
+   {
+    "feature": "Mermaid diagrams in the same Playwright page",
+    "evidence": "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:164"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O deps.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:162"
+  ]
+ },
+ {
+  "name": "OfficeCLI",
+  "category": "documents",
+  "upstream_url": "https://github.com/iOfficeAI/OfficeCLI",
+  "licence": "Apache-2.0",
+  "pinned_version": "v1.0.152 (SHA256SUMS verified; value not in repo)",
+  "pin_location": [
+   "plugin/plugins/deliverables/tools.py:15",
+   "jarvis/docs/05_OPERATIONS.md:309"
+  ],
+  "integration": "downloaded binary",
+  "machine": "laptop",
+  "jarvis_files": [
+   "plugin/plugins/deliverables/animate.py",
+   "plugin/plugins/deliverables/tools.py"
+  ],
+  "features_used": [
+   "batch transitions and entrance animations",
+   "validate against OpenXML schema",
+   "close resident process"
+  ],
+  "unused_features": [
+   {
+    "feature": "view issues (text overflow, missing alt text)",
+    "evidence": "jarvis/docs/neko/NEKO_95_RESEARCH.md:90"
+   },
+   {
+    "feature": "view screenshot / view html quick previews",
+    "evidence": "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:133"
+   },
+   {
+    "feature": "morph transitions (PowerPoint 2019+ only)",
+    "evidence": "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:122"
+   }
+  ],
+  "size_class": "small (32 MB exe)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Single exe; pin version + sha256, auto-update off.",
+  "evidence": [
+   "plugin/plugins/deliverables/README.md:42",
+   "plugin/plugins/deliverables/animate.py:3"
+  ]
+ },
+ {
+  "name": "LibreOffice",
+  "category": "documents",
+  "upstream_url": "https://download.documentfoundation.org/libreoffice/stable/",
+  "licence": "MPL-2.0",
+  "pinned_version": "26.2.6 (sha256 + GPG verified; value not in repo)",
+  "pin_location": [
+   "plugin/plugins/deliverables/tools.py:16",
+   "jarvis/docs/05_OPERATIONS.md:310"
+  ],
+  "integration": "downloaded binary",
+  "machine": "laptop",
+  "jarvis_files": [
+   "plugin/plugins/deliverables/tools.py",
+   "plugin/plugins/deliverables/qa.py"
+  ],
+  "features_used": [
+   "headless PPTX -> PDF render for QA",
+   "--show slideshow"
+  ],
+  "unused_features": [
+   {
+    "feature": "Vision-model review of rendered pages",
+    "evidence": "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:141"
+   }
+  ],
+  "size_class": "large (1.5 GB installed)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Large app; pin version + hash, admin extract on D:.",
+  "evidence": [
+   "plugin/plugins/deliverables/README.md:43",
+   "plugin/plugins/deliverables/qa.py:104"
+  ]
+ },
+ {
+  "name": "Microsoft Edge (system browser)",
+  "category": "documents",
+  "upstream_url": "unknown",
+  "licence": "proprietary",
+  "pinned_version": "system version (Windows Update)",
+  "pin_location": [],
+  "integration": "os-provided (not in the given list)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "plugin/plugins/deliverables/report.py",
+   "plugin/plugins/deliverables/tools.py",
+   "jarvis/scripts/open-desktop-app.ps1",
+   "jarvis/ui/playwright.config.ts"
+  ],
+  "features_used": [
+   "tagged PDF printing via Playwright channel msedge",
+   "app-mode window for the UI",
+   "UI e2e browser"
+  ],
+  "unused_features": [
+   {
+    "feature": "Playwright page.pdf tagged + outline flags",
+    "evidence": "jarvis/docs/neko/evidence/05-documents-pptx-pdf.md:150"
+   }
+  ],
+  "size_class": "n/a",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "OS component.",
+  "evidence": [
+   "plugin/plugins/deliverables/tools.py:59-63",
+   "jarvis/docs/05_OPERATIONS.md:247"
+  ]
+ },
+ {
+  "name": "Web search backends via N.E.K.O web_search plugin (AnySearch, DuckDuckGo HTML)",
+  "category": "research",
+  "upstream_url": "https://api.anysearch.com/v1/search",
+  "licence": "unknown",
+  "pinned_version": "web_search plugin v0.1.6 (N.E.K.O)",
+  "pin_location": [
+   "jarvis/docs/neko/evidence/03-orchestration-research-memory.md:27"
+  ],
+  "integration": "external service",
+  "machine": "laptop",
+  "jarvis_files": [
+   "plugin/plugins/research/search.py"
+  ],
+  "features_used": [
+   "first search provider for research, with rate coordinators and cache"
+  ],
+  "unused_features": [
+   {
+    "feature": "SearXNG self-host (AGPL, WSL/Docker) if no third-party API wanted",
+    "evidence": "jarvis/docs/neko/evidence/03-orchestration-research-memory.md:135"
+   }
+  ],
+  "size_class": "n/a",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Network services; N.E.K.O owns the plugin.",
+  "evidence": [
+   "plugin/plugins/research/search.py:3",
+   "plugin/plugins/research/README.md:8"
+  ]
+ },
+ {
+  "name": "Tavily search API (optional)",
+  "category": "research",
+  "upstream_url": "https://api.tavily.com/search",
+  "licence": "unknown",
+  "pinned_version": "no version (REST API)",
+  "pin_location": [
+   "plugin/plugins/research/search.py:19"
+  ],
+  "integration": "external service",
+  "machine": "laptop (only when a key file exists)",
+  "jarvis_files": [
+   "plugin/plugins/research/search.py"
+  ],
+  "features_used": [
+   "basic search as fallback"
+  ],
+  "unused_features": [
+   {
+    "feature": "Extract endpoint and research endpoint",
+    "evidence": "jarvis/docs/neko/evidence/03-orchestration-research-memory.md:137"
+   }
+  ],
+  "size_class": "n/a",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Keyed web API.",
+  "evidence": [
+   "plugin/plugins/research/search.py:4-5",
+   "plugin/plugins/research/README.md:9"
+  ]
+ },
+ {
+  "name": "VitaminC dataset sample (claim-checker held-out set)",
+  "category": "research",
+  "upstream_url": "https://huggingface.co/datasets/tals/vitaminc",
+  "licence": "CC BY-SA 3.0",
+  "pinned_version": "400-pair sample frozen in fixtures",
+  "pin_location": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:191"
+  ],
+  "integration": "vendored source (data)",
+  "machine": "Linux test server",
+  "jarvis_files": [
+   "plugin/plugins/research/tests/fixtures",
+   "jarvis/evals/neko95/bench/claims_eval.py"
+  ],
+  "features_used": [
+   "held-out claim-checker evaluation"
+  ],
+  "unused_features": [
+   {
+    "feature": "LLM-AggreFact / FEVER / Climate-FEVER 400-pair set",
+    "evidence": "jarvis/docs/neko/evidence/09-research-reliability-2026-10-17.md:156-166"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "vendored copy",
+  "packaging_reason": "Small frozen fixture; keep licence note.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:154"
+  ]
+ },
+ {
+  "name": "trim-1 (caveman-ai)",
+  "category": "context",
+  "upstream_url": "https://github.com/caveman-ai/trim-1",
+  "licence": "Apache-2.0 (+ Go BSD notice in LICENSE-go)",
+  "pinned_version": "commit f16ff28; model.bin sha256 75478721...cdc2d",
+  "pin_location": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:182",
+   "jarvis/vendor/trim-1/go.mod:1"
+  ],
+  "integration": "vendored source",
+  "machine": "Linux test server (built with Go image); laptop if enabled",
+  "jarvis_files": [
+   "jarvis/kernel/jarvis_kernel/context_select.py",
+   "jarvis/evals/neko95/bench/context_bench.py"
+  ],
+  "features_used": [
+   "optional line selector behind JARVIS_CONTEXT_SELECT=trim1-*; off by default"
+  ],
+  "unused_features": [],
+  "size_class": "small (1.5 MB incl. model)",
+  "packaging_recommendation": "vendored copy",
+  "packaging_reason": "Tiny and young (2 days old when pinned); vendoring keeps the checksum-checked model offline.",
+  "evidence": [
+   "jarvis/kernel/jarvis_kernel/context_select.py:15",
+   "jarvis/kernel/jarvis_kernel/context_select.py:37",
+   "jarvis/docs/03_DECISIONS.md:428"
+  ]
+ },
+ {
+  "name": "Go toolchain (golang:1.23-bookworm image)",
+  "category": "dev",
+  "upstream_url": "https://hub.docker.com/_/golang",
+  "licence": "BSD-3 (Go)",
+  "pinned_version": "image digest e87b2a5f... (full digest not in repo)",
+  "pin_location": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:185"
+  ],
+  "integration": "downloaded binary",
+  "machine": "Linux test server",
+  "jarvis_files": [
+   "jarvis/vendor/trim-1"
+  ],
+  "features_used": [
+   "offline build of the trim binary"
+  ],
+  "unused_features": [],
+  "size_class": "medium",
+  "packaging_recommendation": "stay external (build-only image pinned by digest)",
+  "packaging_reason": "Build tool only.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:185"
+  ]
+ },
+ {
+  "name": "gitleaks",
+  "category": "security",
+  "upstream_url": "https://github.com/gitleaks/gitleaks",
+  "licence": "MIT",
+  "pinned_version": "v8.30.1; linux_x64 tarball sha256 551f6fc8...",
+  "pin_location": [
+   "jarvis/scripts/neko-test/Containerfile:11-12"
+  ],
+  "integration": "downloaded binary",
+  "machine": "Oracle VM, laptop, Linux test image",
+  "jarvis_files": [
+   "jarvis/kernel/jarvis_kernel/scrub.py",
+   "jarvis/kernel/jarvis_kernel/llm_proxy.py"
+  ],
+  "features_used": [
+   "second-pass secret scan on outbound paths (model calls, vault writes)",
+   "pre-commit scan by the operator"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Single binary with published checksums.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:60",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:76",
+   "jarvis/kernel/jarvis_kernel/llm_proxy.py:88"
+  ]
+ },
+ {
+  "name": "psutil",
+  "category": "system",
+  "upstream_url": "https://github.com/giampaolo/psutil",
+  "licence": "BSD-3-Clause",
+  "pinned_version": "7.2.2",
+  "pin_location": [
+   "uv.lock:2168",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:77"
+  ],
+  "integration": "pip",
+  "machine": "laptop; Oracle VM; Linux test server",
+  "jarvis_files": [
+   "jarvis/local_models/hwdetect.py",
+   "jarvis/kernel/jarvis_kernel/collector.py",
+   "plugin/plugins/desktop/monitor.py",
+   "jarvis/console/jarvis_console/voicebench.py"
+  ],
+  "features_used": [
+   "RAM, CPU, disks, processes, ports for state, hwdetect, memory guard"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "Already locked.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:61"
+  ]
+ },
+ {
+  "name": "pywin32",
+  "category": "system",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "311",
+  "pin_location": [
+   "uv.lock:5052",
+   "pyproject.toml:36"
+  ],
+  "integration": "pip",
+  "machine": "laptop",
+  "jarvis_files": [
+   "plugin/plugins/desktop/monitor.py"
+  ],
+  "features_used": [
+   "EvtQuery on the Application event log for crash alerts"
+  ],
+  "unused_features": [],
+  "size_class": "medium",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O dep (win32 only).",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:173"
+  ]
+ },
+ {
+  "name": "httpx",
+  "category": "python",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "0.28.1",
+  "pin_location": [
+   "uv.lock:1117"
+  ],
+  "integration": "pip",
+  "machine": "any",
+  "jarvis_files": [
+   "plugin/plugins/jarvis_bridge/client.py",
+   "plugin/plugins/main_agent/__init__.py"
+  ],
+  "features_used": [
+   "HTTP client to the console and plugins"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O dep.",
+  "evidence": [
+   "pyproject.toml:73"
+  ]
+ },
+ {
+  "name": "PyYAML",
+  "category": "python",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "6.0.3",
+  "pin_location": [
+   "uv.lock:5086"
+  ],
+  "integration": "pip",
+  "machine": "laptop (skillgate-venv)",
+  "jarvis_files": [
+   "jarvis/skills/skillgate.py",
+   "jarvis/skills/vendor/openjarvis"
+  ],
+  "features_used": [
+   "SKILL.md frontmatter parsing"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O dep.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:97"
+  ]
+ },
+ {
+  "name": "numpy + scipy",
+  "category": "python",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "numpy 1.26.4, scipy 1.17.1",
+  "pin_location": [
+   "uv.lock:1853",
+   "uv.lock:5387"
+  ],
+  "integration": "pip",
+  "machine": "any",
+  "jarvis_files": [
+   "jarvis/console/jarvis_console/voice.py",
+   "jarvis/wake/eval_wake.py",
+   "jarvis/bench/wakeword/score.py"
+  ],
+  "features_used": [
+   "audio arrays, resampling, scoring"
+  ],
+  "unused_features": [],
+  "size_class": "medium",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O deps.",
+  "evidence": [
+   "pyproject.toml:20"
+  ]
+ },
+ {
+  "name": "OpenJarvis (vendored skill parser files)",
+  "category": "skills",
+  "upstream_url": "https://github.com/open-jarvis/OpenJarvis",
+  "licence": "Apache-2.0",
+  "pinned_version": "commit ecbde4b32091e2a8b02e8acfa41cb5f95e4da560",
+  "pin_location": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:101"
+  ],
+  "integration": "vendored source",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/skills/vendor/openjarvis",
+   "jarvis/skills/skillgate.py",
+   "jarvis/kernel/jarvis_kernel/sizing.py"
+  ],
+  "features_used": [
+   "SKILL.md parser, types, tool translator; context-length error markers"
+  ],
+  "unused_features": [],
+  "size_class": "small (3 files)",
+  "packaging_recommendation": "vendored copy",
+  "packaging_reason": "Three small files with NOTICE.md; the full runtime is unwanted.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:106",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:111",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:117"
+  ]
+ },
+ {
+  "name": "Hermes Agent (Nous Research)",
+  "category": "agents",
+  "upstream_url": "https://github.com/NousResearch/hermes-agent",
+  "licence": "MIT",
+  "pinned_version": "v0.21.6, commit 818c13be",
+  "pin_location": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:71",
+   "jarvis/skills/active.json:5"
+  ],
+  "integration": "git dependency (installed on the VM; not in this repo)",
+  "machine": "Oracle VM (hermes-agent-vm); WSL lab",
+  "jarvis_files": [
+   "jarvis/hermes/plugins/jarvis_memory",
+   "jarvis/deploy/jarvis-hermes-gateway.service",
+   "jarvis/deploy/jarvis-hermes-serve.service",
+   "jarvis/skills/skillgate.py"
+  ],
+  "features_used": [
+   "agent runtime with shell/file/code/browser toolsets off",
+   "memory provider plugin",
+   "skills"
+  ],
+  "unused_features": [],
+  "size_class": "large",
+  "packaging_recommendation": "stay external, pinned tag",
+  "packaging_reason": "Fast-moving 0.x project; used as published (01_RESEARCH_AUDIT:84). hermes-agent-vm-2 must never be touched.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:11",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:84"
+  ]
+ },
+ {
+  "name": "OmniRoute (model gateway, trial)",
+  "category": "infra",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "3.8.51",
+  "pin_location": [
+   "jarvis/deploy/jarvis-omniroute.service:2"
+  ],
+  "integration": "npm",
+  "machine": "Oracle VM",
+  "jarvis_files": [
+   "jarvis/deploy/jarvis-omniroute.service"
+  ],
+  "features_used": [
+   "installed but routes nothing (trial)"
+  ],
+  "unused_features": [],
+  "size_class": "unknown",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Trial status; holds provider keys.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:12"
+  ]
+ },
+ {
+  "name": "Stripe Smokescreen (egress proxy)",
+  "category": "infra",
+  "upstream_url": "https://github.com/stripe/smokescreen",
+  "licence": "MIT",
+  "pinned_version": "v0.1.0 (release checksum verified; value not in repo)",
+  "pin_location": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:79"
+  ],
+  "integration": "downloaded binary",
+  "machine": "Oracle VM (laptop browser reaches it over Tailscale)",
+  "jarvis_files": [
+   "jarvis/config/egress.json",
+   "jarvis/deploy/jarvis-smokescreen.service",
+   "VM path tools/smokescreen/bin/smokescreen_v0.1.0_linux_arm64 (jarvis-smokescreen.service:8)"
+  ],
+  "features_used": [
+   "deny private ranges for browser traffic"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "No Windows build (compile fails on SIGUSR2).",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:59",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "Monit",
+  "category": "infra",
+  "upstream_url": "https://mmonit.com/monit/",
+  "licence": "AGPL-3+ with OpenSSL exception",
+  "pinned_version": "5.33.0 (Ubuntu package)",
+  "pin_location": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:82"
+  ],
+  "integration": "os-provided (Ubuntu apt package)",
+  "machine": "Oracle VM",
+  "jarvis_files": [
+   "jarvis/deploy/monit-jarvis.conf",
+   "jarvis/deploy/monit-override.conf",
+   "jarvis/scripts/alert.py"
+  ],
+  "features_used": [
+   "restart dead services, disk/memory alerts"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Distro package, unmodified daemon.",
+  "evidence": [
+   "jarvis/deploy/monit-jarvis.conf:36"
+  ]
+ },
+ {
+  "name": "Caddy",
+  "category": "infra",
+  "upstream_url": "https://caddyserver.com",
+  "licence": "Apache-2.0",
+  "pinned_version": "2.11.7 (release digest checked; value not in repo)",
+  "pin_location": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:87"
+  ],
+  "integration": "downloaded binary",
+  "machine": "WSL lab on the laptop",
+  "jarvis_files": [
+   "jarvis/hub/Caddyfile"
+  ],
+  "features_used": [
+   "*.localhost routing for the hub, auth header injection"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Single binary.",
+  "evidence": [
+   "jarvis/hub/Caddyfile:1-8"
+  ]
+ },
+ {
+  "name": "noVNC + VNC desktop (Agent PC)",
+  "category": "infra",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "unknown",
+  "pin_location": [],
+  "integration": "os-provided (WSL lab packages)",
+  "machine": "WSL lab",
+  "jarvis_files": [
+   "jarvis/hub/Caddyfile",
+   "jarvis/lab/lab_control.py"
+  ],
+  "features_used": [
+   "watch and take control of the agent desktop, View Only switch"
+  ],
+  "unused_features": [],
+  "size_class": "unknown",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Lab-only.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:91",
+   "jarvis/hub/Caddyfile:19-23"
+  ]
+ },
+ {
+  "name": "Tailscale",
+  "category": "infra",
+  "upstream_url": "https://tailscale.com",
+  "licence": "unknown",
+  "pinned_version": "unknown",
+  "pin_location": [],
+  "integration": "external service",
+  "machine": "laptop, Oracle VM",
+  "jarvis_files": [
+   "jarvis/hub/Caddyfile",
+   "jarvis/deploy/monit-jarvis.conf"
+  ],
+  "features_used": [
+   "private network between laptop and VM (100.x addresses)"
+  ],
+  "unused_features": [],
+  "size_class": "n/a",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Network service. Never touch it on the Linux test server.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:20"
+  ]
+ },
+ {
+  "name": "OCI CLI",
+  "category": "infra",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "unknown",
+  "pin_location": [],
+  "integration": "pip (own venv D:\\jarvis\\tools\\oci-venv)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/scripts/oci_cost.py",
+   "jarvis/skills/oracle-delete",
+   "jarvis/skills/cost-check"
+  ],
+  "features_used": [
+   "cost checks, listing resources"
+  ],
+  "unused_features": [],
+  "size_class": "medium (0.8 GB venv)",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Separate venv; credentials stay in secrets folder.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:23"
+  ]
+ },
+ {
+  "name": "Lab agents OpenCode and goose",
+  "category": "agents",
+  "upstream_url": "unknown",
+  "licence": "OpenCode MIT; goose Apache-2.0",
+  "pinned_version": "OpenCode 1.18.35; goose 1.54.0",
+  "pin_location": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:85"
+  ],
+  "integration": "downloaded binary",
+  "machine": "WSL lab",
+  "jarvis_files": [
+   "jarvis/lab/lab_runner.py",
+   "jarvis/lab/demo.py"
+  ],
+  "features_used": [
+   "lab agents run as published"
+  ],
+  "unused_features": [],
+  "size_class": "unknown",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Lab-only tools.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:85"
+  ]
+ },
+ {
+  "name": "MCP servers via JARVIS connectors (mcp-server-time, github-mcp-server, notion-mcp-server, google_workspace_mcp)",
+  "category": "mcp",
+  "upstream_url": "https://github.com/modelcontextprotocol/servers",
+  "licence": "MIT",
+  "pinned_version": "mcp-server-time 2026.10.10 (tested); github-mcp-server v2.0.2 (template); google_workspace_mcp and notion-mcp-server unpinned templates",
+  "pin_location": [
+   "jarvis/docs/research/09-connectors.md:29-30",
+   "jarvis/console/jarvis_console/connector_templates.json:9"
+  ],
+  "integration": "pip / downloaded binary (own folders)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/node/jarvis_node/mcpclient.py",
+   "jarvis/kernel/jarvis_kernel/connectors.py",
+   "jarvis/console/jarvis_console/connectorcfg.py"
+  ],
+  "features_used": [
+   "stdio and HTTP MCP servers gated by kernel allowlist"
+  ],
+  "unused_features": [
+   {
+    "feature": "MCP spec 2026-07-28: stateless, server/discover; pin protocol version",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:119-123"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Each server installed in its own folder (05_OPERATIONS:153).",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:153",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:143"
+  ]
+ },
+ {
+  "name": "MCP Python SDK (mcp)",
+  "category": "mcp",
+  "upstream_url": "unknown",
+  "licence": "MIT",
+  "pinned_version": "2.3.0 in docs (02_ARCHITECTURE.md:97); 2.1.1 in uv.lock (mismatch)",
+  "pin_location": [
+   "jarvis/docs/02_ARCHITECTURE.md:97",
+   "uv.lock:1563"
+  ],
+  "integration": "pip",
+  "machine": "Oracle VM (lab tool file)",
+  "jarvis_files": [
+   "jarvis/lab/jarvis_mcp.py"
+  ],
+  "features_used": [
+   "connector_list/call/result tools for agents"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "Kernel itself stays stdlib-only (01_RESEARCH_AUDIT:143).",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:154"
+  ]
+ },
+ {
+  "name": "Model providers: Dahl (MiniMax-M2.7), Groq, OpenRouter free, Cloudflare Workers AI",
+  "category": "providers",
+  "upstream_url": "https://inference.dahl.global/v1",
+  "licence": "provider terms",
+  "pinned_version": "model ids in config",
+  "pin_location": [
+   "jarvis/config/providers.json",
+   "jarvis/privacy/providers.json"
+  ],
+  "integration": "external service",
+  "machine": "cloud",
+  "jarvis_files": [
+   "jarvis/privacy/gateway.py",
+   "jarvis/kernel/jarvis_kernel/gateway.py",
+   "jarvis/config/models.json"
+  ],
+  "features_used": [
+   "public-lane writer/planner (Dahl); private-lane fallbacks (Groq, OpenRouter)"
+  ],
+  "unused_features": [],
+  "size_class": "n/a",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Remote APIs; never send private data to Dahl.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:196",
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:98",
+   "jarvis/config/models.json:12-14"
+  ]
+ },
+ {
+  "name": "Microsoft Presidio + spaCy en_core_web_sm + gliner + PyTorch CPU",
+  "category": "privacy",
+  "upstream_url": "unknown",
+  "licence": "Presidio MIT",
+  "pinned_version": "presidio 2.2.364, spaCy 3.8.16, en_core_web_sm 3.8.0, torch 2.8.0, gliner 0.2.29",
+  "pin_location": [
+   "jarvis/docs/05_OPERATIONS.md:264",
+   "jarvis/docs/05_OPERATIONS.md:294"
+  ],
+  "integration": "pip (privacy-venv, outside uv.lock)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/privacy/redactor.py",
+   "jarvis/privacy/gateway.py"
+  ],
+  "features_used": [
+   "PII detection and validation, placeholder redaction"
+  ],
+  "unused_features": [],
+  "size_class": "large (3.45 GB venv)",
+  "packaging_recommendation": "lockfile-pinned (own lock for privacy-venv)",
+  "packaging_reason": "Separate venv with pins only in docs.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:156"
+  ]
+ },
+ {
+  "name": "sherpa-onnx (ASR runtime + KWS wake word)",
+  "category": "voice",
+  "upstream_url": "https://github.com/k2-fsa/sherpa-onnx",
+  "licence": "Apache-2.0 (TTS path embeds espeak-ng GPL-3.0)",
+  "pinned_version": "stock 1.13.8 (HEAD 9db1af18) in jarvis-venv; KWS runtime 1.13.8+neko.kws2 built from commit 11afbd00 with two patches; wheel hash only on D:",
+  "pin_location": [
+   "jarvis/docs/research/07-integration-decisions.md:145",
+   "scripts/wake_word/build_wake_word_runtime.ps1:7",
+   "scripts/wake_word/build_wake_word_runtime.ps1:18",
+   "pyproject.toml:119"
+  ],
+  "integration": "pip (local wheel)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/console/jarvis_console/voice.py",
+   "jarvis/wake/wake_listener.py",
+   "jarvis/bench/wakeword/make_audio.py"
+  ],
+  "features_used": [
+   "Parakeet and IndicConformer decoding",
+   "'Hey Neko' keyword spotting"
+  ],
+  "unused_features": [
+   {
+    "feature": "Open-vocabulary keywords with no training",
+    "evidence": "jarvis/docs/neko/evidence/07-small-models-2026-10-17.md:181"
+   },
+   {
+    "feature": "Streaming recognizers; qwen3/omnilingual/moonshine APIs",
+    "evidence": "jarvis/docs/research/02-voice-and-local-models.md:47"
+   },
+   {
+    "feature": "Speaker-embedding owner check after a wake hit",
+    "evidence": "jarvis/docs/neko/NEKO_95_RESEARCH.md:24"
+   },
+   {
+    "feature": "Hotword biasing for transducers (unverified)",
+    "evidence": "jarvis/docs/neko/evidence/02-voice.md:134"
+   }
+  ],
+  "size_class": "medium",
+  "packaging_recommendation": "lockfile-pinned download (wheel + sha256)",
+  "packaging_reason": "Patched runtime wheel cannot go in uv.lock (pyproject.toml:114-120).",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:397",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:164"
+  ]
+ },
+ {
+  "name": "Parakeet-TDT 0.6B v3 int8 (English STT)",
+  "category": "voice",
+  "upstream_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models (sherpa-onnx export of nvidia/parakeet-tdt-0.6b-v3)",
+  "licence": "CC-BY-4.0",
+  "pinned_version": "HF sha 541d1f99c6b0 (docs only)",
+  "pin_location": [
+   "jarvis/docs/research/02-voice-and-local-models.md:52"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/console/jarvis_console/voice.py",
+   "jarvis/scripts/local_speech_server.py"
+  ],
+  "features_used": [
+   "English speech recognition"
+  ],
+  "unused_features": [],
+  "size_class": "medium",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "No pin in repo found.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:29",
+   "jarvis/docs/05_OPERATIONS.md:244",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "AI4Bharat IndicConformer int8 (Hindi, Telugu STT)",
+  "category": "voice",
+  "upstream_url": "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx",
+  "licence": "MIT (weights, gated); export tagged Apache-2.0",
+  "pinned_version": "export repo sha 9721eb71eea1 (docs only)",
+  "pin_location": [
+   "jarvis/docs/research/02-voice-and-local-models.md:48"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/console/jarvis_console/voice.py",
+   "jarvis/scripts/asr_score.py"
+  ],
+  "features_used": [
+   "Hindi and Telugu recognition (86% word recall on a voice note)"
+  ],
+  "unused_features": [],
+  "size_class": "medium",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "No pin in repo found.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:30",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "Kokoro 82M (English TTS)",
+  "category": "voice",
+  "upstream_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models (sherpa-onnx export of hexgrad/Kokoro-82M)",
+  "licence": "Apache-2.0",
+  "pinned_version": "HF sha f3ff3571791e (docs only)",
+  "pin_location": [
+   "jarvis/docs/research/02-voice-and-local-models.md:64"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/console/jarvis_console/voice.py",
+   "jarvis/scripts/local_speech_server.py"
+  ],
+  "features_used": [
+   "English speech output via sherpa OfflineTts"
+  ],
+  "unused_features": [
+   {
+    "feature": "Kokoro Hindi voices (grade C)",
+    "evidence": "jarvis/docs/research/02-voice-and-local-models.md:64"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "No pin in repo found.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:31",
+   "jarvis/docs/05_OPERATIONS.md:202",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "Piper (engine + Hindi/Telugu voices)",
+  "category": "voice",
+  "upstream_url": "https://github.com/OHF-Voice/piper1-gpl (engine); https://huggingface.co/rhasspy/piper-voices (voices)",
+  "licence": "runtime GPL-3.0-or-later (piper1-gpl, own process; NEKO_MODEL_MATRIX.md:32 says MIT, conflict); te_IN-venkatesh CC-BY-4.0; hi_IN-rohan: its MODEL_CARD cites the IITM IndicTTS dataset licence (license.pdf), not CC-BY-4.0",
+  "pinned_version": "piper-tts 1.8.0; piper-voices sha c10ece1aade4 (docs only)",
+  "pin_location": [
+   "jarvis/docs/research/07-integration-decisions.md:145",
+   "jarvis/docs/research/02-voice-and-local-models.md:73"
+  ],
+  "integration": "pip (piper-venv) + downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/console/jarvis_console/piper_worker.py"
+  ],
+  "features_used": [
+   "Hindi and Telugu speech output"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "No pin in repo found.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:32",
+   "jarvis/docs/05_OPERATIONS.md:124",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "Silero VAD",
+  "category": "voice",
+  "upstream_url": "https://github.com/snakers4/silero-vad (silero_vad.onnx at commit 1e261b03)",
+  "licence": "MIT",
+  "pinned_version": "repo 1e261b03 v6.2.3 (docs only)",
+  "pin_location": [
+   "jarvis/docs/research/07-integration-decisions.md:40"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/wake/wake_listener.py",
+   "jarvis/console/jarvis_console/voice.py"
+  ],
+  "features_used": [
+   "voice activity detection for the wake listener"
+  ],
+  "unused_features": [],
+  "size_class": "tiny (~2 MB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "No pin in repo found.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:20",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:164",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "faster-whisper (+ CTranslate2)",
+  "category": "voice",
+  "upstream_url": "unknown",
+  "licence": "MIT",
+  "pinned_version": "faster-whisper 1.2.1, ctranslate2 4.8.2 (extra local-asr)",
+  "pin_location": [
+   "uv.lock:779",
+   "uv.lock:653",
+   "pyproject.toml:127"
+  ],
+  "integration": "pip",
+  "machine": "laptop",
+  "jarvis_files": [
+   "N.E.K.O main_logic/asr_client/workers/faster_whisper.py"
+  ],
+  "features_used": [
+   "N.E.K.O local ASR option (base model); replaced by JARVIS int8 recognizers"
+  ],
+  "unused_features": [],
+  "size_class": "medium",
+  "packaging_recommendation": "lockfile-pinned (uv.lock extra)",
+  "packaging_reason": "N.E.K.O extra.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:239",
+   "jarvis/docs/05_OPERATIONS.md:244"
+  ]
+ },
+ {
+  "name": "openWakeWord",
+  "category": "voice",
+  "upstream_url": "https://github.com/dscripka/openWakeWord",
+  "licence": "code Apache-2.0; pre-trained models CC BY-NC-SA 4.0",
+  "pinned_version": "openwakeword==0.6.0",
+  "pin_location": [
+   "jarvis/bench/wakeword/make_audio.py:3"
+  ],
+  "integration": "pip (benchmark only)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/bench/wakeword/score.py"
+  ],
+  "features_used": [
+   "'hey_jarvis' benchmark on synthetic audio only"
+  ],
+  "unused_features": [],
+  "size_class": "tiny",
+  "packaging_recommendation": "stay external (bench only)",
+  "packaging_reason": "Not in the product; licence of models is non-commercial.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/07-small-models-2026-10-17.md:182",
+   "jarvis/docs/neko/evidence/00-baseline.md:34"
+  ]
+ },
+ {
+  "name": "kaldi-native-fbank",
+  "category": "voice",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "1.22.3 (test-only oracle)",
+  "pin_location": [
+   "jarvis/scripts/neko-test/Containerfile:29"
+  ],
+  "integration": "pip",
+  "machine": "Linux test server; laptop",
+  "jarvis_files": [
+   "N.E.K.O tests"
+  ],
+  "features_used": [
+   "upstream test oracle"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (dev group)",
+  "packaging_reason": "Test only.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:177"
+  ]
+ },
+ {
+  "name": "LiveKit APM / Nemotron streaming ASR / SraVaani / Omnilingual / Indic Parler-TTS / Supertonic",
+  "category": "voice",
+  "upstream_url": "unknown",
+  "licence": "varies (SraVaani MIT)",
+  "pinned_version": "none",
+  "pin_location": [],
+  "integration": "planned-only",
+  "machine": "laptop",
+  "jarvis_files": [],
+  "features_used": [],
+  "unused_features": [
+   {
+    "feature": "Echo cancellation / barge-in (LiveKit APM)",
+    "evidence": "jarvis/docs/01_RESEARCH_AUDIT.md:178"
+   },
+   {
+    "feature": "STT/TTS challengers must win benchmarks B5/B6",
+    "evidence": "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:34"
+   }
+  ],
+  "size_class": "unknown",
+  "packaging_recommendation": "decide after benchmark",
+  "packaging_reason": "Waits for the owner's real recordings (03_DECISIONS.md:419).",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:178"
+  ]
+ },
+ {
+  "name": "Playwright for Python",
+  "category": "browser",
+  "upstream_url": "https://playwright.dev",
+  "licence": "Apache-2.0",
+  "pinned_version": "1.63.0",
+  "pin_location": [
+   "uv.lock:2047",
+   "jarvis/scripts/neko-test/Containerfile:9"
+  ],
+  "integration": "pip",
+  "machine": "laptop; Linux test server",
+  "jarvis_files": [
+   "jarvis/node/jarvis_node/browser.py",
+   "plugin/plugins/deliverables/report.py",
+   "jarvis/scripts/live_check.py",
+   "jarvis/kernel/tests/test_browser.py"
+  ],
+  "features_used": [
+   "DOM rung of the control ladder on installed Chrome",
+   "Edge PDF printing"
+  ],
+  "unused_features": [
+   {
+    "feature": "v1.64 page.webmcp, Locator.within(), page.getByRef()",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:55"
+   }
+  ],
+  "size_class": "medium (+browser)",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "Already locked.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:51"
+  ]
+ },
+ {
+  "name": "Playwright MCP + Microsoft Playwright Chrome extension",
+  "category": "browser",
+  "upstream_url": "https://github.com/microsoft/playwright-mcp",
+  "licence": "Apache-2.0",
+  "pinned_version": "0.0.83, enforced at every start (browserext.MCP_VERSION against node_modules/@playwright/mcp/package.json); installed at D:\\jarvis\\tools\\playwright-mcp (no npm lock in repo); extension 0.4.0 (docs), Web Store auto-updates",
+  "pin_location": [
+   "jarvis/docs/03_DECISIONS.md:269",
+   "jarvis/node/jarvis_node/browserext.py:37",
+   "jarvis/node/jarvis_node/browserext.py:39",
+   "jarvis/node/jarvis_node/browserext.py:42"
+  ],
+  "integration": "npm (npx) + browser extension",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/node/jarvis_node/browserext.py",
+   "jarvis/scripts/install_playwright_extension.ps1",
+   "jarvis/scripts/save_playwright_token.ps1",
+   "jarvis/scripts/allow_playwright_connection.ps1"
+  ],
+  "features_used": [
+   "drive the owner's logged-in Chrome profiles through an allowlisted tool set",
+   "page WebMCP tools (webmcp_*) refused by kernel policy and never enableable as connector tools (jarvis/kernel/jarvis_kernel/policy.py PAGE_TOOL_PREFIX; tests/test_webmcp.py)"
+  ],
+  "unused_features": [
+   {
+    "feature": "--secrets redaction, --proxy-server with Smokescreen",
+    "evidence": "jarvis/docs/research/03-computer-control.md:154"
+   },
+   {
+    "feature": "Per-profile tokens for unattended connection",
+    "evidence": "jarvis/docs/03_DECISIONS.md:419"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (npm lock)",
+  "packaging_reason": "Pin the npm version; unattended use needs per-profile token.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:165"
+  ]
+ },
+ {
+  "name": "browser-use (N.E.K.O agent dependency)",
+  "category": "browser",
+  "upstream_url": "unknown",
+  "licence": "MIT",
+  "pinned_version": "0.11.13",
+  "pin_location": [
+   "uv.lock:323",
+   "pyproject.toml:65"
+  ],
+  "integration": "pip",
+  "machine": "laptop",
+  "jarvis_files": [
+   "N.E.K.O agent server; main_agent 'browser' sub-agent"
+  ],
+  "features_used": [
+   "N.E.K.O's browser helper"
+  ],
+  "unused_features": [],
+  "size_class": "medium",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O dep; JARVIS does not use it for the owner's profiles.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/00-baseline.md:48",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:165"
+  ]
+ },
+ {
+  "name": "Windows UI Automation + Windows.Media.Ocr (via PowerShell/WinRT)",
+  "category": "computer",
+  "upstream_url": "unknown",
+  "licence": "proprietary (OS)",
+  "pinned_version": "OS built-in",
+  "pin_location": [],
+  "integration": "os-provided (not in the given list)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/node/jarvis_node/winbackend.py",
+   "jarvis/node/jarvis_node/vision.py"
+  ],
+  "features_used": [
+   "UIA-first control, one-window OCR at 2x"
+  ],
+  "unused_features": [],
+  "size_class": "n/a",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "OS components.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:175",
+   "jarvis/docs/03_DECISIONS.md:405"
+  ]
+ },
+ {
+  "name": "pywinauto",
+  "category": "computer",
+  "upstream_url": "unknown",
+  "licence": "BSD-3",
+  "pinned_version": "0.6.9",
+  "pin_location": [
+   "uv.lock:5071",
+   "pyproject.toml:37"
+  ],
+  "integration": "pip",
+  "machine": "laptop",
+  "jarvis_files": [
+   "(neko-venv only; not in the node env)"
+  ],
+  "features_used": [
+   "not used by JARVIS code today"
+  ],
+  "unused_features": [
+   {
+    "feature": "Tested Python UIA wrapper to replace hand-written paths",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:74"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock)",
+  "packaging_reason": "N.E.K.O dep.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:166"
+  ]
+ },
+ {
+  "name": "Windows-MCP (CursorTouch)",
+  "category": "computer",
+  "upstream_url": "https://github.com/CursorTouch/Windows-MCP",
+  "licence": "MIT",
+  "pinned_version": "0.8.7 (isolated venv)",
+  "pin_location": [
+   "jarvis/evals/pc_control/compare_windows_mcp.py:1"
+  ],
+  "integration": "pip (isolated venv, benchmark only)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/evals/pc_control/compare_windows_mcp.py"
+  ],
+  "features_used": [
+   "benchmark vs Neko's UIA layer; read/click/type only"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "stay external (benchmark only)",
+  "packaging_reason": "Its shell tool must never be exposed.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:13",
+   "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:73"
+  ]
+ },
+ {
+  "name": "winget + Windows media session API",
+  "category": "computer",
+  "upstream_url": "unknown",
+  "licence": "proprietary (OS)",
+  "pinned_version": "OS built-in",
+  "pin_location": [],
+  "integration": "os-provided (not in the given list)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/node/jarvis_node/repair.py",
+   "jarvis/node/jarvis_node/media.py"
+  ],
+  "features_used": [
+   "fixed repair and media actions"
+  ],
+  "unused_features": [],
+  "size_class": "n/a",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "OS components.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:166"
+  ]
+ },
+ {
+  "name": "RapidOCR (rapidocr-pillow local fork, N.E.K.O)",
+  "category": "computer",
+  "upstream_url": "unknown",
+  "licence": "Apache-2.0",
+  "pinned_version": "1.4.4.post1 (local path dep)",
+  "pin_location": [
+   "pyproject.toml:200",
+   "uv.lock:5163"
+  ],
+  "integration": "vendored source (deps/rapidocr_pillow)",
+  "machine": "any (galgame group)",
+  "jarvis_files": [
+   "plugin/plugins/_shared/rapidocr (N.E.K.O)"
+  ],
+  "features_used": [
+   "not used by JARVIS (Windows OCR chosen)"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "stay as N.E.K.O vendored",
+  "packaging_reason": "N.E.K.O-owned; JARVIS rejected it as weaker on small UI text (01_RESEARCH_AUDIT:175).",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:175"
+  ]
+ },
+ {
+  "name": "JARVIS UI stack (React, Vite, TypeScript, Tailwind, Vitest, @playwright/test, axe-core)",
+  "category": "ui",
+  "upstream_url": "https://github.com/vitejs/vite",
+  "licence": "MIT (typical; not stated in repo)",
+  "pinned_version": "react 19.3.0, vite 8.3.4, typescript 5.9.3, tailwindcss 4.3.3, vitest 5.0.3, @playwright/test 1.64.0, @axe-core/playwright 4.13.0",
+  "pin_location": [
+   "jarvis/ui/package.json:15-28",
+   "jarvis/ui/package-lock.json:100",
+   "jarvis/ui/package-lock.json:1486"
+  ],
+  "integration": "npm",
+  "machine": "laptop (build); Linux test image",
+  "jarvis_files": [
+   "jarvis/ui"
+  ],
+  "features_used": [
+   "console UI, e2e and live specs, accessibility checks"
+  ],
+  "unused_features": [],
+  "size_class": "medium (node_modules)",
+  "packaging_recommendation": "lockfile-pinned (package-lock.json)",
+  "packaging_reason": "Already locked.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:136"
+  ]
+ },
+ {
+  "name": "Geist font",
+  "category": "ui",
+  "upstream_url": "https://github.com/vercel/geist-font",
+  "licence": "SIL OFL",
+  "pinned_version": "unknown version",
+  "pin_location": [],
+  "integration": "vendored source (font files)",
+  "machine": "any",
+  "jarvis_files": [
+   "jarvis/ui/public/fonts",
+   "jarvis/ui/src/index.css"
+  ],
+  "features_used": [
+   "UI typeface"
+  ],
+  "unused_features": [],
+  "size_class": "tiny",
+  "packaging_recommendation": "vendored copy",
+  "packaging_reason": "Small, OFL text kept.",
+  "evidence": [
+   "jarvis/ui/public/fonts/OFL.txt:1",
+   "jarvis/ui/src/index.css:3-4"
+  ]
+ },
+ {
+  "name": "Node.js",
+  "category": "dev",
+  "upstream_url": "https://nodejs.org",
+  "licence": "MIT",
+  "pinned_version": "24.22.0 in test image (sha256 cc2f601c...); laptop 24.19",
+  "pin_location": [
+   "jarvis/scripts/neko-test/Containerfile:14-15"
+  ],
+  "integration": "downloaded binary",
+  "machine": "laptop; Linux test image",
+  "jarvis_files": [
+   "jarvis/ui",
+   "N.E.K.O frontend tests"
+  ],
+  "features_used": [
+   "UI build and tests"
+  ],
+  "unused_features": [],
+  "size_class": "medium",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Checksum pinned in the image.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/00-baseline.md:16",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "uv",
+  "category": "dev",
+  "upstream_url": "https://github.com/astral-sh/uv",
+  "licence": "Apache-2.0 OR MIT",
+  "pinned_version": "unpinned in test image",
+  "pin_location": [
+   "jarvis/scripts/neko-test/Containerfile:6"
+  ],
+  "integration": "downloaded binary (version not chosen yet)",
+  "machine": "laptop; Linux test image",
+  "jarvis_files": [
+   "jarvis/scripts/run-upstream-tests.ps1",
+   "jarvis/scripts/neko-test/Containerfile"
+  ],
+  "features_used": [
+   "frozen sync of uv.lock"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Pin uv version.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:162",
+   "jarvis/tools/jarvis.lock.json (corrected 2026-10-17 from upstream metadata)"
+  ]
+ },
+ {
+  "name": "podman neko-test image (python:3.11-slim base)",
+  "category": "dev",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "base tag python:3.11-slim (no digest)",
+  "pin_location": [
+   "jarvis/scripts/neko-test/Containerfile:4"
+  ],
+  "integration": "downloaded binary (container image)",
+  "machine": "Linux test server",
+  "jarvis_files": [
+   "jarvis/scripts/neko-test/Containerfile",
+   "jarvis/scripts/neko-test/sync-and-build.sh"
+  ],
+  "features_used": [
+   "rootless headless test environment"
+  ],
+  "unused_features": [],
+  "size_class": "large",
+  "packaging_recommendation": "stay external, pin base by digest",
+  "packaging_reason": "Test-only.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:416"
+  ]
+ },
+ {
+  "name": "pytest + plugins, ruff",
+  "category": "dev",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "pytest 9.1.1; others per dev group",
+  "pin_location": [
+   "uv.lock:4840"
+  ],
+  "integration": "pip",
+  "machine": "Linux test server; laptop",
+  "jarvis_files": [
+   "plugin/plugins/*/tests",
+   "jarvis/local_models/test_server_flags.py"
+  ],
+  "features_used": [
+   "test runner, lint"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (uv.lock dev group)",
+  "packaging_reason": "Already locked.",
+  "evidence": [
+   "jarvis/scripts/neko-test/Containerfile:28"
+  ]
+ },
+ {
+  "name": "Evaluation suites (AgentDojo, Inspect AI, InjecAgent, BFCL subset)",
+  "category": "eval",
+  "upstream_url": "https://github.com/ethz-spylab/agentdojo",
+  "licence": "MIT (AgentDojo, Inspect AI)",
+  "pinned_version": "none",
+  "pin_location": [],
+  "integration": "planned-only",
+  "machine": "Linux test server",
+  "jarvis_files": [],
+  "features_used": [],
+  "unused_features": [
+   {
+    "feature": "AgentDojo through kernel policy as security regression suite",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:202"
+   },
+   {
+    "feature": "Inspect AI harness for BFCL subset/GAIA L1",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:208"
+   }
+  ],
+  "size_class": "unknown",
+  "packaging_recommendation": "lockfile-pinned (dev group) when adopted",
+  "packaging_reason": "Not adopted yet.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md:194"
+  ]
+ },
+ {
+  "name": "sqlite-vec (planned vector index)",
+  "category": "memory",
+  "upstream_url": "https://github.com/asg017/sqlite-vec",
+  "licence": "MIT / Apache-2.0",
+  "pinned_version": "none (0.1.9 stable noted)",
+  "pin_location": [],
+  "integration": "planned-only",
+  "machine": "any",
+  "jarvis_files": [],
+  "features_used": [],
+  "unused_features": [
+   {
+    "feature": "Hybrid BM25 + vector index in the kernel memory store",
+    "evidence": "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:205"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (pip) when adopted",
+  "packaging_reason": "Single maintainer, 0.1.x.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md:152"
+  ]
+ },
+ {
+  "name": "Kaggle / Colab model servers (parked)",
+  "category": "infra",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "unknown",
+  "pin_location": [],
+  "integration": "external service (parked)",
+  "machine": "cloud",
+  "jarvis_files": [
+   "jarvis/kaggle/model-server/model_server.py"
+  ],
+  "features_used": [
+   "none today (parked)"
+  ],
+  "unused_features": [],
+  "size_class": "unknown",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Parked because of platform rules on tunnels.",
+  "evidence": [
+   "jarvis/docs/05_OPERATIONS.md:64"
+  ]
+ },
+ {
+  "name": "Telegram Bot API (switched off)",
+  "category": "infra",
+  "upstream_url": "unknown",
+  "licence": "unknown",
+  "pinned_version": "n/a",
+  "pin_location": [],
+  "integration": "external service (off)",
+  "machine": "Oracle VM",
+  "jarvis_files": [
+   "jarvis/kernel/jarvis_kernel/telegram.py",
+   "jarvis/deploy/jarvis-telegram.service"
+  ],
+  "features_used": [
+   "off by owner decision D13"
+  ],
+  "unused_features": [],
+  "size_class": "n/a",
+  "packaging_recommendation": "stay external, keep off",
+  "packaging_reason": "Owner rule: Telegram stays off.",
+  "evidence": [
+   "jarvis/docs/03_DECISIONS.md:150"
+  ]
+ },
+ {
+  "name": "sherpa-onnx KWS model zipformer-zh-en-3M-2025-12-20 (N.E.K.O)",
+  "category": "voice",
+  "upstream_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/",
+  "licence": "unknown (weights)",
+  "pinned_version": "sha256 68447f4f...616a6",
+  "pin_location": [
+   "main_logic/voice_identity_service/wake_word_bundle.py:27"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/wake/wake_listener.py"
+  ],
+  "features_used": [
+   "'Hey Neko' keyword model"
+  ],
+  "unused_features": [
+   {
+    "feature": "evaluate_wake_word.py false hits per hour; paced latency",
+    "evidence": "jarvis/docs/neko/evidence/02-voice.md:44"
+   }
+  ],
+  "size_class": "small (~33 MB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Already hash-pinned by N.E.K.O.",
+  "evidence": [
+   "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:19"
+  ]
+ },
+ {
+  "name": "CAM++ speaker verification model (N.E.K.O)",
+  "category": "voice",
+  "upstream_url": "unknown",
+  "licence": "Apache-2.0",
+  "pinned_version": "sha256 aa3cfc16...ceba2",
+  "pin_location": [
+   "main_logic/asr_client/speaker_shadow/asset_manifest.py:23"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [],
+  "features_used": [
+   "not used by the JARVIS wake listener"
+  ],
+  "unused_features": [
+   {
+    "feature": "Owner-only wake gate",
+    "evidence": "jarvis/docs/neko/NEKO_95_RESEARCH.md:24"
+   }
+  ],
+  "size_class": "small (28 MB)",
+  "packaging_recommendation": "stay as N.E.K.O-provisioned",
+  "packaging_reason": "N.E.K.O owns it.",
+  "evidence": [
+   "jarvis/docs/03_DECISIONS.md:292"
+  ]
+ },
+ {
+  "name": "Google Chrome (owner profiles)",
+  "category": "browser",
+  "upstream_url": "unknown",
+  "licence": "proprietary",
+  "pinned_version": "155.0.8059.40 recorded only",
+  "pin_location": [],
+  "integration": "os-provided (not in the given list)",
+  "machine": "laptop; Linux test image",
+  "jarvis_files": [
+   "jarvis/node/jarvis_node/browser.py",
+   "jarvis/node/jarvis_node/browserext.py"
+  ],
+  "features_used": [
+   "owner's real profiles via the Playwright extension; throwaway profiles in tests"
+  ],
+  "unused_features": [],
+  "size_class": "n/a",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Installed app.",
+  "evidence": [
+   "jarvis/docs/neko/evidence/04-computer-browser-mcp.md:82"
+  ]
+ },
+ {
+  "name": "uiautomation (yinkaisheng) / comtypes COM UIA",
+  "category": "computer",
+  "upstream_url": "unknown",
+  "licence": "uiautomation Apache-2.0; comtypes MIT-style",
+  "pinned_version": "none (comtypes 1.4.11 transitive in uv.lock)",
+  "pin_location": [
+   "uv.lock:532"
+  ],
+  "integration": "planned-only",
+  "machine": "laptop",
+  "jarvis_files": [],
+  "features_used": [],
+  "unused_features": [
+   {
+    "feature": "Persistent UIA worker to save 235-343 ms PowerShell start per call",
+    "evidence": "jarvis/docs/research/03-computer-control.md:418"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "lockfile-pinned (pip) when adopted",
+  "packaging_reason": "Not adopted.",
+  "evidence": [
+   "jarvis/docs/research/03-computer-control.md:173"
+  ]
+ },
+ {
+  "name": "WSL lab Agent PC tools (TigerVNC/Xvnc, xdotool, cua-driver, Firefox, Dashy)",
+  "category": "infra",
+  "upstream_url": "unknown",
+  "licence": "noVNC MPL-2.0; xdotool BSD-3; Dashy MIT; others unknown",
+  "pinned_version": "cua-driver 0.21.0, Firefox 157, Dashy 4.7.0 (docs only)",
+  "pin_location": [
+   "jarvis/docs/02_ARCHITECTURE.md:100",
+   "jarvis/docs/01_RESEARCH_AUDIT.md:87"
+  ],
+  "integration": "os-provided (Ubuntu packages in WSL)",
+  "machine": "WSL lab",
+  "jarvis_files": [
+   "jarvis/lab/jarvis_mcp.py",
+   "jarvis/lab/lab_control.py",
+   "jarvis/hub/Caddyfile"
+  ],
+  "features_used": [
+   "lab desktop control and status page"
+  ],
+  "unused_features": [
+   {
+    "feature": "cua-driver 0.34 upgrade; AT-SPI tree reads",
+    "evidence": "jarvis/docs/03_DECISIONS.md:146"
+   }
+  ],
+  "size_class": "unknown",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Lab-only.",
+  "evidence": [
+   "jarvis/docs/research/03-computer-control.md:201"
+  ]
+ }
+]

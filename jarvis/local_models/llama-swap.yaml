@@ -7,6 +7,8 @@ healthCheckTimeout: 180
 logLevel: info
 
 macros:
+  # llama.cpp b11714 is the next build (2026-10-17: same accuracy, JSON validity and speed as b11669 on the Linux test
+  # server; jarvis/tools/jarvis.lock.json). Switch these paths to b11714 only after it is fetched and smoke-tested here.
   # -fa off: flash attention on Vulkan gives garbage after the first token on this GPU (RDNA1), measured 2026-10-15
   # ("Paris" then "GGGG..."); with it off the output matches the CPU build. llama-bench speeds below were measured with it off.
   server: D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe --host 127.0.0.1 --port ${PORT} --jinja --no-webui -fa off

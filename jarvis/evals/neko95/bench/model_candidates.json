@@ -130,5 +130,51 @@
   "ctx": 2048,
   "args": [],
   "note": "routing-size candidate (1B)"
+ },
+ "qwen3-4b-2507-kvq8": {
+  "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+  "revision": "a06e946bb6b655725eafa393f4a9745d460374c9",
+  "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+  "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+  "bytes": 2497281120,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [
+   "-ctk",
+   "q8_0",
+   "-ctv",
+   "q8_0"
+  ],
+  "note": "variant of qwen3-4b-2507: K and V cache q8_0. A quantised V cache needs flash attention: llama-server turns it on by itself and refuses -fa off with -ctv q8_0 (b11669 and b11714, checked 2026-10-17)"
+ },
+ "qwen3-4b-2507-faoff": {
+  "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+  "revision": "a06e946bb6b655725eafa393f4a9745d460374c9",
+  "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+  "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+  "bytes": 2497281120,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [
+   "-fa",
+   "off"
+  ],
+  "note": "variant of qwen3-4b-2507: flash attention off, as the laptop runs it (llama-swap.yaml: RDNA1 Vulkan bug); baseline for -faoff-ctkq8"
+ },
+ "qwen3-4b-2507-faoff-ctkq8": {
+  "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+  "revision": "a06e946bb6b655725eafa393f4a9745d460374c9",
+  "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+  "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+  "bytes": 2497281120,
+  "license": "apache-2.0",
+  "ctx": 2048,
+  "args": [
+   "-fa",
+   "off",
+   "-ctk",
+   "q8_0"
+  ],
+  "note": "variant of qwen3-4b-2507: flash attention off (laptop) with only the K cache q8_0, which works without flash attention"
  }
 }

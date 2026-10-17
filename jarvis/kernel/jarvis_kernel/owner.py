@@ -73,6 +73,7 @@ class Owner:
         self.node = "laptop"     # the node PC jobs are queued for (set from the kernel's output node)
         self.lane_wait = None     # lane -> seconds until a model provider may be asked again (set by the gateway)
         self.routes = {}          # (method, name) -> fn(body, query) -> (code, reply); other modules register theirs here
+        self.idem = None          # idempotency keys (idempotency.py), created on the first request that carries one
         kernel.db.execute("CREATE TABLE IF NOT EXISTS owner_commands(id TEXT PRIMARY KEY, ts REAL, source TEXT, text TEXT, "
                           "state TEXT, reply TEXT, error TEXT, finished REAL)")
         kernel.db.execute("CREATE INDEX IF NOT EXISTS owner_commands_ts ON owner_commands(ts)")
@@ -671,8 +672,22 @@ class Owner:
             R[("POST", "agents/test")] = guard(lambda b, q: (202, agents.test(str(b.get("id")), b.get("task"))))
 
     # ---------- HTTP-shaped entry point ----------
-    def handle(self, method: str, path: str, body: dict):
-        """(status, reply) for one owner request. The caller has already checked that the token's lane is 'owner'."""
+    def handle(self, method: str, path: str, body: dict, headers=None):
+        """(status, reply) for one owner request. The caller has already checked that the token's lane is 'owner'.
+        A POST may carry an idempotency key (header Idempotency-Key or body idempotency_key): the same request sent again
+        with it returns the first reply instead of acting twice (idempotency.py). Not for a body with a PIN (approve): no
+        hash of a PIN is stored, and an approval is used once anyway."""
+        if method == "POST" and isinstance(body, dict):
+            from . import idempotency
+            key = idempotency.key_from(headers, body)
+            name = urllib.parse.urlsplit(path).path[len(PREFIX):].strip("/")
+            if key is not None and name != "approve" and "pin" not in body:
+                if self.idem is None:
+                    self.idem = idempotency.Idempotency(self.k, self.clock)
+                return self.idem.run("owner:" + name[:60], key, body, lambda: self._handle(method, path, body))
+        return self._handle(method, path, body)
+
+    def _handle(self, method: str, path: str, body: dict):
         u = urllib.parse.urlsplit(path)
         name = u.path[len(PREFIX):].strip("/")
         q = dict(urllib.parse.parse_qsl(u.query))

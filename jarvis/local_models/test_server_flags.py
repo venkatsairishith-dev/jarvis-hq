@@ -56,6 +56,66 @@ def test_no_command_turns_the_model_server_into_an_agent_or_opens_it():
             assert not re.search(r"--api-key\s", cmd)
 
 
+# --api-key-file is the only allowed way to give llama-server a key: a file in the secrets folder (D:\jarvis-secrets),
+# never the key itself on a command line or in an environment variable a config sets (LLAMA_API_KEY).
+SECRETS = re.compile(r"^[A-Za-z]:\\jarvis-secrets\\[\w.\\-]+\.key$")
+INLINE_KEY = re.compile(r"LLAMA_API_KEY(?!_FILE)|LLAMA_ARG_API_KEY(?!_FILE)")
+
+
+def api_key_file_problems(cmd):
+    """Problems with how a command passes an API key ([] when it passes none, or a key file in the secrets folder)."""
+    out = []
+    if re.search(r"--api-key(?:\s|=)", cmd):
+        out.append("--api-key with the key itself")
+    for m in re.finditer(r"--api-key-file(?:\s+|=)(\S+)", cmd):
+        path = m.group(1).strip("'\"")
+        if not SECRETS.match(path) or ".." in path:
+            out.append(f"--api-key-file outside the secrets folder: {path}")
+    if re.search(r"--api-key-file\s*$", cmd):
+        out.append("--api-key-file without a path")
+    if INLINE_KEY.search(cmd):
+        out.append("API key in an environment variable")
+    return out
+
+
+def test_api_keys_only_come_from_a_file_in_the_secrets_folder():
+    for path in CONFIGS:
+        text = "\n".join(lines(path))
+        _, cmds = server_commands(path)
+        for cmd in cmds:
+            assert not api_key_file_problems(cmd), (os.path.basename(path), api_key_file_problems(cmd))
+        assert not INLINE_KEY.search(text), f"{os.path.basename(path)}: API key set through an environment variable"
+    with open(os.path.join(REPO, "jarvis", "scripts", "local-models.ps1"), encoding="utf-8-sig") as fh:
+        assert not INLINE_KEY.search(fh.read())
+
+
+def test_the_api_key_check_catches_what_it_should():
+    ok = r"D:\jarvis\tools\llama.cpp\b11714\vulkan\llama-server.exe --host 127.0.0.1 --api-key-file D:\jarvis-secrets\local\llama-server.key"
+    assert api_key_file_problems(ok) == [] and not FORBIDDEN.search(ok)
+    for bad in ("x --api-key sk-123", "x --api-key=sk-123", r"x --api-key-file D:\jarvis\key.txt",
+                r"x --api-key-file D:\jarvis-secrets\..\jarvis\k.key", "x --api-key-file", "x env LLAMA_API_KEY=abc",
+                "x LLAMA_ARG_API_KEY=abc"):
+        assert api_key_file_problems(bad), bad
+    assert FORBIDDEN.search("x --api-key sk-123") and FORBIDDEN.search("x --api-key=sk-123")
+
+
+def test_every_config_runs_a_locked_llama_cpp_build():
+    """The llama-server path names a build (\\llama.cpp\\b11714\\vulkan\\) whose Windows release zip is in jarvis.lock.json."""
+    import json
+    with open(os.path.join(REPO, "jarvis", "tools", "jarvis.lock.json"), encoding="utf-8") as fh:
+        lock = json.load(fh)
+    locked = {(e["revision"].get("tag"), e["unpack_to"].replace("\\", "/").split("/")[-1]) for e in lock["entries"]
+              if "laptop" in e["machine"] and e["registry_name"] == "llama.cpp (llama-server)"}
+    builds = set()
+    for path in CONFIGS:
+        macro, _ = server_commands(path)
+        m = re.search(r"\\llama\.cpp\\(b\d+)\\(vulkan|cpu)\\llama-server\.exe", macro)
+        assert m, f"{os.path.basename(path)}: llama-server path does not name a build"
+        assert (m.group(1), m.group(2)) in locked, f"{os.path.basename(path)}: {m.group(1)} {m.group(2)} is not locked"
+        builds.add(m.group(1))
+    assert len(builds) == 1, f"configs disagree on the llama.cpp build: {sorted(builds)}"
+
+
 def test_the_proxy_listens_on_loopback_only():
     with open(os.path.join(REPO, "jarvis", "scripts", "local-models.ps1"), encoding="utf-8-sig") as fh:
         ps1 = fh.read()

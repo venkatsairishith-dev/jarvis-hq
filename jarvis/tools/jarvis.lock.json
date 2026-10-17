@@ -1,0 +1,2427 @@
+{
+ "schema_version": 1,
+ "generated": "2026-10-17",
+ "about": "Pinned downloads (model weights, binaries, archives) for JARVIS. Fetch and verify with jarvis/tools/fetch.py. Values come only from upstream metadata (Hugging Face API lfs.oid, GitHub release asset digests, published checksum files); nothing was downloaded to compute a hash. pip and npm dependencies are locked elsewhere.",
+ "roots": {
+  "env": "JARVIS_DATA_ROOT",
+  "windows": "D:\\jarvis",
+  "linux": "/srv/jarvis",
+  "oracle-vm": "/home/ubuntu/jarvis (not a default: pass --root or set JARVIS_DATA_ROOT)"
+ },
+ "machines": {
+  "laptop": "owner's Windows laptop",
+  "linux-test": "Linux test server (/srv/jarvis)",
+  "oracle-vm": "Oracle VM hermes-agent-vm (ARM64)",
+  "wsl-lab": "WSL lab on the laptop",
+  "other-profile": "hardware profiles other than this laptop (cpu8, cpu16, vram8plus)"
+ },
+ "entries": [
+  {
+   "name": "llama-cpp-b11669-win-vulkan-x64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-win-vulkan-x64.zip",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11669",
+    "asset": "llama-b11669-bin-win-vulkan-x64.zip",
+    "commit": "620d2225cc436ab0b001e3200e590e3b286ef9ab"
+   },
+   "filename": "llama-b11669-bin-win-vulkan-x64.zip",
+   "sha256": "2c07574e7bde71321cb785282b20cc821e951132149eeceeea32ddebdbf0598e",
+   "bytes": 32182350,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11669-bin-win-vulkan-x64.zip",
+   "optional": false,
+   "unpack_to": "tools/llama.cpp/b11669/vulkan",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11669 (asset digest)",
+    "jarvis/local_models/llama-swap.yaml:12",
+    "jarvis/local_models/hwdetect.py:21"
+   ]
+  },
+  {
+   "name": "llama-cpp-b11714-win-vulkan-x64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11714/llama-b11714-bin-win-vulkan-x64.zip",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11714",
+    "asset": "llama-b11714-bin-win-vulkan-x64.zip",
+    "commit": "c0fd78626405c6d9b934efef0ec7291fcc20e3d6"
+   },
+   "filename": "llama-b11714-bin-win-vulkan-x64.zip",
+   "sha256": "d4765447307f29fc0b4c8ae5b8b806c46b3e515d0ce5c2a54dd90d9b2c7a392f",
+   "bytes": 32306237,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11714-bin-win-vulkan-x64.zip",
+   "optional": false,
+   "unpack_to": "tools/llama.cpp/b11714/vulkan",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11714 (asset digest)",
+    "jarvis/local_models/llama-swap.yaml:12"
+   ],
+   "notes": "Adopted 2026-10-17 in place of b11669 after the Linux release-vs-release comparison (same accuracy, JSON validity and llama-bench speed; jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md). The Windows vulkan build itself is UNTESTED: run the laptop checks before relying on it. llama-cpp-b11669-win-vulkan-x64 stays locked for a rollback."
+  },
+  {
+   "name": "llama-cpp-b11669-win-cpu-x64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-win-cpu-x64.zip",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11669",
+    "asset": "llama-b11669-bin-win-cpu-x64.zip",
+    "commit": "620d2225cc436ab0b001e3200e590e3b286ef9ab"
+   },
+   "filename": "llama-b11669-bin-win-cpu-x64.zip",
+   "sha256": "37b3efcf962847ca869745fd4ccf7f5e7e8dacfeff9fa3523b4ca8cdc66d632b",
+   "bytes": 19537886,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11669-bin-win-cpu-x64.zip",
+   "optional": false,
+   "unpack_to": "tools/llama.cpp/b11669/cpu",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11669 (asset digest)",
+    "jarvis/docs/neko/NEKO_MODEL_MATRIX.md:106",
+    "jarvis/evals/neko95/bench/model_compare.py:6"
+   ]
+  },
+  {
+   "name": "llama-cpp-b11714-win-cpu-x64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11714/llama-b11714-bin-win-cpu-x64.zip",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11714",
+    "asset": "llama-b11714-bin-win-cpu-x64.zip",
+    "commit": "c0fd78626405c6d9b934efef0ec7291fcc20e3d6"
+   },
+   "filename": "llama-b11714-bin-win-cpu-x64.zip",
+   "sha256": "f78eded047061a3f86372db426797400a2f1bb0ec37868d5927dd820eb3386c0",
+   "bytes": 19662606,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11714-bin-win-cpu-x64.zip",
+   "optional": false,
+   "unpack_to": "tools/llama.cpp/b11714/cpu",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11714 (asset digest)",
+    "jarvis/local_models/profiles/cpu8.yaml:8"
+   ],
+   "notes": "Adopted 2026-10-17 in place of b11669 after the Linux release-vs-release comparison (same accuracy, JSON validity and llama-bench speed; jarvis/docs/neko/evidence/08-runtimes-agents-infra-2026-10-17.md). The Windows cpu build itself is UNTESTED: run the laptop checks before relying on it. llama-cpp-b11669-win-cpu-x64 stays locked for a rollback."
+  },
+  {
+   "name": "llama-cpp-b11669-linux-x64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-ubuntu-x64.tar.gz",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11669",
+    "asset": "llama-b11669-bin-ubuntu-x64.tar.gz",
+    "commit": "620d2225cc436ab0b001e3200e590e3b286ef9ab"
+   },
+   "filename": "llama-b11669-bin-ubuntu-x64.tar.gz",
+   "sha256": "cf07c1c112d709bd67e522017471de57ed0ec8bea031d732c5422351c07f65ac",
+   "bytes": 17851611,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11669-bin-ubuntu-x64.tar.gz",
+   "optional": true,
+   "unpack_to": "tools/llama.cpp-b11669-bin",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11669 (asset digest)",
+    "jarvis/evals/neko95/bench/model_compare.py:194"
+   ],
+   "notes": "The Linux test server's b11669 CPU build today is a local source build (/srv/jarvis/tools/llama.cpp-b11669-cpu holds cmake.log and make.log), not this release binary. Optional until the test server switches to it."
+  },
+  {
+   "name": "llama-cpp-b11714-linux-x64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11714/llama-b11714-bin-ubuntu-x64.tar.gz",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11714",
+    "asset": "llama-b11714-bin-ubuntu-x64.tar.gz",
+    "commit": "c0fd78626405c6d9b934efef0ec7291fcc20e3d6"
+   },
+   "filename": "llama-b11714-bin-ubuntu-x64.tar.gz",
+   "sha256": "639059a1106e706810486285ec6d1d92c961f3f920ef78bbdd1ee359428679d0",
+   "bytes": 17968637,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11714-bin-ubuntu-x64.tar.gz",
+   "optional": true,
+   "unpack_to": "tools/llama.cpp-b11714-bin",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11714 (asset digest)",
+    "https://api.github.com/repos/ggml-org/llama.cpp/git/ref/tags/b11714 (commit)"
+   ],
+   "notes": "Release binary used 2026-10-17 to compare b11714 with b11669 release vs release (equal accuracy, JSON validity and llama-bench speed). Needs glibc >= 2.34 (neko-test has 2.41) and libgomp.so.1 copied next to it (not in neko-test). The test server's default stays a local native source build (/srv/jarvis/tools/llama.cpp-b11714-cpu, BUILD.txt), which is ~8% faster at prompt processing than this generic binary. Optional."
+  },
+  {
+   "name": "llama-cpp-b11461-linux-arm64",
+   "registry_name": "llama.cpp (llama-server)",
+   "kind": "archive",
+   "machine": [
+    "oracle-vm"
+   ],
+   "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11461/llama-b11461-bin-ubuntu-arm64.tar.gz",
+   "revision": {
+    "source": "github-release",
+    "repo": "ggml-org/llama.cpp",
+    "tag": "b11461",
+    "asset": "llama-b11461-bin-ubuntu-arm64.tar.gz",
+    "commit": "4d756bc72bf00a4aacf410ae15a2d315f3db400d"
+   },
+   "filename": "llama-b11461-bin-ubuntu-arm64.tar.gz",
+   "sha256": "93f9d5043b6cef6044c2afd583ba74a09c43bddabf90403b584371e3a95764aa",
+   "bytes": 13724350,
+   "licence": "MIT",
+   "dest": "downloads/llama-b11461-bin-ubuntu-arm64.tar.gz",
+   "optional": false,
+   "unpack_to": "tools/llama.cpp/llama-b11461",
+   "source_evidence": [
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11461 (asset digest)",
+    "jarvis/deploy/jarvis-llm.service:8",
+    "jarvis/deploy/jarvis-embed.service:27"
+   ],
+   "notes": "Oracle VM root is /home/ubuntu/jarvis (pass --root). Whether the VM's binary came from this release asset is not recorded in the repo; --check on the VM's kept archive (if any) or a rebuild from this asset settles it."
+  },
+  {
+   "name": "llama-swap-v261-windows-amd64",
+   "registry_name": "llama-swap",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/mostlygeek/llama-swap/releases/download/v261/llama-swap_261_windows_amd64.zip",
+   "revision": {
+    "source": "github-release",
+    "repo": "mostlygeek/llama-swap",
+    "tag": "v261",
+    "asset": "llama-swap_261_windows_amd64.zip"
+   },
+   "filename": "llama-swap_261_windows_amd64.zip",
+   "sha256": "e7208ec31a9a019d582bfd1a15cd3425a4f265b5139456a62d15365b07caf1f5",
+   "bytes": 23020972,
+   "licence": "MIT",
+   "dest": "downloads/llama-swap_261_windows_amd64.zip",
+   "optional": false,
+   "unpack_to": "tools/llama-swap/v261",
+   "source_evidence": [
+    "https://api.github.com/repos/mostlygeek/llama-swap/releases/tags/v261 (asset digest)",
+    "jarvis/scripts/local-models.ps1:13",
+    "release file llama-swap_261_checksums.txt (same value)"
+   ]
+  },
+  {
+   "name": "ling-3.0-tiny-q4km",
+   "registry_name": "Ling-3.0-tiny GGUF (generalist + router)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/inclusionAI/Ling-3.0-tiny-GGUF/resolve/01b850e29ed5b44e2b810160ff980a9bb353296f/Ling-3.0-tiny-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "inclusionAI/Ling-3.0-tiny-GGUF",
+    "commit": "01b850e29ed5b44e2b810160ff980a9bb353296f",
+    "path": "Ling-3.0-tiny-Q4_K_M.gguf"
+   },
+   "filename": "Ling-3.0-tiny-Q4_K_M.gguf",
+   "sha256": "246d67d45f5b0c7447ca0ce0bdb8b46b8a47b593c5068635dc16422c051d7be9",
+   "bytes": 4823894944,
+   "licence": "MIT",
+   "dest": "models/llm/Ling-3.0-tiny-Q4_K_M.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/inclusionAI/Ling-3.0-tiny-GGUF",
+    "https://huggingface.co/api/models/inclusionAI/Ling-3.0-tiny-GGUF/tree/01b850e29ed5b44e2b810160ff980a9bb353296f",
+    "jarvis/scripts/fetch_models.py:19"
+   ],
+   "notes": "fetch_models.py downloads this from revision 'main'; this lock pins the commit 'main' pointed to on 2026-10-17. The laptop's copy was fetched earlier from 'main': run --check to confirm it is this file."
+  },
+  {
+   "name": "qwen2.5-coder-1.5b-q4km",
+   "registry_name": "Qwen2.5-Coder-1.5B-Instruct GGUF",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/f86cb2c1fa58255f8052cc32aeede1b7482d4361/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+    "commit": "f86cb2c1fa58255f8052cc32aeede1b7482d4361",
+    "path": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+   },
+   "filename": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+   "sha256": "cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046",
+   "bytes": 1117320768,
+   "licence": "Apache-2.0",
+   "dest": "models/llm/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+    "https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/tree/f86cb2c1fa58255f8052cc32aeede1b7482d4361",
+    "jarvis/scripts/fetch_models.py:20"
+   ],
+   "notes": "fetch_models.py downloads this from revision 'main'; this lock pins the commit 'main' pointed to on 2026-10-17. The laptop's copy was fetched earlier from 'main': run --check to confirm it is this file."
+  },
+  {
+   "name": "qwen2.5-math-1.5b-q4km",
+   "registry_name": "Qwen2.5-Math-1.5B-Instruct GGUF",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF/resolve/951ed2aea09c43e331c612e74d83e4a23ca98e3b/Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF",
+    "commit": "951ed2aea09c43e331c612e74d83e4a23ca98e3b",
+    "path": "Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf"
+   },
+   "filename": "Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf",
+   "sha256": "9614a50f03c897028920ca0dc4365da570bf587f9ee7768261216fe370b37e8e",
+   "bytes": 986048832,
+   "licence": "Apache-2.0",
+   "dest": "models/llm/Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF",
+    "https://huggingface.co/api/models/bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF/tree/951ed2aea09c43e331c612e74d83e4a23ca98e3b",
+    "jarvis/scripts/fetch_models.py:21"
+   ],
+   "notes": "fetch_models.py downloads this from revision 'main'; this lock pins the commit 'main' pointed to on 2026-10-17. The laptop's copy was fetched earlier from 'main': run --check to confirm it is this file."
+  },
+  {
+   "name": "qwen3-4b-2507-q4km",
+   "registry_name": "Qwen3-4B-Instruct-2507 GGUF (decider)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+    "commit": "a06e946bb6b655725eafa393f4a9745d460374c9",
+    "path": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+   },
+   "filename": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+   "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+   "bytes": 2497281120,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/unsloth/Qwen3-4B-Instruct-2507-GGUF/revision/a06e946bb6b655725eafa393f4a9745d460374c9",
+    "https://huggingface.co/api/models/unsloth/Qwen3-4B-Instruct-2507-GGUF/tree/a06e946bb6b655725eafa393f4a9745d460374c9",
+    "jarvis/evals/neko95/bench/model_candidates.json (qwen3-4b-2507)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "a06e946bb6b655725eafa393f4a9745d460374c9",
+    "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+    "bytes": 2497281120,
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "qwen3-1.7b-q4km",
+   "registry_name": "Qwen3-1.7B GGUF (fast fallback)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "unsloth/Qwen3-1.7B-GGUF",
+    "commit": "d7f544eead698dbd1f15126ef60b45a1e1933222",
+    "path": "Qwen3-1.7B-Q4_K_M.gguf"
+   },
+   "filename": "Qwen3-1.7B-Q4_K_M.gguf",
+   "sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+   "bytes": 1107409472,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/Qwen3-1.7B-Q4_K_M.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/unsloth/Qwen3-1.7B-GGUF/revision/d7f544eead698dbd1f15126ef60b45a1e1933222",
+    "https://huggingface.co/api/models/unsloth/Qwen3-1.7B-GGUF/tree/d7f544eead698dbd1f15126ef60b45a1e1933222",
+    "jarvis/evals/neko95/bench/model_candidates.json (qwen3-1.7b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "d7f544eead698dbd1f15126ef60b45a1e1933222",
+    "sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+    "bytes": 1107409472,
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "qwen3.5-2b-q4km",
+   "registry_name": "Qwen3.5-2B/4B/9B GGUF (profiles cpu8, cpu16, vram8plus)",
+   "kind": "model",
+   "machine": [
+    "other-profile",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "unsloth/Qwen3.5-2B-GGUF",
+    "commit": "f6d5376be1edb4d416d56da11e5397a961aca8ae",
+    "path": "Qwen3.5-2B-Q4_K_M.gguf"
+   },
+   "filename": "Qwen3.5-2B-Q4_K_M.gguf",
+   "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+   "bytes": 1280835840,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/Qwen3.5-2B-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/unsloth/Qwen3.5-2B-GGUF/revision/f6d5376be1edb4d416d56da11e5397a961aca8ae",
+    "https://huggingface.co/api/models/unsloth/Qwen3.5-2B-GGUF/tree/f6d5376be1edb4d416d56da11e5397a961aca8ae",
+    "jarvis/evals/neko95/bench/model_candidates.json (qwen3.5-2b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "f6d5376be1edb4d416d56da11e5397a961aca8ae",
+    "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+    "bytes": 1280835840,
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "qwen3.5-4b-q4km",
+   "registry_name": "Qwen3.5-2B/4B/9B GGUF (profiles cpu8, cpu16, vram8plus)",
+   "kind": "model",
+   "machine": [
+    "other-profile",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "unsloth/Qwen3.5-4B-GGUF",
+    "commit": "e87f176479d0855a907a41277aca2f8ee7a09523",
+    "path": "Qwen3.5-4B-Q4_K_M.gguf"
+   },
+   "filename": "Qwen3.5-4B-Q4_K_M.gguf",
+   "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+   "bytes": 2740937888,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/Qwen3.5-4B-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/unsloth/Qwen3.5-4B-GGUF/revision/e87f176479d0855a907a41277aca2f8ee7a09523",
+    "https://huggingface.co/api/models/unsloth/Qwen3.5-4B-GGUF/tree/e87f176479d0855a907a41277aca2f8ee7a09523",
+    "jarvis/evals/neko95/bench/model_candidates.json (qwen3.5-4b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "e87f176479d0855a907a41277aca2f8ee7a09523",
+    "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "bytes": 2740937888,
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "lfm2.5-1.2b-q4km",
+   "registry_name": "Rejected decider candidates (LFM2.5 350M/1.2B/2.6B/8B-A1B, MiniCPM5 1B/2B, Granite-4.2-3B, Qwen3.5-0.8B)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/8ed288026e23958ad9dfa92d53ed773a8eee7125/LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "LiquidAI/LFM2.5-1.2B-Instruct-GGUF",
+    "commit": "8ed288026e23958ad9dfa92d53ed773a8eee7125",
+    "path": "LFM2.5-1.2B-Instruct-Q4_K_M.gguf"
+   },
+   "filename": "LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
+   "sha256": "b1b3de114215d9507409a662a501a631095a479a419584e8a2ded6304b19b4f5",
+   "bytes": 730895168,
+   "licence": "other",
+   "dest": "models/gguf/LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/revision/8ed288026e23958ad9dfa92d53ed773a8eee7125",
+    "https://huggingface.co/api/models/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/tree/8ed288026e23958ad9dfa92d53ed773a8eee7125",
+    "jarvis/evals/neko95/bench/model_candidates.json (lfm2.5-1.2b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "8ed288026e23958ad9dfa92d53ed773a8eee7125",
+    "sha256": "b1b3de114215d9507409a662a501a631095a479a419584e8a2ded6304b19b4f5",
+    "bytes": 730895168,
+    "agrees_with_upstream": true
+   },
+   "notes": "benchmark only (model_compare.py --fetch); rejected as decider"
+  },
+  {
+   "name": "lfm2.5-2.6b-q4km",
+   "registry_name": "Rejected decider candidates (LFM2.5 350M/1.2B/2.6B/8B-A1B, MiniCPM5 1B/2B, Granite-4.2-3B, Qwen3.5-0.8B)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/LiquidAI/LFM2.5-2.6B-GGUF/resolve/e7caca5d835a3901a8e0d63e94009429bafafdfc/LFM2.5-2.6B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "LiquidAI/LFM2.5-2.6B-GGUF",
+    "commit": "e7caca5d835a3901a8e0d63e94009429bafafdfc",
+    "path": "LFM2.5-2.6B-Q4_K_M.gguf"
+   },
+   "filename": "LFM2.5-2.6B-Q4_K_M.gguf",
+   "sha256": "02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed",
+   "bytes": 1674455040,
+   "licence": "other (lfm1.0)",
+   "dest": "models/gguf/LFM2.5-2.6B-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/LiquidAI/LFM2.5-2.6B-GGUF/revision/e7caca5d835a3901a8e0d63e94009429bafafdfc",
+    "https://huggingface.co/api/models/LiquidAI/LFM2.5-2.6B-GGUF/tree/e7caca5d835a3901a8e0d63e94009429bafafdfc",
+    "jarvis/evals/neko95/bench/model_candidates.json (lfm2.5-2.6b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "e7caca5d835a3901a8e0d63e94009429bafafdfc",
+    "sha256": "02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed",
+    "bytes": 1674455040,
+    "agrees_with_upstream": true
+   },
+   "notes": "benchmark only (model_compare.py --fetch); rejected as decider"
+  },
+  {
+   "name": "minicpm5-2b-q4km",
+   "registry_name": "Rejected decider candidates (LFM2.5 350M/1.2B/2.6B/8B-A1B, MiniCPM5 1B/2B, Granite-4.2-3B, Qwen3.5-0.8B)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/openbmb/MiniCPM5-2B-GGUF/resolve/2079a22f3beaa4e306449978533478fe0522f4b3/MiniCPM5-2B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "openbmb/MiniCPM5-2B-GGUF",
+    "commit": "2079a22f3beaa4e306449978533478fe0522f4b3",
+    "path": "MiniCPM5-2B-Q4_K_M.gguf"
+   },
+   "filename": "MiniCPM5-2B-Q4_K_M.gguf",
+   "sha256": "ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd",
+   "bytes": 1561318368,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/MiniCPM5-2B-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/openbmb/MiniCPM5-2B-GGUF/revision/2079a22f3beaa4e306449978533478fe0522f4b3",
+    "https://huggingface.co/api/models/openbmb/MiniCPM5-2B-GGUF/tree/2079a22f3beaa4e306449978533478fe0522f4b3",
+    "jarvis/evals/neko95/bench/model_candidates.json (minicpm5-2b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "2079a22f3beaa4e306449978533478fe0522f4b3",
+    "sha256": "ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd",
+    "bytes": 1561318368,
+    "agrees_with_upstream": true
+   },
+   "notes": "benchmark only (model_compare.py --fetch); rejected as decider"
+  },
+  {
+   "name": "granite-4.2-3b-q4km",
+   "registry_name": "Rejected decider candidates (LFM2.5 350M/1.2B/2.6B/8B-A1B, MiniCPM5 1B/2B, Granite-4.2-3B, Qwen3.5-0.8B)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/ibm-granite/granite-4.2-3b-GGUF/resolve/c40945d71cd90f249a56985e8155551a9188dc30/granite-4.2-3b-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "ibm-granite/granite-4.2-3b-GGUF",
+    "commit": "c40945d71cd90f249a56985e8155551a9188dc30",
+    "path": "granite-4.2-3b-Q4_K_M.gguf"
+   },
+   "filename": "granite-4.2-3b-Q4_K_M.gguf",
+   "sha256": "e0406663965846ae22a403456eb826ccce5f450840491f71952f18a7cb78e7d5",
+   "bytes": 2244011552,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/granite-4.2-3b-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/ibm-granite/granite-4.2-3b-GGUF/revision/c40945d71cd90f249a56985e8155551a9188dc30",
+    "https://huggingface.co/api/models/ibm-granite/granite-4.2-3b-GGUF/tree/c40945d71cd90f249a56985e8155551a9188dc30",
+    "jarvis/evals/neko95/bench/model_candidates.json (granite-4.2-3b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "c40945d71cd90f249a56985e8155551a9188dc30",
+    "sha256": "e0406663965846ae22a403456eb826ccce5f450840491f71952f18a7cb78e7d5",
+    "bytes": 2244011552,
+    "agrees_with_upstream": true
+   },
+   "notes": "benchmark only (model_compare.py --fetch); rejected as decider"
+  },
+  {
+   "name": "lfm2.5-8b-a1b-q4km",
+   "registry_name": "Rejected decider candidates (LFM2.5 350M/1.2B/2.6B/8B-A1B, MiniCPM5 1B/2B, Granite-4.2-3B, Qwen3.5-0.8B)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/LiquidAI/LFM2.5-8B-A1B-GGUF/resolve/49c14831707011e64d70b2ebd8462ba08d608434/LFM2.5-8B-A1B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "LiquidAI/LFM2.5-8B-A1B-GGUF",
+    "commit": "49c14831707011e64d70b2ebd8462ba08d608434",
+    "path": "LFM2.5-8B-A1B-Q4_K_M.gguf"
+   },
+   "filename": "LFM2.5-8B-A1B-Q4_K_M.gguf",
+   "sha256": "4923ec14f06b968b74d663e5949867d2d9c3bf13a20b8be1a9f9af39989b2bb0",
+   "bytes": 5155564768,
+   "licence": "other (lfm1.0)",
+   "dest": "models/gguf/LFM2.5-8B-A1B-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/LiquidAI/LFM2.5-8B-A1B-GGUF/revision/49c14831707011e64d70b2ebd8462ba08d608434",
+    "https://huggingface.co/api/models/LiquidAI/LFM2.5-8B-A1B-GGUF/tree/49c14831707011e64d70b2ebd8462ba08d608434",
+    "jarvis/evals/neko95/bench/model_candidates.json (lfm2.5-8b-a1b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "49c14831707011e64d70b2ebd8462ba08d608434",
+    "sha256": "4923ec14f06b968b74d663e5949867d2d9c3bf13a20b8be1a9f9af39989b2bb0",
+    "bytes": 5155564768,
+    "agrees_with_upstream": true
+   },
+   "notes": "benchmark only (model_compare.py --fetch); rejected as decider"
+  },
+  {
+   "name": "lfm2.5-350m-q4km",
+   "registry_name": "Rejected decider candidates (LFM2.5 350M/1.2B/2.6B/8B-A1B, MiniCPM5 1B/2B, Granite-4.2-3B, Qwen3.5-0.8B)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/LiquidAI/LFM2.5-350M-GGUF/resolve/657e078c94084481950a2d555a941481f715536b/LFM2.5-350M-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "LiquidAI/LFM2.5-350M-GGUF",
+    "commit": "657e078c94084481950a2d555a941481f715536b",
+    "path": "LFM2.5-350M-Q4_K_M.gguf"
+   },
+   "filename": "LFM2.5-350M-Q4_K_M.gguf",
+   "sha256": "7e6f72643caafc9a68256686638c4d7916f2cec76d1df478d4c3ddcd95a6aed4",
+   "bytes": 229312224,
+   "licence": "other (lfm1.0)",
+   "dest": "models/gguf/LFM2.5-350M-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/LiquidAI/LFM2.5-350M-GGUF/revision/657e078c94084481950a2d555a941481f715536b",
+    "https://huggingface.co/api/models/LiquidAI/LFM2.5-350M-GGUF/tree/657e078c94084481950a2d555a941481f715536b",
+    "jarvis/evals/neko95/bench/model_candidates.json (lfm2.5-350m)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "657e078c94084481950a2d555a941481f715536b",
+    "sha256": "7e6f72643caafc9a68256686638c4d7916f2cec76d1df478d4c3ddcd95a6aed4",
+    "bytes": 229312224,
+    "agrees_with_upstream": true
+   },
+   "notes": "benchmark only (model_compare.py --fetch); rejected as decider"
+  },
+  {
+   "name": "qwen3.5-0.8b-q4km",
+   "registry_name": "Rejected decider candidates (LFM2.5 350M/1.2B/2.6B/8B-A1B, MiniCPM5 1B/2B, Granite-4.2-3B, Qwen3.5-0.8B)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "unsloth/Qwen3.5-0.8B-GGUF",
+    "commit": "6ab461498e2023f6e3c1baea90a8f0fe38ab64d0",
+    "path": "Qwen3.5-0.8B-Q4_K_M.gguf"
+   },
+   "filename": "Qwen3.5-0.8B-Q4_K_M.gguf",
+   "sha256": "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
+   "bytes": 532517120,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/Qwen3.5-0.8B-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/unsloth/Qwen3.5-0.8B-GGUF/revision/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0",
+    "https://huggingface.co/api/models/unsloth/Qwen3.5-0.8B-GGUF/tree/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0",
+    "jarvis/evals/neko95/bench/model_candidates.json (qwen3.5-0.8b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "6ab461498e2023f6e3c1baea90a8f0fe38ab64d0",
+    "sha256": "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
+    "bytes": 532517120,
+    "agrees_with_upstream": true
+   },
+   "notes": "benchmark only (model_compare.py --fetch); rejected as decider"
+  },
+  {
+   "name": "minicpm5-1b-q4km",
+   "registry_name": "Rejected decider candidates (LFM2.5 350M/1.2B/2.6B/8B-A1B, MiniCPM5 1B/2B, Granite-4.2-3B, Qwen3.5-0.8B)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/openbmb/MiniCPM5-1B-GGUF/resolve/3d55fac80935ae6456986ad2384b5cbcc4d6c948/MiniCPM5-1B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "openbmb/MiniCPM5-1B-GGUF",
+    "commit": "3d55fac80935ae6456986ad2384b5cbcc4d6c948",
+    "path": "MiniCPM5-1B-Q4_K_M.gguf"
+   },
+   "filename": "MiniCPM5-1B-Q4_K_M.gguf",
+   "sha256": "81b64d05a23b17b34c475f42b3e72fbde62d4b92cc34541f7a8031d0752deafa",
+   "bytes": 688065920,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/MiniCPM5-1B-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/openbmb/MiniCPM5-1B-GGUF/revision/3d55fac80935ae6456986ad2384b5cbcc4d6c948",
+    "https://huggingface.co/api/models/openbmb/MiniCPM5-1B-GGUF/tree/3d55fac80935ae6456986ad2384b5cbcc4d6c948",
+    "jarvis/evals/neko95/bench/model_candidates.json (minicpm5-1b)"
+   ],
+   "existing_pin": {
+    "source": "jarvis/evals/neko95/bench/model_candidates.json",
+    "revision": "3d55fac80935ae6456986ad2384b5cbcc4d6c948",
+    "sha256": "81b64d05a23b17b34c475f42b3e72fbde62d4b92cc34541f7a8031d0752deafa",
+    "bytes": 688065920,
+    "agrees_with_upstream": true
+   },
+   "notes": "benchmark only (model_compare.py --fetch); rejected as decider"
+  },
+  {
+   "name": "qwen3.5-9b-q4km",
+   "registry_name": "Qwen3.5-2B/4B/9B GGUF (profiles cpu8, cpu16, vram8plus)",
+   "kind": "model",
+   "machine": [
+    "other-profile"
+   ],
+   "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "unsloth/Qwen3.5-9B-GGUF",
+    "commit": "3885219b6810b007914f3a7950a8d1b469d598a5",
+    "path": "Qwen3.5-9B-Q4_K_M.gguf"
+   },
+   "filename": "Qwen3.5-9B-Q4_K_M.gguf",
+   "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+   "bytes": 5680522464,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/Qwen3.5-9B-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/unsloth/Qwen3.5-9B-GGUF",
+    "https://huggingface.co/api/models/unsloth/Qwen3.5-9B-GGUF/tree/3885219b6810b007914f3a7950a8d1b469d598a5",
+    "jarvis/scripts/fetch_models.py:27"
+   ],
+   "notes": "profile vram8plus; fetch_models.py takes it from 'main' into models/llm; pinned here to the 2026-10-17 commit"
+  },
+  {
+   "name": "qwen3-4b-q4km",
+   "registry_name": "Qwen3-4B GGUF (Oracle VM private-lane fallback, older laptop decider)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "unsloth/Qwen3-4B-GGUF",
+    "commit": "22c9fc8a8c7700b76a1789366280a6a5a1ad1120",
+    "path": "Qwen3-4B-Q4_K_M.gguf"
+   },
+   "filename": "Qwen3-4B-Q4_K_M.gguf",
+   "sha256": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
+   "bytes": 2497281312,
+   "licence": "Apache-2.0",
+   "dest": "models/gguf/Qwen3-4B-Q4_K_M.gguf",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF",
+    "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF/tree/22c9fc8a8c7700b76a1789366280a6a5a1ad1120",
+    "jarvis/local_models/llama-swap.yaml:38-40",
+    "jarvis/docs/research/02-voice-and-local-models.md:91"
+   ],
+   "notes": "Upstream repo is not written in the repo. unsloth/Qwen3-4B-GGUF is chosen because its file is exactly 2,497,281,312 bytes, the laptop file size recorded in jarvis/docs/research/02-voice-and-local-models.md:91 (Qwen/Qwen3-4B-GGUF's file is 2,497,280,256 bytes). The revision 1cfa9a720891 in that doc is the base Qwen/Qwen3-4B repo, not a GGUF repo. Run --check on the laptop and VM to confirm."
+  },
+  {
+   "name": "qwen3-4b-q4km-vm",
+   "registry_name": "Qwen3-4B GGUF (Oracle VM private-lane fallback, older laptop decider)",
+   "kind": "model",
+   "machine": [
+    "oracle-vm"
+   ],
+   "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "unsloth/Qwen3-4B-GGUF",
+    "commit": "22c9fc8a8c7700b76a1789366280a6a5a1ad1120",
+    "path": "Qwen3-4B-Q4_K_M.gguf"
+   },
+   "filename": "Qwen3-4B-Q4_K_M.gguf",
+   "sha256": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
+   "bytes": 2497281312,
+   "licence": "Apache-2.0",
+   "dest": "models/Qwen3-4B-Q4_K_M.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF",
+    "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF/tree/22c9fc8a8c7700b76a1789366280a6a5a1ad1120",
+    "jarvis/deploy/jarvis-llm.service:8"
+   ],
+   "notes": "Upstream repo is not written in the repo. unsloth/Qwen3-4B-GGUF is chosen because its file is exactly 2,497,281,312 bytes, the laptop file size recorded in jarvis/docs/research/02-voice-and-local-models.md:91 (Qwen/Qwen3-4B-GGUF's file is 2,497,280,256 bytes). The revision 1cfa9a720891 in that doc is the base Qwen/Qwen3-4B repo, not a GGUF repo. Run --check on the laptop and VM to confirm. VM root is /home/ubuntu/jarvis (pass --root)."
+  },
+  {
+   "name": "ui-venus-1.5-2b-q4km",
+   "registry_name": "UI-Venus-1.5-2B GGUF + mmproj F16 (vision grounding)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/noctrex/UI-Venus-1.5-2B-GGUF/resolve/42af01579dbcd9a2269b29db6e478e455d711509/UI-Venus-1.5-2B-Q4_K_M.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "noctrex/UI-Venus-1.5-2B-GGUF",
+    "commit": "42af01579dbcd9a2269b29db6e478e455d711509",
+    "path": "UI-Venus-1.5-2B-Q4_K_M.gguf"
+   },
+   "filename": "UI-Venus-1.5-2B-Q4_K_M.gguf",
+   "sha256": "2e20249b0d13a69737350471a366c369a608958f8600441ff44dd223e716cf29",
+   "bytes": 1282440608,
+   "licence": "Apache-2.0 (upstream inclusionAI/UI-Venus-1.5-2B; the noctrex GGUF card states no licence)",
+   "dest": "models/gguf/ui-venus-1.5-2b/UI-Venus-1.5-2B-Q4_K_M.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/noctrex/UI-Venus-1.5-2B-GGUF",
+    "https://huggingface.co/api/models/noctrex/UI-Venus-1.5-2B-GGUF/tree/42af01579dbcd9a2269b29db6e478e455d711509",
+    "jarvis/local_models/llama-swap.yaml:52",
+    "jarvis/docs/01_RESEARCH_AUDIT.md:178 (GGUF by noctrex)"
+   ]
+  },
+  {
+   "name": "ui-venus-1.5-2b-mmproj-f16",
+   "registry_name": "UI-Venus-1.5-2B GGUF + mmproj F16 (vision grounding)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/noctrex/UI-Venus-1.5-2B-GGUF/resolve/42af01579dbcd9a2269b29db6e478e455d711509/mmproj-F16.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "noctrex/UI-Venus-1.5-2B-GGUF",
+    "commit": "42af01579dbcd9a2269b29db6e478e455d711509",
+    "path": "mmproj-F16.gguf"
+   },
+   "filename": "mmproj-F16.gguf",
+   "sha256": "df84ad7622d75067c534bada9d84df826f8596069ab69e7ce96e9e41c96a2ecd",
+   "bytes": 819394976,
+   "licence": "Apache-2.0 (upstream inclusionAI/UI-Venus-1.5-2B; the noctrex GGUF card states no licence)",
+   "dest": "models/gguf/ui-venus-1.5-2b/mmproj-F16.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/noctrex/UI-Venus-1.5-2B-GGUF",
+    "https://huggingface.co/api/models/noctrex/UI-Venus-1.5-2B-GGUF/tree/42af01579dbcd9a2269b29db6e478e455d711509",
+    "jarvis/local_models/llama-swap.yaml:52"
+   ]
+  },
+  {
+   "name": "bge-small-en-v1.5-q8",
+   "registry_name": "bge-small-en-v1.5 GGUF Q8_0 (embeddings)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/ggml-org/bge-small-en-v1.5-Q8_0-GGUF/resolve/f2068edd9b54f2a369549ccc71f70ed273a2a801/bge-small-en-v1.5-q8_0.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "ggml-org/bge-small-en-v1.5-Q8_0-GGUF",
+    "commit": "f2068edd9b54f2a369549ccc71f70ed273a2a801",
+    "path": "bge-small-en-v1.5-q8_0.gguf"
+   },
+   "filename": "bge-small-en-v1.5-q8_0.gguf",
+   "sha256": "f046db1dc724cf4f6f0a0c5917e922823b73eb1d27b8f9a9c2797f7866974804",
+   "bytes": 36685152,
+   "licence": "MIT",
+   "dest": "models/gguf/bge-small-en-v1.5-q8_0.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/ggml-org/bge-small-en-v1.5-Q8_0-GGUF",
+    "https://huggingface.co/api/models/ggml-org/bge-small-en-v1.5-Q8_0-GGUF/tree/f2068edd9b54f2a369549ccc71f70ed273a2a801",
+    "jarvis/docs/research/02-voice-and-local-models.md:31"
+   ],
+   "notes": "The repo does not record which GGUF repo the installed bge-small-en-v1.5-q8_0.gguf came from. Two public files have that exact name: ggml-org/bge-small-en-v1.5-Q8_0-GGUF (locked here; llama.cpp's own org) and CompendiumLabs/bge-small-en-v1.5-gguf (sha256 ec38e8da142596baa913124ae50550de284b6916bf59577ef2f0cb9660c2f514, 36806944 bytes). --check tells which one the machine holds."
+  },
+  {
+   "name": "bge-small-en-v1.5-q8-vm",
+   "registry_name": "bge-small-en-v1.5 GGUF Q8_0 (embeddings)",
+   "kind": "model",
+   "machine": [
+    "oracle-vm"
+   ],
+   "url": "https://huggingface.co/ggml-org/bge-small-en-v1.5-Q8_0-GGUF/resolve/f2068edd9b54f2a369549ccc71f70ed273a2a801/bge-small-en-v1.5-q8_0.gguf",
+   "revision": {
+    "source": "huggingface",
+    "repo": "ggml-org/bge-small-en-v1.5-Q8_0-GGUF",
+    "commit": "f2068edd9b54f2a369549ccc71f70ed273a2a801",
+    "path": "bge-small-en-v1.5-q8_0.gguf"
+   },
+   "filename": "bge-small-en-v1.5-q8_0.gguf",
+   "sha256": "f046db1dc724cf4f6f0a0c5917e922823b73eb1d27b8f9a9c2797f7866974804",
+   "bytes": 36685152,
+   "licence": "MIT",
+   "dest": "models/bge-small-en-v1.5-q8_0.gguf",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/ggml-org/bge-small-en-v1.5-Q8_0-GGUF",
+    "https://huggingface.co/api/models/ggml-org/bge-small-en-v1.5-Q8_0-GGUF/tree/f2068edd9b54f2a369549ccc71f70ed273a2a801",
+    "jarvis/deploy/jarvis-embed.service:27"
+   ],
+   "notes": "The repo does not record which GGUF repo the installed bge-small-en-v1.5-q8_0.gguf came from. Two public files have that exact name: ggml-org/bge-small-en-v1.5-Q8_0-GGUF (locked here; llama.cpp's own org) and CompendiumLabs/bge-small-en-v1.5-gguf (sha256 ec38e8da142596baa913124ae50550de284b6916bf59577ef2f0cb9660c2f514, 36806944 bytes). --check tells which one the machine holds. VM root is /home/ubuntu/jarvis."
+  },
+  {
+   "name": "nli-deberta-v3-xsmall-model-quint8-avx2-onnx",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/cross-encoder/nli-deberta-v3-xsmall/resolve/a150876415327c80daeff35ca6f68f5ed8cf5c24/onnx/model_quint8_avx2.onnx",
+   "revision": {
+    "source": "huggingface",
+    "repo": "cross-encoder/nli-deberta-v3-xsmall",
+    "commit": "a150876415327c80daeff35ca6f68f5ed8cf5c24",
+    "path": "onnx/model_quint8_avx2.onnx"
+   },
+   "filename": "model_quint8_avx2.onnx",
+   "sha256": "21b14751a95520953bfcc607ceeb617de7cbeaeb6d60f4c8966716c743985337",
+   "bytes": 87377068,
+   "licence": "Apache-2.0",
+   "dest": "models/nli/nli-deberta-v3-xsmall/onnx/model_quint8_avx2.onnx",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/cross-encoder/nli-deberta-v3-xsmall/revision/a150876",
+    "https://huggingface.co/api/models/cross-encoder/nli-deberta-v3-xsmall/tree/a150876415327c80daeff35ca6f68f5ed8cf5c24/onnx",
+    "plugin/plugins/research/verify.py:17-39"
+   ],
+   "existing_pin": {
+    "source": "plugin/plugins/research/verify.py:3, jarvis/docs/01_RESEARCH_AUDIT.md:185",
+    "revision": "a150876",
+    "sha256_prefix": "21b14751",
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "nli-deberta-v3-xsmall-tokenizer-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/cross-encoder/nli-deberta-v3-xsmall/resolve/a150876415327c80daeff35ca6f68f5ed8cf5c24/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "cross-encoder/nli-deberta-v3-xsmall",
+    "commit": "a150876415327c80daeff35ca6f68f5ed8cf5c24",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 8656624,
+   "licence": "Apache-2.0",
+   "dest": "models/nli/nli-deberta-v3-xsmall/tokenizer.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "12cc2e86bad0e731393847b017b32a7405ebd4f8",
+   "source_evidence": [
+    "https://huggingface.co/api/models/cross-encoder/nli-deberta-v3-xsmall/revision/a150876",
+    "https://huggingface.co/api/models/cross-encoder/nli-deberta-v3-xsmall/tree/a150876415327c80daeff35ca6f68f5ed8cf5c24",
+    "plugin/plugins/research/verify.py:17-39"
+   ]
+  },
+  {
+   "name": "nli-deberta-v3-xsmall-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/cross-encoder/nli-deberta-v3-xsmall/resolve/a150876415327c80daeff35ca6f68f5ed8cf5c24/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "cross-encoder/nli-deberta-v3-xsmall",
+    "commit": "a150876415327c80daeff35ca6f68f5ed8cf5c24",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 1053,
+   "licence": "Apache-2.0",
+   "dest": "models/nli/nli-deberta-v3-xsmall/config.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "855bc825dc75ef9bc0a33ca9619d2870531d4274",
+   "source_evidence": [
+    "https://huggingface.co/api/models/cross-encoder/nli-deberta-v3-xsmall/revision/a150876",
+    "https://huggingface.co/api/models/cross-encoder/nli-deberta-v3-xsmall/tree/a150876415327c80daeff35ca6f68f5ed8cf5c24",
+    "plugin/plugins/research/verify.py:17-39"
+   ]
+  },
+  {
+   "name": "factcg-deberta-v3-large-model-safetensors",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/model.safetensors",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "model.safetensors"
+   },
+   "filename": "model.safetensors",
+   "sha256": "379a343d1ca25c9dfe24ae149f76cc958ea4f09c00dae88bd49bbbf58c749d5e",
+   "bytes": 1740304440,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/model.safetensors",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 883,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "3739f40bfb2811ac49cad372de63f53f382cc545",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-tokenizer-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 8656646,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/tokenizer.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "f9bbf3fa0b51e2c1d9c2bf284e3de29c542720c7",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-tokenizer-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/tokenizer_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "tokenizer_config.json"
+   },
+   "filename": "tokenizer_config.json",
+   "sha256": null,
+   "bytes": 1284,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/tokenizer_config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "13d6406af565bd9e59dd649afd4c2b48bddb6a4c",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-special-tokens-map-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/special_tokens_map.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "special_tokens_map.json"
+   },
+   "filename": "special_tokens_map.json",
+   "sha256": null,
+   "bytes": 286,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/special_tokens_map.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "2c9cb07c8fdeeb5ac3ceafb170592e990b204dcd",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "factcg-deberta-v3-large-added-tokens-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/yaxili96/FactCG-DeBERTa-v3-Large/resolve/0430e3509dbd28d2dff7a117c0eae25359ff3e80/added_tokens.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "yaxili96/FactCG-DeBERTa-v3-Large",
+    "commit": "0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "path": "added_tokens.json"
+   },
+   "filename": "added_tokens.json",
+   "sha256": null,
+   "bytes": 23,
+   "licence": "MIT",
+   "dest": "models/nli/factcg-deberta-v3-large/added_tokens.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "8ee2b3623dc526b123cde0aaa401755b82299af2",
+   "source_evidence": [
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/revision/0430e350",
+    "https://huggingface.co/api/models/yaxili96/FactCG-DeBERTa-v3-Large/tree/0430e3509dbd28d2dff7a117c0eae25359ff3e80",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-pytorch-model-bin",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/pytorch_model.bin",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "pytorch_model.bin"
+   },
+   "filename": "pytorch_model.bin",
+   "sha256": "32ced784f4831d5f324a072e43b96d4072cac4bf41042bc42243605ffbbccbdf",
+   "bytes": 1740386738,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/pytorch_model.bin",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 1075,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "3d6f63070c822ff347bb83aa9adad54ac29f19f3",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-tokenizer-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 8648917,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/tokenizer.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "645847e755c5da5572d1737f26b75a2912453aa5",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-tokenizer-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/tokenizer_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "tokenizer_config.json"
+   },
+   "filename": "tokenizer_config.json",
+   "sha256": null,
+   "bytes": 1496,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/tokenizer_config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "ed7ce59e944d744a27cb722ae34c0ab8cdeee226",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-special-tokens-map-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/special_tokens_map.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "special_tokens_map.json"
+   },
+   "filename": "special_tokens_map.json",
+   "sha256": null,
+   "bytes": 276,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/special_tokens_map.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "db6a3353e4d6e3080e91bb044ca6b91730754505",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-deberta-v3-large-added-tokens-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-DeBERTa-v3-Large/resolve/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb/added_tokens.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-DeBERTa-v3-Large",
+    "commit": "2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "path": "added_tokens.json"
+   },
+   "filename": "added_tokens.json",
+   "sha256": null,
+   "bytes": 79,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-deberta-v3-large/added_tokens.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "38090ace11147c895618f82d436d75a661553849",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/revision/2f2d01a5",
+    "https://huggingface.co/api/models/lytang/MiniCheck-DeBERTa-v3-Large/tree/2f2d01a54fa022a7ffadb76260e1ea8bc88c82bb",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "minicheck-roberta-large-pytorch-model-bin",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/pytorch_model.bin",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "pytorch_model.bin"
+   },
+   "filename": "pytorch_model.bin",
+   "sha256": "67af45a2d5a2706283821049232c7d7c81cea22e81dfdbb7097487a98bc61b53",
+   "bytes": 1421577710,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/pytorch_model.bin",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 890,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/config.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "9c9d73b5d3c061b6990343ebbe285ac03d7374a9",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-tokenizer-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 2108717,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/tokenizer.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "ca6d9de2001062449565ecb9f2139198e6a48f18",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-tokenizer-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/tokenizer_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "tokenizer_config.json"
+   },
+   "filename": "tokenizer_config.json",
+   "sha256": null,
+   "bytes": 1427,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/tokenizer_config.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "629a00eb3b705d4b62c90e6a6135e65920f03d1e",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-special-tokens-map-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/special_tokens_map.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "special_tokens_map.json"
+   },
+   "filename": "special_tokens_map.json",
+   "sha256": null,
+   "bytes": 267,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/special_tokens_map.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "b064251a5d9abe6b27f8e039fd4969cdda4bb2f7",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "minicheck-roberta-large-added-tokens-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "laptop",
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/lytang/MiniCheck-RoBERTa-Large/resolve/74c8919647e61ed0f71bc177d94f10930f090068/added_tokens.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "lytang/MiniCheck-RoBERTa-Large",
+    "commit": "74c8919647e61ed0f71bc177d94f10930f090068",
+    "path": "added_tokens.json"
+   },
+   "filename": "added_tokens.json",
+   "sha256": null,
+   "bytes": 75,
+   "licence": "MIT",
+   "dest": "models/nli/minicheck-roberta-large/added_tokens.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "83f18e106e2ca8b6d2fa4aba8136fd5b080f8d34",
+   "source_evidence": [
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/revision/74c89196",
+    "https://huggingface.co/api/models/lytang/MiniCheck-RoBERTa-Large/tree/74c8919647e61ed0f71bc177d94f10930f090068",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "DEFAULT claim checker since 2026-10-17 (plugin/plugins/research/verify.py DEFAULT_MODEL; measured in jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md). Source weights only: the int8 ONNX file used at run time (onnx/model_quint8.onnx, 357154336 bytes, sha256 eb1112092c0eb29f9b12ccdcebcab9e89b44d3e5f64bfa38ef1cf1500afd2dc0) is converted locally by jarvis/evals/neko95/bench/nli_export.py, so it is not an upstream value and is not locked here. Until it is on a machine, verify.py falls back to nli-deberta-v3-xsmall with a warning."
+  },
+  {
+   "name": "hhem-2.1-open-model-safetensors",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/vectara/hallucination_evaluation_model/resolve/de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8/model.safetensors",
+   "revision": {
+    "source": "huggingface",
+    "repo": "vectara/hallucination_evaluation_model",
+    "commit": "de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8",
+    "path": "model.safetensors"
+   },
+   "filename": "model.safetensors",
+   "sha256": "634de18a38cf1e991c1acd0f7a9e0d30f7ea187fba42bb4798f862d3edd31e72",
+   "bytes": 438535352,
+   "licence": "Apache-2.0",
+   "dest": "models/nli/hhem-2.1-open/model.safetensors",
+   "optional": true,
+   "source_evidence": [
+    "https://huggingface.co/api/models/vectara/hallucination_evaluation_model/revision/de9a5e6b",
+    "https://huggingface.co/api/models/vectara/hallucination_evaluation_model/tree/de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/vectara/hallucination_evaluation_model/resolve/de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "vectara/hallucination_evaluation_model",
+    "commit": "de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 389,
+   "licence": "Apache-2.0",
+   "dest": "models/nli/hhem-2.1-open/config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "4c9062d21243372ae3f9348dd1b72b3b7bb9b62f",
+   "source_evidence": [
+    "https://huggingface.co/api/models/vectara/hallucination_evaluation_model/revision/de9a5e6b",
+    "https://huggingface.co/api/models/vectara/hallucination_evaluation_model/tree/de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-flan-t5-base-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/google/flan-t5-base/resolve/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2/config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "google/flan-t5-base",
+    "commit": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "path": "config.json"
+   },
+   "filename": "config.json",
+   "sha256": null,
+   "bytes": 1404,
+   "licence": "Apache-2.0 (HHEM-2.1-Open needs the flan-t5-base tokenizer and config)",
+   "dest": "models/nli/hhem-2.1-open/flan-t5-base/config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "d41e16cd4cd58621695da4f94132f516d07251af",
+   "source_evidence": [
+    "https://huggingface.co/api/models/google/flan-t5-base/revision/7bcac572",
+    "https://huggingface.co/api/models/google/flan-t5-base/tree/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-flan-t5-base-tokenizer-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/google/flan-t5-base/resolve/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "google/flan-t5-base",
+    "commit": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 2424064,
+   "licence": "Apache-2.0 (HHEM-2.1-Open needs the flan-t5-base tokenizer and config)",
+   "dest": "models/nli/hhem-2.1-open/flan-t5-base/tokenizer.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "fc669fbad1a6a82119ca3e1fa75db33ee22ca47d",
+   "source_evidence": [
+    "https://huggingface.co/api/models/google/flan-t5-base/revision/7bcac572",
+    "https://huggingface.co/api/models/google/flan-t5-base/tree/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-flan-t5-base-tokenizer-config-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/google/flan-t5-base/resolve/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2/tokenizer_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "google/flan-t5-base",
+    "commit": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "path": "tokenizer_config.json"
+   },
+   "filename": "tokenizer_config.json",
+   "sha256": null,
+   "bytes": 2537,
+   "licence": "Apache-2.0 (HHEM-2.1-Open needs the flan-t5-base tokenizer and config)",
+   "dest": "models/nli/hhem-2.1-open/flan-t5-base/tokenizer_config.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "e3685b0cb5c8909cf3e7d72ffc16ca94c861bdfb",
+   "source_evidence": [
+    "https://huggingface.co/api/models/google/flan-t5-base/revision/7bcac572",
+    "https://huggingface.co/api/models/google/flan-t5-base/tree/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "hhem-2.1-open-flan-t5-base-special-tokens-map-json",
+   "registry_name": "cross-encoder/nli-deberta-v3-xsmall (int8 ONNX claim checker)",
+   "kind": "model",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://huggingface.co/google/flan-t5-base/resolve/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2/special_tokens_map.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "google/flan-t5-base",
+    "commit": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "path": "special_tokens_map.json"
+   },
+   "filename": "special_tokens_map.json",
+   "sha256": null,
+   "bytes": 2201,
+   "licence": "Apache-2.0 (HHEM-2.1-Open needs the flan-t5-base tokenizer and config)",
+   "dest": "models/nli/hhem-2.1-open/flan-t5-base/special_tokens_map.json",
+   "optional": true,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "2c19eb6e3b583f52d34b903b5978d3d30b6b7682",
+   "source_evidence": [
+    "https://huggingface.co/api/models/google/flan-t5-base/revision/7bcac572",
+    "https://huggingface.co/api/models/google/flan-t5-base/tree/7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+    "plugin/plugins/research/verify.py (BACKENDS)"
+   ],
+   "notes": "Claim-checker CANDIDATE measured on the Linux test server (2026-10-17, jarvis/docs/neko/evidence/11-claim-checker-candidates-2026-10-17.md); not used unless RESEARCH_NLI_MODEL selects it. Source weights only: the int8 ONNX file used at run time is converted locally by jarvis/evals/neko95/bench/nli_export.py, so its hash is not an upstream value and is not locked here."
+  },
+  {
+   "name": "gliner-pii-small-v1.0-model-quint8-onnx",
+   "registry_name": "GLiNER-PII small v1.0 (int8 ONNX)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/knowledgator/gliner-pii-small-v1.0/resolve/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e/onnx/model_quint8.onnx",
+   "revision": {
+    "source": "huggingface",
+    "repo": "knowledgator/gliner-pii-small-v1.0",
+    "commit": "d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e",
+    "path": "onnx/model_quint8.onnx"
+   },
+   "filename": "model_quint8.onnx",
+   "sha256": "891589426ee96f2748b16439f44fad8c3f97e198e002a6637e58dee989500216",
+   "bytes": 82680500,
+   "licence": "Apache-2.0",
+   "dest": "models/pii/gliner-pii-small-v1.0/onnx/model_quint8.onnx",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/revision/d21aad5b",
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/tree/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e/onnx",
+    "jarvis/privacy/redactor.py:32,158",
+    "jarvis/docs/05_OPERATIONS.md:292"
+   ],
+   "existing_pin": {
+    "source": "jarvis/docs/05_OPERATIONS.md:292",
+    "revision": "d21aad5b",
+    "sha256": null,
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "gliner-pii-small-v1.0-gliner-config-json",
+   "registry_name": "GLiNER-PII small v1.0 (int8 ONNX)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/knowledgator/gliner-pii-small-v1.0/resolve/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e/gliner_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "knowledgator/gliner-pii-small-v1.0",
+    "commit": "d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e",
+    "path": "gliner_config.json"
+   },
+   "filename": "gliner_config.json",
+   "sha256": null,
+   "bytes": 4316,
+   "licence": "Apache-2.0",
+   "dest": "models/pii/gliner-pii-small-v1.0/gliner_config.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "0a64fc99ae077e8bbb9b082bce538c07f5420319",
+   "source_evidence": [
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/revision/d21aad5b",
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/tree/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e",
+    "jarvis/privacy/redactor.py:32,158",
+    "jarvis/docs/05_OPERATIONS.md:292"
+   ]
+  },
+  {
+   "name": "gliner-pii-small-v1.0-tokenizer-json",
+   "registry_name": "GLiNER-PII small v1.0 (int8 ONNX)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/knowledgator/gliner-pii-small-v1.0/resolve/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e/tokenizer.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "knowledgator/gliner-pii-small-v1.0",
+    "commit": "d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e",
+    "path": "tokenizer.json"
+   },
+   "filename": "tokenizer.json",
+   "sha256": null,
+   "bytes": 3583593,
+   "licence": "Apache-2.0",
+   "dest": "models/pii/gliner-pii-small-v1.0/tokenizer.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "b625701e5c22e413f28b394f2aa8388273b735c8",
+   "source_evidence": [
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/revision/d21aad5b",
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/tree/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e",
+    "jarvis/privacy/redactor.py:32,158",
+    "jarvis/docs/05_OPERATIONS.md:292"
+   ]
+  },
+  {
+   "name": "gliner-pii-small-v1.0-tokenizer-config-json",
+   "registry_name": "GLiNER-PII small v1.0 (int8 ONNX)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/knowledgator/gliner-pii-small-v1.0/resolve/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e/tokenizer_config.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "knowledgator/gliner-pii-small-v1.0",
+    "commit": "d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e",
+    "path": "tokenizer_config.json"
+   },
+   "filename": "tokenizer_config.json",
+   "sha256": null,
+   "bytes": 21214,
+   "licence": "Apache-2.0",
+   "dest": "models/pii/gliner-pii-small-v1.0/tokenizer_config.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "943fdbd40c3411b09907c7dc770049154b261553",
+   "source_evidence": [
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/revision/d21aad5b",
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/tree/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e",
+    "jarvis/privacy/redactor.py:32,158",
+    "jarvis/docs/05_OPERATIONS.md:292"
+   ]
+  },
+  {
+   "name": "gliner-pii-small-v1.0-special-tokens-map-json",
+   "registry_name": "GLiNER-PII small v1.0 (int8 ONNX)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/knowledgator/gliner-pii-small-v1.0/resolve/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e/special_tokens_map.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "knowledgator/gliner-pii-small-v1.0",
+    "commit": "d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e",
+    "path": "special_tokens_map.json"
+   },
+   "filename": "special_tokens_map.json",
+   "sha256": null,
+   "bytes": 694,
+   "licence": "Apache-2.0",
+   "dest": "models/pii/gliner-pii-small-v1.0/special_tokens_map.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "6bf65ea14185a88eef7e24b41c86a953a58dcbad",
+   "source_evidence": [
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/revision/d21aad5b",
+    "https://huggingface.co/api/models/knowledgator/gliner-pii-small-v1.0/tree/d21aad5b4a7ec82b3d0970fd1ac74a12c087d85e",
+    "jarvis/privacy/redactor.py:32,158",
+    "jarvis/docs/05_OPERATIONS.md:292"
+   ]
+  },
+  {
+   "name": "officecli-v1.0.152-win-x64",
+   "registry_name": "OfficeCLI",
+   "kind": "binary",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/iOfficeAI/OfficeCLI/releases/download/v1.0.152/officecli-win-x64.exe",
+   "revision": {
+    "source": "github-release",
+    "repo": "iOfficeAI/OfficeCLI",
+    "tag": "v1.0.152",
+    "asset": "officecli-win-x64.exe"
+   },
+   "filename": "officecli.exe",
+   "sha256": "047705402974c3690a4437e55f620d03afac4beba4fdd28fdb59af610a3afff2",
+   "bytes": 33460136,
+   "licence": "Apache-2.0",
+   "dest": "tools/officecli/v1.0.152/officecli.exe",
+   "optional": false,
+   "source_evidence": [
+    "https://api.github.com/repos/iOfficeAI/OfficeCLI/releases/tags/v1.0.152 (asset digest)",
+    "plugin/plugins/deliverables/tools.py:15",
+    "release file SHA256SUMS (same value)"
+   ],
+   "notes": "saved as officecli.exe; fetch.py never runs it"
+  },
+  {
+   "name": "smokescreen-v0.1.0-linux-arm64",
+   "registry_name": "Stripe Smokescreen (egress proxy)",
+   "kind": "archive",
+   "machine": [
+    "oracle-vm"
+   ],
+   "url": "https://github.com/stripe/smokescreen/releases/download/v0.1.0/smokescreen_v0.1.0_linux_arm64.tar.gz",
+   "revision": {
+    "source": "github-release",
+    "repo": "stripe/smokescreen",
+    "tag": "v0.1.0",
+    "asset": "smokescreen_v0.1.0_linux_arm64.tar.gz"
+   },
+   "filename": "smokescreen_v0.1.0_linux_arm64.tar.gz",
+   "sha256": "f15ddd0dc2b2cbc6d7318f441928939eb9bedfab2a1881508af3096a1e24b7c9",
+   "bytes": 4771897,
+   "licence": "MIT",
+   "dest": "downloads/smokescreen_v0.1.0_linux_arm64.tar.gz",
+   "optional": false,
+   "unpack_to": "tools/smokescreen/bin/smokescreen_v0.1.0_linux_arm64",
+   "source_evidence": [
+    "https://api.github.com/repos/stripe/smokescreen/releases/tags/v0.1.0 (asset digest)",
+    "jarvis/deploy/jarvis-smokescreen.service:8",
+    "release file SHA256SUMS (same value)"
+   ]
+  },
+  {
+   "name": "caddy-v2.11.7-linux-amd64",
+   "registry_name": "Caddy",
+   "kind": "archive",
+   "machine": [
+    "wsl-lab"
+   ],
+   "url": "https://github.com/caddyserver/caddy/releases/download/v2.11.7/caddy_2.11.7_linux_amd64.tar.gz",
+   "revision": {
+    "source": "github-release",
+    "repo": "caddyserver/caddy",
+    "tag": "v2.11.7",
+    "asset": "caddy_2.11.7_linux_amd64.tar.gz"
+   },
+   "filename": "caddy_2.11.7_linux_amd64.tar.gz",
+   "sha256": "727b91701a392de6ebc5027509f548bf39979e5216340d0faed8fa5e69c84f8b",
+   "bytes": 18113754,
+   "licence": "Apache-2.0",
+   "dest": "downloads/caddy_2.11.7_linux_amd64.tar.gz",
+   "optional": true,
+   "source_evidence": [
+    "https://api.github.com/repos/caddyserver/caddy/releases/tags/v2.11.7 (asset digest)",
+    "jarvis/docs/01_RESEARCH_AUDIT.md:87",
+    "jarvis/hub/Caddyfile"
+   ],
+   "notes": "the release's caddy_2.11.7_checksums.txt is SHA-512 (matches); sha256 is the release API digest"
+  },
+  {
+   "name": "gitleaks-v8.30.1-windows-x64",
+   "registry_name": "gitleaks",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip",
+   "revision": {
+    "source": "github-release",
+    "repo": "gitleaks/gitleaks",
+    "tag": "v8.30.1",
+    "asset": "gitleaks_8.30.1_windows_x64.zip"
+   },
+   "filename": "gitleaks_8.30.1_windows_x64.zip",
+   "sha256": "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e",
+   "bytes": 8438883,
+   "licence": "MIT",
+   "dest": "downloads/gitleaks_8.30.1_windows_x64.zip",
+   "optional": false,
+   "unpack_to": "tools/gitleaks/bin",
+   "source_evidence": [
+    "https://api.github.com/repos/gitleaks/gitleaks/releases/tags/v8.30.1 (asset digest)",
+    "jarvis/kernel/jarvis_kernel/scrub.py:36-37",
+    "release file gitleaks_8.30.1_checksums.txt (same value)"
+   ]
+  },
+  {
+   "name": "gitleaks-v8.30.1-linux-x64",
+   "registry_name": "gitleaks",
+   "kind": "archive",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
+   "revision": {
+    "source": "github-release",
+    "repo": "gitleaks/gitleaks",
+    "tag": "v8.30.1",
+    "asset": "gitleaks_8.30.1_linux_x64.tar.gz"
+   },
+   "filename": "gitleaks_8.30.1_linux_x64.tar.gz",
+   "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+   "bytes": 8230402,
+   "licence": "MIT",
+   "dest": "downloads/gitleaks_8.30.1_linux_x64.tar.gz",
+   "optional": false,
+   "unpack_to": "tools/gitleaks/bin",
+   "source_evidence": [
+    "https://api.github.com/repos/gitleaks/gitleaks/releases/tags/v8.30.1 (asset digest)",
+    "jarvis/kernel/jarvis_kernel/scrub.py:36-37",
+    "release file gitleaks_8.30.1_checksums.txt (same value)",
+    "jarvis/scripts/neko-test/Containerfile:11-12"
+   ],
+   "existing_pin": {
+    "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "gitleaks-v8.30.1-linux-arm64",
+   "registry_name": "gitleaks",
+   "kind": "archive",
+   "machine": [
+    "oracle-vm"
+   ],
+   "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz",
+   "revision": {
+    "source": "github-release",
+    "repo": "gitleaks/gitleaks",
+    "tag": "v8.30.1",
+    "asset": "gitleaks_8.30.1_linux_arm64.tar.gz"
+   },
+   "filename": "gitleaks_8.30.1_linux_arm64.tar.gz",
+   "sha256": "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080",
+   "bytes": 7601421,
+   "licence": "MIT",
+   "dest": "downloads/gitleaks_8.30.1_linux_arm64.tar.gz",
+   "optional": false,
+   "unpack_to": "tools/gitleaks/bin",
+   "source_evidence": [
+    "https://api.github.com/repos/gitleaks/gitleaks/releases/tags/v8.30.1 (asset digest)",
+    "jarvis/kernel/jarvis_kernel/scrub.py:36-37",
+    "release file gitleaks_8.30.1_checksums.txt (same value)"
+   ]
+  },
+  {
+   "name": "libreoffice-26.2.6-win-x86-64-msi",
+   "registry_name": "LibreOffice",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://download.documentfoundation.org/libreoffice/stable/26.2.6/win/x86_64/LibreOffice_26.2.6_Win_x86-64.msi",
+   "revision": {
+    "source": "documentfoundation",
+    "version": "26.2.6",
+    "asset": "LibreOffice_26.2.6_Win_x86-64.msi"
+   },
+   "filename": "LibreOffice_26.2.6_Win_x86-64.msi",
+   "sha256": "f9877032fd908beb9c0ddf06df4af5c2e85f419c42e14876c4cce5aae5fb2660",
+   "bytes": 373252096,
+   "licence": "MPL-2.0",
+   "dest": "downloads/LibreOffice_26.2.6_Win_x86-64.msi",
+   "optional": false,
+   "unpack_to": "tools/libreoffice/26.2.6",
+   "source_evidence": [
+    "https://download.documentfoundation.org/libreoffice/stable/26.2.6/win/x86_64/LibreOffice_26.2.6_Win_x86-64.msi.sha256",
+    "https://download.documentfoundation.org/libreoffice/stable/26.2.6/win/x86_64/LibreOffice_26.2.6_Win_x86-64.msi.mirrorlist (same SHA-256, size)",
+    "plugin/plugins/deliverables/tools.py:16",
+    "jarvis/docs/05_OPERATIONS.md:310"
+   ],
+   "notes": "admin extract (msiexec /a) by hand; fetch.py never runs it. The 'stable' path moves to downloadarchive.documentfoundation.org once 26.2.6 leaves stable; the sha256 stays the same."
+  },
+  {
+   "name": "node-v24.22.0-linux-x64",
+   "registry_name": "Node.js",
+   "kind": "archive",
+   "machine": [
+    "linux-test"
+   ],
+   "url": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-x64.tar.xz",
+   "revision": {
+    "source": "nodejs-dist",
+    "version": "v24.22.0",
+    "asset": "node-v24.22.0-linux-x64.tar.xz"
+   },
+   "filename": "node-v24.22.0-linux-x64.tar.xz",
+   "sha256": "cc2f601cee82d9a5a233302fe307abc600727035fd7d2c3a3571755989e95008",
+   "bytes": 32015600,
+   "licence": "MIT",
+   "dest": "downloads/node-v24.22.0-linux-x64.tar.xz",
+   "optional": false,
+   "unpack_to": "tools/node-v24.22.0-linux-x64",
+   "source_evidence": [
+    "https://nodejs.org/dist/v24.22.0/SHASUMS256.txt",
+    "jarvis/scripts/neko-test/Containerfile:14-15"
+   ],
+   "existing_pin": {
+    "sha256": "cc2f601cee82d9a5a233302fe307abc600727035fd7d2c3a3571755989e95008",
+    "agrees_with_upstream": true
+   },
+   "notes": "the laptop runs Node 24.19 (installer not recorded); not locked here"
+  },
+  {
+   "name": "parakeet-tdt-0.6b-v3-int8-sherpa",
+   "registry_name": "Parakeet-TDT 0.6B v3 int8 (English STT)",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
+   "revision": {
+    "source": "github-release",
+    "repo": "k2-fsa/sherpa-onnx",
+    "tag": "asr-models",
+    "asset": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2"
+   },
+   "filename": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
+   "sha256": "5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf",
+   "bytes": 487170055,
+   "licence": "CC-BY-4.0 (weights, attribution required)",
+   "dest": "downloads/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
+   "optional": false,
+   "unpack_to": "models/voice/stt/parakeet-tdt-0.6b-v3-int8",
+   "source_evidence": [
+    "https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/tags/asr-models (asset digest)",
+    "jarvis/console/jarvis_console/voice.py:88-90",
+    "jarvis/docs/research/02-voice-and-local-models.md:385 (5793d0fd...16bf)",
+    "release file asr-models/checksum.txt (same value)"
+   ],
+   "notes": "unpack_to keeps encoder.int8.onnx, decoder.int8.onnx, joiner.int8.onnx, tokens.txt (folder renamed). The HF sha 541d1f99 in the docs is NVIDIA's NeMo upstream (nvidia/parakeet-tdt-0.6b-v3), not this export."
+  },
+  {
+   "name": "indicconformer-int8-hi",
+   "registry_name": "AI4Bharat IndicConformer int8 (Hindi, Telugu STT)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/9721eb71eea141fae0982cfcdb9dd2e3d4953c4a/hi/model.int8.onnx",
+   "revision": {
+    "source": "huggingface",
+    "repo": "parismitaglobalsolutions/indicconformer-sherpa-onnx",
+    "commit": "9721eb71eea141fae0982cfcdb9dd2e3d4953c4a",
+    "path": "hi/model.int8.onnx"
+   },
+   "filename": "model.int8.onnx",
+   "sha256": "915c71e04dd7e5378a4057fdebb252b3a587188e4e99db6d7ce0909ad5ad05fa",
+   "bytes": 197595593,
+   "licence": "MIT (AI4Bharat weights; export repo tagged Apache-2.0)",
+   "dest": "models/voice/stt/indicconformer-int8/hi/model.int8.onnx",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/parismitaglobalsolutions/indicconformer-sherpa-onnx/revision/9721eb71eea1",
+    "https://huggingface.co/api/models/parismitaglobalsolutions/indicconformer-sherpa-onnx/tree/9721eb71eea141fae0982cfcdb9dd2e3d4953c4a/hi",
+    "jarvis/console/jarvis_console/voice.py:91-92",
+    "jarvis/docs/research/02-voice-and-local-models.md:363,382"
+   ],
+   "existing_pin": {
+    "source": "jarvis/docs/research/02-voice-and-local-models.md:382",
+    "revision": "9721eb71eea1",
+    "sha256": null,
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "indicconformer-int8-te",
+   "registry_name": "AI4Bharat IndicConformer int8 (Hindi, Telugu STT)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/9721eb71eea141fae0982cfcdb9dd2e3d4953c4a/te/model.int8.onnx",
+   "revision": {
+    "source": "huggingface",
+    "repo": "parismitaglobalsolutions/indicconformer-sherpa-onnx",
+    "commit": "9721eb71eea141fae0982cfcdb9dd2e3d4953c4a",
+    "path": "te/model.int8.onnx"
+   },
+   "filename": "model.int8.onnx",
+   "sha256": "710f176e33080f1be84b4f38bb5f33be3f522dcf4f191bf4d5cc89f7a85924f3",
+   "bytes": 197595693,
+   "licence": "MIT (AI4Bharat weights; export repo tagged Apache-2.0)",
+   "dest": "models/voice/stt/indicconformer-int8/te/model.int8.onnx",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/parismitaglobalsolutions/indicconformer-sherpa-onnx/revision/9721eb71eea1",
+    "https://huggingface.co/api/models/parismitaglobalsolutions/indicconformer-sherpa-onnx/tree/9721eb71eea141fae0982cfcdb9dd2e3d4953c4a/te",
+    "jarvis/console/jarvis_console/voice.py:91-92",
+    "jarvis/docs/research/02-voice-and-local-models.md:363,382"
+   ],
+   "existing_pin": {
+    "source": "jarvis/docs/research/02-voice-and-local-models.md:382",
+    "revision": "9721eb71eea1",
+    "sha256": null,
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "indicconformer-int8-tokens",
+   "registry_name": "AI4Bharat IndicConformer int8 (Hindi, Telugu STT)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/9721eb71eea141fae0982cfcdb9dd2e3d4953c4a/tokens.txt",
+   "revision": {
+    "source": "huggingface",
+    "repo": "parismitaglobalsolutions/indicconformer-sherpa-onnx",
+    "commit": "9721eb71eea141fae0982cfcdb9dd2e3d4953c4a",
+    "path": "tokens.txt"
+   },
+   "filename": "tokens.txt",
+   "sha256": null,
+   "bytes": 67605,
+   "licence": "MIT (AI4Bharat weights; export repo tagged Apache-2.0)",
+   "dest": "models/voice/stt/indicconformer-int8/tokens.txt",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "4fd63ec413c32fcc5d5c035762decc5180363283",
+   "source_evidence": [
+    "https://huggingface.co/api/models/parismitaglobalsolutions/indicconformer-sherpa-onnx/revision/9721eb71eea1",
+    "https://huggingface.co/api/models/parismitaglobalsolutions/indicconformer-sherpa-onnx/tree/9721eb71eea141fae0982cfcdb9dd2e3d4953c4a",
+    "jarvis/console/jarvis_console/voice.py:92"
+   ]
+  },
+  {
+   "name": "kokoro-multi-lang-v1_0-sherpa",
+   "registry_name": "Kokoro 82M (English TTS)",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",
+   "revision": {
+    "source": "github-release",
+    "repo": "k2-fsa/sherpa-onnx",
+    "tag": "tts-models",
+    "asset": "kokoro-multi-lang-v1_0.tar.bz2"
+   },
+   "filename": "kokoro-multi-lang-v1_0.tar.bz2",
+   "sha256": "c5f7e2d2caf082bc1d20fb70334a61d99d20b484500aad32e7cf84c128ea3298",
+   "bytes": 349906910,
+   "licence": "Apache-2.0 (espeak-ng data inside is GPL-3.0)",
+   "dest": "downloads/kokoro-multi-lang-v1_0.tar.bz2",
+   "optional": false,
+   "unpack_to": "models/voice/tts/kokoro-multi-lang-v1_0",
+   "source_evidence": [
+    "https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/tags/tts-models (asset digest)",
+    "jarvis/console/jarvis_console/voice.py:96-97",
+    "jarvis/docs/research/02-voice-and-local-models.md:383 (tarball SHA not recorded)"
+   ],
+   "notes": "DISAGREEMENT inside upstream: the release's tts-models/checksum.txt (last updated 2026-05-20) lists c133d26353d776da730870dac7da07dbfc9a5e3bc80cc5e8e83ab6e823be7046, but the asset was re-uploaded on 2026-09-08 and GitHub's digest of the current file is the value locked here. The laptop downloaded it after 2026-09-08. The HF sha f3ff3571 in the docs is hexgrad/Kokoro-82M (PyTorch upstream), not this export."
+  },
+  {
+   "name": "piper-hi_in-rohan-medium-onnx",
+   "registry_name": "Piper (engine + Hindi/Telugu voices)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx",
+   "revision": {
+    "source": "huggingface",
+    "repo": "rhasspy/piper-voices",
+    "commit": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+    "path": "hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx"
+   },
+   "filename": "hi_IN-rohan-medium.onnx",
+   "sha256": "b65dc80fb34d9dcd1cf684cb297966a34983bbc93bb1696fe207f32b0b33a091",
+   "bytes": 62950044,
+   "licence": "dataset licence: IITM IndicTTS (https://www.iitm.ac.in/donlab/indictts/downloads/license.pdf), per MODEL_CARD",
+   "dest": "models/voice/tts/piper-voices/hi_IN-rohan-medium.onnx",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/rhasspy/piper-voices/revision/c10ece1aade4",
+    "https://huggingface.co/api/models/rhasspy/piper-voices/tree/c10ece1aade47bb51c153c893d14e5bf8e5b7117/hi/hi_IN/rohan/medium",
+    "jarvis/console/jarvis_console/voice.py:98-100",
+    "jarvis/docs/research/02-voice-and-local-models.md:73,384"
+   ],
+   "existing_pin": {
+    "source": "jarvis/docs/research/02-voice-and-local-models.md:384",
+    "revision": "c10ece1aade4",
+    "sha256": null,
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "piper-hi_in-rohan-medium-onnx-json",
+   "registry_name": "Piper (engine + Hindi/Telugu voices)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "rhasspy/piper-voices",
+    "commit": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+    "path": "hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx.json"
+   },
+   "filename": "hi_IN-rohan-medium.onnx.json",
+   "sha256": null,
+   "bytes": 5041,
+   "licence": "dataset licence: IITM IndicTTS (https://www.iitm.ac.in/donlab/indictts/downloads/license.pdf), per MODEL_CARD",
+   "dest": "models/voice/tts/piper-voices/hi_IN-rohan-medium.onnx.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "1a4e2cc13929f7e26979fd2c50312ebbe2a802d7",
+   "source_evidence": [
+    "https://huggingface.co/api/models/rhasspy/piper-voices/revision/c10ece1aade4",
+    "https://huggingface.co/api/models/rhasspy/piper-voices/tree/c10ece1aade47bb51c153c893d14e5bf8e5b7117/hi/hi_IN/rohan/medium",
+    "jarvis/console/jarvis_console/voice.py:98-100",
+    "jarvis/docs/research/02-voice-and-local-models.md:73,384"
+   ]
+  },
+  {
+   "name": "piper-te_in-venkatesh-medium-onnx",
+   "registry_name": "Piper (engine + Hindi/Telugu voices)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/te/te_IN/venkatesh/medium/te_IN-venkatesh-medium.onnx",
+   "revision": {
+    "source": "huggingface",
+    "repo": "rhasspy/piper-voices",
+    "commit": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+    "path": "te/te_IN/venkatesh/medium/te_IN-venkatesh-medium.onnx"
+   },
+   "filename": "te_IN-venkatesh-medium.onnx",
+   "sha256": "dfaa5b7833cd48d946f3fe18c9c934aaa4e8590aac6922fddf34783a694c3c87",
+   "bytes": 63516050,
+   "licence": "CC-BY-4.0 (dataset ai4bharat/indicvoices_r), per MODEL_CARD",
+   "dest": "models/voice/tts/piper-voices/te_IN-venkatesh-medium.onnx",
+   "optional": false,
+   "source_evidence": [
+    "https://huggingface.co/api/models/rhasspy/piper-voices/revision/c10ece1aade4",
+    "https://huggingface.co/api/models/rhasspy/piper-voices/tree/c10ece1aade47bb51c153c893d14e5bf8e5b7117/te/te_IN/venkatesh/medium",
+    "jarvis/console/jarvis_console/voice.py:98-100",
+    "jarvis/docs/research/02-voice-and-local-models.md:73,384"
+   ],
+   "existing_pin": {
+    "source": "jarvis/docs/research/02-voice-and-local-models.md:384",
+    "revision": "c10ece1aade4",
+    "sha256": null,
+    "agrees_with_upstream": true
+   }
+  },
+  {
+   "name": "piper-te_in-venkatesh-medium-onnx-json",
+   "registry_name": "Piper (engine + Hindi/Telugu voices)",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/te/te_IN/venkatesh/medium/te_IN-venkatesh-medium.onnx.json",
+   "revision": {
+    "source": "huggingface",
+    "repo": "rhasspy/piper-voices",
+    "commit": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+    "path": "te/te_IN/venkatesh/medium/te_IN-venkatesh-medium.onnx.json"
+   },
+   "filename": "te_IN-venkatesh-medium.onnx.json",
+   "sha256": null,
+   "bytes": 4973,
+   "licence": "CC-BY-4.0 (dataset ai4bharat/indicvoices_r), per MODEL_CARD",
+   "dest": "models/voice/tts/piper-voices/te_IN-venkatesh-medium.onnx.json",
+   "optional": false,
+   "unpinned_reason": "small non-LFS file: Hugging Face publishes only its git blob SHA-1 (no sha256); fetch.py checks git_blob_sha1 and bytes when run with --allow-unpinned",
+   "git_blob_sha1": "319f97853e9036e84422299b434d25c561b7a450",
+   "source_evidence": [
+    "https://huggingface.co/api/models/rhasspy/piper-voices/revision/c10ece1aade4",
+    "https://huggingface.co/api/models/rhasspy/piper-voices/tree/c10ece1aade47bb51c153c893d14e5bf8e5b7117/te/te_IN/venkatesh/medium",
+    "jarvis/console/jarvis_console/voice.py:98-100",
+    "jarvis/docs/research/02-voice-and-local-models.md:73,384"
+   ]
+  },
+  {
+   "name": "silero-vad-v6.2.3-onnx",
+   "registry_name": "Silero VAD",
+   "kind": "model",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://raw.githubusercontent.com/snakers4/silero-vad/1e261b036686cd0017d500ee96acd1c4ba572a9d/src/silero_vad/data/silero_vad.onnx",
+   "revision": {
+    "source": "github-repo",
+    "repo": "snakers4/silero-vad",
+    "tag": "v6.2.3",
+    "commit": "1e261b036686cd0017d500ee96acd1c4ba572a9d",
+    "path": "src/silero_vad/data/silero_vad.onnx"
+   },
+   "filename": "silero_vad.onnx",
+   "sha256": null,
+   "bytes": 2327524,
+   "licence": "MIT",
+   "dest": "models/voice/vad/silero_vad.onnx",
+   "optional": false,
+   "git_blob_sha1": "80c5592ef1f4c9ede3e357bbd02eb863358a6a9d",
+   "unpinned_reason": "the file lives in git (not LFS) and the v6.2.3 release has no assets: upstream publishes no sha256, only the git blob SHA-1 (checked by fetch.py with --allow-unpinned)",
+   "source_evidence": [
+    "https://api.github.com/repos/snakers4/silero-vad/contents/src/silero_vad/data/silero_vad.onnx?ref=1e261b03",
+    "jarvis/docs/research/07-integration-decisions.md:40",
+    "jarvis/console/jarvis_console/voice.py:125"
+   ],
+   "notes": "Alternative with a published sha256: sherpa-onnx asr-models/silero_vad.onnx (sha256:9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6, 643854 bytes), a different file (older export). Which one the laptop holds is not recorded."
+  },
+  {
+   "name": "sherpa-kws-zipformer-zh-en-3m-2025-12-20",
+   "registry_name": "sherpa-onnx KWS model zipformer-zh-en-3M-2025-12-20 (N.E.K.O)",
+   "kind": "archive",
+   "machine": [
+    "laptop"
+   ],
+   "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2",
+   "revision": {
+    "source": "github-release",
+    "repo": "k2-fsa/sherpa-onnx",
+    "tag": "kws-models",
+    "asset": "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2"
+   },
+   "filename": "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2",
+   "sha256": "68447f4fbc67e70eee3a93961f36e81e98f47aef73ce7e7ca00885c6cd3616a6",
+   "bytes": 32885699,
+   "licence": "unknown (upstream states none for these weights)",
+   "dest": "downloads/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2",
+   "optional": true,
+   "source_evidence": [
+    "https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/tags/kws-models (asset digest)",
+    "main_logic/voice_identity_service/wake_word_bundle.py:25-27",
+    "release file kws-models/checksum.txt (same value)"
+   ],
+   "existing_pin": {
+    "sha256": "68447f4fbc67e70eee3a93961f36e81e98f47aef73ce7e7ca00885c6cd3616a6",
+    "agrees_with_upstream": true
+   },
+   "notes": "N.E.K.O downloads and checks this itself into its wake-word cache; locked here for the record and offline installs."
+  }
+ ],
+ "not_locked": [
+  {
+   "registry_name": "sherpa-onnx (ASR runtime + KWS wake word)",
+   "unpinned_reason": "The KWS runtime wheel 1.13.8+neko.kws2 is built locally from commit 11afbd00 with two patches (scripts/wake_word/build_wake_word_runtime.ps1); there is no upstream artefact to pin and its hash exists only on D:. The stock sherpa-onnx 1.13.8 wheel is a pip dependency (jarvis/tools/requirements/jarvis-venv.txt), handled by the pip lock."
+  },
+  {
+   "registry_name": "uv",
+   "unpinned_reason": "No uv version is chosen anywhere in the repo (the test image runs an unpinned 'pip install uv'). Pick a version, then pin the astral-sh/uv release asset digests here."
+  }
+ ]
+}

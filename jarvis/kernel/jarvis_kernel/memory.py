@@ -38,6 +38,46 @@ def _words(s: str) -> set:
     return {w for w in re.findall(r"[a-z0-9]+", str(s)[:MAX_QUERY].lower()) if len(w) > 2}
 
 
+# Ranking for resolve() (2026-10-17): SQLite FTS5 BM25 over the same words _words() keeps, compared after Porter stemming
+# ("recipes" = "recipe", "trains" = "train"). BM25 weighs a rare shared word above a common one ("seat" shared by four
+# entries counts less than "aisle"). An in-memory index is built per call from the entries being ranked, so no copy of any
+# text is kept on disk (forget() stays real erasure). Measured on jarvis/kernel/tests/fixtures/memory_retrieval.json with
+# jarvis/evals/memory_retrieval.py. Without FTS5 in this Python's sqlite3, the word-overlap ranking below is used as before.
+RANK_TOKENIZER = "porter unicode61"
+
+
+def _fts_rank(query: str, texts: list):
+    """(bm25 by text index for the texts that share at least one stemmed word with the query, the query's stemmed words,
+    each text's stemmed words), or None when FTS5 is missing. Lower bm25 is better."""
+    import sqlite3
+
+    def toks(s):
+        return " ".join(w for w in re.findall(r"[a-z0-9]+", str(s)[:MAX_QUERY].lower()) if len(w) > 2)
+    q = toks(query)
+    if not q or not texts:
+        return {}, set(), {}
+    c = sqlite3.connect(":memory:")
+    try:
+        c.execute(f"CREATE VIRTUAL TABLE d USING fts5(t, tokenize='{RANK_TOKENIZER}')")
+        c.execute(f"CREATE VIRTUAL TABLE q USING fts5(t, tokenize='{RANK_TOKENIZER}')")
+        c.execute("CREATE VIRTUAL TABLE dv USING fts5vocab(d, 'instance')")
+        c.execute("CREATE VIRTUAL TABLE qv USING fts5vocab(q, 'instance')")
+        c.executemany("INSERT INTO d(rowid, t) VALUES (?,?)", [(i + 1, toks(t)) for i, t in enumerate(texts)])
+        c.execute("INSERT INTO q(rowid, t) VALUES (1, ?)", (q,))
+        qterms = {r[0] for r in c.execute("SELECT term FROM qv")}
+        terms = {}
+        for term, doc in c.execute("SELECT term, doc FROM dv"):
+            terms.setdefault(doc - 1, set()).add(term)
+        # the query's own words (the tokenizer stems them once; stemming a stem again can change it): [a-z0-9] only
+        match = " OR ".join('"' + w + '"' for w in sorted(set(q.split())))
+        rows = c.execute("SELECT rowid, bm25(d) FROM d WHERE d MATCH ?", (match,)).fetchall() if match else []
+    except sqlite3.OperationalError:
+        return None
+    finally:
+        c.close()
+    return {r - 1: s for r, s in rows}, qterms, terms
+
+
 def _history(raw):
     """An entry's stored history; None when it is damaged (not a JSON list), so one bad row never breaks the others."""
     try:
@@ -88,18 +128,28 @@ class Memories:
         return [{k: m[k] for k in ("id", "kind", "text", "version", "updated")} for m in out]
 
     def resolve(self, owner, query, scope="default"):
-        """Entries that match *query*, best first, with a score; 'unique' only when one clearly stands out."""
-        q = _words(query)
+        """Entries that match *query*, best first, with a score; 'unique' only when one clearly stands out.
+        An entry with no word in common (after stemming) is never a candidate. Order: BM25 (FTS5), then the overlap score.
+        score = the share of words in common (Jaccard over stemmed words); unique needs the same margins as before AND
+        the BM25 winner to be the overlap winner, so it is never claimed more readily than by the overlap rule alone."""
+        entries = self.list(owner, scope)
+        ranked = _fts_rank(query, [m["text"] for m in entries])
+        if ranked is None:                                 # no FTS5: exact-word overlap only (the ranking before 2026-10-17)
+            q, words, bm25 = _words(query), [_words(m["text"]) for m in entries], None
+        else:
+            bm25, q, words = ranked
+            words = [words.get(i, set()) for i in range(len(entries))]
         scored = []
-        for m in self.list(owner, scope):
-            shared = q & _words(m["text"])
+        for i, m in enumerate(entries):
+            shared = q & words[i]
             if shared:                                     # an entry with no word in common is not a match at all
-                scored.append((len(shared) / len(q | _words(m["text"])), m))
-        scored.sort(key=lambda x: -x[0])
-        best = scored[0][0] if scored else 0
-        second = scored[1][0] if len(scored) > 1 else 0
-        unique = bool(scored) and best >= 0.34 and best - second >= 0.15
-        return {"unique": unique, "candidates": [dict(m, score=round(s, 2)) for s, m in scored[:5]]}
+                scored.append((len(shared) / len(q | words[i]), bm25.get(i, 0.0) if bm25 is not None else 0.0, i, m))
+        by_overlap = sorted(scored, key=lambda x: (-x[0], x[2]))
+        scored.sort(key=lambda x: (x[1], -x[0], x[2]))     # bm25 is lower-is-better; ties: more overlap, then older entry
+        best = by_overlap[0][0] if by_overlap else 0
+        second = by_overlap[1][0] if len(by_overlap) > 1 else 0
+        unique = bool(scored) and best >= 0.34 and best - second >= 0.15 and scored[0][2] == by_overlap[0][2]
+        return {"unique": unique, "candidates": [dict(m, score=round(s, 2)) for s, _, _, m in scored[:5]]}
 
     # ---- writes ----
     def _check_text(self, text):

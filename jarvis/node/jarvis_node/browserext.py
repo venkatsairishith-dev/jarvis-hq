@@ -35,6 +35,11 @@ REGISTRY = os.environ.get("NEKO_BROWSER_PROFILES", r"D:\jarvis\N.E.K.O-data\neko
 DEFAULT_ACCOUNT = os.environ.get("NEKO_DEFAULT_ACCOUNT_PREFIX", "venkatgaminggem17")   # the owner's default (2026-10-16)
 NODE = next((p for p in (r"C:\Program Files\nodejs\node.exe",) if os.path.isfile(p)), "node")
 MCP_CLI = os.environ.get("NEKO_PLAYWRIGHT_MCP", r"D:\jarvis\tools\playwright-mcp\node_modules\@playwright\mcp\cli.js")
+# The one @playwright/mcp version this node starts (2026-10-17). Checked at every start against the package.json next to
+# cli.js, so an `npm update` cannot silently bring a different server: 0.0.82 began exposing a page's own WebMCP
+# tools (webmcp_*, untrusted) and 0.0.81 changed the Linux sandbox default. Change it only after reading the release
+# notes; the kernel refuses webmcp_* tools whatever this says (policy.py).
+MCP_VERSION = "0.0.83"
 TOKEN_FILE = r"D:\jarvis-secrets\playwright\extension-token.txt"
 EXTENSION_ID = "mmlmfjhmonkocbjadbfplnigmagldckm"
 ALLOWED_TOOLS = {"browser_tabs", "browser_navigate", "browser_snapshot", "browser_find", "browser_click", "browser_type",
@@ -47,6 +52,21 @@ EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 class BrowserError(Exception):
     pass
+
+
+def check_mcp_version(cli: str = None, want: str = MCP_VERSION) -> str:
+    """The installed @playwright/mcp is the pinned version, or BrowserError says exactly what to install."""
+    cli = cli or MCP_CLI
+    try:
+        with open(os.path.join(os.path.dirname(cli), "package.json"), encoding="utf-8") as f:
+            info = json.load(f)
+        got = info.get("version") if info.get("name") == "@playwright/mcp" else None
+    except (OSError, ValueError, AttributeError):
+        got = None
+    if got != want:
+        raise BrowserError(f"Playwright MCP {got or 'is not installed or unreadable'}{' is installed' if got else ''} at "
+                           f"{os.path.dirname(cli)}; Neko starts only the pinned {want}: npm install --save-exact @playwright/mcp@{want}")
+    return got
 
 
 # ---------------------------------------------------------------- profiles
@@ -184,6 +204,7 @@ class Session:
             argv = [NODE, MCP_CLI, "--headless", "--isolated", "--browser", "chrome", "--image-responses", "omit",
                     "--output-dir", self.work]
         if session_factory is None:                     # the real server, started through runtime so a cancel kills it
+            check_mcp_version()
             from .mcpclient import StdioSession
             os.makedirs(self.work, exist_ok=True)
             self.s = StdioSession(argv, env=env, cwd=self.work, popen=runtime.popen)

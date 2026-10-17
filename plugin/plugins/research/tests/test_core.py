@@ -265,6 +265,8 @@ def test_claim_checker_on_the_labelled_pairs():
     true_ok = sum(verify.supported(h, [d["passages"][p]])[0] for p, lab, h in d["pairs"] if lab == "yes")
     false_ok = sum(verify.supported(h, [d["passages"][p]])[0] for p, lab, h in d["pairs"] if lab == "no")
     assert true_ok >= 17 and false_ok <= 2, (true_ok, false_ok)
+    if verify.backend().name == "minicheck-roberta":                    # the default since 2026-10-17 (evidence 11)
+        assert true_ok == 18 and false_ok == 0, (true_ok, false_ok)
 
 
 def test_sentences_addressed_to_an_ai_are_never_evidence():
@@ -361,3 +363,102 @@ def test_a_long_summary_statement_still_makes_a_valid_deck():
     d = dspec.deck(core.to_deck(sp))
     glance = d["slides"][1]["bullets"][0]["text"]
     assert glance.endswith("…[S1][S2]") and len(glance) <= 240
+
+
+class _FakeEnc:
+    def __init__(self, n):
+        self.ids, self.attention_mask, self.type_ids = [1] * n, [1] * n, [0] * n
+
+
+class _FakeSess:
+    """Says 'entails' only when the premise and claim are the same text; records that the model really ran."""
+    def __init__(self, calls):
+        self.calls = calls
+
+    def run(self, _out, feeds):
+        import numpy as np
+        self.calls.append(len(feeds["input_ids"][0]))
+        same = len(feeds["input_ids"][0]) == 2
+        return [np.array([[0.0, 9.0, 0.0] if same else [9.0, 0.0, 0.0]])]
+
+
+def _fake_checker(monkeypatch, tmp_path, *present):
+    """RESEARCH_NLI_DIR points at the xsmall folder; xsmall and each checker in `present` get a (dummy) model file in
+    their folders. _load is replaced, so no real model runs; it records which checker was loaded."""
+    from plugin.plugins.research import verify
+    for name in ("xsmall",) + present:
+        b = verify.BACKENDS[name]
+        f = tmp_path / b.folder / b.onnx
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"")
+    monkeypatch.setenv("RESEARCH_NLI_DIR", str(tmp_path / verify.BACKENDS["xsmall"].folder))
+    monkeypatch.delenv("RESEARCH_NLI_MODEL", raising=False)
+    loaded, calls = [], []
+
+    class Tok:
+        def encode(self, premise, claim=None, add_special_tokens=True):
+            if claim is None and "</s>" in premise:                      # MiniCheck-RoBERTa: "passage</s>claim"
+                premise, claim = premise.split("</s>", 1)
+            return _FakeEnc(2 if claim is None or premise == claim else 3)
+
+    def fake_load(name, folder):
+        loaded.append((name, folder))
+        return Tok(), _FakeSess(calls), {"input_ids", "attention_mask"}
+    monkeypatch.setattr(verify, "_load", fake_load)
+    return verify, loaded, calls
+
+
+def test_checker_selection_default_and_explicit_names(monkeypatch, tmp_path):
+    import warnings
+    verify, loaded, _ = _fake_checker(monkeypatch, tmp_path, "minicheck-roberta", "factcg")
+    assert verify.DEFAULT_MODEL == "minicheck-roberta" and verify.FALLBACK_MODEL == "xsmall"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")                                   # the default with its files never warns
+        assert verify.backend().name == "minicheck-roberta" and verify.available()
+        verify.entailment("a", "a")
+    assert loaded[-1] == ("minicheck-roberta", str(tmp_path / "minicheck-roberta-large"))
+    for name, folder in (("FactCG ", "factcg-deberta-v3-large"), ("xsmall", "nli-deberta-v3-xsmall")):
+        monkeypatch.setenv("RESEARCH_NLI_MODEL", name)                   # a known name, any case, is used as given
+        verify.entailment("a", "a")
+        assert loaded[-1] == (name.strip().lower(), str(tmp_path / folder))
+
+
+def test_unknown_checker_name_falls_back_to_the_default_with_a_warning_never_to_no_checking(monkeypatch, tmp_path):
+    verify, loaded, calls = _fake_checker(monkeypatch, tmp_path, "minicheck-roberta")
+    monkeypatch.setenv("RESEARCH_NLI_MODEL", "gpt-judge")
+    with pytest.warns(RuntimeWarning, match="not a known claim checker.*using minicheck-roberta"):
+        assert verify.backend().name == "minicheck-roberta"
+    with pytest.warns(RuntimeWarning):
+        assert verify.available()                                        # the plugin keeps its verifier (not None)
+    with pytest.warns(RuntimeWarning):
+        assert verify.supported("The tower is tall.", ["The tower is tall."])[0]
+    with pytest.warns(RuntimeWarning):
+        assert not verify.supported("The tower is short.", ["The tower is tall."])[0]   # still rejects: the model ran
+    assert calls and {n for n, _ in loaded} == {"minicheck-roberta"}
+
+
+def test_missing_checker_files_fall_back_to_xsmall_with_a_warning(monkeypatch, tmp_path):
+    """The laptop has only xsmall until the MiniCheck file is copied there: checking goes on with xsmall."""
+    verify, loaded, calls = _fake_checker(monkeypatch, tmp_path)         # only xsmall present
+    with pytest.warns(RuntimeWarning, match="'minicheck-roberta'.*not found; using xsmall"):
+        assert verify.backend().name == "xsmall"
+    with pytest.warns(RuntimeWarning, match="'hhem'.*not found; using xsmall"):
+        assert verify.backend("hhem").name == "xsmall"
+    monkeypatch.setenv("RESEARCH_NLI_MODEL", "no-such-model")            # unknown name AND default missing
+    with pytest.warns(RuntimeWarning) as got:
+        assert verify.available()
+        assert not verify.supported("The tower is short.", ["The tower is tall."])[0]
+    assert any("not a known" in str(w.message) for w in got) and any("using xsmall" in str(w.message) for w in got)
+    assert calls and {n for n, _ in loaded} == {"xsmall"}
+
+
+def test_prompt_checkers_cut_the_passage_never_the_claim():
+    """A prompt-style input that is too long loses the end of the passage; the claim stays whole."""
+    from tokenizers import Tokenizer, models, pre_tokenizers
+    from plugin.plugins.research import verify
+    words = ["w%d" % i for i in range(700)] + ["claim", "words", "here", "[UNK]"]
+    tok = Tokenizer(models.WordLevel({w: i for i, w in enumerate(words)}, unk_token="[UNK]"))
+    tok.pre_tokenizer = pre_tokenizers.WhitespaceSplit()
+    b = verify.Backend("t", "t", "m.onnx", prompt="{premise} {claim}", max_tokens=50)
+    enc = verify.encode(b, tok, " ".join(words[:700]), "claim words here")
+    assert len(enc.ids) <= 50 and enc.ids[-3:] == [700, 701, 702]

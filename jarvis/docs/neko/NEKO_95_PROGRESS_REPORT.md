@@ -542,9 +542,36 @@ python -m pytest jarvis\local_models -q                      # server flag guard
 python -m pytest plugin\plugins\desktop\tests -q             # includes the Windows msvcrt skills lock
 python jarvis\evals\neko95\bench\bench.py                    # 860 cases; Windows-only cases then run instead of deferring
 # decider on the real GPU (RSS is not measured on Windows):
-$env:NEKO_LLAMA_SERVER="D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe"; $env:NEKO_MODEL_DIR="D:\jarvis\models\gguf"
+# llama.cpp b11714 (chosen 2026-10-17 on the test server; configs still point at b11669): fetch, unpack, smoke-test,
+# then change b11669 -> b11714 in llama-swap.yaml, profiles\*.yaml and hwdetect.py; keep b11669 for a rollback
+python jarvis\tools\fetch.py --fetch llama-cpp-b11714-win-vulkan-x64 llama-cpp-b11714-win-cpu-x64   # then unzip to D:\jarvis\tools\llama.cpp\b11714\{vulkan,cpu}
+$env:NEKO_LLAMA_SERVER="D:\jarvis\tools\llama.cpp\b11714\vulkan\llama-server.exe"; $env:NEKO_MODEL_DIR="D:\jarvis\models\gguf"
 python jarvis\evals\neko95\bench\model_compare.py --models qwen3-4b-2507,qwen3-1.7b
+# -ctk q8_0 with -fa off (laptop test required before it goes on the decider line; evidence/08, KV section). The -faoff
+# variants run as llama-swap.yaml does; the plain candidates leave flash attention on "auto" (garbage risk on RDNA1).
+python jarvis\evals\neko95\bench\model_compare.py --models qwen3-4b-2507-faoff,qwen3-4b-2507-faoff-ctkq8
 # owner hardware: G-036 (44.1 kHz-only microphone), G-037 (pause with the real microphone)
 ```
 Research reports with links: `evidence/07-small-models-2026-10-17.md` (ranked shortlist and compatibility),
 `evidence/08-runtimes-agents-infra-2026-10-17.md`, `evidence/09-research-reliability-2026-10-17.md`.
+
+## One JARVIS: combining the tools (2026-10-17 evening; owner's direction, PR #5 on jarvis-hq)
+Owner: N.E.K.O and every tool JARVIS uses are one product. Combine them, use them fully, test, then let JARVIS take
+care of them with sub-agents (fixes as branch + PR that the owner approves; old state kept; everything logged).
+- **Phase 1, inventory:** `jarvis/tools/registry.json` (88 tools), `evidence/10-tool-inventory-2026-10-17.md`.
+- **Phase 2, combine:** one lock (`jarvis/tools/jarvis.lock.json`, 54+ downloads pinned by revision and sha256),
+  verified fetcher (`jarvis/tools/fetch.py`), uv groups `jarvis` / `jarvis-dev`, laptop venv pins, N.E.K.O.-Tauri
+  submodule at b7b4fd70 (Windows build waits for the laptop).
+- **Phase 3, use them fully** (each adopted only on measurement): MiniCheck-RoBERTa-Large claim checker
+  (`evidence/11-claim-checker-candidates-2026-10-17.md`), llama.cpp b11714 (test server; laptop configs stay on
+  b11669 until it is smoke-tested there), optional llama-server key in the gateway, idempotency keys in the kernel,
+  webmcp_* page tools denied and Playwright MCP pinned to 0.0.83, BM25 + stemming memory resolve.
+- **Phase 4, full run on this server after phase 3:** benchmark v2 834 pass, 0 fail, 0 error, 26 deferred of 860
+  (`results/bench-20261017-220721.json`); scorecard v2 9.81 (`results/scorecard-v2-20261017-220722.json`; research 10,
+  H-042 fixed by the new checker); kernel 570 OK; console 93 OK; plugin suites all pass (research 40, desktop 115,
+  deliverables 36, local_team 31, main_agent 73, ...); local_models 12, wake 17, tools 52; plugin/tests 4289 passed with
+  the 8 known metadata snapshots failing; tests/unit 41981 passed with the 4 known failures. Claims (MiniCheck):
+  claims_v2 0/46, nli_pairs 0/18, VitaminC 9/200 false acceptances, VitaminC recall 0.71. Memory fixture hit@1 0.979.
+- **Laptop items added:** fetch the MiniCheck model (or copy it from the server), fetch and smoke-test llama.cpp b11714
+  before switching the config paths, test `-ctk q8_0` with flash attention off on Vulkan, check that Playwright MCP
+  0.0.83 is installed (the node now refuses any other version), send Idempotency-Key from the phone UI / desktop.

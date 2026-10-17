@@ -1,15 +1,26 @@
-"""Check whether a cited passage supports a sentence, with a small local NLI model (no PyTorch; onnxruntime only).
+"""Check whether a cited passage supports a sentence, with a small local checker model (no PyTorch; onnxruntime only).
 
-Model: cross-encoder/nli-deberta-v3-xsmall (Apache-2.0), int8 ONNX, pinned revision a150876, sha256-checked, 87 MB, in
-D:\\jarvis\\models\\nli. Labels: contradiction, entailment, neutral. A sentence counts as supported when one of its cited
-passages entails it, and every number in it appears in that passage (models are weak at numbers).
+Default model since 2026-10-17 (evidence 11): lytang/MiniCheck-RoBERTa-Large (MIT), revision 74c89196, converted to int8
+ONNX here by jarvis/evals/neko95/bench/nli_export.py (onnx/model_quint8.onnx, 357 MB, sha256 eb111209...2dc0), in
+D:\\jarvis\\models\\nli\\minicheck-roberta-large. Measured against the previous checker under the rule written before the
+runs: false acceptances 0/46, 0/18, 9/200 (xsmall 2/46, 1/18, 10/200), VitaminC recall 0.71 (0.44), 3.6-3.9x the time.
+Fallback: cross-encoder/nli-deberta-v3-xsmall (Apache-2.0), int8 ONNX, pinned revision a150876, sha256-checked, 87 MB,
+labels contradiction, entailment, neutral; used when the default's files are missing. A sentence counts as supported
+when one of its cited passages entails it, and every number in it appears in that passage (models are weak at numbers).
 Measured choice (2026-10-16): the Jev decision model answered "supported" for every claim (8/16), so it is not used here.
+
+Other checkers (env RESEARCH_NLI_MODEL): xsmall, factcg(-fp32), minicheck-deberta(-fp32), hhem. Only the model call
+changes: thresholds, sentence windows and every deterministic guard below are the same for all. An unknown name falls
+back to the default, and a checker whose files are missing to xsmall, with a warning - never to no checking.
+RESEARCH_NLI_DIR is a model folder under models/nli; each checker is found there or in its own sibling folder.
 """
 from __future__ import annotations
 
 import os
 import re
 import unicodedata
+import warnings
+from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
@@ -23,25 +34,112 @@ WINDOW_MIN = 0.95
 MAX_TOKENS = 384
 
 
-@lru_cache(maxsize=1)
-def _load():
+@dataclass(frozen=True)
+class Backend:
+    """One checker model. `prompt` builds the single input text for two-label checkers (None: an NLI premise/hypothesis
+    pair with labels contradiction, entailment, neutral); the score is always P(label 1) = entailed / supported."""
+    name: str
+    folder: str                  # default folder name under models/nli
+    onnx: str                    # model file, relative to the folder
+    tokenizer: str = "tokenizer.json"
+    prompt: str | None = None    # format string with {premise} and {claim}
+    max_tokens: int = MAX_TOKENS
+
+
+DEFAULT_MODEL = "minicheck-roberta"
+FALLBACK_MODEL = "xsmall"                    # small, pinned in the lock, on every machine since 2026-10-16
+BACKENDS = {b.name: b for b in (
+    Backend("xsmall", "nli-deberta-v3-xsmall", "onnx/model_quint8_avx2.onnx"),
+    # Input formats as in the authors' inference code: FactCG (github derenlei/FactCG 41f18541, factcg/utils.py
+    # INSTRUCTION_TEMPLATE), MiniCheck (github Liyan06/MiniCheck b58b9fa6: document + eos token + claim as one text),
+    # HHEM-2.1-Open (configuration_hhem_v2.py prompt; score = class 1 of the first token).
+    Backend("factcg", "factcg-deberta-v3-large", "onnx/model_quint8.onnx", max_tokens=512,
+            prompt="{premise}\n\nChoose your answer: based on the paragraph above can we conclude that \"{claim}\"?\n\n"
+                   "OPTIONS:\n- Yes\n- No\nI think the answer is "),
+    # int8 changed 18 of 36 decisions against PyTorch for this model (evidence 11), so the fp32 file is measured too.
+    Backend("factcg-fp32", "factcg-deberta-v3-large", "onnx/model.onnx", max_tokens=512,
+            prompt="{premise}\n\nChoose your answer: based on the paragraph above can we conclude that \"{claim}\"?\n\n"
+                   "OPTIONS:\n- Yes\n- No\nI think the answer is "),
+    Backend("minicheck-deberta", "minicheck-deberta-v3-large", "onnx/model_quint8.onnx", max_tokens=512,
+            prompt="{premise}[SEP]{claim}"),
+    # int8 changed 8 of 36 decisions against PyTorch for this model (evidence 11), so the fp32 file is measured too.
+    Backend("minicheck-deberta-fp32", "minicheck-deberta-v3-large", "onnx/model.onnx", max_tokens=512,
+            prompt="{premise}[SEP]{claim}"),
+    Backend("minicheck-roberta", "minicheck-roberta-large", "onnx/model_quint8.onnx", max_tokens=512,
+            prompt="{premise}</s>{claim}"),
+    Backend("hhem", "hhem-2.1-open", "onnx/model_quint8.onnx", tokenizer="flan-t5-base/tokenizer.json", max_tokens=512,
+            prompt="<pad> Determine if the hypothesis is true given the premise?\n\nPremise: {premise}\n\nHypothesis: {claim}"),
+)}
+
+
+def model_dir(b: Backend) -> str:
+    """The folder holding b's model file: RESEARCH_NLI_DIR itself, or the sibling folder named after b."""
+    configured = os.environ.get("RESEARCH_NLI_DIR") or MODEL_DIR
+    tries = [configured, os.path.join(os.path.dirname(configured.rstrip("/\\")), b.folder)]
+    for d in tries:
+        if os.path.isfile(os.path.join(d, b.onnx)):
+            return d
+    return tries[0] if b.name == FALLBACK_MODEL else tries[1]
+
+
+def backend(name: str | None = None) -> Backend:
+    """The checker in use: `name`, else env RESEARCH_NLI_MODEL, else the default. An unknown name falls back to the
+    default, and a checker whose files are missing to xsmall, each with a warning."""
+    want = (name if name is not None else os.environ.get("RESEARCH_NLI_MODEL", "")).strip().lower() or DEFAULT_MODEL
+    b = BACKENDS.get(want)
+    if b is None:
+        warnings.warn(f"RESEARCH_NLI_MODEL={want!r} is not a known claim checker ({', '.join(BACKENDS)}); "
+                      f"using {DEFAULT_MODEL}", RuntimeWarning, stacklevel=2)
+        b = BACKENDS[DEFAULT_MODEL]
+    if b.name != FALLBACK_MODEL and not os.path.isfile(os.path.join(model_dir(b), b.onnx)):
+        warnings.warn(f"claim checker {b.name!r}: {os.path.join(model_dir(b), b.onnx)} not found; using {FALLBACK_MODEL}",
+                      RuntimeWarning, stacklevel=2)
+        return BACKENDS[FALLBACK_MODEL]
+    return b
+
+
+@lru_cache(maxsize=4)
+def _load(name: str, folder: str):
     import onnxruntime as ort
     from tokenizers import Tokenizer
-    tok = Tokenizer.from_file(os.path.join(MODEL_DIR, "tokenizer.json"))
-    tok.enable_truncation(MAX_TOKENS)
+    b = BACKENDS[name]
+    tok = Tokenizer.from_file(os.path.join(folder, b.tokenizer))
+    if b.prompt is None:
+        tok.enable_truncation(b.max_tokens)
+    else:
+        tok.no_truncation()
+        tok.no_padding()
     opts = ort.SessionOptions()
     opts.intra_op_num_threads = 4
-    sess = ort.InferenceSession(os.path.join(MODEL_DIR, "onnx", "model_quint8_avx2.onnx"), opts, providers=["CPUExecutionProvider"])
+    sess = ort.InferenceSession(os.path.join(folder, b.onnx), opts, providers=["CPUExecutionProvider"])
     return tok, sess, {i.name for i in sess.get_inputs()}
 
 
 def available() -> bool:
-    return os.path.isfile(os.path.join(MODEL_DIR, "onnx", "model_quint8_avx2.onnx"))
+    b = backend()
+    return os.path.isfile(os.path.join(model_dir(b), b.onnx))
+
+
+def encode(b: Backend, tok, premise: str, hypothesis: str):
+    """Token ids for the pair. A prompt-style input that is too long loses the end of the premise, never the claim."""
+    if b.prompt is None:
+        return tok.encode(premise, hypothesis)
+    enc = tok.encode(b.prompt.format(premise=premise, claim=hypothesis))
+    for _ in range(3):
+        over = len(enc.ids) - b.max_tokens
+        if over <= 0:
+            break
+        p = tok.encode(premise, add_special_tokens=False)
+        keep = max(len(p.ids) - over - 2, 0)
+        premise = premise[:p.offsets[keep][0]] if keep < len(p.ids) else premise
+        enc = tok.encode(b.prompt.format(premise=premise, claim=hypothesis))
+    return enc
 
 
 def entailment(premise: str, hypothesis: str) -> float:
-    tok, sess, names = _load()
-    enc = tok.encode(premise, hypothesis)
+    b = backend()
+    tok, sess, names = _load(b.name, model_dir(b))
+    enc = encode(b, tok, premise, hypothesis)
     feeds = {"input_ids": np.array([enc.ids], dtype=np.int64), "attention_mask": np.array([enc.attention_mask], dtype=np.int64)}
     if "token_type_ids" in names:
         feeds["token_type_ids"] = np.array([enc.type_ids], dtype=np.int64)

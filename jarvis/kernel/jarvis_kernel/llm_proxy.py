@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import gateway, sizing
+from . import gateway, idempotency, sizing
 from .scrub import scrub
 
 MAX_BODY = 2 * 1024 * 1024
@@ -42,6 +42,7 @@ READ_ACTIONS = {("connector", "list"), ("connector", "result"), ("memory", "list
                 ("task", "get"), ("task", "checkpoint"), ("models", "status")}
 SHOWS_PER_HOUR = 12
 PREFERS_PER_DAY = 20
+CARETAKER_AGENT = "caretaker"  # the agent token name the caretaker runs under (jarvis/caretaker): its tasks are caretaker tasks
 
 
 def _h(s: str) -> str:
@@ -263,6 +264,8 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
     from .connector_service import ConnectorService
     connectors = ConnectorService(kernel, jobs)
     owner_plane.install_connectors(connectors)
+    idem = idempotency.Idempotency(kernel, clock)
+    owner_plane.idem = idem
     kernel.db.execute("CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)")
     lock = threading.Lock()
     dispatch_lock = threading.Lock()            # one dispatch decision at a time (the server answers on many threads)
@@ -428,6 +431,8 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 return 400, {"status": "refused", "reason": "unknown connector operation"}
             if tool == "task":
                 return task_action(agent, lane, op, target, p)
+            if tool == "caretaker" and op == "report":
+                return caretaker_report(agent, lane, p)
             if tool == "memory":
                 return memory_action(agent, lane, op, target, p)
             if tool == "lab" and op == "task":
@@ -475,6 +480,22 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
         except MemoryError as e:
             return 400, {"status": "refused", "reason": str(e)[:200]}
 
+    def caretaker_report(agent, lane, p):
+        """One caretaker run's summary into the audit chain: counts by kind and severity, and the task ids it created."""
+        if agent != CARETAKER_AGENT:
+            return 403, {"status": "refused", "reason": "only the caretaker's token reports caretaker runs"}
+        if not kernel.authorize(Action("caretaker", "report", "run", {}, lane, True)).allowed:
+            return 403, {"status": "refused"}
+
+        def counts(x):
+            return {str(k)[:30]: int(v) for k, v in list(x.items())[:12] if isinstance(v, int) and not isinstance(v, bool)} if isinstance(x, dict) else {}
+        made = [str(t) for t in (p.get("tasks") or [])[:50] if re.fullmatch(r"[0-9a-f]{12}", str(t))]
+        rec = {"run": str(p.get("run_id", ""))[:40], "by_kind": counts(p.get("by_kind")), "by_severity": counts(p.get("by_severity")),
+               "new": int(p.get("new") or 0) if str(p.get("new") or 0).isdigit() else 0, "tasks": made,
+               "owner_only": int(p.get("owner_only") or 0) if str(p.get("owner_only") or 0).isdigit() else 0}
+        seq = kernel.audit.append("caretaker_run", rec)
+        return 200, {"status": "done", "audit_seq": seq}
+
     def dispatch_to_lab(agent, lane, target, p):
         """Hand a task to the lab: the one guarded path (scrubbed instructions, no owner paths, one active dispatch per task).
         Used by an agent's lab_work, by automations and by agent-definition test runs. Returns (http status, reply)."""
@@ -492,8 +513,15 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
             return 400, {"status": "refused", "reason": "the lab cannot see the owner's computer: remove D:\\ / C:\\ / /mnt/ paths from "
                          "the instructions and criteria. The runner delivers verified files to D:\\jarvis\\outputs\\task-<id>\\ itself; "
                          "use a criterion like 'the files are delivered to the owner'."}
+        if t.get("source") == "caretaker" or agent == CARETAKER_AGENT:
+            # caretaker fixes reach main only as a pull request the owner merges: the text must be the fixed template
+            from .policy import caretaker_problems
+            why = caretaker_problems(instr, crit)
+            if why:
+                kernel.audit.append("caretaker_dispatch_refused", {"task": target, "agent": agent, "why": why[:5]})
+                return 400, {"status": "refused", "reason": "caretaker lab text must come from the caretaker template: " + "; ".join(why)[:300]}
         agent_kind = str(p.get("agent") or "hermes")
-        with dispatch_lock:                     # check and create as one step: two requests at once must not both pass
+        with dispatch_lock:                    # check and create as one step: two requests at once must not both pass
             t = tasks.get(target, owner=agent)
             active = kernel.db.execute("SELECT id FROM jobs WHERE kind='lab_run' AND state IN ('queued','running') AND params LIKE ?",
                                        (f'%"task": "{target}"%',)).fetchone()
@@ -516,8 +544,10 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
         if dup:                      # found live: the same request became two tasks and the lab queued both
             return 409, {"status": "refused", "task": dup[0], "reason": f"this request already has an open task ({dup[0]}, {dup[1]}): "
                          "use that one (task get) instead of creating another; the lab works on one task at a time and will tell you the outcome"}
+        # the caretaker's token always makes caretaker tasks, so their dispatch always passes the caretaker guard
+        source = "caretaker" if agent == CARETAKER_AGENT else str(p.get("source") or "agent")
         tid = tasks.create(agent, lane, p.get("request", ""), p.get("goal", target), p.get("plan"), p.get("criteria"),
-                           str(p.get("source") or "agent"), int(p.get("max_attempts") or 3), int(p.get("budget_s") or 3600))
+                           source, int(p.get("max_attempts") or 3), int(p.get("budget_s") or 3600))
         return 200, {"status": "done", "task": tid, "next": (
             "Hands-on work (writing and running code, tests, browsing, files) goes to the lab now: "
             "lab_work(task_id, instructions, public_ok=true). You cannot run or test anything yourself, and this task "
@@ -639,7 +669,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                     return self._json(400, {"error": "bad request"})
             if method == "GET" and self.path.split("?")[0].rstrip("/") == owner_mod.PREFIX + "stream":
                 return self._owner_stream()
-            code, reply = owner_plane.handle(method, self.path, body)
+            code, reply = owner_plane.handle(method, self.path, body, self.headers)
             return self._json(code, reply)
 
         def _owner_stream(self):
@@ -743,7 +773,9 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                         raise ValueError
                 except (ValueError, OSError):
                     return self._json(400, {"status": "refused", "reason": "bad request"})
-                code, reply = agent_action(agent, lane, body)
+                # a retried action with the same Idempotency-Key gets its first reply back instead of acting twice
+                code, reply = idem.run("agent:" + agent, idempotency.key_from(self.headers, body), body,
+                                       lambda: agent_action(agent, lane, body))
                 kernel.audit.append("agent_action", {"agent": agent, "lane": lane, "tool": str(body.get("tool", ""))[:20],
                                                      "op": str(body.get("op", ""))[:20], "status": reply.get("status")})
                 return self._json(code, reply)
@@ -830,15 +862,13 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 if summary:
                     payload["stream"] = False                        # read the whole summary to check it before passing it on
                 headers = {"Content-Type": "application/json", "User-Agent": "jarvis-llm-proxy/0.1"}
-                if p.key_file:
-                    try:
-                        with open(p.key_path(), encoding="utf-8-sig") as fh:
-                            headers["Authorization"] = "Bearer " + fh.read().strip()
-                    except (OSError, ValueError) as e:            # key withdrawn or unreadable: this provider fails, try the next
-                        last, why = f"key unreadable ({type(e).__name__})", "other"
-                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": "no_key"})
-                        outcomes.append(why)
-                        continue
+                try:
+                    headers.update(p.auth_headers())               # {} for a keyless or optional-and-absent key
+                except (OSError, ValueError) as e:                # key withdrawn or unreadable: this provider fails, try the next
+                    last, why = f"key unreadable ({type(e).__name__})", "other"
+                    kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": "no_key"})
+                    outcomes.append(why)
+                    continue
                 req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
                 resp, t_call = None, time.time()
                 for attempt in (1, 2):

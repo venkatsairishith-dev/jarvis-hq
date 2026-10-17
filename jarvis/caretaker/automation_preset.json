@@ -1,0 +1,26 @@
+{
+  "about": "Weekly caretaker scan. Install it through the existing automations API (POST /v1/jarvis/owner/automations with this whole object as the body, or the console's Automations screen). It is created PAUSED (enabled false): it runs only after the owner presses Resume on it in the console. It is a lab task, so the scan runs in the lab with public-lane models, never on the owner's machines or the Linux test server.",
+  "enabled": false,
+  "definition": {
+    "name": "Caretaker: weekly tool scan",
+    "action_kind": "lab_task",
+    "trigger_kind": "cron",
+    "schedule": "17 3 * * 1",
+    "tz": "UTC",
+    "catchup": "one",
+    "overlap": "skip",
+    "max_runs_per_day": 1,
+    "pause_after_failures": 2,
+    "action": {
+      "goal": "Weekly caretaker scan of every tool JARVIS uses; new findings become pull-request tasks for the owner",
+      "instructions": "Run the JARVIS caretaker once.\n1. Clone the repository named in ~/.config/jarvis-caretaker/config.json (field repo_url) into this workspace, or fetch and check out origin/main if a clone is already here.\n2. From the repository root run: python3 -m jarvis.caretaker.run --config ~/.config/jarvis-caretaker/config.json\n3. Copy the lines it prints (the summary with counts by kind and severity, the task ids it created and the notes) into EVIDENCE.md, exactly as printed.\nRules: do not change any file in the repository and do not open pull requests yourself; the caretaker creates one task per finding and each of those works on its own branch. Never push to main, never force-push, never merge. Never print or copy the token file named in the config.",
+      "criteria": [
+        "EVIDENCE.md contains the caretaker's printed summary line (caretaker run ..., findings ..., by kind ...) and its tasks line, exactly as printed by the run",
+        "git status in the clone shows no changes: the scan itself changed no repository file"
+      ],
+      "agent": "hermes",
+      "max_attempts": 1,
+      "budget_s": 3600
+    }
+  }
+}

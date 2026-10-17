@@ -5,6 +5,8 @@ healthCheckTimeout: 240
 logLevel: info
 
 macros:
+  # llama.cpp b11714 is the next build (2026-10-17: same accuracy, JSON validity and speed as b11669 on the Linux test
+  # server; jarvis/tools/jarvis.lock.json). Switch these paths to b11714 only after it is fetched and smoke-tested here.
   server: D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe --host 127.0.0.1 --port ${PORT} --jinja --no-webui -fa off -np 1
   models: D:\jarvis\models\llm
 

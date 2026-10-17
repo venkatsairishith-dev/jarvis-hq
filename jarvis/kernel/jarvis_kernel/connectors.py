@@ -190,6 +190,9 @@ class Connectors:
                 raise ConnectorError(f"a tool classified '{new_risk}' cannot be enabled (only read, write or send)")
             if not present:
                 raise ConnectorError("the server no longer offers this tool")
+            from .policy import PAGE_TOOL_PREFIX
+            if str(tool).lower().startswith(PAGE_TOOL_PREFIX):  # policy refuses every call anyway; say so here, not later
+                raise ConnectorError("a web page's own WebMCP tool (webmcp_*) is untrusted and cannot be enabled")
         approved = digest if new_en else None
         if new_en:
             changed = False                       # enabling is the owner's review of the current declaration
