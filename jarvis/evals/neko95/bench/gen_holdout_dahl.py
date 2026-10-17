@@ -56,6 +56,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=45)
     ap.add_argument("--start", type=int, default=0, help="first case index (cases already in the file are kept)")
+    ap.add_argument("--out", default="context_fixtures_holdout.json", help="file under bench/ (a second batch gets its own file)")
+    ap.add_argument("--prefix", default="ho", help="case id prefix")
     a = ap.parse_args(argv)
     tmp = tempfile.TemporaryDirectory()
     k = Kernel(str(Path(tmp.name) / "d"))
@@ -66,13 +68,13 @@ def main(argv=None):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     url, tok = f"http://127.0.0.1:{srv.server_address[1]}", tokens.issue("bench-holdout", "public")
     r = random.Random(4242 + a.start)
-    path = HERE / "context_fixtures_holdout.json"
+    path = HERE / a.out
     out = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
     have = {f["id"] for f in out}
     rejected = 0
     try:
         for i in range(a.start, a.start + a.n):
-            if f"ho-{i:03d}" in have:
+            if f"{a.prefix}-{i:03d}" in have:
                 continue
             kind = KINDS[i % len(KINDS)]
             body = {"model": "x", "max_tokens": 4096, "temperature": 0.7,
@@ -102,7 +104,7 @@ def main(argv=None):
             pos = ("begin", "middle", "end")[i % 3]
             filler = CF._filler(r, r.choice((600, 1200, 2000)), "multi" if "non-English" in kind else "py")
             lines = CF._place(r, filler, block, pos)
-            out.append({"id": f"ho-{i:03d}", "kind": kind, "query": d["query"].strip(), "text": "\n".join(lines),
+            out.append({"id": f"{a.prefix}-{i:03d}", "kind": kind, "query": d["query"].strip(), "text": "\n".join(lines),
                         "critical": crit if ans in crit else crit + [ans], "answer": ans, "position": pos})
             print("ok", i, kind, flush=True)
     finally:

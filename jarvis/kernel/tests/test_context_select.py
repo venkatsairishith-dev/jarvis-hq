@@ -177,3 +177,16 @@ class HostileInput(unittest.TestCase):
             secs = time.perf_counter() - t0
             self.assertLess(secs, 5.0, f"{name}: {secs:.1f} s")
             self.assertLessEqual(len(s.text), 4000, name)
+
+
+class AccessLogs(unittest.TestCase):
+    def test_a_failing_request_is_kept_by_its_status_code(self):
+        ok = [f'10.0.0.{i % 250} - - [12/Mar/2024:08:{i % 60:02d}:01 +0000] "POST /api/v2/checkout HTTP/1.1" 200 312 "-" "App/4.2"'
+              for i in range(3000)]
+        bad = '198.51.100.23 - - [12/Mar/2024:08:14:27 +0000] "POST /api/v2/checkout HTTP/1.1" 502 559 "-" "App/4.2"'
+        text = "\n".join(ok[:1500] + [bad] + ok[1500:])
+        s = CS.select(text, "which checkout request failed", 4000, "evidence")
+        self.assertIn(bad, s.text.split("\n"))
+        self.assertTrue(CS.EVIDENCE.search('{"ts": 1, "status": 503, "path": "/x"}'))
+        self.assertFalse(CS.EVIDENCE.search(ok[0]))                 # a 200 is not evidence
+

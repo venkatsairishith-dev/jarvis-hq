@@ -44,6 +44,7 @@ EVIDENCE = re.compile(          # strong evidence: something went wrong, and whe
     r"failed|failure|\bfail\b|denied|refused|forbidden|unauthori[sz]ed|not found|no such file|cannot|can't|couldn't|"
     r"timed? ?out|timeout|killed|oom|out of memory|exit (code|status)|exited with|returned non-zero|status [45]\d\d|"
     r"\b[45]\d\d (bad|not|internal|service|gateway|forbidden|unauthori)|quota|exceeded|crash|"
+    r"\" [45]\d\d \d|\"(status|status_?code|code)\"\s*:\s*\"?[45]\d\d\b|"     # access logs: '"GET /x" 502 559', JSON "status": 503
     r"^\s+at |\bat \S.{0,300}:\d+(:\d+)?\)?$|File \"[^\"]{1,400}\", line \d+|\.(py|js|ts|tsx|go|rs|java|cs|cpp|c|h):\d+|"
     r"goroutine \d+|caused by|during handling of the above|the above exception|\w+(Error|Exception|Exit)\b)")
 WEAK = re.compile(r"(?i)(warn|deprecat|retry|retrying|slow)")   # weak evidence: ranked after strong evidence and query hits

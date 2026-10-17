@@ -411,6 +411,21 @@ Per area (final run):
   - Known miss: an nginx access-log line whose only sign of failure is "502".
   - Found by the kernel suite right after the switch, and fixed before committing: one regex was quadratic on a very long line (8.6 s at 32,000 characters, hours for a megabyte), so a hostile tool could stall the kernel. Lines are now classified on their start and end, and the pattern is bounded; 1 MB lines now take well under 5 s (test `HostileInput`). Kernel: 517 OK, 16 Windows-only skips.
 
+- **Access logs:** a 4xx/5xx status after the quoted request (`" 502 559`), or `"status": 503` in JSON logs, now counts as evidence (test `AccessLogs`).
+  - The first held-out set fed that rule, so it is now development data (45/45 there).
+- **Second held-out batch**, generated before the rule changed, in its own file `context_fixtures_holdout2.json`. Dahl wrote 34 of 60; 26 were refused while busy.
+
+| Mode | Answer kept @4 KB | @16 KB | Fits budget |
+|---|---|---|---|
+| head cut | 12/34 | 16/34 | 0/34 |
+| evidence (default) | 33/34 | 33/34 | 34/34 |
+
+  - The default stays on.
+- **Writer prompt A/B (rejected):** an extra rule ("no conclusions or attributions the passage does not state"), 2 rounds × 5 questions per prompt, alternating.
+  - Confirmed share: 77.5% vs 75.5% for the old prompt.
+  - But only **7/10 correct answers vs 10/10**, and shorter reports. The old prompt stays.
+  - What remains unconfirmed is mostly the writer's own embellishments (correctly unconfirmed), plus some paraphrases at 0.7–0.9 that stay below the strict 0.95 window threshold by design.
+
 ## What blocks 9.5 (owner actions)
 
 1. **Real voice (C1):**
