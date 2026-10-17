@@ -122,6 +122,14 @@ def _age_days(ts: str | None, now: datetime) -> float:
     return delta / 86400
 
 
+def _counter(value) -> float:
+    """A stored evidence counter as a number; a damaged one (text, a list; manual edits, legacy formats) counts as 0."""
+    try:
+        return float(value or 0.0)
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def effective_reinforcement(entry: dict, now: datetime) -> float:
     """Compute decayed reinforcement value at `now`.
 
@@ -129,7 +137,7 @@ def effective_reinforcement(entry: dict, now: datetime) -> float:
     reinforcement side is touched; `disp` events do not affect this
     computation (§3.1.1).
     """
-    r = float(entry.get("reinforcement", 0.0) or 0.0)
+    r = _counter(entry.get("reinforcement", 0.0))
     if r == 0.0:
         return r
     age = _age_days(entry.get("rein_last_signal_at"), now)
@@ -140,7 +148,7 @@ def effective_reinforcement(entry: dict, now: datetime) -> float:
 
 def effective_disputation(entry: dict, now: datetime) -> float:
     """Compute decayed disputation value at `now`. Symmetric to rein."""
-    d = float(entry.get("disputation", 0.0) or 0.0)
+    d = _counter(entry.get("disputation", 0.0))
     if d == 0.0:
         return d
     age = _age_days(entry.get("disp_last_signal_at"), now)

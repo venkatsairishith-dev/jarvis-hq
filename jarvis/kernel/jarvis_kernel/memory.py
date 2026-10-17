@@ -31,8 +31,31 @@ class Conflict(MemoryError):
         self.current = current
 
 
+MAX_QUERY = 4 * MAX_TEXT          # a query longer than this matches no better: the rest is not read (a 2 MB query stays fast)
+
+
 def _words(s: str) -> set:
-    return {w for w in re.findall(r"[a-z0-9]+", s.lower()) if len(w) > 2}
+    return {w for w in re.findall(r"[a-z0-9]+", str(s)[:MAX_QUERY].lower()) if len(w) > 2}
+
+
+def _history(raw):
+    """An entry's stored history; None when it is damaged (not a JSON list), so one bad row never breaks the others."""
+    try:
+        h = json.loads(raw or "[]")
+    except (ValueError, TypeError):
+        return None
+    return h if isinstance(h, list) else None
+
+
+def _version(v) -> int:
+    """expected_version as the whole number it must be; anything else is the caller's mistake (a clear refusal, not a crash)."""
+    if isinstance(v, int) and not isinstance(v, bool):
+        return v
+    if isinstance(v, float) and v.is_integer():
+        return int(v)
+    if isinstance(v, str) and re.fullmatch(r"\s*-?\d{1,18}\s*", v):
+        return int(v)
+    raise MemoryError("expected_version must be the entry's version number (read the entry, then send its version)")
 
 
 class Memories:
@@ -51,8 +74,9 @@ class Memories:
                               "WHERE id=? AND owner=?", (str(mid), owner)).fetchone()
         if not r or (r[6] != "active" and not include_deleted):
             return None
+        hist = _history(r[9])
         return {"id": r[0], "scope": r[2], "kind": r[3], "text": r[4], "version": r[5], "state": r[6], "created": r[7],
-                "updated": r[8], "history": json.loads(r[9] or "[]")}
+                "updated": r[8], "history": hist or [], **({"history_damaged": True} if hist is None else {})}
 
     def list(self, owner, scope="default", query=None):
         rows = self.k.db.execute("SELECT id FROM memories WHERE owner=? AND scope=? AND state='active' ORDER BY created",
@@ -68,9 +92,9 @@ class Memories:
         q = _words(query)
         scored = []
         for m in self.list(owner, scope):
-            w = _words(m["text"])
-            if q and w:
-                scored.append((len(q & w) / len(q | w), m))
+            shared = q & _words(m["text"])
+            if shared:                                     # an entry with no word in common is not a match at all
+                scored.append((len(shared) / len(q | _words(m["text"])), m))
         scored.sort(key=lambda x: -x[0])
         best = scored[0][0] if scored else 0
         second = scored[1][0] if len(scored) > 1 else 0
@@ -113,7 +137,7 @@ class Memories:
         cur = self.get(owner, mid)
         if not cur:
             raise MemoryError("no such entry")
-        if int(expected_version) != cur["version"]:
+        if _version(expected_version) != cur["version"]:
             raise Conflict(cur)
         hist = cur["history"] + [{"v": cur["version"] + 1, "at": time.time(), "op": "update", "text": text}]
         r = self.k.db.execute("UPDATE memories SET text=?, version=version+1, updated=?, history=? WHERE id=? AND owner=? AND version=? "
@@ -130,7 +154,7 @@ class Memories:
             cur = self.get(owner, mid)
             if not cur:
                 raise MemoryError("no such entry (already forgotten, or not yours)")
-            if expected_version is not None and int(expected_version) != cur["version"]:
+            if expected_version is not None and _version(expected_version) != cur["version"]:
                 raise Conflict(cur)
             now = time.time()
             tomb = [{"v": cur["version"], "at": now, "op": "forget"}]

@@ -194,3 +194,151 @@ def test_a_crashed_tasks_lock_is_taken_over_but_a_live_ones_is_not(tmp_path):
         C.acquire("third", lock)                                    # owner (this process) is alive: refused
     C.release("next", lock)
     assert not lock.exists()
+
+
+# ---------------------------------------------------------------- bench E-035..E-046 (2026-10-17): malformed input, unusable fixes
+def test_a_typo_fix_whose_text_occurs_twice_is_widened_until_it_is_unique(tmp_path):
+    """Bench E-035: the fix's text occurred twice, so repair.edit_file (exactly-once rule) could never apply it."""
+    cfg = tmp_path / "config.json"
+    cfg.write_bytes(b'{\r\n "servers": [\r\n  {"port": 80x80},\r\n  {"port": 80x80}\r\n ]\r\n}\r\n')   # CRLF, as on Windows
+    d = core.diagnose([{"dialog": True, "title": "x", "texts": ["Neko Sample App could not start.", f"File: {cfg}"]}], [], [])
+    assert d["verified"] and d["line"] == 3
+    on_disk = cfg.read_bytes().decode("utf-8")                     # what repair.edit_file counts in (line endings kept)
+    f = d["fix"]["args"]
+    assert on_disk.count(f["find"]) == 1
+    fixed = on_disk.replace(f["find"], f["replace"], 1)
+    assert fixed.splitlines()[2] == '  {"port": 8080},' and fixed.splitlines()[3] == '  {"port": 80x80}' and "\r\n" in fixed
+
+
+def test_a_port_fix_whose_text_occurs_twice_is_widened_until_it_is_unique(tmp_path):
+    """Bench E-036: the config held the busy port twice; the proposed '"port": N' could never apply."""
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    s.listen(1)
+    port = s.getsockname()[1]
+    cfg = tmp_path / "config.json"
+    cfg.write_text('{\n "web": {"port": %d},\n "admin": {"port": %d}\n}\n' % (port, port), encoding="utf-8")
+    try:
+        d = core.diagnose([{"dialog": True, "title": "x", "texts": [f"Port {port} is already in use by another program.", f"File: {cfg}"]}], [], [])
+    finally:
+        s.close()
+    assert d["verified"] and f"port {port}" in d["cause"]
+    f = d["fix"]["args"]
+    assert cfg.read_text(encoding="utf-8").count(f["find"]) == 1 and f'"web": {{"port": {port}}}' in f["find"]
+    assert f'"port": {port}' not in f["replace"] and '"port": ' in f["replace"]
+
+
+def test_wrong_typed_node_output_never_crashes_the_diagnosis_and_claims_nothing():
+    """Bench E-041: texts as one string (str + list), a null crash record, events as one object raised."""
+    for windows, events, crashes in (
+            ([{"title": "x", "dialog": True, "texts": "Port 8080 is already in use"}], [], []),
+            ([None, {"title": "x", "dialog": True, "texts": ["could not start", None, 7]}], [], []),
+            ([], {"provider": "Application Error"}, []),
+            ([], [], [None]),
+            ("<html><body>502 Bad Gateway</body></html>", "<html>", "<html>"),
+            ([{"title": ["not", "text"], "dialog": True, "texts": [{"x": 1}]}], [None, "e"], [{"app": "a.exe"}, None])):
+        d = core.diagnose(windows, events, crashes)
+        assert not d["verified"] and d["fix"] is None and d["cause"]
+
+
+def test_a_console_port_that_answers_html_is_a_desktop_error(monkeypatch):
+    """Bench E-046: a 200 reply with an HTML page raised JSONDecodeError out of core.owner / Pc.run."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import threading
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            data = b"<html><body>Welcome to nginx!</body></html>" if self.path.endswith("/state") else b"[1, 2]"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        do_POST = do_GET
+
+        def log_message(self, *a):
+            pass
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(core, "CONSOLE", f"http://127.0.0.1:{srv.server_address[1]}")
+        for name in ("state", "pc"):                                # HTML, and JSON that is not an object
+            with pytest.raises(core.DesktopError, match="not answering properly"):
+                core.owner("GET", name)
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+class _Host:
+    """A DesktopPlugin stand-in whose _run answers from a script (no console, no node)."""
+
+    def __init__(self, local, reads, repair_result):
+        self.local, self.reads, self.repair_result, self.bodies, self.n = local, list(reads), repair_result, [], 0
+
+    async def _run(self, pc, body, timeout, what=""):
+        self.bodies.append(body)
+        if body.get("check") == "window_text":
+            self.n += 1
+            f = self.local / f"window_text-{self.n}.json"
+            f.write_text(self.reads.pop(0), encoding="utf-8")
+            return {"state": "done", "result": {"ok": True, "local_result": str(f)}}
+        if body.get("op") == "repair":
+            return {"state": "done", "result": dict(self.repair_result)}
+        return {"state": "done", "result": {"ok": True, "rows": []}}
+
+
+def _troubleshoot(tmp_path, monkeypatch, reads, repair_result=None):
+    import asyncio
+    from plugin.plugins.desktop import DesktopPlugin
+    local = tmp_path / "neko-local"
+    local.mkdir()
+    monkeypatch.setattr(core, "LOCAL_RESULTS", local)
+    monkeypatch.setattr(core, "set_activity", lambda *a, **k: None)
+    h = _Host(local, reads, repair_result or {"ok": True, "backup": "20261017-101500-abcdef", "undo": "repair restore 20261017-101500-abcdef"})
+    res = asyncio.run(DesktopPlugin.run_troubleshooter(h, app="NekoSampleApp"))
+    return res, h, list(local.iterdir())
+
+
+def test_a_malformed_screen_read_is_answered_and_changes_nothing(tmp_path, monkeypatch):
+    """Bench E-043: take_local returned a string or a dict, and diagnose / the troubleshooter raised AttributeError."""
+    for i, bad in enumerate(("<html><body><h1>500 Internal Server Error</h1></body></html>", '[{"title": "Neko Sample App - configuration err',
+                             '{"error": "access denied"}', '["Neko Sample App", "could not start"]')):
+        sub = tmp_path / f"read{i}"
+        sub.mkdir()
+        res, h, left = _troubleshoot(sub, monkeypatch, [bad])
+        rep = res.value
+        assert "fixed" not in rep["outcome"] and not [b for b in h.bodies if b.get("op") == "repair"] and not left
+
+
+def test_a_malformed_check_after_the_fix_keeps_the_backup_and_undo(tmp_path, monkeypatch):
+    """Bench E-045: the read after an applied fix was an HTML page; the report (with its backup and undo) was lost."""
+    cfg = tmp_path / "config.json"
+    cfg.write_text('{\n  "name": "sample",\n  "port": 80x80\n}\n', encoding="utf-8")
+    first = json.dumps([{"title": "Neko Sample App - configuration error", "dialog": True, "texts": ["could not start.", f"File: {cfg}"]}])
+    res, h, left = _troubleshoot(tmp_path, monkeypatch, [first, "<html><body><h1>502 Bad Gateway</h1></body></html>"])
+    rep = res.value
+    assert [b for b in h.bodies if b.get("op") == "repair"] and not left
+    assert rep["backup"] == "20261017-101500-abcdef" and rep["undo"] == "repair restore 20261017-101500-abcdef"
+    assert rep["outcome"] != "fixed and verified" and "undo" in rep["outcome"]
+
+
+def test_an_error_after_the_fix_still_reports_the_backup_and_undo(tmp_path, monkeypatch):
+    """Bench E-045: once a backup exists, every report names it, even when the console stops answering for the check."""
+    cfg = tmp_path / "config.json"
+    cfg.write_text('{\n  "name": "sample",\n  "port": 80x80\n}\n', encoding="utf-8")
+    first = json.dumps([{"title": "x", "dialog": True, "texts": [f"File: {cfg}"]}])
+
+    class Gone(_Host):
+        async def _run(self, pc, body, timeout, what=""):
+            if body.get("check") == "window_text" and self.n:
+                raise core.DesktopError("the JARVIS console is not answering")
+            return await super()._run(pc, body, timeout, what)
+    import asyncio
+    from plugin.plugins.desktop import DesktopPlugin
+    local = tmp_path / "neko-local"
+    local.mkdir()
+    monkeypatch.setattr(core, "LOCAL_RESULTS", local)
+    monkeypatch.setattr(core, "set_activity", lambda *a, **k: None)
+    h = Gone(local, [first], {"ok": True, "backup": "b-1", "undo": "repair restore b-1"})
+    rep = asyncio.run(DesktopPlugin.run_troubleshooter(h, app="NekoSampleApp")).value
+    assert rep["backup"] == "b-1" and rep["undo"] == "repair restore b-1" and "could not run" in rep["outcome"]

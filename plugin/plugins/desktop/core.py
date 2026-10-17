@@ -46,14 +46,23 @@ def owner(method: str, name: str, body: dict | None = None, timeout: float = 20.
                                  headers={"X-Jarvis-Console": "1", **({"Content-Type": "application/json"} if data else {})})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, json.loads(r.read().decode("utf-8", "replace") or "{}")
+            status, text = r.status, r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         try:
-            return e.code, json.loads(e.read().decode("utf-8", "replace") or "{}")
+            reply = json.loads(e.read().decode("utf-8", "replace") or "{}")
         except ValueError:
-            return e.code, {"error": f"HTTP {e.code}"}
+            reply = None
+        return e.code, reply if isinstance(reply, dict) else {"error": f"HTTP {e.code}"}
     except (urllib.error.URLError, OSError, TimeoutError) as e:
         raise DesktopError(f"the JARVIS console is not answering ({type(e).__name__}); is it running?") from None
+    try:                                     # something else on the console's port (a web server, a proxy) answers HTML
+        reply = json.loads(text or "{}")
+    except ValueError:
+        reply = None
+    if not isinstance(reply, dict):
+        raise DesktopError(f"the JARVIS console is not answering properly (HTTP {status}, not a JSON object); "
+                           "is something else using its port?")
+    return status, reply
 
 
 class Pc:
@@ -172,12 +181,25 @@ FILE_IN_TEXT = re.compile(r"((?:[A-Za-z]:\\|(?<![\w:/.~-])/)[^\s\"'<>|*?]+\.(?:j
 NUMBER_TYPO = re.compile(r"^(\d+)[^\d\s,}\]]+(\d*)$")
 
 
+def rows(value) -> list[dict]:
+    """The objects of a list the node sent (windows, events, crash records); anything else (an HTML page, one object, a
+    null item, cut-off JSON read back as text) is dropped, so a malformed read yields fewer facts, never an exception."""
+    return [x for x in value if isinstance(x, dict)] if isinstance(value, list) else []
+
+
+def _str(value) -> str:
+    return value if isinstance(value, str) else ""
+
+
 def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = None) -> dict:
     """What went wrong, from the error dialog, the event log and crash records, checked against the files it names.
-    A cause is 'verified' only when the named file really has the fault; otherwise it is a hypothesis."""
-    texts = [t for w in windows or [] for t in (w.get("texts") or []) + [w.get("title") or ""]]
-    dialog = [w for w in windows or [] if w.get("dialog")]
-    out = {"dialog_seen": bool(dialog), "dialog_title": (dialog[0].get("title") if dialog else "")[:120],
+    A cause is 'verified' only when the named file really has the fault; otherwise it is a hypothesis.
+    Wrong-typed input (texts as one string, null items, an object instead of a list) is ignored, not trusted."""
+    windows, events, crashes = rows(windows), rows(events), rows(crashes)
+    texts = [t for w in windows for t in (w.get("texts") if isinstance(w.get("texts"), list) else []) + [_str(w.get("title"))]
+             if isinstance(t, str)]
+    dialog = [w for w in windows if w.get("dialog")]
+    out = {"dialog_seen": bool(dialog), "dialog_title": (_str(dialog[0].get("title")) if dialog else "")[:120],
            "verified": False, "cause": "", "evidence": [], "fix": None, "app_dir": app_dir}
     joined = " ".join(texts)
     m = FILE_IN_TEXT.search(joined)
@@ -185,7 +207,7 @@ def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = N
         path = m.group(1)
         out["file"] = path
         if path.lower().endswith(".json") and os.path.isfile(path):
-            raw = Path(path).read_text(encoding="utf-8-sig")
+            raw = _exact_text(path)
             try:
                 json.loads(raw)
                 out["evidence"].append("the file the dialog names is valid JSON now")
@@ -195,6 +217,9 @@ def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = N
                            line=e.lineno)
                 out["evidence"].append(f"JSON check of {Path(path).name}: {e.msg} at line {e.lineno}")
                 fix = _number_typo_fix(line)
+                if fix:
+                    at = sum(len(x) for x in raw.splitlines(keepends=True)[:e.lineno - 1]) + line.find(fix[0])
+                    fix = _unique_edit(raw, at, fix[0], fix[1])
                 if fix:
                     out["fix"] = {"action": "edit_file", "target": path, "args": {"find": fix[0], "replace": fix[1]},
                                   "why": "a value that must be a number has a typo"}
@@ -273,11 +298,12 @@ def _system_causes(joined: str, out: dict):
             out["evidence"].append(f"listening check: {who['name']} holds 127.0.0.1:{port}")
             cfg = out.get("file")
             if cfg and cfg.lower().endswith(".json") and os.path.isfile(cfg):
-                text = Path(cfg).read_text(encoding="utf-8-sig")
+                text = _exact_text(cfg)
                 old = re.search(rf'"port"\s*:\s*{port}\b', text)
                 new = free_port()
-                if old and new:
-                    out["fix"] = {"action": "edit_file", "target": cfg, "args": {"find": old.group(0), "replace": f'"port": {new}'},
+                edit = _unique_edit(text, old.start(), old.group(0), f'"port": {new}') if old and new else None
+                if edit:
+                    out["fix"] = {"action": "edit_file", "target": cfg, "args": {"find": edit[0], "replace": edit[1]},
                                   "why": f"move the program to free port {new} (the other program keeps {port})"}
         else:
             out.update(cause=f"the program says port {port} is in use, but nothing listens on it now (it may have been "
@@ -326,6 +352,31 @@ def _system_causes(joined: str, out: dict):
 def _dll_present(name: str, app_dir: str | None = None) -> bool:
     dirs = ([app_dir] if app_dir else []) + [os.environ.get("SystemRoot", r"C:\Windows") + r"\System32"] + os.environ.get("PATH", "").split(os.pathsep)
     return any(d and os.path.isfile(os.path.join(d, name)) for d in dirs)
+
+
+def _exact_text(path: str) -> str:
+    """The file's text as repair.edit_file will see it (BOM dropped, line endings kept as they are on disk)."""
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        return f.read()
+
+
+def _unique_edit(text: str, at: int, find: str, replace: str, max_lines: int = 3):
+    """repair.edit_file replaces only text that occurs exactly once. If `find` (at offset `at`) occurs more often, widen it
+    to its whole line, then to neighbouring lines (at most `max_lines` each way), until it is unique. None if it never is."""
+    if at < 0 or text[at:at + len(find)] != find:
+        return None
+    if text.count(find) == 1:
+        return find, replace
+    starts = [0]
+    for ln in text.splitlines(keepends=True):
+        starts.append(starts[-1] + len(ln))
+    i = max(k for k in range(len(starts) - 1) if starts[k] <= at)     # the line that holds the fault
+    for n in range(max_lines + 1):
+        a, b = starts[max(i - n, 0)], starts[min(i + n + 1, len(starts) - 1)]
+        anchor = text[a:b]
+        if text.count(anchor) == 1:
+            return anchor, text[a:at] + replace + text[at + len(find):b]
+    return None
 
 
 def _number_typo_fix(line: str):

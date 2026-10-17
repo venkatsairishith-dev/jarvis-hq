@@ -328,17 +328,22 @@ class DesktopPlugin(NekoPluginBase):
         async def job(body, timeout=60, what=""):
             return _brief(await self._run(pc, body, timeout, what))
 
+        def local(res):                                   # the node's local result, read once and deleted; only its objects
+            r = res.get("result")
+            return core.rows(core.take_local(r.get("local_result") if isinstance(r, dict) else None))
+
+        report = {}
         try:
             step("inspecting", f"Looking at {app}")
             raw = await self._run(pc, {"op": "diag", "check": "window_text", "target": app}, 60)
-            windows = core.take_local((raw.get("result") or {}).get("local_result")) or []
+            windows = local(raw)
             if not windows and start_name:
                 await job({"op": "open_app", "target": start_name}, 60)
                 await asyncio.sleep(3)
                 raw = await self._run(pc, {"op": "diag", "check": "window_text", "target": app}, 60)
-                windows = core.take_local((raw.get("result") or {}).get("local_result")) or []
+                windows = local(raw)
             ev = await self._run(pc, {"op": "diag", "check": "app_errors", "target": app}, 60)
-            events = core.take_local((ev.get("result") or {}).get("local_result")) or []
+            events = local(ev)
             crashes = (await job({"op": "diag", "check": "crashes", "target": app})).get("rows") or []
             step("diagnosing", "Checking the cause")
             d = await asyncio.to_thread(core.diagnose, windows, events, crashes)
@@ -367,7 +372,8 @@ class DesktopPlugin(NekoPluginBase):
                 return Ok(report)
             report.update(backup=r.get("backup"), undo=r.get("undo"))
             step("verifying", "Starting it again to check")
-            ok_btn = [b for w in windows if w.get("dialog") for b in w.get("buttons") or [] if b.lower() in ("ok", "close")]
+            ok_btn = [b for w in windows if w.get("dialog") for b in (w.get("buttons") if isinstance(w.get("buttons"), list) else [])
+                      if isinstance(b, str) and b.lower() in ("ok", "close")]
             if ok_btn:                                    # dismiss the old error dialog first, as the owner would
                 await job({"op": "ui", "action": "click", "target": f"{app}|{ok_btn[0]}"}, 60)
                 await asyncio.sleep(1)
@@ -375,18 +381,24 @@ class DesktopPlugin(NekoPluginBase):
                 await job({"op": "open_app", "target": start_name}, 60)
                 await asyncio.sleep(4)
             raw = await self._run(pc, {"op": "diag", "check": "window_text", "target": app}, 60)
-            after = core.take_local((raw.get("result") or {}).get("local_result")) or []
+            after = local(raw)                            # an unreadable read counts as "not verified", never as fixed
             dialogs = [w for w in after if w.get("dialog")]
             running = [w for w in after if not w.get("dialog")]
             fixed = bool(running) and not dialogs
             report["verification"] = {"windows_now": len(after), "error_dialogs_now": len(dialogs), "main_window": bool(running),
-                                      "title": running[0].get("title", "")[:120] if running else ""}
+                                      "title": str(running[0].get("title") or "")[:120] if running else ""}
             step("completed" if fixed else "failed", "The error is gone" if fixed else "The error is still there")
             report["outcome"] = "fixed and verified" if fixed else "fix applied, but the check failed (undo with the backup)"
             return Ok(report)
-        except core.DesktopError as e:
-            step("failed", str(e))
-            return Err(SdkError(str(e)))
+        except Exception as e:  # noqa: BLE001 - once a fix is applied, the owner must still get its backup and undo
+            if "backup" in report:                        # set once the fix was applied
+                step("failed", f"The check after the fix did not run: {e}")
+                report.update(outcome="fix applied, but the check could not run (undo with the backup)", error=str(e)[:200])
+                return Ok(report)
+            if isinstance(e, core.DesktopError):
+                step("failed", str(e))
+                return Err(SdkError(str(e)))
+            raise
         finally:
             core.set_activity("idle")
 

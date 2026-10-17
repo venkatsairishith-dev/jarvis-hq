@@ -157,6 +157,17 @@ def test_derive_status_tier_mapping(fixed_now):
     assert derive_status(_seed(-5.0), fixed_now) == 'archive_candidate'
 
 
+def test_damaged_counters_count_as_zero_not_a_crash(fixed_now):
+    """Bench F-050 (2026-10-17): a counter stored as text or a list (manual edit, legacy format) raised ValueError /
+    TypeError from float() and broke the evidence score of that entry."""
+    from memory.evidence import derive_status, evidence_score
+    now = fixed_now.isoformat()
+    assert evidence_score({'reinforcement': 'x', 'disputation': '2', 'disp_last_signal_at': now}, fixed_now) == -2.0
+    assert evidence_score({'reinforcement': 3, 'disputation': [1], 'rein_last_signal_at': now}, fixed_now) == 3.0
+    assert evidence_score({'reinforcement': {'v': 1}, 'disputation': None}, fixed_now) == 0.0
+    assert derive_status({'reinforcement': 'x', 'disputation': '2', 'disp_last_signal_at': now}, fixed_now) == 'archive_candidate'
+
+
 # ── S3: migration seed arithmetic (values per §5.1 table) ────────────
 
 

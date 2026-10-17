@@ -2,6 +2,7 @@
 repairs back up first and can be undone, the Chrome profile registry, the YouTube flow and the browser tool allowlist."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -128,6 +129,76 @@ class Repairs(unittest.TestCase):
         r = repair.edit_file(self.f, '"port": 80x80', '"port": 8080')
         open(os.path.join(repair.BACKUPS, r["backup"], "file.bak"), "w").write("evil")
         self.assertIn("does not match", repair.restore(r["backup"])["error"])
+
+
+class RepairInputs(unittest.TestCase):
+    """Bench E-054/E-056/E-057 (2026-10-17): wrong-shaped records and tool output are refused, never crash, never count as
+    success. Runs on any OS (the file system parts use a folder under the user profile)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(dir=os.path.expanduser("~"))
+        self.old = repair.BACKUPS
+        repair.BACKUPS = os.path.join(self.tmp.name, "backups")
+
+    def tearDown(self):
+        repair.BACKUPS = self.old
+        self.tmp.cleanup()
+
+    def _backup(self, manifest_of):
+        live = os.path.join(self.tmp.name, "config.json")
+        with open(live, "w", encoding="utf-8") as f:
+            f.write('{"port": 8080}\n')
+        bid = "20261017-101500-abcdef"
+        shutil.rmtree(repair.BACKUPS, ignore_errors=True)               # each case starts clean, even after a failed one
+        d = os.path.join(repair.BACKUPS, bid)
+        os.makedirs(d)
+        data = b'{"port": 80x80}\n'
+        with open(os.path.join(d, "file.bak"), "wb") as f:
+            f.write(data)
+        good = {"path": os.path.realpath(live), "sha256": repair._sha(data), "bytes": len(data), "time": "x", "why": "edit_file"}
+        with open(os.path.join(d, "manifest.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest_of(good), f)
+        return bid, live
+
+    def test_a_wrong_shaped_backup_record_is_refused_and_the_live_file_stays(self):
+        for name, shape in (("a list", lambda g: [g]), ("path a number", lambda g: dict(g, path=42)),
+                            ("sha a number", lambda g: dict(g, sha256=12345))):
+            with self.subTest(name):
+                bid, live = self._backup(shape)
+                r = repair.restore(bid)
+                self.assertFalse(r["ok"], r)
+                with open(live, encoding="utf-8") as f:
+                    self.assertEqual(f.read(), '{"port": 8080}\n')
+
+    def test_a_json_list_from_powershell_is_refused_and_nothing_is_started(self):
+        started, o = [], (runtime.powershell, runtime.popen)
+        runtime.powershell = lambda script, env=None, timeout=30: subprocess.CompletedProcess(
+            [], 0, '[{"running": true}, {"running": true}]' if script == repair.CLOSE else "[1]", "")
+        runtime.popen = lambda args, **kw: started.append(args)
+        try:
+            r = repair.restart_app("NekoSampleApp")
+        finally:
+            runtime.powershell, runtime.popen = o
+        self.assertFalse(r["ok"])
+        self.assertEqual(started, [])
+
+    def test_install_counts_only_the_exact_id_in_a_successful_listing(self):
+        o = (repair.shutil.which, runtime.run)
+        cases = [("Name              Id                   Version\n------------------------------------------\n"
+                  "Neko Sample Beta  Neko.SampleApp.Beta  1.0.0\n", 0, False),
+                 ("No installed package found matching input criteria: Neko.SampleApp", 1, False),
+                 ("Name         Id              Version\n-------------------------------------\nNeko Sample  Neko.SampleApp  1.0.0\n", 1, False),
+                 ("", 1, False),
+                 ("Name         Id              Version\r\n-------------------------------------\r\nNeko Sample  Neko.SampleApp  1.0.0\r\n", 0, True)]
+        try:
+            repair.shutil.which = lambda n: "/fake/winget"
+            for out, code, want in cases:
+                runtime.run = lambda args, timeout=30, out=out, code=code, **kw: subprocess.CompletedProcess(
+                    args, code if args[1] == "list" else 0, out if args[1] == "list" else "Successfully installed", "")
+                with self.subTest(out=out[:40], code=code):
+                    self.assertEqual(repair.install("Neko.SampleApp")["ok"], want)
+        finally:
+            repair.shutil.which, runtime.run = o
 
 
 LOCAL_STATE = {"os_crypt": {"encrypted_key": "NOT-READ"}, "profile": {"last_used": "Default", "info_cache": {

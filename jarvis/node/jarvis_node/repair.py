@@ -106,6 +106,8 @@ def restore(bid: str) -> dict:
         data = _read(os.path.join(d, "file.bak"))
     except (OSError, ValueError):
         return {"ok": False, "error": "no such backup"}
+    if not (isinstance(m, dict) and isinstance(m.get("path"), str) and m["path"] and isinstance(m.get("sha256"), str)):
+        return {"ok": False, "error": "the backup's record is damaged; nothing changed"}
     if _sha(data) != m.get("sha256"):
         return {"ok": False, "error": "the backup does not match its record; nothing changed"}
     path = m["path"]
@@ -142,18 +144,22 @@ def restart_app(name: str) -> dict:
         st = json.loads(r.stdout.strip() or "{}")
     except ValueError:
         return {"ok": False, "error": "could not read the program's state"}
+    if not isinstance(st, dict):
+        return {"ok": False, "error": "could not read the program's state (not one object); nothing was started"}
     if not st.get("running"):
         return {"ok": False, "error": f"{name} has no open window to restart"}
     if not st.get("closed"):
         return {"ok": False, "error": f"{name} did not close within 8 s (it may be asking to save); it was NOT forced, nothing lost"}
     path = st.get("path") or ""
-    if not path or not os.path.isfile(path):
+    if not isinstance(path, str) or not path or not os.path.isfile(path):
         return {"ok": False, "error": "closed, but its program file is not known, so it was not restarted; open it yourself"}
     runtime.popen([path], close_fds=True, creationflags=0)            # its own window, as the owner would start it
     chk = runtime.powershell(CHECK, {"JARVIS_APP": name}, 30)
     try:
         after = json.loads(chk.stdout.strip() or "{}")
     except ValueError:
+        after = {}
+    if not isinstance(after, dict):
         after = {}
     ok = bool(after.get("running") and after.get("responding"))
     return {"ok": ok, "restarted": name, "running": bool(after.get("running")), "responding": bool(after.get("responding")),
@@ -170,9 +176,28 @@ def install(package: str) -> dict:
     r = runtime.run(base[:1] + ["install", "--id", package, "--exact", "--source", "winget", "--accept-package-agreements",
                                 "--accept-source-agreements", "--disable-interactivity"], timeout=1800)
     chk = runtime.run(base[:1] + ["list", "--id", package, "--exact", "--accept-source-agreements", "--disable-interactivity"], timeout=120)
-    listed = package.lower() in (chk.stdout or "").lower()
+    listed = chk.returncode == 0 and _listed(chk.stdout or "", package)
     return {"ok": listed, "package": package, "installer_exit": r.returncode, "listed_after": listed,
             "error": None if listed else "winget does not list the package after the install (it may have been cancelled at the UAC prompt)"}
+
+
+def _listed(listing: str, package: str) -> bool:
+    """True only when the Id column of winget's table holds exactly this id (case-insensitive, as winget compares ids).
+    A longer id that contains it (Neko.SampleApp.Beta) or an error text that echoes it is not a listing."""
+    lines = [ln.rstrip() for ln in listing.splitlines()]
+    for i in range(1, len(lines)):
+        if not re.fullmatch(r"-{10,}", lines[i].strip()):
+            continue
+        head = lines[i - 1]                                # the header row above the dashes: Name  Id  Version ...
+        col = re.search(r"(?i)(?<!\S)id(?!\S)", head)
+        if not col:
+            continue
+        nxt = re.search(r"\S", head[col.end():])
+        end = col.end() + nxt.start() if nxt else None
+        for row in lines[i + 1:]:
+            if row.strip() and row[col.start():end].strip().lower() == package.lower():
+                return True
+    return False
 
 
 def run(p: dict) -> dict:

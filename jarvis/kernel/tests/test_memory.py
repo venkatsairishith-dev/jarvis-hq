@@ -80,6 +80,59 @@ class Budget(TT.Base):
         self.assertEqual(self.post("/v1/jarvis/actions", {"tool": "memory", "op": "add", "target": "one more", "params": {}}, self.owner)[0], 429)
 
 
+class BadVersionOverHttp(TT.Base):
+    def test_a_malformed_expected_version_gets_a_400_and_changes_nothing(self):
+        # bench F-041 (2026-10-17): int("latest") raised inside the handler and the connection dropped with no answer
+        def mem(op, target, **params):
+            return self.post("/v1/jarvis/actions", {"tool": "memory", "op": op, "target": target, "params": params}, self.owner)
+        mid = mem("add", "Wake me at 6 on weekdays")[1]["entry"]["id"]
+        for op, v in [("update", x) for x in ("latest", None, [1], {"v": 1}, True)] + [("forget", x) for x in ("latest", [1], {"v": 1})]:
+            code, r = mem(op, mid, **({"text": "Wake me at 9"} if op == "update" else {}), expected_version=v)
+            self.assertEqual(code, 400, (op, v, r))
+            self.assertIn("expected_version", r["reason"])
+        e = mem("get", mid)[1]["entry"]
+        self.assertEqual((e["version"], e["text"]), (1, "Wake me at 6 on weekdays"))
+        self.assertEqual(mem("update", mid, text="Wake me at 7", expected_version="1")[0], 200)   # a number sent as text still works
+
+
+class DamagedInput(unittest.TestCase):
+    """Bench F-042/F-043 (2026-10-17): one damaged row and garbage queries."""
+
+    def setUp(self):
+        import tempfile
+        from jarvis_kernel.memory import Memories
+        from jarvis_kernel.store import Kernel
+        self.tmp = tempfile.TemporaryDirectory()
+        self.k = Kernel(os.path.join(self.tmp.name, "k"))
+        self.m = Memories(self.k)
+
+    def tearDown(self):
+        self.k.db.close()
+        self.tmp.cleanup()
+
+    def test_one_damaged_history_does_not_hide_the_other_entries(self):
+        good = [self.m.add("hermes", t)["text"] for t in ("I prefer metric units", "Use dark mode in every app")]
+        bad = self.m.add("hermes", "Call me Venkat", "fact")
+        self.k.db.execute("UPDATE memories SET history=? WHERE id=?", ('[{"v": 1, "op": "add", "text": "Call me Ven', bad["id"]))
+        self.assertEqual([x["text"] for x in self.m.list("hermes")], good + ["Call me Venkat"])
+        self.assertTrue(all(t in self.m.render("hermes") for t in good))
+        self.assertEqual(self.m.resolve("hermes", "dark mode every app")["candidates"][0]["text"], "Use dark mode in every app")
+        e = self.m.get("hermes", bad["id"])
+        self.assertTrue(e["history_damaged"]); self.assertEqual(e["history"], [])
+        self.assertEqual(self.m.update("hermes", bad["id"], "Call me Venkat, please", 1)["version"], 2)   # still correctable
+
+    def test_a_query_with_no_word_in_common_offers_no_candidates(self):
+        import time
+        for t in ("I like short answers", "Use dark mode in every app", "My daughter's school is DPS Hyderabad"):
+            self.m.add("hermes", t)
+        for q in ("zebra crossing", "", "?!? ...", "a an to is it", "x" * 2_000_000):
+            t0 = time.perf_counter()
+            r = self.m.resolve("hermes", q)
+            self.assertEqual((r["unique"], r["candidates"]), (False, []), q[:20])
+            self.assertLess(time.perf_counter() - t0, 2.0)
+        self.assertEqual([c["text"] for c in self.m.resolve("hermes", "dark mode")["candidates"]], ["Use dark mode in every app"])
+
+
 class Erasure(unittest.TestCase):
     def test_a_forgotten_text_is_gone_from_the_database_files(self):
         # bench F-008: the row was blanked but the text stayed in state.db-wal (and freed page space keeps old bytes)
