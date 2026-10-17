@@ -1134,12 +1134,8 @@ def test_the_batch_size_setting_is_clamped_where_it_is_loaded(
 
     Mutation: drop the ``max(1, ...)`` in plugin/settings.py.
     """
-    import importlib
-
-    import plugin.settings as settings_mod
-
     monkeypatch.setenv("NEKO_PLUGIN_ZMQ_MESSAGE_PUSH_BATCH_SIZE", configured)
-    reloaded = importlib.reload(settings_mod)
+    reloaded = _fresh_settings()
     try:
         assert reloaded.PLUGIN_ZMQ_MESSAGE_PUSH_BATCH_SIZE == expected
 
@@ -1160,7 +1156,6 @@ def test_the_batch_size_setting_is_clamped_where_it_is_loaded(
         )
     finally:
         monkeypatch.delenv("NEKO_PLUGIN_ZMQ_MESSAGE_PUSH_BATCH_SIZE", raising=False)
-        importlib.reload(settings_mod)
 
 
 @pytest.mark.plugin_unit
@@ -1177,12 +1172,8 @@ def test_the_batcher_queue_limit_is_clamped_where_it_is_loaded(
 
     Mutation: drop the ``max(1, ...)`` in plugin/settings.py.
     """
-    import importlib
-
-    import plugin.settings as settings_mod
-
     monkeypatch.setenv("NEKO_MESSAGE_PLANE_PUSH_BATCHER_MAX_QUEUE", configured)
-    reloaded = importlib.reload(settings_mod)
+    reloaded = _fresh_settings()
     try:
         assert reloaded.MESSAGE_PLANE_PUSH_BATCHER_MAX_QUEUE == expected
 
@@ -1197,4 +1188,17 @@ def test_the_batcher_queue_limit_is_clamped_where_it_is_loaded(
         assert batcher._queue.maxsize > 0, "队列是无界的——两道闸同时失效"
     finally:
         monkeypatch.delenv("NEKO_MESSAGE_PLANE_PUSH_BATCHER_MAX_QUEUE", raising=False)
-        importlib.reload(settings_mod)
+
+
+def _fresh_settings():
+    """plugin/settings.py evaluated again as a PRIVATE module with the current environment. importlib.reload() of the
+    live plugin.settings replaced its classes (PluginExecStateRootCollisionError among them): code that had imported
+    them earlier no longer caught the new ones, and later tests in the same process failed (found 2026-10-16: the
+    layout-migration tests failed whenever this file ran first in the same worker)."""
+    import importlib.util
+
+    import plugin.settings as live
+    spec = importlib.util.spec_from_file_location("_plugin_settings_probe", live.__file__)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod

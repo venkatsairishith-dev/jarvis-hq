@@ -387,6 +387,16 @@ Per area (final run):
     - trim-1 alone 6/6, within budget 0–1/6.
   - Both stay **off**: the next step is more held-out cases when Dahl has capacity, or real tool output on the laptop.
 
+- **Upstream test isolation (plugin framework, 2 workers):**
+  - The 7 `test_plugin_layout_migration` failures came from `importlib.reload(plugin.settings)` in `test_zmq_transport_security.py` and `test_plugins_lifecycle_service.py`.
+    - A reload replaces the module's classes, so the migration's `except PluginExecStateRootCollisionError` no longer caught the error raised later in the same process.
+    - Those 3 tests now evaluate a private copy of `settings.py` and check the same values.
+    - Both culprit pairs now pass, and the 2-worker run is down to the 8 metadata failures (4289 passed).
+  - `test_bootstrap_failure_does_not_lock_root_initialised` (upstream) fails alone in 10 of 12 random orders:
+    - after any test that already set up the PluginServer logger, `_ensure_root_logger` correctly treats logging as set up;
+    - the test assumes a fresh process, and the repo's pinned seed happens to pass. Documented, not changed.
+- **H-027** (the real claim checker on the 36 labelled pairs) now runs wherever the model is present instead of being deferred. Area H: 36/36 with the model; without it, H-027 errors and never passes.
+
 ## What blocks 9.5 (owner actions)
 
 1. **Real voice (C1):**

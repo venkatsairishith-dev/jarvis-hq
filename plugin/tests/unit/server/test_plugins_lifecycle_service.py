@@ -4496,19 +4496,11 @@ def _demo_config(tmp_path: Path) -> Path:
 
 @pytest.mark.plugin_unit
 def test_sync_auto_start_on_toggle_defaults_to_false(monkeypatch: pytest.MonkeyPatch) -> None:
-    import importlib
-
-    import plugin.settings as settings_module
-
-    try:
-        with monkeypatch.context() as patch:
-            patch.delenv("NEKO_PLUGIN_SYNC_AUTO_START_ON_TOGGLE", raising=False)
-            assert importlib.reload(settings_module).PLUGIN_SYNC_AUTO_START_ON_TOGGLE is False
-            patch.setenv("NEKO_PLUGIN_SYNC_AUTO_START_ON_TOGGLE", "1")
-            assert importlib.reload(settings_module).PLUGIN_SYNC_AUTO_START_ON_TOGGLE is True
-    finally:
-        # Reload only after the context restored the caller's environment.
-        importlib.reload(settings_module)
+    with monkeypatch.context() as patch:
+        patch.delenv("NEKO_PLUGIN_SYNC_AUTO_START_ON_TOGGLE", raising=False)
+        assert _fresh_settings().PLUGIN_SYNC_AUTO_START_ON_TOGGLE is False
+        patch.setenv("NEKO_PLUGIN_SYNC_AUTO_START_ON_TOGGLE", "1")
+        assert _fresh_settings().PLUGIN_SYNC_AUTO_START_ON_TOGGLE is True
 
 
 @pytest.mark.plugin_unit
@@ -4854,3 +4846,17 @@ async def test_set_plugin_auto_start_leaves_approval_pending_when_preference_wri
         assert calls == []
     finally:
         _restore_lifecycle_state(*backup)
+
+
+def _fresh_settings():
+    """plugin/settings.py evaluated again as a PRIVATE module with the current environment. importlib.reload() of the
+    live plugin.settings replaced its classes (PluginExecStateRootCollisionError among them): code that had imported
+    them earlier no longer caught the new ones, and later tests in the same process failed (found 2026-10-16: the
+    layout-migration tests failed whenever this file ran first in the same worker)."""
+    import importlib.util
+
+    import plugin.settings as live
+    spec = importlib.util.spec_from_file_location("_plugin_settings_probe", live.__file__)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
