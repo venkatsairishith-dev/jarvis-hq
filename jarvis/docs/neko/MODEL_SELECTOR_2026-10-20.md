@@ -115,3 +115,17 @@ Windows, in `D:\jarvis\hq-neko` (copy of this working tree). Nothing below chang
    Exit 0 = tool calls work, 1 = they do not, 2 = refused.
 4. Shadow replay on the real log: `python -m jarvis_kernel.model_select --shadow 7`. Send me the numbers (counts only).
 5. Do NOT paste keys anywhere. Do not install 9Router.
+
+## Finding from the laptop run: retention and stale text (2026-10-21)
+
+`test_retention` failed on Windows: old private text stayed inside `state.db` after the cleanup. Cause, confirmed on Linux
+by making the test's "old" writer insecure: `secure_delete` was only switched on by the sweep itself. Text written
+earlier by a connection with it off (the default in python.org/Windows SQLite builds; Debian/Ubuntu builds default to on)
+leaves copies in free space that are not part of any row, so the sweep could not reach them. Windows SQLite 3.53.1
+itself secure-deletes correctly in WAL and DELETE modes (checked on the laptop).
+Fix: `store.py` sets `secure_delete=ON` on every kernel connection; the first retention run on an existing database
+also runs one `VACUUM` (recorded in that run's audit row as `vacuumed`). The test's old writer now has it off on every
+platform, so the test checks the worst case everywhere. Kernel 1056 OK, console 247 passed. Not deployed.
+Production kernel runs on the Linux server; whether its SQLite build had it on is unknown, so the first run after the
+next deploy will VACUUM once. VACUUM can renumber implicit rowids of tables without an integer key; nothing in the kernel
+refers to those.

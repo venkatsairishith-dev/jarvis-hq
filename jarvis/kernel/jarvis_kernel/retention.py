@@ -28,7 +28,9 @@ rows are metadata-only (policy.Action.describe: memory text, task goals, pc.open
 Runs: at kernel start (llm_proxy.serve), then about once an hour from the owner tick, and on demand with
 `python3 -m jarvis_kernel retention --run`. Each run that changed something writes one audit row "retention_run" with the counts.
 It is idempotent: a stub is never stubbed again. After a run that changed rows it checkpoints and truncates the WAL, and SQLite's
-secure_delete is on, so removed text does not stay in freed pages or the write-ahead log.
+secure_delete is on (the kernel sets it on every connection it opens), so removed text does not stay in freed pages or the
+write-ahead log. The first run on an existing database also VACUUMs once: text that older writes left in free space is not part
+of any row, so a sweep alone cannot reach it.
 
 Settings (owner_config 'retention', JSON; `retention --show`, `--set key=value`, `--off`, `--on`):
   enabled (true), approvals_grace_hours (24), jobs_days (14), tasks_days (30), commands_days (30), jobs_keep (2000), tasks_keep (300),
@@ -435,7 +437,15 @@ class Retention:
             if max(step["approvals"], step["jobs"], step["tasks"], step["commands"], step["reasons"], step["projectfix"], step["definitions"]) < BATCH:
                 break
         if any(counts.values()):
-            self.k.audit.append("retention_run", {"source": source, **counts})
+            first = db.execute("SELECT 1 FROM audit WHERE kind='retention_run' LIMIT 1").fetchone() is None
+            vacuumed = False
+            if first:                       # a database written before secure_delete was always on may hold old text in free space
+                try:
+                    db.execute("VACUUM")    # rewrites the file with only live rows (secure_delete is on); once, at the first run
+                    vacuumed = True
+                except sqlite3.Error:       # another connection holds it: the next kernel start tries again only if rows change
+                    pass
+            self.k.audit.append("retention_run", {"source": source, **counts, **({"vacuumed": True} if vacuumed else {})})
             db.execute("PRAGMA wal_checkpoint(TRUNCATE)")     # the old text must not stay in the write-ahead log
         return {"enabled": True, **counts}
 

@@ -125,6 +125,7 @@ class Kernel:
         # isolation_level=None: we issue BEGIN/COMMIT ourselves. check_same_thread=False: the node server uses threads.
         self.db = SafeDB(sqlite3.connect(self.dir / "state.db", timeout=30, isolation_level=None, check_same_thread=False))
         self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("PRAGMA secure_delete=ON")        # freed text is zeroed whatever the local SQLite build defaults to (python.org/Windows builds default to off)
         self._private_files()
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS approvals(id TEXT PRIMARY KEY, action_hash TEXT, level INT, expires REAL, state TEXT, action TEXT)"

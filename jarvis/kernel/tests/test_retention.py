@@ -474,6 +474,7 @@ class Migration(unittest.TestCase):
             old = now - 90 * DAY
             db = sqlite3.connect(os.path.join(d, "state.db"), isolation_level=None)
             db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA secure_delete=OFF")      # worst case on every platform: the old writer left stale copies in free space (a python.org/Windows build)
             # the original six-column approvals table (older columns are added by Kernel on open), and the older jobs table
             db.execute("CREATE TABLE approvals(id TEXT PRIMARY KEY, action_hash TEXT, level INT, expires REAL, state TEXT, action TEXT)")
             db.execute("CREATE TABLE jobs(id TEXT PRIMARY KEY, node TEXT, kind TEXT, params TEXT, state TEXT, created REAL, expires REAL, "
