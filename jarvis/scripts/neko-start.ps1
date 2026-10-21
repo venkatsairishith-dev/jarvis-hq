@@ -31,6 +31,7 @@ $env:NEKO_SECRET_REF_ROOTS = "D:\jarvis-secrets"   # lets a stored API key be a 
 $env:PYTHONUTF8 = "1"
 $env:HF_HOME = "D:\jarvis\cache\hf"          # local speech-recognition model weights stay on D:
 . (Join-Path $PSScriptRoot "d-env.ps1")        # TEMP, TMP and every cache on D: (owner rule)
+& (Join-Path $PSScriptRoot "start-verdict.ps1") | Out-Null      # the Jev decision model (OpenJev Verdict, CPU, 127.0.0.1:8091); idempotent
 $env:NEKO_WAKE_WORD_THRESHOLD = "0.20"   # laptop microphone is quiet (peaks near -38 dBFS); 0.25 never fired (2026-10-21)
 # Speech recognition for N.E.K.O goes to JARVIS's int8 recognizers (Parakeet; IndicConformer for Hindi and Telugu) through the
 # local speech server instead of loading Whisper in-process. Loopback only. Remove this line to go back to Whisper base.
