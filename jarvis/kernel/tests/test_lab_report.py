@@ -11,7 +11,6 @@ Real: the kernel's HTTP handler, sqlite and tasks. The last class also runs the 
 """
 import json
 import os
-import pwd
 import re
 import shutil
 import sys
@@ -19,6 +18,11 @@ import tempfile
 import threading
 import time
 import unittest
+
+try:
+    import pwd          # POSIX only: the two RunnerContract classes (they need /proc too) are skipped where it is missing
+except ImportError:
+    pwd = None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
@@ -414,6 +418,8 @@ class RunnerContract(Helpers):
 
 
 def _real_users():
+    if pwd is None:
+        return False
     try:
         return os.geteuid() == 0 and all(pwd.getpwnam(n) for n in ("agent", "jarvis-sandbox", "jarvis-verify"))
     except KeyError:
