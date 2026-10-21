@@ -442,6 +442,7 @@ def test_a_removal_claim_whose_remover_died_does_not_block_the_takeover_for_ever
     C.release(h)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="needs unlinking a lock file its creator still has open, which Windows refuses (so that state cannot arise there)")
 def test_a_lock_still_empty_when_it_is_removed_as_abandoned_does_not_make_its_writer_a_second_holder(tmp_path, seams):
     """A creator is suspended after O_EXCL and before writing; its empty lock is judged abandoned (a dead writer's leftover),
     removed, and another task takes the lock. When the creator wakes up it writes into an unlinked file: it must notice, and

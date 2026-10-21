@@ -224,7 +224,7 @@ def test_a_port_fix_whose_text_occurs_twice_is_widened_until_it_is_unique(tmp_pa
         s.close()
     assert d["verified"] and f"port {port}" in d["cause"]
     f = d["fix"]["args"]
-    assert cfg.read_text(encoding="utf-8").count(f["find"]) == 1 and f'"web": {{"port": {port}}}' in f["find"]
+    assert cfg.read_bytes().decode("utf-8").count(f["find"]) == 1 and f'"web": {{"port": {port}}}' in f["find"]
     assert f'"port": {port}' not in f["replace"] and '"port": ' in f["replace"]
 
 
@@ -475,12 +475,13 @@ def test_owner_reads_and_writes_send_the_master_token_from_its_0600_file_and_fol
         assert core.owner("GET", "state") == (200, {"ok": True})                   # a 401 login re-reads the file once
         assert core.owner("POST", "pc", {"op": "diag"})[0] == 200
         # a token file that other users can read is not trusted (and the page has no secret to fall back on)
-        core._SECRETS.clear()
-        publish("MASTER-B", mode=0o644)
-        with pytest.raises(core.DesktopError, match="console token is not available"):
-            core.owner("POST", "pc", {"op": "diag"})                               # a write never goes out without a token
-        code, reply = core.owner("GET", "state")                                    # a read goes out bare; the console answers 401
-        assert code == 401 and reply.get("login") is True
+        if os.name == "posix":      # Windows has no mode bits: core trusts the file there (the ACL question is tracked separately)
+            core._SECRETS.clear()
+            publish("MASTER-B", mode=0o644)
+            with pytest.raises(core.DesktopError, match="console token is not available"):
+                core.owner("POST", "pc", {"op": "diag"})                               # a write never goes out without a token
+            code, reply = core.owner("GET", "state")                                    # a read goes out bare; the console answers 401
+            assert code == 401 and reply.get("login") is True
     finally:
         srv.shutdown()
         srv.server_close()
