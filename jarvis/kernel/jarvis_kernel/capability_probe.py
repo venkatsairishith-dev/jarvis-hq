@@ -58,8 +58,8 @@ def check_reply(reply: dict) -> bool:
         return False
 
 
-def probe_once(p: gateway.Provider, timeout: float = 120.0) -> tuple[bool, str | None]:
-    body = {"model": p.default_model if p.default_model != "default" else "any", "temperature": 0, "max_tokens": 200,
+def probe_once(p: gateway.Provider, timeout: float = 120.0, model: str | None = None) -> tuple[bool, str | None]:
+    body = {"model": model or (p.default_model if p.default_model != "default" else "any"), "temperature": 0, "max_tokens": 200,
             "messages": [{"role": "user", "content": PROMPT}], "tools": [TOOL]}
     req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json", **p.auth_headers()})
@@ -68,22 +68,29 @@ def probe_once(p: gateway.Provider, timeout: float = 120.0) -> tuple[bool, str |
     return check_reply(reply), reply.get("model") if isinstance(reply.get("model"), str) else None
 
 
-def run(p: gateway.Provider, runs: int = 3, timeout: float = 120.0) -> dict:
+def error_kind(e: Exception) -> str:
+    """What went wrong, without any server text: HTTP status or exception class only."""
+    code = getattr(e, "code", None)
+    return f"HTTP {code}" if isinstance(code, int) else type(e).__name__
+
+
+def run(p: gateway.Provider, runs: int = 3, timeout: float = 120.0, model: str | None = None) -> dict:
     if p.lane != "local" or not p.base_url or not is_loopback(p.base_url):
         raise gateway.RouteError(f"{p.name}: only local, loopback providers are probed (nothing leaves this machine)")
     if p.paid:
         raise gateway.RouteError(f"{p.name}: paid provider")
-    passed, served, errors = 0, None, 0
+    passed, served, errors, kinds = 0, None, 0, []
     for _ in range(runs):
         try:
-            ok, served_name = probe_once(p, timeout)
-        except Exception:                                                       # server down / timeout: a failed probe, not a crash
+            ok, served_name = probe_once(p, timeout, model)
+        except Exception as e:                                                  # server down / timeout / unknown model: a failed probe, not a crash
             errors += 1
+            kinds.append(error_kind(e))
             continue
         passed += ok
         served = served_name or served
     return {"tools": {"ok": passed == runs and runs > 0, "passed": passed, "runs": runs, "errors": errors,
-                      "model": p.default_model, "served_model": served,
+                      "model": model or p.default_model, "served_model": served, "error_kinds": sorted(set(kinds)),
                       "when": datetime.date.today().isoformat(), "method": "fixed get_weather prompt, temperature 0"}}
 
 
@@ -106,6 +113,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--provider", required=True)
     ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--model", help="the model or llama-swap alias to probe (e.g. decider, general, code); a local server needs a real name")
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--write", action="store_true", help="save the result to measured_capabilities.json")
     ap.add_argument("--providers", default=PROVIDERS)
@@ -114,7 +122,7 @@ def main(argv=None) -> int:
     if a.provider not in by:
         ap.error("unknown provider")
     try:
-        res = run(by[a.provider], a.runs, a.timeout)
+        res = run(by[a.provider], a.runs, a.timeout, a.model)
     except gateway.RouteError as e:
         print(f"refused: {e}")
         return 2

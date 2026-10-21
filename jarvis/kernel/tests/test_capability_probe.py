@@ -59,6 +59,29 @@ class TestProbe(unittest.TestCase):
         finally:
             srv.shutdown()
 
+    def test_model_alias_is_sent_and_errors_are_named_without_server_text(self):
+        seen = []
+        srv, url = server(GOOD, seen)
+        try:
+            r = cp.run(prov(url), runs=1, model="decider")["tools"]
+        finally:
+            srv.shutdown()
+        self.assertEqual((seen[0]["model"], r["model"], r["error_kinds"]), ("decider", "decider", []))
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                self.send_response(404); self.end_headers(); self.wfile.write(b"model 'any' not found")
+        bad = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=bad.serve_forever, daemon=True).start()
+        try:
+            r = cp.run(prov(f"http://127.0.0.1:{bad.server_address[1]}/v1"), runs=2)["tools"]
+        finally:
+            bad.shutdown()
+        self.assertEqual((r["ok"], r["errors"], r["error_kinds"]), (False, 2, ["HTTP 404"]))
+        self.assertNotIn("not found", json.dumps(r))
+
     def test_server_down_is_a_failed_probe_not_a_crash(self):
         r = cp.run(prov("http://127.0.0.1:9/v1"), runs=1, timeout=2)["tools"]
         self.assertEqual((r["ok"], r["errors"]), (False, 1))
@@ -85,6 +108,8 @@ class TestProbe(unittest.TestCase):
             self.assertIn("TOOLS_MEASURED_FAILED", bad[0])
             other_model = ms.capability_codes(None, req, False, probes["loc"], "m2")          # measured on another model: ignored
             self.assertIn("TOOLS_UNVERIFIED", other_model[0])
+            alias = ms.capability_codes(None, req, False, {"tools": {"ok": True, "model": "decider"}}, "default")
+            self.assertIn("TOOLS_MEASURED:decider", alias[1])                                  # unfixed local model: alias named
         self.assertEqual(ms.load_probes(os.path.join(tempfile.gettempdir(), "no-such-file.json")), {})
 
     def test_main_refuses_cloud_and_writes_nothing_without_flag(self):

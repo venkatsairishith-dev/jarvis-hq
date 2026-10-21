@@ -82,7 +82,8 @@ def capability_codes(entry: dict | None, req: dict, allow_unverified: bool, prob
     the catalog's declaration, in both directions."""
     block, notes = [], []
     tool_probe = (probe or {}).get("tools")
-    if tool_probe and model and tool_probe.get("model") != model:
+    unfixed = model in (None, "default", "any")      # a local server serves whichever alias the caller names
+    if tool_probe and not unfixed and tool_probe.get("model") != model:
         tool_probe = None                       # measured on another model: says nothing about this one
     if entry is None:
         notes.append("NOT_IN_CATALOG")
@@ -90,7 +91,10 @@ def capability_codes(entry: dict | None, req: dict, allow_unverified: bool, prob
         if not req.get(need):
             continue
         if need == "tools" and tool_probe is not None:
-            (notes if tool_probe.get("ok") else block).append("TOOLS_MEASURED" if tool_probe.get("ok") else "TOOLS_MEASURED_FAILED")
+            tag = "TOOLS_MEASURED" if tool_probe.get("ok") else "TOOLS_MEASURED_FAILED"
+            if unfixed and tool_probe.get("model"):
+                tag += f":{tool_probe['model']}"      # which alias was measured; others are not covered
+            (notes if tool_probe.get("ok") else block).append(tag)
             continue
         if entry is None:
             val = None
