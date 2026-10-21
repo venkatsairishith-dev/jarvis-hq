@@ -94,7 +94,13 @@ def main(argv=None):
         finally:
             db.close()
     k = Kernel(args.data)
+    try:
+        return _run(args, k)
+    finally:
+        k.db.close()                     # a caller that runs main() in-process (tests, tools) must not keep state.db open
 
+
+def _run(args, k):
     if args.cmd == "check":
         d, aid = k.request(Action(args.tool, args.op, args.target, untrusted_session=args.untrusted))
         print(json.dumps({"level": d.name, "reason": d.reason, "approval_id": aid}))
