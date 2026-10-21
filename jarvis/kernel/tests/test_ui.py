@@ -50,7 +50,7 @@ class UISnapshot(unittest.TestCase):
         self.assertLessEqual(len(s["elements"]), 15)
         self.assertIn("window", s)
         for e in s["elements"]:
-            self.assertEqual(set(e), {"depth", "type", "name", "id", "enabled", "offscreen", "value"})
+            self.assertEqual(set(e), {"depth", "type", "name", "id", "cls", "enabled", "offscreen", "value"})
             self.assertIsNone(e["value"])  # values are off by default
 
 
