@@ -132,7 +132,9 @@ def test_requirement_files_pin_exactly_and_say_where_pins_come_from(filename):
     assert pins, f"{filename} has no pins"
     for line in pins:
         assert re.match(r"^[A-Za-z0-9_.\-]+==[A-Za-z0-9_.+\-]+\s", line), f"not an exact pin: {line!r}"
-        assert "# from docs" in line and "verify on laptop" in line, f"pin without its source: {line!r}"
+        from_docs = "# from docs" in line and "verify on laptop" in line
+        measured = re.search(r"# measured on laptop \d{4}-\d{2}-\d{2}", line) is not None   # read from the installed venv (uv pip list)
+        assert from_docs or measured, f"pin without its source: {line!r}"
 
 
 # ---------- N.E.K.O.-Tauri submodule ----------

@@ -10,6 +10,6 @@ sherpa-onnx==1.13.8  # from docs, verify on laptop
 
 # Versions measured on the laptop 2026-10-21 (uv pip list). numpy is REQUIRED by jarvis_console/voice.py and local_speech_server.py:
 # without it the speech server reports stt_*_missing / tts_en_missing even with every model present.
-numpy==2.5.4
-sherpa-onnx-core==1.13.8   # pulled in by sherpa-onnx
-tzdata==2026.5             # the kernel unit tests need the IANA zones on Windows
+numpy==2.5.4   # measured on laptop 2026-10-21
+sherpa-onnx-core==1.13.8   # measured on laptop 2026-10-21 (pulled in by sherpa-onnx)
+tzdata==2026.5   # measured on laptop 2026-10-21 (the kernel unit tests need the IANA zones on Windows)

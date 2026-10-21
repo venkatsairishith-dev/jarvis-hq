@@ -11,13 +11,13 @@ function Step($name, [scriptblock]$cmd) {
   if ($LASTEXITCODE -ne 0) { "FAILED: $name (exit $LASTEXITCODE)"; $script:fail++ }
 }
 Set-Location $repo
-Step 'chat frontend (vitest)' { Push-Location frontend\react-neko-chat; npx vitest run; $c = $LASTEXITCODE; Pop-Location; exit $c }
+Step 'chat frontend (vitest)' { Push-Location frontend\react-neko-chat; try { npx vitest run } finally { Pop-Location } }
 Step 'main_agent'   { & $nv -m pytest plugin/plugins/main_agent -q -p no:cacheprovider }
 Step 'jarvis_bridge' { & $nv -m pytest plugin/plugins/jarvis_bridge -q -p no:cacheprovider }
 Step 'jarvis console' { & $nv -m pytest jarvis/console -q -p no:cacheprovider }
 if ($Mode -eq 'full') {
   Step 'desktop'           { & $nv -m pytest plugin/plugins/desktop -q -p no:cacheprovider }
   Step 'caretaker + tools' { & $nv -m pytest jarvis/caretaker jarvis/tools -q -p no:cacheprovider }
-  Step 'kernel (unittest)' { Push-Location jarvis\kernel; & $jv -m unittest discover -s tests; $c = $LASTEXITCODE; Pop-Location; exit $c }
+  Step 'kernel (unittest)' { Push-Location jarvis\kernel; try { & $jv -m unittest discover -s tests } finally { Pop-Location } }
 }
 "`n$fail suite(s) failed"; exit $fail
