@@ -7,6 +7,7 @@ import json
 import os
 import time
 import urllib.error
+import urllib.parse
 import sys
 import urllib.request
 
@@ -26,6 +27,11 @@ class Kernel:
     def __init__(self, cfg):
         self.cfg = cfg
 
+    def _open(self, req, timeout):
+        """Loopback rules (no proxy, no redirect, no credentials in the address) plus exactly the configured kernel host, nothing else."""
+        host = (urllib.parse.urlsplit(self.cfg.kernel_url).hostname or "").lower()
+        return loopback_net.urlopen(req, timeout=timeout, allow_hosts=(host,) if host else ())
+
     def _token(self):
         try:
             with open(self.cfg.token_file, encoding="utf-8-sig") as fh:
@@ -44,7 +50,7 @@ class Kernel:
                                      headers={"Authorization": "Bearer " + self._token(), "Content-Type": "application/json"})
         t0 = time.time()
         try:
-            with loopback_net.urlopen(req, timeout=timeout) as r:
+            with self._open(req, timeout) as r:
                 return r.status, json.loads(r.read() or b"{}")
         except urllib.error.HTTPError as e:
             try:
@@ -64,7 +70,7 @@ class Kernel:
         req = urllib.request.Request(self.cfg.kernel_url + PREFIX + f"stream?since={int(since)}",
                                      headers={"Authorization": "Bearer " + self._token(), "Accept": "text/event-stream"})
         try:
-            return loopback_net.urlopen(req, timeout=timeout)
+            return self._open(req, timeout)
         except urllib.error.HTTPError as e:
             raise KernelError(f"the kernel refused the event stream (HTTP {e.code})", e.code)
         except (urllib.error.URLError, OSError, TimeoutError) as e:

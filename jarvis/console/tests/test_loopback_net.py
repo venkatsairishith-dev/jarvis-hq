@@ -112,6 +112,52 @@ class Opener(Base):
         self.assertEqual([h[1] for h in self.svc_hits], ["/redirect"])
 
 
+class KernelHost(Base):
+    """The kernel runs on another machine (Tailscale address). Only the kernel client may reach its configured host, and nothing else."""
+    KERNEL = "http://100.125.91.51:8790"
+
+    def test_allow_hosts_is_exact_and_keeps_every_other_rule(self):
+        self.assertEqual(loopback_net.check_loopback(self.KERNEL + "/x", ("100.125.91.51",)), self.KERNEL + "/x")
+        for bad in ("http://100.125.91.52:8790/", "http://user:pw@100.125.91.51:8790/", "ftp://100.125.91.51/", "http://example.com/"):
+            with self.assertRaises(loopback_net.LoopbackError, msg=bad):
+                loopback_net.check_loopback(bad, ("100.125.91.51",))
+
+    def test_kernel_client_reaches_its_configured_host_but_not_through_the_proxy(self):
+        import types
+        from jarvis_console import kernel_client
+        tok = os.path.join(os.environ.get("TMPDIR", "/tmp"), "kc-token-%d" % os.getpid())
+        with open(tok, "w", encoding="utf-8") as fh:
+            fh.write("tok-" + CANARY)
+        try:
+            sent = []
+
+            class Resp:
+                status = 200
+                def __enter__(self): return self
+                def __exit__(self, *a): return False
+                def read(self): return b'{"ok": true}'
+
+            class Opener:                                                    # no real network: the real kernel must not see a test token
+                def open(self, req, timeout=None):
+                    sent.append(req.full_url)
+                    return Resp()
+            real = loopback_net.build_opener
+            loopback_net.build_opener = lambda: Opener()
+            try:
+                k = kernel_client.Kernel(types.SimpleNamespace(kernel_url=self.KERNEL, token_file=tok))
+                self.assertEqual(k.request("GET", "status", timeout=1), (200, {"ok": True}))
+                self.assertEqual(sent, [self.KERNEL + "/v1/jarvis/owner/status"])
+                k.cfg.kernel_url = "http://user:pw@100.125.91.51:8790"
+                with self.assertRaises(ValueError):                          # credentials in the address are still refused
+                    k.request("GET", "status", timeout=1)
+                self.assertEqual(len(sent), 1)
+            finally:
+                loopback_net.build_opener = real
+        finally:
+            os.remove(tok)
+        self.assertEqual(self.proxy_hits, [])
+
+
 class Callers(Base):
     def _load(self, name, rel):
         spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, "..", "..", rel))
