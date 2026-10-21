@@ -254,7 +254,11 @@ def _extract_json(text: str) -> dict[str, Any]:
     try:
         data = json.loads(raw)
     except ValueError:
-        raise PlanError("The planner's plan was not valid JSON.")
+        # models often leave a comma before } or ]: the only repair made; anything else still counts as not valid JSON
+        try:
+            data = json.loads(re.sub(r",(\s*[}\]])", r"\1", raw))
+        except ValueError:
+            raise PlanError("The planner's plan was not valid JSON.")
     if not isinstance(data, dict):
         raise PlanError("The planner's plan had the wrong shape.")
     return data

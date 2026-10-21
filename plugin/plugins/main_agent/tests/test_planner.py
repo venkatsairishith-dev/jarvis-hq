@@ -254,3 +254,12 @@ def test_an_argument_of_the_wrong_type_is_refused():  # bench A-094 (2026-10-17)
     text = json.dumps({"summary": "x", "steps": [{"id": "s1", "agent": "plugin", "plugin": "web_search:search", "goal": "find",
                                                    "args": {"query": "cats", "max_results": 5}}]})
     assert parse_plan(text, caps(), 6).steps[0].args == {"query": "cats", "max_results": 5}
+
+
+def test_a_trailing_comma_is_forgiven_but_other_broken_json_is_not():
+    text = json.dumps(GOOD)
+    with_commas = text.replace("}]", "},]").replace("}}", "},}")           # a comma before a closing ] or }
+    assert with_commas != text and parse_plan(with_commas, caps(), 6).steps[0].id == "s1"
+    for bad in (text.replace('"id": "s1"', '"id" "s1"', 1), text[:40], "not json at all"):
+        with pytest.raises(PlanError):
+            parse_plan(bad, caps(), 6)
