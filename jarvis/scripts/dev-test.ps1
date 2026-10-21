@@ -7,7 +7,7 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $nv = 'D:\jarvis\tools\neko-venv\Scripts\python.exe'; $jv = 'D:\jarvis\tools\jarvis-venv\Scripts\python.exe'
 $fail = 0
 function Step($name, [scriptblock]$cmd) {
-  "=== $name"; & $cmd 2>&1 | Select-Object -Last 3
+  "=== $name"; & $cmd 2>&1 | ForEach-Object { "$_" } | Where-Object { $_ -match '(passed|failed|error|^Ran |^OK|^FAILED|Test Files|Tests )' } | Select-Object -Last 4
   if ($LASTEXITCODE -ne 0) { "FAILED: $name (exit $LASTEXITCODE)"; $script:fail++ }
 }
 Set-Location $repo
