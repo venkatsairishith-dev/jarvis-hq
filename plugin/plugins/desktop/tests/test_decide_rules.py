@@ -161,3 +161,18 @@ def test_wrong_typed_model_fields_fall_back_and_never_crash():  # A-089
                       ("open notepad", {"tool": {"x": 1}}), ("research tides", {"tool": "research", "query": {"q": "tides"}})):
         p = v(req, step)
         assert p.status in ("fallback", "clarify") and not p.steps, (step, p)
+
+
+def test_a_request_to_create_a_folder_is_refused_plainly_and_never_asks_the_model():
+    """2026-10-21: "make a folder test-live on D:" was mapped to open_file, so the owner heard "no single file matches" for a thing the agent
+    cannot do at all. No model call is made (post would raise), the plan has no steps and says what is missing."""
+    def post(*a, **k):
+        raise AssertionError("the model must not be asked")
+    for req in ("make a folder test-live on D:", "Create the folder D:\\test-live", "create a new directory called notes", "mkdir D:\\x",
+                "please make me a new folder"):
+        p = D.decide(req, PROFILES, post=post)
+        assert p.status == "fallback" and not p.steps and "cannot create" in p.problems[0], (req, p)
+    # near misses stay ordinary requests (the rule is about creating a folder, not opening or finding one)
+    for req in ("open my downloads folder", "open the folder test-live on D:", "find the report folder", "make a presentation about folders"):
+        assert not D.MAKE_FOLDER.search(req), req
+

@@ -757,6 +757,12 @@ def fast_path(request: str, profiles: list[dict]) -> Plan | None:
     return plan
 
 
+# "make a folder test-live on D:", "create a new directory": the desktop agent opens, types and reads; it has no operation that creates a folder or a
+# file (a write needs its own approval rule in the kernel). Without this the model maps it to open_file and the owner hears "no single file matches".
+MAKE_FOLDER = re.compile(r"(?i)\b(?:create|make|new|add)\b(?:\W+\w+){0,3}?\W+(?:folder|directory)\b|\bmkdir\b")
+NO_CREATE = "I cannot create folders or files yet (the PC agent can open, type and read, not create), so nothing was changed"
+
+
 def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=None, timeout: float = 60.0,
            context: str = "", last: dict | None = None) -> Plan:
     """context: the owner's previous request, for follow-ups such as "actually use the Satish profile instead".
@@ -764,6 +770,8 @@ def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=
     request = " ".join(str(request or "").split())[:1000]
     if re.fullmatch(r"(?i)\W*(stop|cancel|abort|never ?mind|forget it)\W*", request):     # no model needed
         return Plan([{"tool": "stop"}], "ok", model="rule")
+    if MAKE_FOLDER.search(request):                                  # no tool creates folders or files: say so, do not open a path that is not there
+        return Plan([], "fallback", problems=[NO_CREATE], model="rule")
     fu = follow_up(request, last)
     if fu is not None:
         return fu
