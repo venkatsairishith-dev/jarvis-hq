@@ -214,7 +214,8 @@ class TestRealConfig(NoNetwork):
             self.assertEqual(out["recommended"], "groq")                    # declared tool calls, private lane
         rows = {r["provider"]: r for r in out["candidates"]}
         self.assertIn("TOOLS_UNVERIFIED", rows["vm-llama-cpu"]["capability_codes"] + rows["vm-llama-cpu"]["notes"])
-        self.assertIn("NOT_IN_CATALOG", rows["openrouter-private"]["notes"])   # its default model is not listed today
+        self.assertNotIn("NOT_IN_CATALOG", rows["openrouter-private"]["notes"])   # its default model (gemma-4-31b-it:free, set 2026-10-21) is listed
+        self.assertIn("TOOLS_DECLARED", rows["openrouter-private"]["notes"])
         for r in out["candidates"]:
             if r["lane"] == "public":
                 self.assertEqual(r["verdict"], "excluded")

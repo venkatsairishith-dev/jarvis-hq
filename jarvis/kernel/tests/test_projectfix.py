@@ -17,6 +17,8 @@ import tempfile
 import threading
 import time
 import unittest
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import winclean  # noqa: E402  retrying temp cleanup for Windows file locks
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -160,7 +162,7 @@ class _Fixture(unittest.TestCase):
         repair.BACKUPS = self.backups
         for k, v in self.env.items():
             os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
-        self.srv.shutdown(); self.srv.server_close(); self.k.db.close(); self.tmp.cleanup()
+        self.srv.shutdown(); self.srv.server_close(); self.k.db.close(); winclean.cleanup(self.tmp)
 
     # ---- the pieces outside the kernel
     def post(self, path, body, tok):
@@ -498,7 +500,7 @@ class ApplyJob(unittest.TestCase):
         self.backups, repair.BACKUPS = repair.BACKUPS, os.path.join(self.tmp.name, "backups")
 
     def tearDown(self):
-        repair.BACKUPS = self.backups; self.tmp.cleanup()
+        repair.BACKUPS = self.backups; winclean.cleanup(self.tmp)
 
     def params(self, **over):
         import hashlib

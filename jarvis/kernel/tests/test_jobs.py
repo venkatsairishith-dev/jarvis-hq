@@ -6,6 +6,8 @@ import tempfile
 import threading
 import time
 import unittest
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import winclean  # noqa: E402  retrying temp cleanup for Windows file locks
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -39,7 +41,7 @@ class Queue(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.k = Kernel(os.path.join(self.tmp.name, "d")); self.j = Jobs(self.k)
 
-    def tearDown(self): self.k.db.close(); self.tmp.cleanup()
+    def tearDown(self): self.k.db.close(); winclean.cleanup(self.tmp)
 
     def test_create_validates_kind_and_parameters(self):
         for kind, params in (("rm_rf", {"project": "x"}), ("project_check", {}), ("project_check", {"project": "x", "cmd": "calc"}), ("project_check", {"project": "../x"}),
@@ -141,7 +143,7 @@ class Http(unittest.TestCase):
         self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
         self.tok = self.nodes.pair(self.nodes.new_code(), "laptop")
 
-    def tearDown(self): self.srv.shutdown(); self.k.db.close(); self.tmp.cleanup()
+    def tearDown(self): self.srv.shutdown(); self.k.db.close(); winclean.cleanup(self.tmp)
 
     def post(self, path, obj, tok=None):
         r = urllib.request.Request(self.url + path, data=json.dumps(obj).encode(), method="POST"); r.add_header("Authorization", "Bearer " + (tok or self.tok))
@@ -168,7 +170,7 @@ class Telegram(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.k = Kernel(os.path.join(self.tmp.name, "d")); self.api = FakeAPI()
         Jobs(self.k); self.b = Bridge(self.k, self.api, OWNER, [])
 
-    def tearDown(self): self.k.db.close(); self.tmp.cleanup()
+    def tearDown(self): self.k.db.close(); winclean.cleanup(self.tmp)
 
     def pair_laptop(self):
         n = Nodes(self.k); tok = n.pair(n.new_code(), "laptop")
@@ -216,7 +218,7 @@ class NodeRunner(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.root = os.path.join(self.tmp.name, "proj")
         os.makedirs(self.root)
 
-    def tearDown(self): self.tmp.cleanup()
+    def tearDown(self): winclean.cleanup(self.tmp)
 
     def projects(self, **test_over):
         t = {"cwd": ".", "cmd": ["{python}", "-B", "-W", "ignore", "-I", "-m", "unittest", "discover", "-s", "tests"], "timeout_s": 60}

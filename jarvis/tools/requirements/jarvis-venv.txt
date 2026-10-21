@@ -8,8 +8,8 @@
 # Source: jarvis/docs/research/07-integration-decisions.md:145 ("Installed: sherpa-onnx 1.13.8").
 sherpa-onnx==1.13.8  # from docs, verify on laptop
 
-# Imported by the console but no version is recorded anywhere in the repo, so not pinned (never invent versions).
-# Fill in from `pip freeze` on the laptop:
-#   numpy        (jarvis_console, local_speech_server.py)
-#   psutil       (jarvis_console)
-#   sherpa-onnx-core  (pulled in by sherpa-onnx; research/02-voice-and-local-models.md:146, version not stated)
+# Versions measured on the laptop 2026-10-21 (uv pip list). numpy is REQUIRED by jarvis_console/voice.py and local_speech_server.py:
+# without it the speech server reports stt_*_missing / tts_en_missing even with every model present.
+numpy==2.5.4
+sherpa-onnx-core==1.13.8   # pulled in by sherpa-onnx
+tzdata==2026.5             # the kernel unit tests need the IANA zones on Windows

@@ -1,0 +1,7 @@
+# Extras the N.E.K.O venv (D:\jarvis	ools
+eko-venv) needs for JARVIS beyond upstream's requirements.txt. Measured 2026-10-21.
+sounddevice==0.5.6   # the 'Hey Neko' listener (jarvis/wake/wake_listener.py) opens the microphone with it; without it: 'No module named sounddevice'
+# The patched sherpa-onnx wake runtime (1.13.8+neko.kws2) is built, not downloaded: scripts\wake_worduild_wake_word_runtime.ps1
+# (needs uv on PATH, e.g. %APPDATA%\Python\Python314\Scripts, Visual Studio Build Tools 2022 and UCRTContentRoot for that shell only),
+# then: uv pip install --python D:\jarvis	ools
+eko-venv\Scripts\python.exe <wheel from D:\jarvis	ools\wake-runtime\sherpa-onnx\dist>
