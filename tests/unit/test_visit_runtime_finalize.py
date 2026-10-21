@@ -69,6 +69,9 @@ async def _quiet(tmp_path, monkeypatch, **kw):
     host, guest, wire, clock, wall = await bring_up(tmp_path, monkeypatch, host_replies=host_replies,
                                                     guest_replies=guest_replies, **kw)
     await wait_for(lambda: len(host.rt.journal.lines()) >= 2 and len(guest.rt.journal.lines()) >= 2)
+    # 先等被挡住的那一轮真的开始（已领走 ``default``）再换队列：否则它晚到一步时会领走仪式句的答复，
+    # 仪式句 / 简述那两轮反倒去等 ``default`` 的门，卡满 VISIT_CEREMONY_TIMEOUT_S（负载高时偶发）。
+    await wait_for(lambda: host_replies.calls >= 2 and guest_replies.calls >= 2, timeout=30.0)
     # 下一轮回话被挡住；收尾时的仪式句与简述两轮直接给答复（打断回话那一轮之后才轮到它们）
     host_replies.queue = [["我回来啦。"], ["这次聊得很开心。"]]
     guest_replies.queue = [["我回来啦。"], ["这次聊得很开心。"]]

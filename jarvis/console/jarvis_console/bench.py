@@ -32,6 +32,9 @@ import time
 import types
 import urllib.error
 import urllib.request
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+import loopback_net  # noqa: E402  loopback only, no proxy, no redirect (completion H)
 from collections import deque
 from pathlib import Path
 
@@ -637,7 +640,7 @@ class Bench:
         if not url:
             return None, ""
         try:
-            with urllib.request.urlopen(url + "/health", timeout=0.5) as r:
+            with loopback_net.urlopen(url + "/health", timeout=0.5) as r:
                 if not 200 <= r.status < 300:
                     return None, url
         except (urllib.error.URLError, OSError, ValueError):
@@ -645,7 +648,7 @@ class Bench:
 
         def post(body):
             req = urllib.request.Request(url + "/v1/chat/completions", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with loopback_net.urlopen(req, timeout=60) as resp:
                 out = json.loads(resp.read().decode("utf-8", "replace"))
             return str(((out.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
         return post, url

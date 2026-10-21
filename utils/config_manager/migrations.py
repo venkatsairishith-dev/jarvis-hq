@@ -236,6 +236,15 @@ def _force_rmtree(path):
             except OSError:
                 current = 0
             os.chmod(target, current | stat.S_IWRITE | stat.S_IREAD)
+            # POSIX only: unlinking an entry needs write+search on its PARENT
+            # directory, not on the entry, so a read-only directory inside the
+            # tree strands everything below it even after the entry itself was
+            # fixed. Only parents inside the tree being removed are touched.
+            root = os.path.abspath(str(path))
+            parent = os.path.dirname(os.path.abspath(target))
+            if parent == root or parent.startswith(root + os.sep):
+                parent_mode = os.stat(parent).st_mode
+                os.chmod(parent, parent_mode | stat.S_IWRITE | stat.S_IREAD | stat.S_IEXEC)
             if os.path.isdir(target):
                 # Traversal, which is what an unwritable parent was blocking.
                 os.chmod(target, os.stat(target).st_mode | stat.S_IEXEC)

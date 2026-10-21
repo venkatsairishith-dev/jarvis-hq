@@ -9,11 +9,23 @@ export interface Task {
   criteria: string[]; plan: string[]; verification: { passed?: boolean; [k: string]: unknown }; evidence: string[]; events: TaskEvent[];
 }
 export interface Approval {
-  id: string; level: string; action: { tool: string; op: string; target: string; lane?: string; params?: Record<string, unknown> };
+  id: string; level: string;
+  action: {
+    tool: string; op: string; target: string; lane?: string; params?: Record<string, unknown>; card?: Record<string, unknown>;
+    invisible?: InvisibleReport; invisible_chars?: number; has_invisible?: boolean;   // the server wrote invisible characters out as <U+XXXX> (re-review M1)
+    purged?: boolean; text_removed?: string;                                          // a decided approval whose text was removed (retention)
+  };
   seconds_left: number; reason: string; digest: string; truncated: boolean;
+  blocked?: boolean; invisible_chars?: number; has_invisible?: boolean;   // blocked: invisible/control/direction characters, it cannot be approved
+  chars?: number;       // characters of text on the card; the card holds ALL of it, or `truncated` is true and it cannot be approved (review M6)
+  requester?: string;   // the agent that asked ("" or absent: the owner's own request); part of what is approved (audit SEC-D3)
+}
+export interface InvisibleReport {
+  status: "clean" | "notice" | "warning" | "blocked"; invisible_chars: number; hostile: number; benign: number; has_invisible: boolean;
+  fields: Record<string, { invisible_chars: number; has_invisible: boolean; hostile: number }>; flags: string[]; note?: string;
 }
 export interface ApprovalOutcome {
-  id: string; level: string; state: "approved" | "used" | "denied" | "expired"; at: number; job: string | null; reason: string;
+  id: string; level: string; state: "approved" | "used" | "denied" | "expired"; at: number; job: string | null; reason: string; requester?: string;
   action: { tool: string; op: string; target: string; lane?: string };
 }
 export interface Job { id: string; node: string; kind: string; state: string; created: number; finished: number | null; owner: string; params: string; result: string }

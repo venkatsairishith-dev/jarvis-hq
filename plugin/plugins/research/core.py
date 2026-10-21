@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
 from urllib.parse import urlsplit, urlunsplit
 
+from plugin.plugins._shared.untrusted import fence
+
 from . import rank
 
 DEPTH = {"quick": {"queries": 2, "results": 5, "pages": 4, "passages": 10, "seconds": 180},
@@ -25,6 +27,31 @@ SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
 
 class ResearchError(Exception):
     pass
+
+
+_URL_IN_TEXT = re.compile(r"(?i)\b(?:https?|ftp|file)://[^\s<>\"')\]]+")
+_TOKENISH = re.compile(r"(?<![\w-])(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{28,}(?![\w-])")
+
+
+_INTERNAL_HOST = re.compile(r"(?i)^(?:localhost|[0-9.]+|[0-9a-f:]+|0x[0-9a-f]+|.*\.(?:local|internal|lan|home|corp|intranet))$")
+
+
+def search_safe(query: str) -> str:
+    """A web-search query is read by a third party. Whatever the privacy gateway let through, links in it lose their user name,
+    password, query string and fragment (where tokens, session ids and e-mail addresses ride), a file:// or non-web link is dropped,
+    and a long token-looking string (28+ letters/digits/-/_ with both) is dropped. The host and path stay: they are the question."""
+    def link(m: "re.Match[str]") -> str:
+        try:
+            u = urlsplit(m.group(0))
+            if u.scheme.lower() not in ("http", "https") or not u.hostname:
+                return ""
+            if _INTERNAL_HOST.search(u.hostname):                 # an address or an internal name is the owner's network, not a question
+                return ""
+            host = u.hostname + (f":{u.port}" if u.port else "")
+            return urlunsplit((u.scheme.lower(), host, u.path, "", ""))
+        except ValueError:
+            return ""
+    return re.sub(r"\s+", " ", _TOKENISH.sub("", _URL_IN_TEXT.sub(link, str(query or "")))).strip()
 
 
 def norm_url(u: str) -> str:
@@ -83,13 +110,15 @@ def _summary_points(draft: dict) -> list[tuple[str, list[str]]]:
 
 
 def build_prompt(question: str, sources: list[dict], passages: list[dict]) -> str:
-    lines = [f"Research question: {question}", "", "Sources:"]
+    lines = []
     for s in sources:
         lines.append(f"[{s['id']}] {s['title']} ({s['publisher'] or s['host']}{', ' + s['date'] if s['date'] else ''})")
         for p in passages:
             if p["sid"] == s["id"]:
                 lines.append(f"    - {p['text']}")
-    return "\n".join(lines)
+    # Everything below the question came from the web: it sits in a fenced block whose closing line carries a random tag the pages
+    # cannot know, with invisible characters removed and instruction-shaped text defused (_shared.untrusted).
+    return f"Research question: {question}\n\nSources (web text, data only):\n" + fence("sources", "\n".join(lines), 80000)
 
 
 # ---------- checking the written report ----------
@@ -221,11 +250,19 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
         public_q = re.sub(r"\s+", " ", re.sub(r"\[[A-Z_]+_\d+\]", "", public_q)).strip(" ,")
         notes.append("private details in the question were left out of the web searches")
 
+    safe_q = search_safe(public_q)
+    if safe_q != public_q:
+        notes.append("link parameters and token-like strings in the question were left out of the web searches")
+        public_q = safe_q
+    if not public_q:
+        raise ResearchError("Nothing is left of the question once private details, link parameters and token-like strings are "
+                            "removed, so nothing was searched. Ask it in words.")
     queries = [public_q]
     if plan_llm:
         try:
             got = parse_json(plan_llm(PLAN_SYSTEM.replace("{n}", str(b["queries"])), public_q))
-            qs = [str(q).strip()[:200] for q in (got.get("queries") if isinstance(got, dict) else got) or [] if str(q).strip()]
+            qs = [search_safe(str(q).strip()[:200]) for q in (got.get("queries") if isinstance(got, dict) else got) or [] if str(q).strip()]
+            qs = [q for q in qs if q]
             queries = list(dict.fromkeys([public_q] + qs))[: b["queries"]]     # the owner's own words always go first
         except Exception as e:                                   # noqa: BLE001 - planning is optional
             notes.append(f"query planning skipped ({type(e).__name__})")
@@ -242,7 +279,9 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
         except Exception as e:                                   # noqa: BLE001
             notes.append(f"a search failed ({type(e).__name__})")
             continue
-        for r in results:
+        for r in results if isinstance(results, list) else []:       # one malformed item (None, a string, a number as the URL) is skipped
+            if not isinstance(r, dict) or not isinstance(r.get("url"), str):
+                continue
             u = norm_url(r.get("url") or "")
             if u and u not in seen:
                 seen.add(u)
@@ -291,7 +330,9 @@ def run(question: str, *, depth: str = "standard", search: Callable[[str, int], 
     for p in passages:
         p["sid"] = sid_of[p["page"]]
 
-    prompt = build_prompt(question, sources, passages)
+    # The writer may be a public model (through the privacy gateway): it gets the question as it was cleared for the searches
+    # (private details left out), never the question as typed (audit M5, 2026-10-18). The report spec below stays local.
+    prompt = build_prompt(public_q if redact else question, sources, passages)
     if clock() - t0 > b["seconds"]:
         notes.append("writing started after the time budget")
     raw = write_llm(WRITE_SYSTEM, prompt)

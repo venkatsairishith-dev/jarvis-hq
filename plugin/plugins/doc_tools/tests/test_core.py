@@ -75,6 +75,29 @@ def test_pdf_and_html_and_docx_are_read_as_text(env):
     assert back["kind"] == "docx" and "Heading" in back["text"] and "first" in back["text"] and "Body text." in back["text"]
 
 
+def test_a_scanned_pdf_says_it_has_no_text_layer_instead_of_returning_silent_empty_text(env):
+    """PRO-D8: an image-only PDF gave chars_total 0 and no warning, so the model could call the document empty."""
+    docs, _, _ = env
+    from reportlab.pdfgen import canvas
+    c = canvas.Canvas(str(docs / "scan.pdf"))
+    c.rect(50, 50, 300, 400, fill=1)                                  # a page with a picture and no text, like a scan
+    c.save()
+    r = core.read_document(str(docs / "scan.pdf"))
+    assert r["kind"] == "pdf" and r["chars_total"] == 0 and r["text"] == ""
+    assert r["note"] == "no text layer: the PDF may be scanned; OCR is not available here"
+    c = canvas.Canvas(str(docs / "mixed.pdf"))
+    c.drawString(72, 720, "Chapter one has real text.")
+    c.showPage()
+    c.rect(50, 50, 300, 400, fill=1)
+    c.save()
+    m = core.read_document(str(docs / "mixed.pdf"))
+    assert "Chapter one" in m["text"] and m["note"].startswith("1 of 2 pages have no text layer")
+    c = canvas.Canvas(str(docs / "plain.pdf"))
+    c.drawString(72, 720, "Only text here.")
+    c.save()
+    assert "note" not in core.read_document(str(docs / "plain.pdf"))
+
+
 def test_write_never_overwrites_and_sanitizes_names(env):
     _, out, _ = env
     a = core.write_document("Plan: week 1/2?", "one", "md")

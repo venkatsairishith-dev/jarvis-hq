@@ -11,6 +11,9 @@ from typing import Any
 import pytest
 
 from main_logic.asr_client.speaker_shadow.contracts import (
+    MAX_SPEAKER_SHADOW_BACKEND_CLOSE_SECONDS,
+    MAX_SPEAKER_SHADOW_BACKEND_LOAD_SECONDS,
+    MAX_SPEAKER_SHADOW_BACKEND_SCORE_SECONDS,
     MAX_SPEAKER_SHADOW_FRAME_PCM_BYTES,
     SPEAKER_SHADOW_SAMPLE_RATE_HZ,
     SpeakerShadowCandidateKey,
@@ -110,9 +113,15 @@ def _config(**overrides: object) -> SpeakerShadowConfig:
         "finalized_candidate_capacity": 16,
         "shutdown_grace_seconds": 0.05,
         "callback_timeout_seconds": 0.05,
-        "backend_load_timeout_seconds": 3.0,
-        "backend_score_timeout_seconds": 1.0,
-        "backend_close_timeout_seconds": 1.0,
+        # The product's own backend deadlines are hang guards here: they cover a
+        # freshly spawned interpreter's start-up (machine speed, not product
+        # behaviour), so on a starved CPU the old 3 s / 1 s / 1 s let a healthy
+        # host "time out" and the test then saw no observation. The tests that
+        # ARE about those deadlines pass their own small values explicitly.
+        # The product's configuration caps them at these maxima.
+        "backend_load_timeout_seconds": MAX_SPEAKER_SHADOW_BACKEND_LOAD_SECONDS,
+        "backend_score_timeout_seconds": MAX_SPEAKER_SHADOW_BACKEND_SCORE_SECONDS,
+        "backend_close_timeout_seconds": MAX_SPEAKER_SHADOW_BACKEND_CLOSE_SECONDS,
         "process_terminate_timeout_seconds": 0.5,
     }
     values.update(overrides)
@@ -131,6 +140,20 @@ def _speaker_host_pids() -> set[int]:
         and process.name == "speaker-shadow-backend"
         and process.is_alive()
     }
+
+
+# A spawned speaker-shadow host has to start a fresh interpreter and import this
+# module before it can signal "stage started"; that cost is the machine's, not the
+# product's, and balloons when the CPUs are shared. Waiting for such an EVENT is
+# not an assertion about speed (it returns the moment the event is set), so its
+# bound is only a hang guard. Assertions about how fast the product reacts
+# (reaping a host, closing) keep their own tight bounds.
+_HOST_START_HANG_GUARD_SECONDS = 60.0
+# Same for the OS finishing off a host the product has ALREADY killed and
+# declared gone (close() returned within its own tight bound, asserted next to
+# these waits): how soon a SIGKILLed process is scheduled out and reaped depends on
+# the machine, so the wait for "no host process left" is a hang guard too.
+_HOST_REAP_GUARD_SECONDS = 30.0
 
 
 async def _wait_until(predicate: Any, timeout: float = 2.0) -> None:
@@ -486,7 +509,7 @@ async def test_checkpoint_accepts_pcm_while_intermediate_score_is_running() -> N
         sample_rate_hz=SPEAKER_SHADOW_SAMPLE_RATE_HZ,
         candidate=candidate,
     )
-    await _wait_until(score_started.is_set)
+    await _wait_until(score_started.is_set, _HOST_START_HANG_GUARD_SECONDS)
     for _ in range(250):
         assert runtime.submit(
             _pcm(10),
@@ -892,7 +915,7 @@ async def test_reset_discards_in_flight_result_by_generation() -> None:
         sample_rate_hz=SPEAKER_SHADOW_SAMPLE_RATE_HZ,
         candidate=before,
     )
-    await _wait_until(started.is_set)
+    await _wait_until(started.is_set, _HOST_START_HANG_GUARD_SECONDS)
     old_generation = runtime.generation
     await runtime.reset()
     assert runtime.generation == old_generation + 1
@@ -932,7 +955,7 @@ async def test_reset_cancels_stale_observation_delivery() -> None:
         sample_rate_hz=SPEAKER_SHADOW_SAMPLE_RATE_HZ,
         candidate=candidate,
     )
-    await asyncio.wait_for(callback_started.wait(), 2.0)
+    await asyncio.wait_for(callback_started.wait(), _HOST_START_HANG_GUARD_SECONDS)
 
     await runtime.reset()
     callback_release.set()
@@ -1129,7 +1152,7 @@ async def test_close_cancels_in_flight_observation_and_reaps_host() -> None:
         sample_rate_hz=SPEAKER_SHADOW_SAMPLE_RATE_HZ,
         candidate=_candidate(43),
     )
-    await asyncio.wait_for(callback_started.wait(), 2.0)
+    await asyncio.wait_for(callback_started.wait(), _HOST_START_HANG_GUARD_SECONDS)
 
     await asyncio.wait_for(runtime.close(), 2.0)
 
@@ -1168,7 +1191,7 @@ async def test_close_retries_after_callback_consumes_first_cancellation() -> Non
         sample_rate_hz=SPEAKER_SHADOW_SAMPLE_RATE_HZ,
         candidate=_candidate(47),
     )
-    await asyncio.wait_for(callback_started.wait(), 2.0)
+    await asyncio.wait_for(callback_started.wait(), _HOST_START_HANG_GUARD_SECONDS)
 
     try:
         await asyncio.wait_for(runtime.close(), 2.0)
@@ -1288,7 +1311,7 @@ async def test_close_tracks_cancelled_off_loop_host_start_without_leaks(
 
     start_release.set()
     await asyncio.wait_for(close_task, 2.0)
-    await _wait_until(lambda: not _speaker_host_pids())
+    await _wait_until(lambda: not _speaker_host_pids(), _HOST_REAP_GUARD_SECONDS)
     metrics = runtime.snapshot()
     assert metrics["host_start_task_count"] == 0
     assert metrics["worker_task_count"] == 0
@@ -1324,13 +1347,13 @@ async def test_permanently_blocked_backend_close_is_bounded_and_leaves_no_resour
     if blocked_stage == "close":
         await runtime.wait_idle()
         close_task = asyncio.create_task(runtime.close())
-        await _wait_until(started.is_set)
+        await _wait_until(started.is_set, _HOST_START_HANG_GUARD_SECONDS)
     else:
-        await _wait_until(started.is_set)
+        await _wait_until(started.is_set, _HOST_START_HANG_GUARD_SECONDS)
         close_task = asyncio.create_task(runtime.close())
 
     await asyncio.wait_for(close_task, 1.0)
-    await _wait_until(lambda: not _speaker_host_pids())
+    await _wait_until(lambda: not _speaker_host_pids(), _HOST_REAP_GUARD_SECONDS)
 
     metrics = runtime.snapshot()
     assert metrics["worker_task_count"] == 0

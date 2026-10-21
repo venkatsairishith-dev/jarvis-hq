@@ -84,7 +84,7 @@ class Base(unittest.TestCase):
         self.srv.shutdown(); self.ksrv.shutdown(); self.k.db.close(); self.tmp.cleanup()
 
     def call(self, method, path, body=None, headers=None, raw=None):
-        h = {"Origin": self.base}
+        h = {"Origin": self.base, "X-Jarvis-Console": self.srv.console_secret}      # what the console's own page sends (SEC-D9)
         h.update(headers or {})
         data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
         if data is not None and raw is None:
@@ -124,6 +124,98 @@ class Server(Base):
             urllib.request.urlopen(r, timeout=5)
         self.assertEqual(cm.exception.code, 403)
 
+    def test_a_post_needs_this_launchs_console_secret_not_a_constant_or_a_forged_origin(self):
+        """Audit SEC-D9: any local process could POST /api/owner/* with `X-Jarvis-Console: 1` (or just a forged Origin)."""
+        before = self.k.db.execute("SELECT COUNT(*) FROM owner_commands").fetchone()[0]
+        body = {"text": "open my downloads folder"}
+        for name, headers in (("the old constant header, no Origin", {"X-Jarvis-Console": "1", "Origin": None}),
+                              ("a forged same-origin Origin and no header", {"X-Jarvis-Console": None}),
+                              ("a wrong secret", {"X-Jarvis-Console": "x" * 43}),
+                              ("an empty secret", {"X-Jarvis-Console": ""}),
+                              ("the right secret from a foreign Origin", {"Origin": "https://evil.example"}),
+                              ("the secret of another launch", {"X-Jarvis-Console": "A" * len(self.srv.console_secret)})):
+            raw = {"Origin": self.base, "X-Jarvis-Console": self.srv.console_secret}
+            raw.update(headers)
+            raw = {k: v for k, v in raw.items() if v is not None}
+            r = urllib.request.Request(self.base + "/api/owner/command", data=json.dumps(body).encode(), method="POST",
+                                       headers=dict(raw, **{"Content-Type": "application/json"}))
+            with self.assertRaises(urllib.error.HTTPError, msg=name) as cm:
+                urllib.request.urlopen(r, timeout=5)
+            self.assertEqual(cm.exception.code, 403, name)
+            reply = json.loads(cm.exception.read())
+            self.assertTrue(reply.get("reload"), name)                                 # tells the page to re-read its secret
+            self.assertNotIn(self.srv.console_secret, json.dumps(reply))
+        self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM owner_commands").fetchone()[0], before)    # nothing reached the kernel
+        # the right secret works, with or without an Origin (a local program that read the page, like the NEKO bridge)
+        self.assertEqual(self.call("POST", "/api/owner/command", body)[0], 202)
+        for _ in range(100):
+            if not self.plane.busy.locked():
+                break
+            time.sleep(0.05)
+        r = urllib.request.Request(self.base + "/api/owner/command", data=json.dumps(body).encode(), method="POST",
+                                   headers={"Content-Type": "application/json", "X-Jarvis-Console": self.srv.console_secret})
+        self.assertEqual(urllib.request.urlopen(r, timeout=10).status, 202)
+
+    def test_delete_and_every_post_route_need_the_secret_and_get_does_not(self):
+        raw = lambda method, path, secret: urllib.request.urlopen(urllib.request.Request(      # noqa: E731
+            self.base + path, data=b"{}" if method == "POST" else None, method=method,
+            headers=({"X-Jarvis-Console": secret} if secret is not None else {})), timeout=10)
+        for method, path in (("POST", "/api/owner/kill"), ("POST", "/api/owner/stop_all"), ("POST", "/api/owner/approve"),
+                             ("POST", "/api/voice/speak"), ("POST", "/api/classify"), ("POST", "/api/connectors/local"),
+                             ("DELETE", "/api/bench/challenge/ch-20261017-000000-abcdef")):
+            for secret in (None, "1", "wrong"):
+                with self.assertRaises(urllib.error.HTTPError) as cm:
+                    raw(method, path, secret)
+                self.assertEqual(cm.exception.code, 403, (method, path, secret))
+        self.assertFalse(self.k.killed())                                              # the kill switch was not reachable blind either
+        self.assertEqual(raw("GET", "/api/health", None).status, 200)                  # reading needs no secret (it is loopback, Host-checked)
+
+    def test_the_master_token_is_in_no_page_and_changes_every_launch(self):
+        """Re-review M3 (2026-10-19): the old test pinned "the secret is in every GET /". Now the master token is in NO page: a bare
+        GET / is a login page, and a signed-in page carries only the session's double-submit token."""
+        secret = self.srv.console_secret
+        self.assertGreaterEqual(len(secret), 40)
+        import http.client
+        for path in ("/", "/tasks/abc", "/index.html"):
+            c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+            c.request("GET", path)                              # a bare client: no credential at all
+            r = c.getresponse(); body = r.read(); c.close()
+            self.assertEqual(r.status, 401, path)
+            self.assertNotIn(secret.encode(), body)
+            self.assertNotIn(b"jarvis-console-secret", body)
+            self.assertIn(b"/auth/login.js", body)
+            self.assertIsNone(r.getheader("Set-Cookie"))
+        for path in ("/api/config", "/api/health", "/api/owner/state", "/api/owner/commands", "/api/voice/status"):
+            code, body, _ = self.call("GET", path)            # even a fully authenticated read never echoes the master token
+            self.assertNotIn(secret.encode(), body if isinstance(body, bytes) else json.dumps(body).encode(), path)
+        self.assertNotIn(secret, json.dumps(self.call("GET", "/api/owner/events?since=0&limit=500")[1]))
+        import copy
+        from jarvis_console.server import make_server as make_again
+        cfg2 = copy.copy(self.cfg)
+        cfg2.port = 0
+        other = make_again(cfg2, kernel=self.srv.kernel, voice=self.voice)
+        try:
+            self.assertNotEqual(other.console_secret, secret)
+        finally:
+            other.server_close()
+
+    def test_a_signed_in_page_carries_only_its_session_token_in_the_head(self):
+        with open(os.path.join(self.ui, "index.html"), "w") as fh:
+            fh.write("<!doctype html><html><head><meta charset=utf-8><title>JARVIS</title></head><body><div id=root></div></body></html>")
+        import http.client
+        gate = self.srv.gate
+        code = gate.issue_code()
+        host = f"127.0.0.1:{self.port}"
+        sid = gate.redeem(code, host)
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        c.request("GET", "/", headers={"Cookie": f"jarvis_console_session={sid}"})
+        r = c.getresponse(); body = r.read().decode(); c.close()
+        self.assertEqual(r.status, 200)
+        head = body[:body.index("</head>")]
+        self.assertIn('<meta name="jarvis-console-secret" content="' + gate.csrf(sid) + '">', head)
+        self.assertNotIn(self.srv.console_secret, body)
+        self.assertEqual(body.count("jarvis-console-secret"), 1)
+
     def test_owner_passthrough_command_state_and_token_never_leaks(self):
         code, r, _ = self.call("POST", "/api/owner/command", {"text": "open my downloads folder", "source": "voice"})
         self.assertEqual(code, 202)
@@ -155,7 +247,7 @@ class Server(Base):
 
     def test_event_stream_passthrough_delivers_new_audit_rows(self):
         t = Tasks(self.k).create("hermes", "private", "r", "stream me")
-        r = urllib.request.Request(self.base + "/api/stream?since=0", headers={"Origin": self.base})
+        r = urllib.request.Request(self.base + "/api/stream?since=0", headers={"Origin": self.base, "X-Jarvis-Console": self.srv.console_secret})
         got = []
         with urllib.request.urlopen(r, timeout=40) as resp:       # generous: this runs beside heavy suites on one laptop
             for _ in range(200):

@@ -388,10 +388,57 @@ def _process_is_running(pid: int) -> bool:
         return False
 
 
+class _ReadinessTimer:
+    """Stand-in for the scanner's wall-clock timeout timer.
+
+    The scanner arms its timer when the worker process is spawned, so the
+    budget also covers interpreter start-up and the plugin-framework imports
+    that happen before the plugin module is imported. Under CPU contention a
+    fixed 2 s budget can expire before the plugin module has run at all, and
+    then it never spawned its helper (no child.pid, nothing to reap). This
+    timer fires the real expiry callback only once the plugin module has
+    announced it is running (the pid file exists), so the test exercises the
+    timeout path deterministically instead of racing the machine's speed.
+    """
+
+    def __init__(self, ready_path: Path, fire: bool = True) -> None:
+        self._ready_path = ready_path
+        self._fire = fire
+        self._cancelled = threading.Event()
+        self._function = None
+        self.daemon = True
+
+    def factory(self, _interval: float, function) -> "_ReadinessTimer":
+        self._function = function
+        return self
+
+    def start(self) -> None:
+        # fire=False is the success case: it asserts reaping after a NORMAL
+        # completion, so the wall-clock budget must not be part of the outcome
+        # (start-up cost is machine-dependent; the timeout path has its own case).
+        if self._fire:
+            threading.Thread(target=self._wait_then_fire, daemon=True).start()
+
+    def cancel(self) -> None:
+        self._cancelled.set()
+
+    def _wait_then_fire(self) -> None:
+        # Generous bound only so a broken worker cannot hang the suite; the
+        # normal trigger is the readiness file, never this deadline.
+        deadline = time.monotonic() + 120.0
+        while not self._cancelled.is_set() and time.monotonic() < deadline:
+            if self._ready_path.exists() and self._ready_path.read_text(encoding="utf-8"):
+                break
+            time.sleep(0.01)
+        if not self._cancelled.is_set() and self._function is not None:
+            self._function()
+
+
 @pytest.mark.parametrize("worker_times_out", [False, True], ids=["success", "timeout"])
 def test_metadata_scan_reaps_plugin_spawned_helpers(
     tmp_path: Path,
     worker_times_out: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module_name = f"helper_spawning_plugin_{int(worker_times_out)}"
     module_path = tmp_path / f"{module_name}.py"
@@ -419,6 +466,13 @@ def test_metadata_scan_reaps_plugin_spawned_helpers(
 
     child_pid = 0
     try:
+        from plugin.server.application.plugins import metadata_scanner
+
+        monkeypatch.setattr(
+            metadata_scanner.threading,
+            "Timer",
+            _ReadinessTimer(child_pid_path, fire=worker_times_out).factory,
+        )
         if worker_times_out:
             with pytest.raises(PluginMetadataScanError) as exc_info:
                 scan_plugin_metadata_isolated(

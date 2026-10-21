@@ -1513,9 +1513,21 @@ def proxy():
             srv.server_close()
 
 
+def _owner_approved_dispatch(P, tid, params):
+    """Since 2026-10-18 (audit SEC-D5) a private agent's dispatch to the public-lane lab waits for the OWNER's approval of
+    exactly the shared text. The cases below test the lab lifecycle after a dispatch, so they take the owner's step first,
+    as the console would (Kernel.approve is the human step); what each case checks is unchanged."""
+    code, r = P.act("dispatch", tid, params)
+    if code == 202 and r.get("status") == "needs_approval":
+        assert P.k.approve(r["approval_id"])
+        code, r = P.post("/v1/jarvis/actions", {"tool": "task", "op": "dispatch", "target": tid, "params": {"public_ok": True},
+                                                "approval_id": r["approval_id"]}, P.owner)
+    return code, r
+
+
 def _dispatched(P, attempts=2):
     tid = P.act("create", "t", {"goal": "A tool", "criteria": ["tests pass"], "max_attempts": attempts, "request": f"tool {time.time()}"})[1]["task"]
-    P.act("dispatch", tid, {"instructions": "build it and test it", "public_ok": True})
+    _owner_approved_dispatch(P, tid, {"instructions": "build it and test it", "public_ok": True})
     return tid
 
 

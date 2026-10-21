@@ -55,9 +55,91 @@ class Plugin(unittest.TestCase):
         self.assertTrue(r["verified"]); self.assertEqual(self.call(self.test, "jarvis_memory_list")["entries"], [])
         self.assertNotIn(e["id"], self.test.system_prompt_block())
 
+    def test_the_newest_entries_reach_the_session_prompt(self):
+        """MEM-M1 (2026-10-18): with many saved entries the block used to keep the 14 oldest and drop every newer one."""
+        from jarvis_kernel import scrub as S
+        from jarvis_kernel.memory import Memories
+        gl = dict(S._GL); S._GL.update(path=None, checked=True)          # fixture filling only: skip the gitleaks subprocess
+        try:
+            M = Memories(self.k)
+            for i in range(30):
+                e = M.add("hermes", f"Topic{i}: x{i}alpha x{i}beta x{i}gamma x{i}delta for the owner")
+                self.k.db.execute("UPDATE memories SET created=?, updated=? WHERE id=?", (1_760_000_000 + i, 1_760_000_000 + i, e["id"]))
+        finally:
+            S._GL.clear(); S._GL.update(gl)
+        new = self.call(self.owner, "jarvis_memory_add", text="NEWEST: the owner now prefers aisle seats on every flight")["entry"]
+        block = self.owner.system_prompt_block()
+        self.assertIn(f"[{new['id']} v1]", block)
+        self.assertRegex(block, r"\n\.\.\. \d+ more \(.*jarvis_memory_list")      # says how many were left out, and how to list them
+        self.assertIn(new["id"], self.owner.on_pre_compress([{"role": "user", "content": "anything"}]))
+        self.assertNotIn("NEWEST", self.test.system_prompt_block())
+
+    def test_the_current_task_and_latest_message_are_the_ranking_query(self):
+        sent = []
+        real = self.owner._act
+
+        def spy(tool, op, target="", **params):
+            sent.append((tool, op, params))
+            return real(tool, op, target, **params)
+        self.owner._act = spy
+        self.owner.system_prompt_block()
+        self.assertEqual(sent[-1][:2], ("memory", "render"))
+        self.assertIn("Write the quarterly report", sent[-1][2]["query"])               # the open task's goal
+        self.owner.on_pre_compress([{"role": "user", "content": "old question"}, {"role": "assistant", "content": "x"},
+                                    {"role": "user", "content": [{"type": "text", "text": "book my passport renewal slot"}]}])
+        q = sent[-1][2]["query"]
+        self.assertTrue(q.startswith("book my passport renewal slot"), q); self.assertNotIn("old question", q)
+        self.assertLessEqual(len(q), JM.MAX_QUERY)
+        sent.clear()
+        self.test._act = lambda tool, op, target="", **params: sent.append((tool, op, params)) or {}
+        self.test.system_prompt_block()                                                  # no open task, no message: recency only
+        self.assertEqual(sent[-1], ("memory", "render", {}))
+
     def test_kernel_down_degrades_quietly(self):
         p = JM.JarvisMemoryProvider("http://127.0.0.1:9", self.files["hermes"])
         self.assertEqual(p.system_prompt_block(), "")
+
+
+class NoProxy(unittest.TestCase):
+    """Completion H (2026-10-19): the kernel bearer token never goes to an environment proxy and is not re-sent after a redirect."""
+
+    def test_a_recording_proxy_sees_nothing(self):
+        from http.server import BaseHTTPRequestHandler
+        hits = []
+
+        class Sink(BaseHTTPRequestHandler):
+            def _any(self):
+                hits.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"{}")
+            do_GET = do_POST = _any
+
+            def log_message(self, *a):
+                pass
+        proxy = ThreadingHTTPServer(("127.0.0.1", 0), Sink)
+        threading.Thread(target=proxy.serve_forever, daemon=True).start()
+        saved = {k: os.environ.get(k) for k in ("http_proxy", "HTTP_PROXY", "ALL_PROXY", "all_proxy", "no_proxy", "NO_PROXY")}
+        tmp = tempfile.TemporaryDirectory()
+        try:
+            for k in saved:
+                os.environ.pop(k, None)
+            os.environ["http_proxy"] = os.environ["HTTP_PROXY"] = f"http://127.0.0.1:{proxy.server_address[1]}"
+            tok = os.path.join(tmp.name, "t.token")
+            open(tok, "w").write("CANARY-7f3a-Priyanka-SYNTH")
+            p = JM.JarvisMemoryProvider("http://127.0.0.1:9", tok)         # nothing listens on :9: the call fails, but never via the proxy
+            try:
+                p._act("memory", "list")
+            except OSError:
+                pass
+            self.assertEqual(hits, [])
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+            proxy.shutdown(); tmp.cleanup()
 
 
 if __name__ == "__main__":

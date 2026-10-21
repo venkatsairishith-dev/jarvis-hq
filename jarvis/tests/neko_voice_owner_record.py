@@ -19,6 +19,8 @@ import urllib.request
 import wave
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import control_auth  # noqa: E402  the wake listener's /status needs its token (re-review M3)
 import numpy as np
 import sounddevice as sd
 
@@ -35,7 +37,7 @@ def dbfs(x: np.ndarray) -> float:
 
 def detections() -> int | None:
     try:
-        with urllib.request.urlopen(STATUS, timeout=3) as r:
+        with urllib.request.urlopen(urllib.request.Request(STATUS, headers=control_auth.headers_for("wake")), timeout=3) as r:
             s = json.loads(r.read())
         return int((s.get("counts") or {}).get("detections", 0))
     except Exception:  # noqa: BLE001

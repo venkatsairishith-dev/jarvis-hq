@@ -1,0 +1,5373 @@
+{
+  "build_env": {
+    "arch": "x86_64",
+    "os": "linux",
+    "python": "3.11"
+  },
+  "entries": [
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.add_project_files.description",
+        "default": "Copy a client's files into a project: audio recordings, transcripts, chat exports (WhatsApp, Telegram, text), PDF, Word, Markdown, CSV, spreadsheets and images. Full paths; only the folders JARVIS may read. `languages` maps an audio file's path to en, hi or te."
+      },
+      "event_key": "workbench.add_project_files",
+      "event_type": "plugin_entry",
+      "id": "add_project_files",
+      "input_schema": {
+        "properties": {
+          "languages": {
+            "type": "object"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "paths"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "added",
+        "refused"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "added": {},
+          "refused": {}
+        },
+        "required": [
+          "added",
+          "refused"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.add_project_files.name",
+        "default": "Add files to a client project"
+      },
+      "return_message": "",
+      "timeout": 120
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.analyze_project.description",
+        "default": "Read every file of a client project (transcribing audio on this PC), then write requirements that cite where each one was said, list conflicting instructions and open questions, and make a plan with a prompt per task. Text in the files that tries to instruct an AI is ignored and listed."
+      },
+      "event_key": "workbench.analyze_project",
+      "event_type": "plugin_entry",
+      "id": "analyze_project",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "use_local_model": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stats",
+        "deliverables",
+        "conflicts",
+        "open_questions",
+        "files"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "conflicts": {},
+          "deliverables": {},
+          "files": {},
+          "open_questions": {},
+          "stats": {}
+        },
+        "required": [
+          "stats",
+          "deliverables",
+          "conflicts",
+          "open_questions",
+          "files"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.analyze_project.name",
+        "default": "Understand what the client needs"
+      },
+      "return_message": "",
+      "timeout": 1800
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.answer_questions.description",
+        "default": "Give the owner's answers to a project's open questions ({\"Q1\": \"answer\"}); requirements, conflicts and the plan are rebuilt with them."
+      },
+      "event_key": "workbench.answer_questions",
+      "event_type": "plugin_entry",
+      "id": "answer_questions",
+      "input_schema": {
+        "properties": {
+          "answers": {
+            "type": "object"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "answers"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stats",
+        "open_questions",
+        "conflicts"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "conflicts": {},
+          "open_questions": {},
+          "stats": {}
+        },
+        "required": [
+          "stats",
+          "open_questions",
+          "conflicts"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.answer_questions.name",
+        "default": "Answer a project's open questions"
+      },
+      "return_message": "",
+      "timeout": 600
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.briefing.description",
+        "default": "What is waiting: JARVIS approvals, client projects' open questions, conflicts, deadlines as the client stated them, deliverables that need review, prompts submitted but not verified, quarantined skills. Facts are read from records and name their source; suggestions are marked as suggestions."
+      },
+      "event_key": "workbench.briefing",
+      "event_type": "plugin_entry",
+      "id": "briefing",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "text"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "text": {}
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.briefing.name",
+        "default": "Briefing: what is pending"
+      },
+      "return_message": "",
+      "timeout": 60
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.build_deliverables.description",
+        "default": "Make the deliverables JARVIS can make itself (documents, briefs, outlines, message drafts, sheets) with the local model, then check each one against the requirements. Says which are verified and which need review. Code, websites and research wait for the owner to run their prompts."
+      },
+      "event_key": "workbench.build_deliverables",
+      "event_type": "plugin_entry",
+      "id": "build_deliverables",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "deliverables",
+        "verified",
+        "needs_review",
+        "files"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "deliverables": {},
+          "files": {},
+          "needs_review": {},
+          "verified": {}
+        },
+        "required": [
+          "deliverables",
+          "verified",
+          "needs_review",
+          "files"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.build_deliverables.name",
+        "default": "Make the client's deliverables"
+      },
+      "return_message": "",
+      "timeout": 3600
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.check_workflow_output.description",
+        "default": "Apply a learned workflow's success checks to the files a real run produced (full paths). Only then is the run verified."
+      },
+      "event_key": "workbench.check_workflow_output",
+      "event_type": "plugin_entry",
+      "id": "check_workflow_output",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "output_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "output_paths"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "verified",
+        "why"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "verified": {},
+          "why": {}
+        },
+        "required": [
+          "verified",
+          "why"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.check_workflow_output.name",
+        "default": "Check a learned workflow's output"
+      },
+      "return_message": "",
+      "timeout": 60
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.compare_prompt.description",
+        "default": "What changed between two versions of a prompt, and why (how each was made)."
+      },
+      "event_key": "workbench.compare_prompt",
+      "event_type": "plugin_entry",
+      "id": "compare_prompt",
+      "input_schema": {
+        "properties": {
+          "a": {
+            "type": "integer"
+          },
+          "b": {
+            "type": "integer"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "diff"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "diff": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "diff"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.compare_prompt.name",
+        "default": "Compare prompt versions"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.create_project.description",
+        "default": "Start a client project folder in JARVIS's Workbench. Give a project name, the client's name and the owner's own name(s) as they appear in chats, so JARVIS can tell the owner's promises from the client's requests."
+      },
+      "event_key": "workbench.create_project",
+      "event_type": "plugin_entry",
+      "id": "create_project",
+      "input_schema": {
+        "properties": {
+          "client": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "project_id",
+        "policy"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "policy": {},
+          "project_id": {}
+        },
+        "required": [
+          "project_id",
+          "policy"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.create_project.name",
+        "default": "Start a client project"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.disable_skill.description",
+        "default": "Stop a skill from being used or run (it stays stored; enable it again later)."
+      },
+      "event_key": "workbench.disable_skill",
+      "event_type": "plugin_entry",
+      "id": "disable_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status",
+        "reason"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "reason": {},
+          "status": {}
+        },
+        "required": [
+          "status",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.disable_skill.name",
+        "default": "Disable a learned skill"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.duplicate_prompt.description",
+        "default": "Copy a saved prompt's current version into a new prompt."
+      },
+      "event_key": "workbench.duplicate_prompt",
+      "event_type": "plugin_entry",
+      "id": "duplicate_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.duplicate_prompt.name",
+        "default": "Duplicate a prompt"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.edit_prompt.description",
+        "default": "Save the owner's edit as a new version (whole text, or named sections)."
+      },
+      "event_key": "workbench.edit_prompt",
+      "event_type": "plugin_entry",
+      "id": "edit_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "sections": {
+            "type": "object"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.edit_prompt.name",
+        "default": "Edit a saved prompt"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.enable_skill.description",
+        "default": "Owner only (panel). After a quarantine it must pass its regression cases first."
+      },
+      "event_key": "workbench.enable_skill",
+      "event_type": "plugin_entry",
+      "id": "enable_skill",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "status": {}
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.enable_skill.name",
+        "default": "Enable a learned skill"
+      },
+      "return_message": "",
+      "timeout": 300
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.execute_prompt.description",
+        "default": "Owner only (panel). Hands the prompt's compact form to main_agent or JARVIS (kernel approvals apply). Needs confirm=true; refused while the kill switch is on."
+      },
+      "event_key": "workbench.execute_prompt",
+      "event_type": "plugin_entry",
+      "id": "execute_prompt",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "via": {
+            "enum": [
+              "auto",
+              "main_agent",
+              "jarvis"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "route",
+        "ref",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "ref": {},
+          "route": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "route",
+          "ref",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.execute_prompt.name",
+        "default": "Run a saved prompt"
+      },
+      "return_message": "",
+      "timeout": 60
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.export_prompt.description",
+        "default": "Write a prompt version to a Markdown file with its status, target and provenance."
+      },
+      "event_key": "workbench.export_prompt",
+      "event_type": "plugin_entry",
+      "id": "export_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "version": {}
+        },
+        "required": [
+          "file",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.export_prompt.name",
+        "default": "Export a prompt"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.export_skill.description",
+        "default": "One JSON bundle: workflow, cases, SKILL.md, validation, provenance, state, usage."
+      },
+      "event_key": "workbench.export_skill",
+      "event_type": "plugin_entry",
+      "id": "export_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "sha256"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "sha256": {}
+        },
+        "required": [
+          "file",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.export_skill.name",
+        "default": "Export a learned skill"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.generate_prompt.description",
+        "default": "Write a structured prompt from a plain-language objective: role, source context, requirements and exclusions, tools, steps, security boundaries, deliverables, acceptance criteria and failure handling. kind: single, multi_agent, research, coding or client_deliverable. It is saved as a suggestion; nothing runs."
+      },
+      "event_key": "workbench.generate_prompt",
+      "event_type": "plugin_entry",
+      "id": "generate_prompt",
+      "input_schema": {
+        "properties": {
+          "acceptance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "budget": {
+            "type": "string"
+          },
+          "constraints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "deadline": {
+            "type": "string"
+          },
+          "exclusions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "history": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "single",
+              "multi_agent",
+              "research",
+              "coding",
+              "client_deliverable"
+            ],
+            "type": "string"
+          },
+          "objective": {
+            "type": "string"
+          },
+          "output_format": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "target": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "objective"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "status",
+        "text",
+        "withheld"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "status": {},
+          "text": {},
+          "withheld": {}
+        },
+        "required": [
+          "id",
+          "status",
+          "text",
+          "withheld"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.generate_prompt.name",
+        "default": "Generate a structured prompt"
+      },
+      "return_message": "",
+      "timeout": 60
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.get_prompt.description",
+        "default": "A saved prompt (a version, or the current one) with its status and executions."
+      },
+      "event_key": "workbench.get_prompt",
+      "event_type": "plugin_entry",
+      "id": "get_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version",
+        "status",
+        "text"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "status": {},
+          "text": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version",
+          "status",
+          "text"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.get_prompt.name",
+        "default": "Show a saved prompt"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.import_skill.description",
+        "default": "Owner only (panel). Reads a SKILL.md from an allowed folder, hashes and rates it, lists its links and scripts, and keeps it quarantined. It is never activated here."
+      },
+      "event_key": "workbench.import_skill",
+      "event_type": "plugin_entry",
+      "id": "import_skill",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "name",
+        "status",
+        "gate",
+        "findings"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "findings": {},
+          "gate": {},
+          "name": {},
+          "status": {}
+        },
+        "required": [
+          "name",
+          "status",
+          "gate",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.import_skill.name",
+        "default": "Import an external SKILL.md (untrusted)"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.inspect_skill.description",
+        "default": "A skill's steps, validation, provenance, state, versions, permissions and usage numbers."
+      },
+      "event_key": "workbench.inspect_skill",
+      "event_type": "plugin_entry",
+      "id": "inspect_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "name",
+        "version",
+        "state",
+        "metrics",
+        "validation"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "metrics": {},
+          "name": {},
+          "state": {},
+          "validation": {},
+          "version": {}
+        },
+        "required": [
+          "name",
+          "version",
+          "state",
+          "metrics",
+          "validation"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.inspect_skill.name",
+        "default": "Inspect a learned skill"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.learn_task.description",
+        "default": "Analyse an unfamiliar task, research it (official sources first), plan it, draft a workflow, test it in a sandbox on example cases, refine it (Propose-Probe-Compose) and keep it as a skill only if every case passes. `examples`: [{name, inputs: {file: text}, checks: [{check, file, text}]}]. Nothing real runs here."
+      },
+      "event_key": "workbench.learn_task",
+      "event_type": "plugin_entry",
+      "id": "learn_task",
+      "input_schema": {
+        "properties": {
+          "examples": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "k": {
+            "default": 2,
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "parallel",
+              "sequential"
+            ],
+            "type": "string"
+          },
+          "research": {
+            "default": true,
+            "type": "boolean"
+          },
+          "task": {
+            "type": "string"
+          },
+          "workflow": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status",
+        "why",
+        "familiarity",
+        "workflow",
+        "approvals_needed",
+        "plan"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approvals_needed": {},
+          "familiarity": {},
+          "plan": {},
+          "status": {},
+          "why": {},
+          "workflow": {}
+        },
+        "required": [
+          "status",
+          "why",
+          "familiarity",
+          "workflow",
+          "approvals_needed",
+          "plan"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.learn_task.name",
+        "default": "Learn a task JARVIS does not know yet"
+      },
+      "return_message": "",
+      "timeout": 1800
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_learned.description",
+        "default": "Validated workflows (skills) and recent lessons."
+      },
+      "event_key": "workbench.list_learned",
+      "event_type": "plugin_entry",
+      "id": "list_learned",
+      "input_schema": {
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "workflows",
+        "lessons"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "lessons": {},
+          "workflows": {}
+        },
+        "required": [
+          "workflows",
+          "lessons"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_learned.name",
+        "default": "What JARVIS has learned"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.project_status.description",
+        "default": "Sources, open questions, deliverables and prompts of a client project."
+      },
+      "event_key": "workbench.project_status",
+      "event_type": "plugin_entry",
+      "id": "project_status",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stats",
+        "open_questions",
+        "deliverables"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "deliverables": {},
+          "open_questions": {},
+          "stats": {}
+        },
+        "required": [
+          "stats",
+          "open_questions",
+          "deliverables"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.project_status.name",
+        "default": "Client project status"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.regenerate_prompt.description",
+        "default": "Rebuild a saved prompt, optionally with changed fields; saved as a new version."
+      },
+      "event_key": "workbench.regenerate_prompt",
+      "event_type": "plugin_entry",
+      "id": "regenerate_prompt",
+      "input_schema": {
+        "properties": {
+          "changes": {
+            "type": "object"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.regenerate_prompt.name",
+        "default": "Regenerate a prompt"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.regress_skill.description",
+        "default": "Run a skill's own and regression cases again; a failure quarantines it."
+      },
+      "event_key": "workbench.regress_skill",
+      "event_type": "plugin_entry",
+      "id": "regress_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "passed",
+        "failed_cases"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "failed_cases": {},
+          "passed": {}
+        },
+        "required": [
+          "passed",
+          "failed_cases"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.regress_skill.name",
+        "default": "Re-test a learned skill"
+      },
+      "return_message": "",
+      "timeout": 300
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.rename_prompt.description",
+        "default": "Give a saved prompt a title."
+      },
+      "event_key": "workbench.rename_prompt",
+      "event_type": "plugin_entry",
+      "id": "rename_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id",
+          "title"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "title"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "title": {}
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.rename_prompt.name",
+        "default": "Rename a prompt"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.reuse_skill.description",
+        "default": "Run a validated, active skill in the sandbox on new input text ({file name: text}) and check the result. No real files, nothing sent."
+      },
+      "event_key": "workbench.reuse_skill",
+      "event_type": "plugin_entry",
+      "id": "reuse_skill",
+      "input_schema": {
+        "properties": {
+          "inputs": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "inputs"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "outputs",
+        "checks"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "checks": {},
+          "ok": {},
+          "outputs": {}
+        },
+        "required": [
+          "ok",
+          "outputs",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.reuse_skill.name",
+        "default": "Try a learned skill on new input"
+      },
+      "return_message": "",
+      "timeout": 120
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.rollback_skill.description",
+        "default": "Owner only (panel). Only to a version that was validated."
+      },
+      "event_key": "workbench.rollback_skill",
+      "event_type": "plugin_entry",
+      "id": "rollback_skill",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "current",
+        "previous"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "current": {},
+          "previous": {}
+        },
+        "required": [
+          "current",
+          "previous"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.rollback_skill.name",
+        "default": "Roll a skill back to an older version"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_learned_workflow.description",
+        "default": "Owner only (panel). Hands a validated workflow to JARVIS (kernel approvals, audit, kill switch). confirm=true."
+      },
+      "event_key": "workbench.run_learned_workflow",
+      "event_type": "plugin_entry",
+      "id": "run_learned_workflow",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "input_note": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "input_note",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "command_id",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "command_id": {},
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "command_id",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_learned_workflow.name",
+        "default": "Run a learned workflow"
+      },
+      "return_message": "",
+      "timeout": 60
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.search_skills.description",
+        "default": "Search the learned skills (with their state) and imported, unverified skill files."
+      },
+      "event_key": "workbench.search_skills",
+      "event_type": "plugin_entry",
+      "id": "search_skills",
+      "input_schema": {
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "skills"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "skills": {}
+        },
+        "required": [
+          "skills"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.search_skills.name",
+        "default": "Find learned or imported skills"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.set_provider_policy.description",
+        "default": "Owner only (panel). local_only (default) or external_allowed with named providers and confirmed_by_owner."
+      },
+      "event_key": "workbench.set_provider_policy",
+      "event_type": "plugin_entry",
+      "id": "set_provider_policy",
+      "input_schema": {
+        "properties": {
+          "confirmed_by_owner": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "mode"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.set_provider_policy.name",
+        "default": "Set a project's AI provider policy"
+      },
+      "return_message": "",
+      "timeout": 20
+    }
+  ],
+  "entries_config_sha256": "",
+  "entry_methods": {
+    "add_project_files": "add_project_files",
+    "analyze_project": "analyze_project",
+    "answer_questions": "answer_questions",
+    "briefing": "briefing",
+    "build_deliverables": "build_deliverables",
+    "check_workflow_output": "check_workflow_output",
+    "compare_prompt": "compare_prompt",
+    "create_project": "create_project",
+    "disable_skill": "disable_skill",
+    "duplicate_prompt": "duplicate_prompt",
+    "edit_prompt": "edit_prompt",
+    "enable_skill": "enable_skill",
+    "execute_prompt": "execute_prompt",
+    "export_prompt": "export_prompt",
+    "export_skill": "export_skill",
+    "generate_prompt": "generate_prompt",
+    "get_prompt": "get_prompt",
+    "import_skill": "import_skill",
+    "inspect_skill": "inspect_skill",
+    "learn_task": "learn_task",
+    "list_learned": "list_learned",
+    "project_status": "project_status",
+    "regenerate_prompt": "regenerate_prompt",
+    "regress_skill": "regress_skill",
+    "rename_prompt": "rename_prompt",
+    "reuse_skill": "reuse_skill",
+    "rollback_skill": "rollback_skill",
+    "run_learned_workflow": "run_learned_workflow",
+    "search_skills": "search_skills",
+    "set_provider_policy": "set_provider_policy"
+  },
+  "handlers": {
+    "workbench.add_project_files": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.add_project_files.description",
+        "default": "Copy a client's files into a project: audio recordings, transcripts, chat exports (WhatsApp, Telegram, text), PDF, Word, Markdown, CSV, spreadsheets and images. Full paths; only the folders JARVIS may read. `languages` maps an audio file's path to en, hi or te."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "add_project_files",
+      "input_schema": {
+        "properties": {
+          "languages": {
+            "type": "object"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "paths"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "added",
+        "refused"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "added": {},
+          "refused": {}
+        },
+        "required": [
+          "added",
+          "refused"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.add_project_files.name",
+        "default": "Add files to a client project"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "workbench.analyze_project": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.analyze_project.description",
+        "default": "Read every file of a client project (transcribing audio on this PC), then write requirements that cite where each one was said, list conflicting instructions and open questions, and make a plan with a prompt per task. Text in the files that tries to instruct an AI is ignored and listed."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "analyze_project",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "use_local_model": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stats",
+        "deliverables",
+        "conflicts",
+        "open_questions",
+        "files"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "conflicts": {},
+          "deliverables": {},
+          "files": {},
+          "open_questions": {},
+          "stats": {}
+        },
+        "required": [
+          "stats",
+          "deliverables",
+          "conflicts",
+          "open_questions",
+          "files"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.analyze_project.name",
+        "default": "Understand what the client needs"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 1800
+    },
+    "workbench.answer_questions": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.answer_questions.description",
+        "default": "Give the owner's answers to a project's open questions ({\"Q1\": \"answer\"}); requirements, conflicts and the plan are rebuilt with them."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "answer_questions",
+      "input_schema": {
+        "properties": {
+          "answers": {
+            "type": "object"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "answers"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stats",
+        "open_questions",
+        "conflicts"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "conflicts": {},
+          "open_questions": {},
+          "stats": {}
+        },
+        "required": [
+          "stats",
+          "open_questions",
+          "conflicts"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.answer_questions.name",
+        "default": "Answer a project's open questions"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 600
+    },
+    "workbench.briefing": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.briefing.description",
+        "default": "What is waiting: JARVIS approvals, client projects' open questions, conflicts, deadlines as the client stated them, deliverables that need review, prompts submitted but not verified, quarantined skills. Facts are read from records and name their source; suggestions are marked as suggestions."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "briefing",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "text"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "text": {}
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.briefing.name",
+        "default": "Briefing: what is pending"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench.build_deliverables": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.build_deliverables.description",
+        "default": "Make the deliverables JARVIS can make itself (documents, briefs, outlines, message drafts, sheets) with the local model, then check each one against the requirements. Says which are verified and which need review. Code, websites and research wait for the owner to run their prompts."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "build_deliverables",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "deliverables",
+        "verified",
+        "needs_review",
+        "files"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "deliverables": {},
+          "files": {},
+          "needs_review": {},
+          "verified": {}
+        },
+        "required": [
+          "deliverables",
+          "verified",
+          "needs_review",
+          "files"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.build_deliverables.name",
+        "default": "Make the client's deliverables"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 3600
+    },
+    "workbench.check_workflow_output": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.check_workflow_output.description",
+        "default": "Apply a learned workflow's success checks to the files a real run produced (full paths). Only then is the run verified."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "check_workflow_output",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "output_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "output_paths"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "verified",
+        "why"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "verified": {},
+          "why": {}
+        },
+        "required": [
+          "verified",
+          "why"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.check_workflow_output.name",
+        "default": "Check a learned workflow's output"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench.compare_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.compare_prompt.description",
+        "default": "What changed between two versions of a prompt, and why (how each was made)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "compare_prompt",
+      "input_schema": {
+        "properties": {
+          "a": {
+            "type": "integer"
+          },
+          "b": {
+            "type": "integer"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "diff"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "diff": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "diff"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.compare_prompt.name",
+        "default": "Compare prompt versions"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.create_project": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.create_project.description",
+        "default": "Start a client project folder in JARVIS's Workbench. Give a project name, the client's name and the owner's own name(s) as they appear in chats, so JARVIS can tell the owner's promises from the client's requests."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "create_project",
+      "input_schema": {
+        "properties": {
+          "client": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "project_id",
+        "policy"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "policy": {},
+          "project_id": {}
+        },
+        "required": [
+          "project_id",
+          "policy"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.create_project.name",
+        "default": "Start a client project"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.disable_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.disable_skill.description",
+        "default": "Stop a skill from being used or run (it stays stored; enable it again later)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "disable_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status",
+        "reason"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "reason": {},
+          "status": {}
+        },
+        "required": [
+          "status",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.disable_skill.name",
+        "default": "Disable a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.duplicate_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.duplicate_prompt.description",
+        "default": "Copy a saved prompt's current version into a new prompt."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "duplicate_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.duplicate_prompt.name",
+        "default": "Duplicate a prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.edit_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.edit_prompt.description",
+        "default": "Save the owner's edit as a new version (whole text, or named sections)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "edit_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "sections": {
+            "type": "object"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.edit_prompt.name",
+        "default": "Edit a saved prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.enable_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.enable_skill.description",
+        "default": "Owner only (panel). After a quarantine it must pass its regression cases first."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "enable_skill",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "status": {}
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.enable_skill.name",
+        "default": "Enable a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 300
+    },
+    "workbench.execute_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.execute_prompt.description",
+        "default": "Owner only (panel). Hands the prompt's compact form to main_agent or JARVIS (kernel approvals apply). Needs confirm=true; refused while the kill switch is on."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "execute_prompt",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "via": {
+            "enum": [
+              "auto",
+              "main_agent",
+              "jarvis"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "route",
+        "ref",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "ref": {},
+          "route": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "route",
+          "ref",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.execute_prompt.name",
+        "default": "Run a saved prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench.export_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.export_prompt.description",
+        "default": "Write a prompt version to a Markdown file with its status, target and provenance."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "export_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "version": {}
+        },
+        "required": [
+          "file",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.export_prompt.name",
+        "default": "Export a prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.export_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.export_skill.description",
+        "default": "One JSON bundle: workflow, cases, SKILL.md, validation, provenance, state, usage."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "export_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "sha256"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "sha256": {}
+        },
+        "required": [
+          "file",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.export_skill.name",
+        "default": "Export a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.generate_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.generate_prompt.description",
+        "default": "Write a structured prompt from a plain-language objective: role, source context, requirements and exclusions, tools, steps, security boundaries, deliverables, acceptance criteria and failure handling. kind: single, multi_agent, research, coding or client_deliverable. It is saved as a suggestion; nothing runs."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "generate_prompt",
+      "input_schema": {
+        "properties": {
+          "acceptance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "budget": {
+            "type": "string"
+          },
+          "constraints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "deadline": {
+            "type": "string"
+          },
+          "exclusions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "history": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "single",
+              "multi_agent",
+              "research",
+              "coding",
+              "client_deliverable"
+            ],
+            "type": "string"
+          },
+          "objective": {
+            "type": "string"
+          },
+          "output_format": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "target": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "objective"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "status",
+        "text",
+        "withheld"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "status": {},
+          "text": {},
+          "withheld": {}
+        },
+        "required": [
+          "id",
+          "status",
+          "text",
+          "withheld"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.generate_prompt.name",
+        "default": "Generate a structured prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench.get_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.get_prompt.description",
+        "default": "A saved prompt (a version, or the current one) with its status and executions."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "get_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version",
+        "status",
+        "text"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "status": {},
+          "text": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version",
+          "status",
+          "text"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.get_prompt.name",
+        "default": "Show a saved prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.import_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.import_skill.description",
+        "default": "Owner only (panel). Reads a SKILL.md from an allowed folder, hashes and rates it, lists its links and scripts, and keeps it quarantined. It is never activated here."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "import_skill",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "name",
+        "status",
+        "gate",
+        "findings"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "findings": {},
+          "gate": {},
+          "name": {},
+          "status": {}
+        },
+        "required": [
+          "name",
+          "status",
+          "gate",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.import_skill.name",
+        "default": "Import an external SKILL.md (untrusted)"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "workbench.inspect_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.inspect_skill.description",
+        "default": "A skill's steps, validation, provenance, state, versions, permissions and usage numbers."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "inspect_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "name",
+        "version",
+        "state",
+        "metrics",
+        "validation"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "metrics": {},
+          "name": {},
+          "state": {},
+          "validation": {},
+          "version": {}
+        },
+        "required": [
+          "name",
+          "version",
+          "state",
+          "metrics",
+          "validation"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.inspect_skill.name",
+        "default": "Inspect a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.learn_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.learn_task.description",
+        "default": "Analyse an unfamiliar task, research it (official sources first), plan it, draft a workflow, test it in a sandbox on example cases, refine it (Propose-Probe-Compose) and keep it as a skill only if every case passes. `examples`: [{name, inputs: {file: text}, checks: [{check, file, text}]}]. Nothing real runs here."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "learn_task",
+      "input_schema": {
+        "properties": {
+          "examples": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "k": {
+            "default": 2,
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "parallel",
+              "sequential"
+            ],
+            "type": "string"
+          },
+          "research": {
+            "default": true,
+            "type": "boolean"
+          },
+          "task": {
+            "type": "string"
+          },
+          "workflow": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status",
+        "why",
+        "familiarity",
+        "workflow",
+        "approvals_needed",
+        "plan"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approvals_needed": {},
+          "familiarity": {},
+          "plan": {},
+          "status": {},
+          "why": {},
+          "workflow": {}
+        },
+        "required": [
+          "status",
+          "why",
+          "familiarity",
+          "workflow",
+          "approvals_needed",
+          "plan"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.learn_task.name",
+        "default": "Learn a task JARVIS does not know yet"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 1800
+    },
+    "workbench.list_learned": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_learned.description",
+        "default": "Validated workflows (skills) and recent lessons."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "list_learned",
+      "input_schema": {
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "workflows",
+        "lessons"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "lessons": {},
+          "workflows": {}
+        },
+        "required": [
+          "workflows",
+          "lessons"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_learned.name",
+        "default": "What JARVIS has learned"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.project_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.project_status.description",
+        "default": "Sources, open questions, deliverables and prompts of a client project."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "project_status",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stats",
+        "open_questions",
+        "deliverables"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "deliverables": {},
+          "open_questions": {},
+          "stats": {}
+        },
+        "required": [
+          "stats",
+          "open_questions",
+          "deliverables"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.project_status.name",
+        "default": "Client project status"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.regenerate_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.regenerate_prompt.description",
+        "default": "Rebuild a saved prompt, optionally with changed fields; saved as a new version."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "regenerate_prompt",
+      "input_schema": {
+        "properties": {
+          "changes": {
+            "type": "object"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.regenerate_prompt.name",
+        "default": "Regenerate a prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "workbench.regress_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.regress_skill.description",
+        "default": "Run a skill's own and regression cases again; a failure quarantines it."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "regress_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "passed",
+        "failed_cases"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "failed_cases": {},
+          "passed": {}
+        },
+        "required": [
+          "passed",
+          "failed_cases"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.regress_skill.name",
+        "default": "Re-test a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 300
+    },
+    "workbench.rename_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.rename_prompt.description",
+        "default": "Give a saved prompt a title."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "rename_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id",
+          "title"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "title"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "title": {}
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.rename_prompt.name",
+        "default": "Rename a prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.reuse_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.reuse_skill.description",
+        "default": "Run a validated, active skill in the sandbox on new input text ({file name: text}) and check the result. No real files, nothing sent."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "reuse_skill",
+      "input_schema": {
+        "properties": {
+          "inputs": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "inputs"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "outputs",
+        "checks"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "checks": {},
+          "ok": {},
+          "outputs": {}
+        },
+        "required": [
+          "ok",
+          "outputs",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.reuse_skill.name",
+        "default": "Try a learned skill on new input"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "workbench.rollback_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.rollback_skill.description",
+        "default": "Owner only (panel). Only to a version that was validated."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "rollback_skill",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "current",
+        "previous"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "current": {},
+          "previous": {}
+        },
+        "required": [
+          "current",
+          "previous"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.rollback_skill.name",
+        "default": "Roll a skill back to an older version"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.run_learned_workflow": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_learned_workflow.description",
+        "default": "Owner only (panel). Hands a validated workflow to JARVIS (kernel approvals, audit, kill switch). confirm=true."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_learned_workflow",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "input_note": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "input_note",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "command_id",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "command_id": {},
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "command_id",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_learned_workflow.name",
+        "default": "Run a learned workflow"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench.search_skills": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.search_skills.description",
+        "default": "Search the learned skills (with their state) and imported, unverified skill files."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "search_skills",
+      "input_schema": {
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "skills"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "skills": {}
+        },
+        "required": [
+          "skills"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.search_skills.name",
+        "default": "Find learned or imported skills"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench.set_provider_policy": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.set_provider_policy.description",
+        "default": "Owner only (panel). local_only (default) or external_allowed with named providers and confirmed_by_owner."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "set_provider_policy",
+      "input_schema": {
+        "properties": {
+          "confirmed_by_owner": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "mode"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.set_provider_policy.name",
+        "default": "Set a project's AI provider policy"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:lifecycle:shutdown": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "shutdown",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "shutdown",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "workbench:lifecycle:startup": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "startup",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "startup",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "workbench:plugin_entry:add_project_files": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.add_project_files.description",
+        "default": "Copy a client's files into a project: audio recordings, transcripts, chat exports (WhatsApp, Telegram, text), PDF, Word, Markdown, CSV, spreadsheets and images. Full paths; only the folders JARVIS may read. `languages` maps an audio file's path to en, hi or te."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "add_project_files",
+      "input_schema": {
+        "properties": {
+          "languages": {
+            "type": "object"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "paths"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "added",
+        "refused"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "added": {},
+          "refused": {}
+        },
+        "required": [
+          "added",
+          "refused"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.add_project_files.name",
+        "default": "Add files to a client project"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "workbench:plugin_entry:analyze_project": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.analyze_project.description",
+        "default": "Read every file of a client project (transcribing audio on this PC), then write requirements that cite where each one was said, list conflicting instructions and open questions, and make a plan with a prompt per task. Text in the files that tries to instruct an AI is ignored and listed."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "analyze_project",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "use_local_model": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stats",
+        "deliverables",
+        "conflicts",
+        "open_questions",
+        "files"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "conflicts": {},
+          "deliverables": {},
+          "files": {},
+          "open_questions": {},
+          "stats": {}
+        },
+        "required": [
+          "stats",
+          "deliverables",
+          "conflicts",
+          "open_questions",
+          "files"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.analyze_project.name",
+        "default": "Understand what the client needs"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 1800
+    },
+    "workbench:plugin_entry:answer_questions": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.answer_questions.description",
+        "default": "Give the owner's answers to a project's open questions ({\"Q1\": \"answer\"}); requirements, conflicts and the plan are rebuilt with them."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "answer_questions",
+      "input_schema": {
+        "properties": {
+          "answers": {
+            "type": "object"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "answers"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stats",
+        "open_questions",
+        "conflicts"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "conflicts": {},
+          "open_questions": {},
+          "stats": {}
+        },
+        "required": [
+          "stats",
+          "open_questions",
+          "conflicts"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.answer_questions.name",
+        "default": "Answer a project's open questions"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 600
+    },
+    "workbench:plugin_entry:briefing": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.briefing.description",
+        "default": "What is waiting: JARVIS approvals, client projects' open questions, conflicts, deadlines as the client stated them, deliverables that need review, prompts submitted but not verified, quarantined skills. Facts are read from records and name their source; suggestions are marked as suggestions."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "briefing",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "text"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "text": {}
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.briefing.name",
+        "default": "Briefing: what is pending"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench:plugin_entry:build_deliverables": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.build_deliverables.description",
+        "default": "Make the deliverables JARVIS can make itself (documents, briefs, outlines, message drafts, sheets) with the local model, then check each one against the requirements. Says which are verified and which need review. Code, websites and research wait for the owner to run their prompts."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "build_deliverables",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "deliverables",
+        "verified",
+        "needs_review",
+        "files"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "deliverables": {},
+          "files": {},
+          "needs_review": {},
+          "verified": {}
+        },
+        "required": [
+          "deliverables",
+          "verified",
+          "needs_review",
+          "files"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.build_deliverables.name",
+        "default": "Make the client's deliverables"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 3600
+    },
+    "workbench:plugin_entry:check_workflow_output": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.check_workflow_output.description",
+        "default": "Apply a learned workflow's success checks to the files a real run produced (full paths). Only then is the run verified."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "check_workflow_output",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "output_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "output_paths"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "verified",
+        "why"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "verified": {},
+          "why": {}
+        },
+        "required": [
+          "verified",
+          "why"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.check_workflow_output.name",
+        "default": "Check a learned workflow's output"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench:plugin_entry:compare_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.compare_prompt.description",
+        "default": "What changed between two versions of a prompt, and why (how each was made)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "compare_prompt",
+      "input_schema": {
+        "properties": {
+          "a": {
+            "type": "integer"
+          },
+          "b": {
+            "type": "integer"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "diff"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "diff": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "diff"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.compare_prompt.name",
+        "default": "Compare prompt versions"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:create_project": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.create_project.description",
+        "default": "Start a client project folder in JARVIS's Workbench. Give a project name, the client's name and the owner's own name(s) as they appear in chats, so JARVIS can tell the owner's promises from the client's requests."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "create_project",
+      "input_schema": {
+        "properties": {
+          "client": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "project_id",
+        "policy"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "policy": {},
+          "project_id": {}
+        },
+        "required": [
+          "project_id",
+          "policy"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.create_project.name",
+        "default": "Start a client project"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:disable_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.disable_skill.description",
+        "default": "Stop a skill from being used or run (it stays stored; enable it again later)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "disable_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status",
+        "reason"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "reason": {},
+          "status": {}
+        },
+        "required": [
+          "status",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.disable_skill.name",
+        "default": "Disable a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:duplicate_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.duplicate_prompt.description",
+        "default": "Copy a saved prompt's current version into a new prompt."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "duplicate_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.duplicate_prompt.name",
+        "default": "Duplicate a prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:edit_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.edit_prompt.description",
+        "default": "Save the owner's edit as a new version (whole text, or named sections)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "edit_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "sections": {
+            "type": "object"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.edit_prompt.name",
+        "default": "Edit a saved prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:enable_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.enable_skill.description",
+        "default": "Owner only (panel). After a quarantine it must pass its regression cases first."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "enable_skill",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "status": {}
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.enable_skill.name",
+        "default": "Enable a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 300
+    },
+    "workbench:plugin_entry:execute_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.execute_prompt.description",
+        "default": "Owner only (panel). Hands the prompt's compact form to main_agent or JARVIS (kernel approvals apply). Needs confirm=true; refused while the kill switch is on."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "execute_prompt",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "via": {
+            "enum": [
+              "auto",
+              "main_agent",
+              "jarvis"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "route",
+        "ref",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "ref": {},
+          "route": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "route",
+          "ref",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.execute_prompt.name",
+        "default": "Run a saved prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench:plugin_entry:export_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.export_prompt.description",
+        "default": "Write a prompt version to a Markdown file with its status, target and provenance."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "export_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "version": {}
+        },
+        "required": [
+          "file",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.export_prompt.name",
+        "default": "Export a prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:export_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.export_skill.description",
+        "default": "One JSON bundle: workflow, cases, SKILL.md, validation, provenance, state, usage."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "export_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "file",
+        "sha256"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "file": {},
+          "sha256": {}
+        },
+        "required": [
+          "file",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.export_skill.name",
+        "default": "Export a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:generate_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.generate_prompt.description",
+        "default": "Write a structured prompt from a plain-language objective: role, source context, requirements and exclusions, tools, steps, security boundaries, deliverables, acceptance criteria and failure handling. kind: single, multi_agent, research, coding or client_deliverable. It is saved as a suggestion; nothing runs."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "generate_prompt",
+      "input_schema": {
+        "properties": {
+          "acceptance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "budget": {
+            "type": "string"
+          },
+          "constraints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "deadline": {
+            "type": "string"
+          },
+          "exclusions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "history": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "single",
+              "multi_agent",
+              "research",
+              "coding",
+              "client_deliverable"
+            ],
+            "type": "string"
+          },
+          "objective": {
+            "type": "string"
+          },
+          "output_format": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "target": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "objective"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "status",
+        "text",
+        "withheld"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "status": {},
+          "text": {},
+          "withheld": {}
+        },
+        "required": [
+          "id",
+          "status",
+          "text",
+          "withheld"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.generate_prompt.name",
+        "default": "Generate a structured prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench:plugin_entry:get_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.get_prompt.description",
+        "default": "A saved prompt (a version, or the current one) with its status and executions."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "get_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version",
+        "status",
+        "text"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "status": {},
+          "text": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version",
+          "status",
+          "text"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.get_prompt.name",
+        "default": "Show a saved prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:import_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.import_skill.description",
+        "default": "Owner only (panel). Reads a SKILL.md from an allowed folder, hashes and rates it, lists its links and scripts, and keeps it quarantined. It is never activated here."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "import_skill",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "name",
+        "status",
+        "gate",
+        "findings"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "findings": {},
+          "gate": {},
+          "name": {},
+          "status": {}
+        },
+        "required": [
+          "name",
+          "status",
+          "gate",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.import_skill.name",
+        "default": "Import an external SKILL.md (untrusted)"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "workbench:plugin_entry:inspect_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.inspect_skill.description",
+        "default": "A skill's steps, validation, provenance, state, versions, permissions and usage numbers."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "inspect_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "name",
+        "version",
+        "state",
+        "metrics",
+        "validation"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "metrics": {},
+          "name": {},
+          "state": {},
+          "validation": {},
+          "version": {}
+        },
+        "required": [
+          "name",
+          "version",
+          "state",
+          "metrics",
+          "validation"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.inspect_skill.name",
+        "default": "Inspect a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:learn_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.learn_task.description",
+        "default": "Analyse an unfamiliar task, research it (official sources first), plan it, draft a workflow, test it in a sandbox on example cases, refine it (Propose-Probe-Compose) and keep it as a skill only if every case passes. `examples`: [{name, inputs: {file: text}, checks: [{check, file, text}]}]. Nothing real runs here."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "learn_task",
+      "input_schema": {
+        "properties": {
+          "examples": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "k": {
+            "default": 2,
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "parallel",
+              "sequential"
+            ],
+            "type": "string"
+          },
+          "research": {
+            "default": true,
+            "type": "boolean"
+          },
+          "task": {
+            "type": "string"
+          },
+          "workflow": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status",
+        "why",
+        "familiarity",
+        "workflow",
+        "approvals_needed",
+        "plan"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approvals_needed": {},
+          "familiarity": {},
+          "plan": {},
+          "status": {},
+          "why": {},
+          "workflow": {}
+        },
+        "required": [
+          "status",
+          "why",
+          "familiarity",
+          "workflow",
+          "approvals_needed",
+          "plan"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.learn_task.name",
+        "default": "Learn a task JARVIS does not know yet"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 1800
+    },
+    "workbench:plugin_entry:list_learned": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_learned.description",
+        "default": "Validated workflows (skills) and recent lessons."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "list_learned",
+      "input_schema": {
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "workflows",
+        "lessons"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "lessons": {},
+          "workflows": {}
+        },
+        "required": [
+          "workflows",
+          "lessons"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_learned.name",
+        "default": "What JARVIS has learned"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:project_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.project_status.description",
+        "default": "Sources, open questions, deliverables and prompts of a client project."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "project_status",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stats",
+        "open_questions",
+        "deliverables"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "deliverables": {},
+          "open_questions": {},
+          "stats": {}
+        },
+        "required": [
+          "stats",
+          "open_questions",
+          "deliverables"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.project_status.name",
+        "default": "Client project status"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:regenerate_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.regenerate_prompt.description",
+        "default": "Rebuild a saved prompt, optionally with changed fields; saved as a new version."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "regenerate_prompt",
+      "input_schema": {
+        "properties": {
+          "changes": {
+            "type": "object"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "version"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "version": {}
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.regenerate_prompt.name",
+        "default": "Regenerate a prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "workbench:plugin_entry:regress_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.regress_skill.description",
+        "default": "Run a skill's own and regression cases again; a failure quarantines it."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "regress_skill",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "passed",
+        "failed_cases"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "failed_cases": {},
+          "passed": {}
+        },
+        "required": [
+          "passed",
+          "failed_cases"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.regress_skill.name",
+        "default": "Re-test a learned skill"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 300
+    },
+    "workbench:plugin_entry:rename_prompt": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.rename_prompt.description",
+        "default": "Give a saved prompt a title."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "rename_prompt",
+      "input_schema": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "prompt_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_id",
+          "title"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "title"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "id": {},
+          "title": {}
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.rename_prompt.name",
+        "default": "Rename a prompt"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:reuse_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.reuse_skill.description",
+        "default": "Run a validated, active skill in the sandbox on new input text ({file name: text}) and check the result. No real files, nothing sent."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "reuse_skill",
+      "input_schema": {
+        "properties": {
+          "inputs": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "inputs"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "outputs",
+        "checks"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "checks": {},
+          "ok": {},
+          "outputs": {}
+        },
+        "required": [
+          "ok",
+          "outputs",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.reuse_skill.name",
+        "default": "Try a learned skill on new input"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "workbench:plugin_entry:rollback_skill": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.rollback_skill.description",
+        "default": "Owner only (panel). Only to a version that was validated."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "rollback_skill",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "current",
+        "previous"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "current": {},
+          "previous": {}
+        },
+        "required": [
+          "current",
+          "previous"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.rollback_skill.name",
+        "default": "Roll a skill back to an older version"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:run_learned_workflow": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_learned_workflow.description",
+        "default": "Owner only (panel). Hands a validated workflow to JARVIS (kernel approvals, audit, kill switch). confirm=true."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_learned_workflow",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "input_note": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "input_note",
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "command_id",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "command_id": {},
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "command_id",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_learned_workflow.name",
+        "default": "Run a learned workflow"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "workbench:plugin_entry:search_skills": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.search_skills.description",
+        "default": "Search the learned skills (with their state) and imported, unverified skill files."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "search_skills",
+      "input_schema": {
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "skills"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "skills": {}
+        },
+        "required": [
+          "skills"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.search_skills.name",
+        "default": "Find learned or imported skills"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "workbench:plugin_entry:set_provider_policy": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.set_provider_policy.description",
+        "default": "Owner only (panel). local_only (default) or external_allowed with named providers and confirmed_by_owner."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "set_provider_policy",
+      "input_schema": {
+        "properties": {
+          "confirmed_by_owner": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "mode"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.set_provider_policy.name",
+        "default": "Set a project's AI provider policy"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    }
+  },
+  "schema_version": 4,
+  "sdk_version": "0.1.0",
+  "source_bytes": 391038,
+  "source_files": [
+    "README.md",
+    "__init__.py",
+    "config.schema.json",
+    "deliver.py",
+    "harness2_compat.py",
+    "ingest.py",
+    "learning.py",
+    "library.py",
+    "localmodel.py",
+    "planning.py",
+    "plugin.toml",
+    "ppc.py",
+    "projects.py",
+    "prompts.py",
+    "pyproject.toml",
+    "requirements.py",
+    "ruff.toml",
+    "safety.py",
+    "sandbox.py",
+    "sandbox_runner.py",
+    "service.py",
+    "skillhub.py",
+    "tests/__init__.py",
+    "tests/conftest.py",
+    "tests/fixtures/client_alpha/brief.md",
+    "tests/fixtures/client_alpha/call_transcript.srt",
+    "tests/fixtures/client_alpha/whatsapp_chat.txt",
+    "tests/fixtures/client_beta/kickoff_call.vtt",
+    "tests/fixtures/client_beta/telegram_export.json",
+    "tests/test_briefing.py",
+    "tests/test_intake.py",
+    "tests/test_learning.py",
+    "tests/test_plugin.py",
+    "tests/test_prompts.py",
+    "tests/test_skillhub.py",
+    "transcribe.py",
+    "ui/panel.tsx"
+  ],
+  "source_sha256": "2c81d2836cffc59e46fea01234c8d06f5015639b55a826d12cdcf0a85f7aeb23"
+}

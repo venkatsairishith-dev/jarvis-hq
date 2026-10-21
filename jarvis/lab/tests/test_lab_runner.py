@@ -14,7 +14,7 @@ except (ImportError, KeyError):            # Windows (no pwd) or no agent user: 
     R = None
 
 
-@unittest.skipUnless(R is not None and os.geteuid() == 0, "lab box only, as root")
+@unittest.skipUnless(R is not None and R.PW is not None and os.geteuid() == 0, "lab box only, as root")
 class Deliverables(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.folder = self.tmp.name
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
-@unittest.skipUnless(R is not None and os.geteuid() == 0, "lab box only, as root")
+@unittest.skipUnless(R is not None and R.PW is not None and os.geteuid() == 0, "lab box only, as root")
 class Integrity(unittest.TestCase):
     """A task must not change the agent's toolchain or start-up files; if it does, it is put back and the attempt fails."""
     def setUp(self):

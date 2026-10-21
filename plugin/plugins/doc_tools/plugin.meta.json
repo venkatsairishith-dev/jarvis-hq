@@ -1,7 +1,7 @@
 {
   "build_env": {
-    "arch": "AMD64",
-    "os": "win32",
+    "arch": "x86_64",
+    "os": "linux",
     "python": "3.11"
   },
   "entries": [
@@ -71,12 +71,14 @@
         "name",
         "kind",
         "text",
-        "truncated"
+        "truncated",
+        "note"
       ],
       "llm_result_schema": {
         "properties": {
           "kind": {},
           "name": {},
+          "note": {},
           "text": {},
           "truncated": {}
         },
@@ -84,7 +86,8 @@
           "name",
           "kind",
           "text",
-          "truncated"
+          "truncated",
+          "note"
         ],
         "type": "object"
       },
@@ -243,12 +246,14 @@
         "name",
         "kind",
         "text",
-        "truncated"
+        "truncated",
+        "note"
       ],
       "llm_result_schema": {
         "properties": {
           "kind": {},
           "name": {},
+          "note": {},
           "text": {},
           "truncated": {}
         },
@@ -256,7 +261,8 @@
           "name",
           "kind",
           "text",
-          "truncated"
+          "truncated",
+          "note"
         ],
         "type": "object"
       },
@@ -471,12 +477,14 @@
         "name",
         "kind",
         "text",
-        "truncated"
+        "truncated",
+        "note"
       ],
       "llm_result_schema": {
         "properties": {
           "kind": {},
           "name": {},
+          "note": {},
           "text": {},
           "truncated": {}
         },
@@ -484,7 +492,8 @@
           "name",
           "kind",
           "text",
-          "truncated"
+          "truncated",
+          "note"
         ],
         "type": "object"
       },
@@ -575,11 +584,9 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 25498,
+  "source_bytes": 28296,
   "source_files": [
     ".gitignore",
-    ".vscode/settings.json",
-    ".vscode/tasks.json",
     "README.md",
     "__init__.py",
     "config.example.toml",
@@ -591,5 +598,5 @@
     "tests/test_core.py",
     "tests/test_smoke.py"
   ],
-  "source_sha256": "763ac3293fb21204b5273cc8ca10f95179589f2a24b0d975219e0fa6f296dafa"
+  "source_sha256": "dcc754e253f005af0f84f39dfde6e81851b4a9bb5299e49eff557c2030b23014"
 }

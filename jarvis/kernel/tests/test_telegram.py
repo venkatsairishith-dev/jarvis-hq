@@ -101,6 +101,14 @@ class T(unittest.TestCase):
         self.assertTrue(self.k.authorize(a, aid).allowed)
         self.assertFalse(self.k.authorize(a, aid).allowed)          # replay refused
 
+    def test_an_action_too_long_for_the_message_is_not_approved_from_telegram(self):
+        """Review M6: the chat message shows at most 1500 characters, so text past that point would be approved unseen."""
+        big = Action("pkg", "install", "requests-" + "x" * 1600)
+        d, aid = self.k.request(big)
+        self.b.handle(msg(f"/approve {aid}")); self.assertIn("console", self.last()); self.assertIn("too long", self.last())
+        self.b.handle(msg(f"CONFIRM {aid}")); self.assertNotIn("Approved", self.last())
+        self.assertEqual(self.k.approval_info(aid)["state"], "pending")
+
     def test_confirm_without_approve_or_after_window_refused(self):
         aid = self.request()
         self.b.handle(msg(f"CONFIRM {aid}")); self.assertIn("No recent", self.last())

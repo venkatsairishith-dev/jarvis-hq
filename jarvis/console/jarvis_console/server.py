@@ -1,11 +1,34 @@
 """The console's HTTP server: static UI, kernel owner-plane proxy, voice, files, desktop control proxy.
 
-Binds 127.0.0.1 only. Every request must carry a loopback Host header (DNS-rebinding defence); every POST must come from the
-console's own origin (cross-site defence). The owner token stays in this process.
+Binds 127.0.0.1 only. Every request must carry an exact loopback Host (name AND port: DNS-rebinding defence). The owner token
+stays in this process.
+
+Authentication (audit SEC-D9 2026-10-18; re-review M3 2026-10-19). Version 1 wrote a per-launch secret into every `GET /` and
+required it only on POST/DELETE; but any loopback client could `GET /` and read it, and every GET route (owner state, files,
+memory, audit, desktop screen) needed nothing. Now (see scripts/control_auth.py for the full design and its limits):
+  * public-harmless: `GET /api/health` WITHOUT credentials (liveness only: no kernel, voice or disk detail), static JS/CSS,
+    the login page, `GET /auth/login.js`.
+  * sensitive-read: every other GET under /api (owner state/tasks/approvals/audit/events/memory, files, desktop state and screen,
+    config, voice, skills, models, bench, the event stream) answers 401 without a credential and sends no data.
+  * state-changing: every POST/DELETE needs a credential and, for a browser session, the per-session double-submit token.
+  * Credentials: the MASTER token (first-party programs send it in `X-Jarvis-Console`; it is published to the 0600 file
+    `console.token` in the per-user run folder by `main()`; `srv.console_secret` in tests), or a BROWSER SESSION (HttpOnly,
+    SameSite=Strict cookie bound to the exact Host:port) obtained by exchanging a ONE-TIME launch code (`POST /auth/code` with the
+    master token, then `POST /auth/session` with the code from the URL fragment). A bare `GET /` without a session returns a login
+    page that contains no secret; the signed-in page carries only the session's double-submit token in its <meta>.
+WHAT THIS DOES NOT STOP, plainly: a process of the same OS user that can read the 0600 token file or the browser profile does what
+the first-party client does; a web server on another loopback port that the owner browses to receives the cookie (cookies are not
+port-scoped) but cannot read responses, pass the double-submit token or use the master token. It blocks other OS users (file
+permissions), other sites (SameSite, no CORS, Origin check), DNS rebinding and programs that only know the port. The real
+boundary for anything that matters stays the owner's PIN: approving needs the PIN, which no page and no process learns from
+here, and the kernel's policy, lanes and kill switch are unchanged.
 """
+import hmac
 import json
 import mimetypes
 import os
+import re
+import secrets
 import shutil
 import threading
 import time
@@ -14,6 +37,10 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import sys as _sys
+_sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+import loopback_net                     # noqa: E402  loopback only, no proxy, no redirect (completion H)
+import control_auth                     # noqa: E402  sessions, one-time codes and the master token (jarvis/scripts/control_auth.py)
 from . import bench as benchmod
 from . import files as filesmod
 from .config import Config
@@ -25,8 +52,12 @@ from .voice import Voice, VoiceError
 MAX_BODY = 20 * 1024 * 1024
 JSON_BODY = 256 * 1024
 REFUSE_DRAIN = 1 << 20      # the most of a refused request's body that is read so the refusal can be delivered
+def UI_PAGE_HEADERS(hub):
+    return {"Content-Security-Policy": UI_CSP.format(hub=hub), "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY"}
+
+
 UI_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; "
-          "connect-src 'self'; frame-src 'self' {hub}; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'")
+          "connect-src 'self'; frame-src 'self' {hub}; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 
 
 class Server(ThreadingHTTPServer):
@@ -51,6 +82,8 @@ class Server(ThreadingHTTPServer):
 
 def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
     cfg = cfg or Config()
+    gate = control_auth.Gate("console", "X-Jarvis-Console", "jarvis_console_session")
+    console_secret = gate.master                      # this launch's MASTER token: never put in a page; for first-party programs and tests
     bench = bench or benchmod.Bench(cfg)
     kernel = kernel or Kernel(cfg)
     voice = voice or Voice(cfg.voice_dir, cfg.piper_python, cfg.voice_threads, cfg.voice_idle_unload_s)
@@ -66,13 +99,23 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
         t0 = time.time()
         try:
             req = urllib.request.Request(url, headers=headers or {})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with loopback_net.urlopen(req, timeout=timeout) as r:
                 body = r.read(2000)
                 return {"ok": 200 <= r.status < 300, "status": r.status, "ms": round((time.time() - t0) * 1000), "body": body}
         except urllib.error.HTTPError as e:
             return {"ok": False, "status": e.code, "ms": round((time.time() - t0) * 1000), "body": b""}
         except (urllib.error.URLError, OSError, TimeoutError) as e:
             return {"ok": False, "status": 0, "ms": round((time.time() - t0) * 1000), "body": b"", "error": type(e).__name__}
+
+    def with_secret(html: bytes, token: str) -> bytes:
+        """Put the SESSION's double-submit token (never the master token) into an HTML page as a <meta> tag (before </head>, else
+        before <body>, else at the end). Only a signed-in request gets here."""
+        tag = ('<meta name="jarvis-console-secret" content="%s">' % token).encode()
+        for pat in (rb"</head\s*>", rb"<body[\s>]"):
+            m = re.search(pat, html, re.I)
+            if m:
+                return html[:m.start()] + tag + html[m.start():]
+        return html + tag
 
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"    # one request per connection: refusals never leave an unread body behind
@@ -84,19 +127,20 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
         # ---- helpers
         def _allowed_host(self):
             """Only the console's own loopback names: a page on another site cannot reach it by DNS rebinding."""
-            host = (self.headers.get("Host") or "").lower()
+            host = (control_auth.host_value(self.headers) or "").lower()
             name, _, port = host.rpartition(":") if ":" in host and not host.endswith("]") else (host, "", "")
             return name in ("127.0.0.1", "localhost") and port == str(self.server.server_address[1])
 
         def _origin_ok(self):
-            o = self.headers.get("Origin")
-            if o is None:
-                return self.headers.get("X-Jarvis-Console") == "1"
-            try:
-                u = urllib.parse.urlsplit(o)
-                return u.hostname in ("127.0.0.1", "localhost") and u.port == self.server.server_address[1]
-            except ValueError:
-                return False
+            """A POST or DELETE is accepted only with a credential: the master token in X-Jarvis-Console, or a signed-in session
+            (cookie bound to this Host) PLUS its double-submit token in X-Jarvis-Console; and, when the client sends an Origin,
+            that Origin is the console's own. The credential is required whatever the Origin says (any local program can write
+            an Origin header)."""
+            return gate.write_ok(self.headers, self.server.server_address[1])
+
+        def _read_ok(self):
+            """May this request read private state? The master token or a signed-in session, on the exact Host, no foreign Origin."""
+            return gate.read_ok(self.headers, self.server.server_address[1])
 
         def _send(self, code, body=b"", ctype="application/json", extra=None):
             if isinstance(body, (dict, list)):
@@ -188,9 +232,18 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
             u = urllib.parse.urlsplit(self.path)
             path, q = u.path, dict(urllib.parse.parse_qsl(u.query))
             try:
+                if path.startswith("/auth/"):                   # sign-in: public by design, each route checks what it needs
+                    return self._auth(method, path)
                 if method in ("POST", "DELETE") and not self._origin_ok():
-                    return self._refuse(403, {"error": "cross-site request refused"})
+                    # `reload` tells the page its token is stale (the console restarted since it loaded): it re-reads it and retries
+                    return self._refuse(403, {"error": "request refused: it did not come from this console's own signed-in page "
+                                                       "(missing or old console credential; reload the page)", "reload": True})
                 if path.startswith("/api/"):
+                    if method == "GET" and not self._read_ok():
+                        if path == "/api/health":                # liveness only: no kernel, voice, disk or path detail
+                            return self._json(200, {"console": {"ok": True}, "time": time.time(), "minimal": True, "liveness_only": True})
+                        return self._json(401, {"error": "not signed in: open the console from JARVIS (a one-time link) or send the "
+                                                         "console token", "login": True})
                     return self._api(method, path[5:], q)
                 if method != "GET":                              # the page is only ever fetched; a POST here is a mistake or a probe
                     return self._refuse(405, {"error": "method not allowed"})
@@ -204,13 +257,34 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
             except Exception as e:                               # never a traceback to the browser
                 return self._json(500, {"error": f"console error: {type(e).__name__}"})
 
+        # ---- sign-in
+        def _auth(self, method, path):
+            """GET /auth/login.js (public) and POST /auth/code (master token) / POST /auth/session (one-time code): a session cookie."""
+            if method == "GET" and path == "/auth/login.js":
+                return self._send(200, control_auth.LOGIN_JS, "application/javascript; charset=utf-8")
+            body = b""
+            if method == "POST":
+                try:
+                    body = self._body(4096)
+                except VoiceError:
+                    return self._refuse(413, {"error": "request body is too large"})
+            res = control_auth.Gate.auth_route(gate, method, path, self.headers, body, self.server.server_address[1])
+            if res is None:
+                return self._json(404, {"error": "not found"})
+            code, extra, reply = res
+            return self._send(code, reply, "application/json", extra)
+
         # ---- static UI
         def _static(self, path):
             root = os.path.realpath(cfg.ui_dir)
+            token = gate.page_token(self.headers)                 # the session's double-submit token, or None when not signed in
+            signed_in = token is not None or gate.master_ok(self.headers)
             if not os.path.isdir(root):
-                return self._send(200, "<!doctype html><meta charset=utf-8><title>JARVIS</title><body style='font:16px system-ui;padding:2rem'>"
-                                       "<h1>JARVIS console is running</h1><p>The UI has not been built yet: run <code>npm run build</code> in "
-                                       "<code>hq/ui</code>.</p>", "text/html; charset=utf-8")
+                if not signed_in:
+                    return self._send(401, control_auth.login_page("JARVIS console"), "text/html; charset=utf-8", UI_PAGE_HEADERS(hub))
+                return self._send(200, with_secret("<!doctype html><meta charset=utf-8><title>JARVIS</title><body style='font:16px system-ui;padding:2rem'>"
+                                                "<h1>JARVIS console is running</h1><p>The UI has not been built yet: run <code>npm run build</code> in "
+                                                "<code>hq/ui</code>.</p>".encode(), token or ""), "text/html; charset=utf-8")
             rel = urllib.parse.unquote(path).lstrip("/") or "index.html"
             full = os.path.realpath(os.path.join(root, rel))
             if os.path.commonpath([root, full]) != root or not os.path.isfile(full):
@@ -218,8 +292,13 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
             ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
             if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
                 ctype += "; charset=utf-8"
+            if ctype.startswith("text/html") and not signed_in:
+                # the app shell is a screen of private data: without a session, a login page that holds no secret
+                return self._send(401, control_auth.login_page("JARVIS console"), "text/html; charset=utf-8", UI_PAGE_HEADERS(hub))
             with open(full, "rb") as fh:
                 data = fh.read()
+            if ctype.startswith("text/html"):
+                data = with_secret(data, token or "")           # a signed-in page learns only its own double-submit token
             extra = {"Content-Security-Policy": UI_CSP.format(hub=hub), "Permissions-Policy": "microphone=(self), camera=(), geolocation=()",
                      "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY"}
             if "/assets/" in path:
@@ -231,6 +310,8 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
             if method == "DELETE" and not name.startswith("bench/"):       # only a saved challenge is ever deleted here
                 return self._json(405, {"error": "method not allowed"})
             if name == "health":
+                if q.get("minimal") == "1":                          # a fast liveness probe even for an authenticated caller
+                    return self._json(200, {"console": {"ok": True}, "time": time.time(), "minimal": True, "liveness_only": True})
                 return self._json(200, health())
             if name == "config":
                 return self._json(200, cfg.public())
@@ -395,7 +476,7 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
                     req = urllib.request.Request(url, data=b"{}", method="POST", headers=dict(hdr, **{"Content-Type": "application/json"}))
                 else:
                     req = urllib.request.Request(url, headers=hdr)
-                with urllib.request.urlopen(req, timeout=8) as r:
+                with loopback_net.urlopen(req, timeout=8) as r:
                     data = r.read(8 * 1024 * 1024)
                     return self._send(r.status, data, r.headers.get("Content-Type", "application/octet-stream"))
             except urllib.error.HTTPError as e:
@@ -423,6 +504,25 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
             out["disk"] = {"free_gb": round(du.free / 1e9, 1), "total_gb": round(du.total / 1e9, 1)}
         except OSError:
             out["disk"] = None
+        # honesty (completion H): `console.ok` only says this process answers. `ready` is true only when what the console needs works: the
+        # kernel answers and accepts its token, the kill switch is off, and every voice model is present. The Agent PC (hub) and the
+        # optional local model are listed under `optional_down`: they do not make the console unready but they are never reported as fine.
+        k, problems = out["kernel"], []
+        if not k.get("reachable"):
+            problems.append("kernel_unreachable")
+        elif not k.get("authorized"):
+            problems.append("kernel_token_refused")
+        elif k.get("killed"):
+            problems.append("kill_switch_on")
+        vs = out["voice"] if isinstance(out["voice"], dict) else {}
+        if not vs.get("engine"):
+            problems.append("voice_engine_missing")
+        for part in ("stt", "tts"):
+            problems += [f"voice_{part}_{lang}_missing" for lang, v in sorted((vs.get(part) or {}).items()) if not (v or {}).get("available")]
+        out["problems"] = problems
+        out["ready"] = not problems
+        out["status"] = "ok" if not problems else "degraded"
+        out["optional_down"] = [n for n in ("local_llm", "hub") if not (out.get(n) or {}).get("ok")]
         return out
 
     def _quiet(fn, *args):
@@ -514,6 +614,8 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
 
     srv = Server((cfg.host, cfg.port), H)
     srv.voice, srv.kernel, srv.cfg, srv.bench = voice, kernel, cfg, bench
+    srv.console_secret = console_secret              # the MASTER token, for tests and the throwaway e2e servers; never logged or served
+    srv.gate = gate
 
     def janitor():
         while True:
@@ -529,8 +631,14 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
 def main():
     cfg = Config()
     srv = make_server(cfg)
+    try:
+        control_auth.publish("console", srv.console_secret)      # 0600 file for first-party programs; sessions come from one-time codes
+    except OSError as e:
+        print(f"warning: could not publish the console token ({type(e).__name__}); first-party programs cannot use the console", flush=True)
     print(f"JARVIS console on http://{cfg.host}:{cfg.port}/  (kernel {cfg.kernel_url})", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        control_auth.unpublish("console")

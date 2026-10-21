@@ -70,8 +70,7 @@ class Base(unittest.TestCase):
     def call(self, method, path, body=None, headers=None):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
         h = {"Host": f"127.0.0.1:{self.port}"}
-        if method != "GET":
-            h["X-Jarvis-Console"] = "1"
+        h["X-Jarvis-Console"] = self.srv.console_secret       # the master token, as a first-party program sends it (reads need it too since 2026-10-19)
         h.update(headers or {})
         data = None
         if body is not None:
@@ -287,6 +286,8 @@ class ProtectionTest(Base):
             code, d = self.call(method, path, body, {"Origin": "http://evil.example"})
             self.assertEqual(code, 403, (method, path, d))
             code, d = self.call(method, path, body, {"X-Jarvis-Console": "0"})      # no Origin and no console header
+            self.assertEqual(code, 403, (method, path, d))
+            code, d = self.call(method, path, body, {"X-Jarvis-Console": "1"})      # the old constant header is no longer a key (SEC-D9)
             self.assertEqual(code, 403, (method, path, d))
         self.assertEqual(self.argvs, [])
         self.assertFalse(os.path.exists(os.path.join(self.results, "challenges")))

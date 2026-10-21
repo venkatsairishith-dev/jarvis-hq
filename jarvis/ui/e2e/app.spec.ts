@@ -1,19 +1,24 @@
 import { test, expect, type Page } from "@playwright/test";
+import { consoleHeaders } from "./console-secret";
 
 // Failures the page itself reports: uncaught errors and unexpected failed API calls (the Agent PC control is not running
 // in this harness, so its 503 is the expected, clearly-reported state).
-function watch(page: Page) {
+// `voiceMissing`: this machine has no speech voice installed (GET /api/voice/status says so). The page speaks each answer, and
+// POST /api/voice/speak then answers 503 "voice ... is not installed" by design; the page reports it ("I could not speak that")
+// and carries on. Only that one expected response is tolerated, and only when the server itself says the voice is absent.
+function watch(page: Page, opts: { voiceMissing?: boolean } = {}) {
   const problems: string[] = [];
   page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/503|net::ERR|Failed to load resource/.test(m.text())) problems.push("console: " + m.text()); });
   page.on("response", (r) => {
     const u = r.url();
+    if (opts.voiceMissing && r.status() === 503 && new URL(u).pathname === "/api/voice/speak") return;
     if (r.status() >= 400 && u.includes("/api/") && !/\/api\/desktop\//.test(u)) problems.push(`${r.status()} ${u}`);
   });
   return problems;
 }
 const api = async (page: Page, path: string, init?: { method?: string; body?: unknown }) => {
-  const r = await page.request.fetch(path, { method: init?.method ?? "GET", data: init?.body, headers: { "X-Jarvis-Console": "1" } });
+  const r = await page.request.fetch(path, { method: init?.method ?? "GET", data: init?.body, headers: await consoleHeaders(page) });
   return { status: r.status(), json: await r.json().catch(() => null) };
 };
 
@@ -56,7 +61,8 @@ test.describe("screens and navigation", () => {
 
 test.describe("command center", () => {
   test("a typed command reaches JARVIS and the answer is shown with its source", async ({ page }) => {
-    const problems = watch(page);
+    const voice = await api(page, "/api/voice/status");
+    const problems = watch(page, { voiceMissing: voice.status === 200 && !voice.json?.tts?.en?.available });
     await page.goto("/");
     await page.locator("#command-input").fill("open my Downloads folder");
     await page.getByRole("button", { name: "Send", exact: true }).click();
@@ -272,8 +278,13 @@ test.describe("models and settings", () => {
     await expect(page.locator("li", { hasText: "Approval PIN" }).getByText("OK")).toBeVisible();
     await page.getByRole("button", { name: "Verify the audit chain" }).click();
     await expect(page.getByText(/^ok: \d+ events/)).toBeVisible();
-    const body = await page.content();
-    expect(body).not.toMatch(/[A-Za-z0-9_-]{40,}/);                    // no token-like string anywhere in the page
+    // no token-like string anywhere in the page, except the signed-in session's double-submit token, which the page carries once (SEC-D9, M3)
+    const html = await page.content();
+    const meta = /<meta name="jarvis-console-secret" content="([^"]+)">/.exec(html);
+    expect(meta).not.toBeNull();
+    const body = html.replace(meta![0], "");
+    expect(body).not.toContain(meta![1]);
+    expect(body).not.toMatch(/[A-Za-z0-9_-]{40,}/);
   });
 
   test("the Agent PC screen says plainly when the lab desktop is not reachable", async ({ page }) => {

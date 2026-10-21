@@ -10,6 +10,14 @@ export interface VoiceSnapshot {
 }
 
 const MAX_SECONDS = 60;
+
+/** What the caller of start() can hand over so the 60 s auto-stop behaves like the manual stop. */
+export interface StartOptions {
+  /** The spoken language to transcribe in, read when the recording ends (the person may change it while talking). Default "en". */
+  lang?: () => string;
+  /** Called with the transcript when the recording was stopped by the 60 s limit (text, "" if nothing was heard, null on failure). */
+  onAutoStop?: (text: string | null) => void;
+}
 let snap: VoiceSnapshot = { mode: "idle", level: 0, seconds: 0, error: null, lastTranscript: null };
 const subs = new Set<() => void>();
 const emit = (patch: Partial<VoiceSnapshot>) => { snap = { ...snap, ...patch }; subs.forEach((f) => f()); };
@@ -22,6 +30,7 @@ let startedAt = 0;
 let timer: number | null = null;
 let audioEl: HTMLAudioElement | null = null;
 let audioUrl: string | null = null;
+let recOpts: StartOptions = {};
 
 export const voice = {
   subscribe(f: () => void) { subs.add(f); return () => { subs.delete(f); }; },
@@ -32,10 +41,11 @@ export const voice = {
     else if (snap.mode === "muted") emit({ mode: "idle" });
   },
 
-  async start(): Promise<void> {
+  async start(opts: StartOptions = {}): Promise<void> {
     if (snap.mode === "muted") { emit({ error: "The microphone is muted. Unmute it to talk." }); return; }
     if (snap.mode === "recording" || snap.mode === "processing") return;
     this.stopSpeaking();                                   // barge-in: speaking to JARVIS stops JARVIS talking
+    recOpts = opts;
     emit({ error: null });
     if (!navigator.mediaDevices?.getUserMedia) { emit({ error: "This browser has no microphone access (it needs a secure page such as 127.0.0.1)." }); return; }
     try {
@@ -62,7 +72,12 @@ export const voice = {
       timer = window.setInterval(() => {
         const s = (performance.now() - startedAt) / 1000;
         emit({ seconds: s });
-        if (s >= MAX_SECONDS) void this.finish("en");
+        if (s >= MAX_SECONDS) {
+          // VOI-D6: the limit used to force English and throw the text away. It now transcribes in the language selected at this
+          // moment and hands the text to the caller, exactly as the manual stop does.
+          const { lang, onAutoStop } = recOpts;
+          void this.finish(lang?.() ?? "en").then((t) => { try { onAutoStop?.(t); } catch { /* a handler error must not leave the controller stuck */ } });
+        }
       }, 200);
       emit({ mode: "recording", seconds: 0, level: 0 });
     } catch {

@@ -7,7 +7,11 @@ import json
 import os
 import time
 import urllib.error
+import sys
 import urllib.request
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+import loopback_net  # noqa: E402  loopback only, no proxy, no redirect (completion H)
 
 PREFIX = "/v1/jarvis/owner/"
 
@@ -40,7 +44,7 @@ class Kernel:
                                      headers={"Authorization": "Bearer " + self._token(), "Content-Type": "application/json"})
         t0 = time.time()
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with loopback_net.urlopen(req, timeout=timeout) as r:
                 return r.status, json.loads(r.read() or b"{}")
         except urllib.error.HTTPError as e:
             try:
@@ -60,7 +64,7 @@ class Kernel:
         req = urllib.request.Request(self.cfg.kernel_url + PREFIX + f"stream?since={int(since)}",
                                      headers={"Authorization": "Bearer " + self._token(), "Accept": "text/event-stream"})
         try:
-            return urllib.request.urlopen(req, timeout=timeout)
+            return loopback_net.urlopen(req, timeout=timeout)
         except urllib.error.HTTPError as e:
             raise KernelError(f"the kernel refused the event stream (HTTP {e.code})", e.code)
         except (urllib.error.URLError, OSError, TimeoutError) as e:

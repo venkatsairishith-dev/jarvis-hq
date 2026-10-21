@@ -102,6 +102,7 @@ except ImportError:
     )
     _warn_once(__name__)
 from memory._reflection.schema import normalize_reflection, refine_reflection_id
+from memory.evidence import _int_counter
 from memory.scopes import MemorySubject, entry_matches_subject, subject_from_entry
 from memory.temporal import explicit_event_window, to_naive_local
 from utils.language_utils import language_context
@@ -947,10 +948,10 @@ async def apply_scoped_persona_merge(
                 )
                 max_user_count = max(
                     max_user_count,
-                    int(src.get('user_fact_reinforce_count', 0) or 0),
+                    _int_counter(src.get('user_fact_reinforce_count', 0)),
                 )
                 max_sub_zero_days = max(
-                    max_sub_zero_days, int(src.get('sub_zero_days', 0) or 0),
+                    max_sub_zero_days, _int_counter(src.get('sub_zero_days', 0)),
                 )
                 for key in (
                     'rein_last_signal_at',

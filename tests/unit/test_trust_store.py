@@ -1219,17 +1219,23 @@ def test_signal_ledger_normalizes_in_linear_time():
 
     from memory.identity import normalize_account_record
 
-    def _elapsed(size: int) -> float:
+    def _cpu_per_call(size: int, repeats: int) -> float:
         ids = [f"owner-signal-{index}" for index in range(size)]
-        started = time.perf_counter()
-        normalize_account_record("qq:1", {"processed_signal_events": ids})
-        return time.perf_counter() - started
+        started = time.process_time()
+        for _ in range(repeats):
+            normalize_account_record("qq:1", {"processed_signal_events": ids})
+        return (time.process_time() - started) / repeats
 
     # Scale RATIO, not wall clock: an absolute threshold red-lines whenever a
     # shared runner is busy, which is luck rather than a regression. Linear
     # gives ~10x for 10x input, quadratic ~100x — machine speed cancels out.
-    small = max(_elapsed(3_000), 1e-6)
-    large = _elapsed(30_000)
+    # CPU time (not wall clock) of a batch of calls per size: a descheduled or
+    # CPU-quota-throttled slice adds wall time but no CPU time (single wall-clock
+    # samples of a 5 ms call read 17x too slow on a starved runner), and batching
+    # keeps each sample far above the OS CPU-time clock's granularity. A
+    # genuinely quadratic dedup still costs ~100x CPU. The 30x limit is unchanged.
+    small = max(_cpu_per_call(3_000, 120), 1e-6)
+    large = _cpu_per_call(30_000, 12)
     assert large / small < 30, f"superlinear: {large / small:.1f}x for 10x input"
 
     event_ids = [f"owner-signal-{index}" for index in range(30_000)]

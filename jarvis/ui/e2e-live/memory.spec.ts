@@ -1,14 +1,15 @@
 import { test, expect, type Page } from "@playwright/test";
+import { consoleHeaders } from "../e2e/console-secret";
 
 // Live: preferences are added, corrected and forgotten through the real UI; the kernel's own list is read back each time.
 // A correction made from a stale copy is refused (409), never silently applied. The audit chain still verifies at the end.
 const J = async (page: Page, p: string) => (await page.request.get(p)).json();
 const P = async (page: Page, p: string, body: unknown) =>
-  page.request.fetch(p, { method: "POST", data: body, headers: { "X-Jarvis-Console": "1", Origin: "http://127.0.0.1:8799" } });
+  page.request.fetch(p, { method: "POST", data: body, headers: await consoleHeaders(page, { Origin: "http://127.0.0.1:8799" }) });
 
 test.describe.configure({ mode: "serial" });
 test.beforeAll(async ({ request }) => {                                                 // leftovers of an interrupted run
-  const h = { "X-Jarvis-Console": "1", Origin: "http://127.0.0.1:8799" };
+  const h = await consoleHeaders(request, { Origin: "http://127.0.0.1:8799" });
   const m = await (await request.get("/api/owner/memory")).json();
   for (const e of m.entries ?? []) if (String(e.text).startsWith("Live test marker")) await request.post("/api/owner/memory", { data: { op: "forget", owner: m.owner, id: e.id }, headers: h });
 });

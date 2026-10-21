@@ -12,6 +12,7 @@ import asyncio
 import hashlib
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -867,25 +868,44 @@ async def test_cancelled_request_still_finishes_admission(tmp_path, monkeypatch)
     try:
         real_write = service_module.atomic_write_bytes
 
+        write_started = threading.Event()
+
         def slow_write(path, data):
             import time
 
+            write_started.set()
             time.sleep(0.2)
             real_write(path, data)
 
         monkeypatch.setattr(service_module, "atomic_write_bytes", slow_write)
         async with service._write_lock:
             request = asyncio.create_task(service.import_pack(_raw(_pack())))
-            await asyncio.sleep(0.05)
+            # Cancel while admission is INSIDE the staging write, not after a fixed
+            # delay: on a busy machine parsing the pack alone outlasts 50 ms, the
+            # request was then cancelled before it was admitted at all, and no job
+            # was ever (correctly) created. The wait is a hang guard only.
+            deadline = asyncio.get_running_loop().time() + 30.0
+            while not write_started.is_set() and asyncio.get_running_loop().time() < deadline:
+                await asyncio.sleep(0.005)
+            assert write_started.is_set()
             request.cancel()
             (outcome,) = await asyncio.gather(request, return_exceptions=True)
             assert isinstance(outcome, asyncio.CancelledError)
-            for _ in range(100):
-                if service.list_jobs():
-                    break
+            # Wait for the detached admission to finish (it is slowed by slow_write
+            # and by whatever else the machine is doing); the bound is a hang guard.
+            deadline = asyncio.get_running_loop().time() + 30.0
+            while not service.list_jobs() and asyncio.get_running_loop().time() < deadline:
                 await asyncio.sleep(0.01)
             # The staged file is owned by a job, and the reservation is gone.
-            assert [job["state"] for job in service.list_jobs()] == ["queued"]
+            # The single runner takes the job off the queue (state "building") as
+            # soon as it is woken and then waits for the write lock this test is
+            # holding, so whether the poll above sees "queued" or "building" is
+            # only loop scheduling. Both are the job still owning its staged file;
+            # the job must not have finished or failed while the lock is held.
+            jobs = service.list_jobs()
+            assert len(jobs) == 1
+            assert jobs[0]["state"] in service_module.ACTIVE_JOB_STATES
+            assert service._staging_path(jobs[0]["job_id"]).exists()
             assert service._admitting == {}
     finally:
         await service.stop()

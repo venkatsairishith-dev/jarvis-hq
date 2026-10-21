@@ -11,11 +11,16 @@ reply (marked "replayed") without acting again. The same key with a different re
 first request is still being handled answers 409 instead of running it a second time. Only replies below 400 are kept:
 a refused request did nothing, so sending it again may act. Without a key nothing changes.
 The client sends the header Idempotency-Key, or the body field idempotency_key (the console passes bodies through
-unchanged). Scope: the owner route, or the agent whose token sent it, so two clients' keys never meet.
+unchanged). Scope: the owner route, or the agent whose token sent it AND the lane of that token ("agent:<name>:<lane>"), so two
+clients' keys never meet and a reply kept for the private lane is never served to the same name re-issued in the public lane
+(review M1, 2026-10-18). Before a kept reply is served the caller may re-check what can have changed (kill switch, policy).
+A kept reply must not outlive what it shows: when a memory entry is forgotten, every kept reply that shows it is replaced
+by a short note (redact_replies; SEC-D2, 2026-10-18). The row stays, so the same key still never acts twice.
 """
 import hashlib
 import json
 import re
+import sqlite3
 import time
 
 TTL = 24 * 3600
@@ -32,6 +37,23 @@ def key_from(headers, body) -> str:
     return k if k else None
 
 
+def redact_replies(db, needle: str, why: str) -> int:
+    """Replace every kept reply that contains *needle* (an id such as a memory entry's m-xxxxxxxx) with {"status": "done",
+    "redacted": why}. The row keeps its key, fingerprint, state and code: a repeat of that request is still answered from
+    here (now with the note) and never acts again. Returns how many replies were redacted. Callers run it inside their own
+    transaction (memory forget), so the reply and the entry disappear together."""
+    needle = str(needle)
+    if not KEY.match(needle):                       # ids only: never a pattern that matches every reply
+        raise ValueError("redact_replies needs an id (8 to 100 letters, digits, '_', '.', ':' or '-')")
+    pattern = "%" + needle.replace("\\", "\\\\").replace("_", "\\_").replace("%", "\\%") + "%"
+    try:
+        r = db.execute("UPDATE idempotency SET reply=? WHERE reply IS NOT NULL AND reply LIKE ? ESCAPE '\\'",
+                       (json.dumps({"status": "done", "redacted": str(why)[:200]}), pattern))
+    except sqlite3.OperationalError:                # no idempotency table on this kernel: no reply was ever kept
+        return 0
+    return r.rowcount
+
+
 def _refusal(code, msg):
     return code, {"status": "refused", "reason": msg, "error": msg}
 
@@ -43,8 +65,11 @@ class Idempotency:
                           "code INT, reply TEXT, PRIMARY KEY(scope, key))")
         kernel.db.execute("CREATE INDEX IF NOT EXISTS idempotency_created ON idempotency(created)")
 
-    def run(self, scope: str, key, request, fn):
-        """(status, reply): fn() once per (scope, key) within 24 h; the stored reply for a repeat."""
+    def run(self, scope: str, key, request, fn, recheck=None):
+        """(status, reply): fn() once per (scope, key) within 24 h; the stored reply for a repeat.
+        recheck: called just before a stored reply is served; it returns None (serve it) or a (status, reply) refusal that is
+        served instead. A kept reply must not outlive the decision it recorded (review M1): the caller re-runs the checks that
+        can have changed since (kill switch, policy). The row stays, so the request still never acts twice."""
         if key is None:
             return fn()
         key = str(key)
@@ -67,6 +92,10 @@ class Idempotency:
                 self.k.audit.append("idempotency_in_flight", {"scope": scope[:60], "key": key[:40]})
                 return _refusal(409, "the same request is still being handled (or it was interrupted); check its state instead of "
                                      "sending it again")
+            stop = recheck() if recheck is not None else None
+            if stop is not None:
+                self.k.audit.append("idempotent_replay_refused", {"scope": scope[:60], "key": key[:40], "code": stop[0]})
+                return stop
             self.k.audit.append("idempotent_replay", {"scope": scope[:60], "key": key[:40], "code": row[2]})
             reply = json.loads(row[3])
             return row[2], dict(reply, replayed=True) if isinstance(reply, dict) else reply

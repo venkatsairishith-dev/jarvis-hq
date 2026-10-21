@@ -3,6 +3,8 @@ import path from "node:path";
 
 // The tests drive the real UI, the real console and a real (throwaway) kernel owner plane with seeded records.
 // Voice tests use a fake microphone fed from a speech file made by the same local TTS the app uses.
+// The console writes its master token to <JARVIS_RUN_DIR>/console.token; global-setup.ts reads it to sign the browser in.
+process.env.JARVIS_RUN_DIR ??= path.resolve(import.meta.dirname, "test-results", "run");
 const PORT = 8811;
 const fixture = path.resolve(import.meta.dirname, "e2e/fixtures/open-downloads.wav");
 const py = process.env.JARVIS_PYTHON ?? "D:\\jarvis\\tools\\jarvis-venv\\Scripts\\python.exe";
@@ -15,13 +17,15 @@ export default defineConfig({
   fullyParallel: false,
   retries: 0,
   reporter: [["list"], ["json", { outputFile: "test-results/results.json" }]],
-  use: { baseURL: `http://127.0.0.1:${PORT}`, channel: "msedge", trace: "retain-on-failure", screenshot: "only-on-failure" },
+  globalSetup: "./e2e/global-setup.ts",
+  use: { baseURL: `http://127.0.0.1:${PORT}`, channel: "msedge", trace: "retain-on-failure", screenshot: "only-on-failure",
+         storageState: path.resolve(import.meta.dirname, "test-results", "console-session.json") },
   webServer: {
     command: `"${py}" "${path.resolve(import.meta.dirname, "../console/tests/e2e_server.py")}"`,
     url: `http://127.0.0.1:${PORT}/api/health`,
     reuseExistingServer: false,
     timeout: 120_000,
-    env: { E2E_CONSOLE_PORT: String(PORT), PYTHONIOENCODING: "utf-8", E2E_STATE_FILE: "D:\\jarvis\\cache\\e2e-state.json" },
+    env: { E2E_CONSOLE_PORT: String(PORT), JARVIS_RUN_DIR: process.env.JARVIS_RUN_DIR!, PYTHONIOENCODING: "utf-8", E2E_STATE_FILE: "D:\\jarvis\\cache\\e2e-state.json" },
   },
   projects: [
     { name: "app", testMatch: /(app|a11y|approvals|connectors)\.spec\.ts/, use: { viewport: { width: 1360, height: 860 } } },

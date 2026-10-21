@@ -14,6 +14,12 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import presidio_analyzer  # noqa: F401
+except ImportError:     # a clear skip, not an import error: these are the REAL-detector tests (the plumbing is test_gateway_plumbing.py)
+    raise unittest.SkipTest("Presidio is not installed. Real-detector tests: install presidio-analyzer + spacy + the "
+                            "en_core_web_sm model (the privacy venv on the laptop, or `pip install --target DIR ...` in a "
+                            "throw-away dir with PYTHONPATH=DIR), then: cd jarvis/privacy && python -B -m unittest test_privacy -v")
 import gateway  # noqa: E402
 from redactor import Mapping, Redactor, StreamRestorer, restore  # noqa: E402
 
@@ -49,6 +55,14 @@ class Redaction(unittest.TestCase):
         for v in (KEY, jwt, "hf_abcdefghijklmnopqrstuvwxyz123456"):
             self.assertNotIn(v, out)
         self.assertIn("[API_KEY_1]", out)
+
+    def test_groq_stripe_and_pgp_keys(self):
+        # audit SEC-D7 (2026-10-18): made-up values, each written in two pieces so no scanner sees a whole one
+        groq, stripe = "gsk_" + "Ab3dE6gH9jK2mN5pQ8sT1vW4yZ7bC0eF3hJ6kL9nP2rS5uX8z", "sk_" + "live_" + "Zx9Cv8Bn7Mq6Wr5Ty4Ui3Op2"
+        pgp = "-----BEGIN PGP " + "PRIVATE KEY BLOCK-----\n\nlQOYBGXsecretbody\n=abcd\n-----END PGP PRIVATE KEY BLOCK-----"
+        out, _ = self.r(f"keys: {groq} and {stripe}\n{pgp}")
+        for v in (groq, stripe, "lQOYBGXsecretbody"):
+            self.assertNotIn(v, out)
 
     def test_contact_and_card(self):
         out, _ = self.r("mail me at ravi.k@example.com, card 4111 1111 1111 1111")
@@ -161,17 +175,120 @@ class ModelRedaction(unittest.TestCase):
         self.assertEqual(self.yes.redact(text, Mapping(), deep=False), text)
 
 
-class GatewayRoles(unittest.TestCase):
-    def test_only_user_and_tool_messages_are_deep(self):
-        seen = []
+class DeepOnly:
+    """Stands in for the PII model: hides the made-up secret SECRET only on a deep pass, as GLiNER + Jev would (no Presidio,
+    no model files: these tests run anywhere)."""
+    model, stats = object(), {}
 
-        class Spy:
-            def redact(self, text, m, deep=True):
-                seen.append((text, deep))
-                return text
+    def __init__(self):
+        self.calls = []
+
+    def redact(self, text, m, deep=True):
+        self.calls.append((text, deep))
+        return text.replace(SECRET, m.tag("PASSWORD", SECRET)) if deep else text
+
+
+SECRET = "Blue7Whale"                                # made up, with no cue word: only the model pass finds it
+
+
+class GatewayRoles(unittest.TestCase):
+    def test_every_role_gets_the_full_pass(self):
+        # Audit MEM-M3 (2026-10-18): system and assistant text used to get the patterns only, and N.E.K.O puts recalled
+        # memory in the system prompt. The old test asserted exactly that gap (system/assistant deep=False).
+        spy = DeepOnly()
         gateway.redact_body({"messages": [{"role": "system", "content": "sys"}, {"role": "user", "content": "u"},
-                                          {"role": "assistant", "content": "a"}, {"role": "tool", "content": "t"}]}, Spy(), Mapping())
-        self.assertEqual(seen, [("sys", False), ("u", True), ("a", False), ("t", True)])
+                                          {"role": "assistant", "content": "a", "reasoning_content": "r"},
+                                          {"role": "tool", "content": "t"}, {"role": "developer", "content": "d"}]}, spy, Mapping())
+        self.assertEqual(spy.calls, [("sys", True), ("u", True), ("a", True), ("r", True), ("t", True), ("d", True)])
+
+    def test_recalled_memory_in_the_system_prompt_never_leaves_in_clear(self):
+        m = Mapping()
+        out = gateway.redact_body({"messages": [
+            {"role": "system", "content": f"Memory about the owner: the office wifi passcode {SECRET}."},
+            {"role": "assistant", "content": f"Noted, {SECRET}."},
+            {"role": "user", "content": [{"type": "text", "text": f"remind me of {SECRET}"}]}]}, DeepOnly(), m)
+        sent = json.dumps(out)
+        self.assertNotIn(SECRET, sent)
+        self.assertEqual(sent.count("[PASSWORD_1]"), 3)                       # one value, one placeholder everywhere
+        self.assertEqual(restore("[PASSWORD_1]", m), SECRET)
+
+    def test_images_audio_and_unknown_parts_are_withheld_with_a_note(self):
+        # Audit PRO-D9: image_url parts were forwarded as they came. The text around them still goes, redacted.
+        before = gateway.STATS.get("withheld", 0)
+        out = gateway.redact_body({"messages": [
+            {"role": "user", "content": [{"type": "text", "text": f"what is on my screen? {SECRET}"},
+                                         {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgoAAAA"}},
+                                         {"type": "input_audio", "input_audio": {"data": "UklGRgAAAA", "format": "wav"}},
+                                         {"type": "something_new", "blob": "x"}]},
+            {"role": "user", "content": {"unexpected": "shape"}},
+            {"role": "assistant", "content": "ok", "audio": {"id": "a1"}}]}, DeepOnly(), Mapping())
+        sent = json.dumps(out)
+        for leak in ("base64", "iVBORw0KGgo", "UklGRg", "image_url", "input_audio", "blob", "unexpected", SECRET, '"audio"'):
+            self.assertNotIn(leak, sent, leak)
+        parts = out["messages"][0]["content"]
+        self.assertEqual([p["type"] for p in parts], ["text"] * 4)
+        self.assertIn("an image was withheld for privacy", parts[1]["text"])
+        self.assertIn("an audio clip was withheld", parts[2]["text"])
+        self.assertIn("an attachment was withheld", parts[3]["text"])
+        self.assertIn("withheld for privacy", out["messages"][1]["content"])
+        self.assertGreaterEqual(gateway.STATS["withheld"] - before, 4)
+
+    def test_a_list_of_completion_prompts_is_redacted(self):
+        out = gateway.redact_body({"prompt": [f"one {SECRET}", "two"]}, DeepOnly(), Mapping())
+        self.assertNotIn(SECRET, json.dumps(out))
+
+
+class GatewayFailsClosed(unittest.TestCase):
+    """The real HTTP gateway with the deep-only stand-in: what would leave the PC (a fake upstream records it)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.up = ThreadingHTTPServer(("127.0.0.1", 0), FakeUpstream)
+        threading.Thread(target=cls.up.serve_forever, daemon=True).start()
+        cls.gw = gateway.serve(0, f"http://127.0.0.1:{cls.up.server_address[1]}/v1", timeout=10, red=DeepOnly())
+        threading.Thread(target=cls.gw.serve_forever, daemon=True).start()
+        cls.base = f"http://127.0.0.1:{cls.gw.server_address[1]}/v1"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.gw.shutdown()
+        cls.up.shutdown()
+
+    def post(self, path, body):
+        req = urllib.request.Request(self.base + path, data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer test-not-a-key"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read() or b"{}")
+
+    def test_a_memory_summary_call_in_the_system_role_is_redacted_and_the_reply_restored(self):
+        n = len(FakeUpstream.seen)
+        code, out = self.post("/chat/completions", {"model": "m", "messages": [
+            {"role": "system", "content": f"Summarise this conversation. The owner said the passcode is {SECRET} and password = x"},
+            {"role": "assistant", "content": f"Summary so far: passcode {SECRET}"}]})
+        self.assertEqual(code, 200)
+        sent = json.dumps(FakeUpstream.seen[n:])
+        self.assertNotIn(SECRET, sent)
+        self.assertIn("I will keep " + SECRET + " safe.", out["choices"][0]["message"]["content"])   # restored locally
+
+    def test_a_screenshot_reaches_the_public_model_only_as_a_note(self):
+        n = len(FakeUpstream.seen)
+        code, _ = self.post("/chat/completions", {"model": "m", "messages": [{"role": "user", "content": [
+            {"type": "text", "text": "read this"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,QUJDREVGRw=="}}]}]})
+        self.assertEqual(code, 200)                                        # the conversation keeps working
+        sent = json.dumps(FakeUpstream.seen[n:])
+        self.assertNotIn("QUJDREVGRw", sent)
+        self.assertIn("withheld for privacy", sent)
+
+    def test_other_endpoints_are_refused_not_forwarded_unredacted(self):
+        n = len(FakeUpstream.seen)
+        for path in ("/embeddings", "/responses", "/audio/speech"):
+            code, out = self.post(path, {"model": "m", "input": f"the passcode is {SECRET}"})
+            self.assertEqual(code, 403, path)
+            self.assertIn("only chat and completion", out["error"]["message"])
+        self.assertEqual(len(FakeUpstream.seen), n)                        # nothing left the PC
 
 
 class FakeUpstream(BaseHTTPRequestHandler):
@@ -210,7 +327,8 @@ class GatewayEndToEnd(unittest.TestCase):
     def setUpClass(cls):
         cls.up = ThreadingHTTPServer(("127.0.0.1", 0), FakeUpstream)
         threading.Thread(target=cls.up.serve_forever, daemon=True).start()
-        cls.gw = gateway.serve(0, f"http://127.0.0.1:{cls.up.server_address[1]}/v1", timeout=10, red=RED)
+        cls.gw = gateway.serve(0, f"http://127.0.0.1:{cls.up.server_address[1]}/v1", timeout=10, red=RED,
+                              require_deep=False)    # RED is patterns-only on purpose; the fail-closed default is tested below
         threading.Thread(target=cls.gw.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.gw.server_address[1]}/v1"
 
@@ -262,6 +380,66 @@ class GatewayEndToEnd(unittest.TestCase):
         self.assertNotIn(PW, h)
 
 
+class RealDetectorsOnEveryField(unittest.TestCase):
+    """REAL Presidio + spaCy (patterns), no fake: a cue-word secret and a key placed in each field the audit (M2) listed must
+    not reach the upstream recorder. GLiNER-PII is not needed for these (the model-dependent tests are ModelRedaction)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.up = ThreadingHTTPServer(("127.0.0.1", 0), FakeUpstream)
+        threading.Thread(target=cls.up.serve_forever, daemon=True).start()
+        cls.gw = gateway.serve(0, f"http://127.0.0.1:{cls.up.server_address[1]}/v1", timeout=10, red=RED, require_deep=False)
+        threading.Thread(target=cls.gw.serve_forever, daemon=True).start()
+        cls.base = f"http://127.0.0.1:{cls.gw.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.gw.shutdown()
+        cls.gw.server_close()
+        cls.up.shutdown()
+        cls.up.server_close()
+
+    def post(self, body):
+        req = urllib.request.Request(self.base + "/v1/chat/completions", data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer test-not-a-key"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status
+
+    def test_a_secret_in_each_listed_field_never_reaches_the_upstream(self):
+        sec = lambda tag: f"password = Zq{tag}9xW7vL"          # a cue word + a made-up value: the real pattern recogniser finds it
+        body = {"model": "m", "messages": [
+            {"role": "user", "name": sec("name"), "content": [{"type": "text", "text": "hi", "note": sec("extra")}]},
+            {"role": "assistant", "content": None, "function_call": {"name": "f", "arguments": json.dumps({"a": sec("fcarg")})},
+             "tool_calls": [{"id": "1", "type": "function", "function": {"name": "g", "arguments": json.dumps({"a": sec("tcarg")})}}]},
+            {"role": "tool", "tool_call_id": "1", "content": sec("toolout")}],
+            "tools": [{"type": "function", "function": {"name": "t", "description": sec("tooldesc"),
+                                                       "parameters": {"type": "object", "properties": {"x": {"type": "string", "description": sec("param")}}}}}],
+            "functions": [{"name": "h", "description": sec("functions"), "parameters": {"type": "object"}}],
+            "response_format": {"type": "json_schema", "json_schema": {"name": "r", "schema": {"type": "object", "description": sec("rf")}}},
+            "stop": [sec("stop")], "user": sec("user"), "metadata": {"k": sec("meta")}}
+        n = len(FakeUpstream.seen)
+        self.assertEqual(self.post(body), 200)
+        sent = json.dumps(FakeUpstream.seen[n:])
+        for tag in ("name", "extra", "fcarg", "tcarg", "toolout", "tooldesc", "param", "functions", "rf", "stop", "user", "meta"):
+            self.assertNotIn(f"Zq{tag}9xW7vL", sent, tag)
+
+    def test_names_for_one_call_are_hidden_with_real_spacy_and_off_by_default(self):
+        """The research plugin asks /redact for names. John Smith / Paris are found by en_core_web_sm; it is a small model and
+        misses some names and street addresses (see the report), so 'active' does not mean 'complete'."""
+        def preview(**extra):
+            req = urllib.request.Request(self.base + "/redact", data=json.dumps({"text": "John Smith flew to Paris", **extra}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read())
+        default, named = preview(), preview(names=True)
+        self.assertIn("John Smith", default["text"])                      # JARVIS_PRIVACY_NAMES is off: ordinary conversation stays
+        self.assertFalse(default["names"])
+        self.assertNotIn("John Smith", named["text"])
+        self.assertNotIn("Paris", named["text"])
+        self.assertTrue(named["names"])
+        self.assertIn("John Smith", preview()["text"])                    # and the names=True answer was not cached for the default
+
+
 class _Scripted(BaseHTTPRequestHandler):
     """A fake provider: answers with the next status code from its script and records what it got."""
     def log_message(self, *a):
@@ -301,7 +479,7 @@ class ProviderFallback(unittest.TestCase):
         provs = [{"name": "first", "base_url": f"http://127.0.0.1:{self.servers[0].server_address[1]}/v1", "key": "from_request"},
                  {"name": "second", "base_url": f"http://127.0.0.1:{self.servers[1].server_address[1]}/v1",
                   "key_file": "providers/second.key", "model": "fallback-model"}]
-        self.gw = gateway.serve(0, provs, timeout=10, red=RED, cooldown=60)
+        self.gw = gateway.serve(0, provs, timeout=10, red=RED, cooldown=60, require_deep=False)   # patterns-only on purpose
         threading.Thread(target=self.gw.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.gw.server_address[1]}/v1/chat/completions"
 

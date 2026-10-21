@@ -11,15 +11,19 @@ import json
 import urllib.request
 
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr
+from plugin.plugins._shared import loopback_http
 
 from . import core
 from .core import TeamError
 
 
+GATEWAY_PREVIEW = "http://127.0.0.1:48950/redact"
+
+
 def _gateway_preview(text: str) -> dict:
-    req = urllib.request.Request("http://127.0.0.1:48950/redact", data=json.dumps({"text": text}).encode("utf-8"),
+    req = urllib.request.Request(GATEWAY_PREVIEW, data=json.dumps({"text": text}).encode("utf-8"),
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=30) as r:
+    with loopback_http.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode("utf-8"))
 
 

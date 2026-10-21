@@ -1518,3 +1518,36 @@ async def test_apromote_with_merge_passes_reflection_evidence_not_precomputed_ma
     # (target wins), proving the lock-side compute happened.
     entry = (await pm.aget_persona('小天'))['master']['facts'][0]
     assert entry['reinforcement'] == 4.0
+
+
+# ── a damaged stored counter must not abort the promote-attempt bookkeeping (raw int()) ──
+
+_DAMAGED_COUNTERS = ["garbage", float("nan"), float("inf"), [1, 2], {"x": 1}]
+
+
+@pytest.mark.parametrize("damaged", _DAMAGED_COUNTERS, ids=["text", "nan", "inf", "list", "dict"])
+def test_exceeds_max_retries_treats_a_damaged_attempt_count_as_zero(damaged):
+    from memory.reflection import ReflectionEngine
+    assert ReflectionEngine._exceeds_max_retries({'promote_attempt_count': damaged}) is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("damaged", _DAMAGED_COUNTERS, ids=["text", "nan", "inf", "list", "dict"])
+async def test_record_promote_attempt_survives_damaged_counters(tmp_path, damaged):
+    _ev, _fs, pm, re, _cm = _install(str(tmp_path))
+    R = _reflection('ref_dmg', '一条计数损坏的观察', rein=2.5)
+    await re.asave_reflections('小天', [R])
+    full = await re._aload_reflections_full('小天')
+    for r in full:
+        r['promote_attempt_count'] = damaged
+        r['sub_zero_days'] = damaged
+        r['user_fact_reinforce_count'] = damaged
+    recorded = AsyncMock(wraps=re._event_log.arecord_and_save)
+    with patch.object(re, '_aload_reflections_full', AsyncMock(return_value=full)), \
+            patch.object(re._event_log, 'arecord_and_save', recorded):
+        await re._arecord_promote_attempt('小天', 'ref_dmg', datetime.now().isoformat(timespec='seconds'))
+    payload = recorded.await_args.args[2]                 # what the event log is asked to record
+    assert payload['promote_attempt_count'] == 1
+    assert payload['sub_zero_days'] == 0 and payload['user_fact_reinforce_count'] == 0
+    rstate = next(r for r in await re._aload_reflections_full('小天') if r['id'] == 'ref_dmg')
+    assert rstate['promote_attempt_count'] == 1

@@ -8,6 +8,7 @@
 param([ValidateSet('neko', 'jarvis')][string]$Target = 'neko')
 $url = if ($Target -eq 'jarvis') { 'http://127.0.0.1:8799/' } else { 'http://127.0.0.1:48911/' }
 $port = if ($Target -eq 'jarvis') { 8799 } else { 48911 }
+if ($Target -eq 'jarvis') { . (Join-Path $PSScriptRoot 'jarvis-auth.ps1') }
 function Listening($p) { [bool](Get-NetTCPConnection -State Listen -LocalPort $p -ErrorAction SilentlyContinue) }
 
 if (-not (Listening $port)) {
@@ -18,4 +19,5 @@ $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$en
   Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $edge) { throw "Microsoft Edge was not found; open $url in any browser instead." }
 Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+if ($Target -eq 'jarvis') { $url = Get-LaunchUrl 'console' 8799 '/' }   # a one-time launch code in the fragment signs the window in
 Start-Process $edge -ArgumentList "--app=$url", "--window-size=1100,820"

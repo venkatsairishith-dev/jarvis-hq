@@ -146,6 +146,7 @@ class Plane(unittest.TestCase):
         self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
         self.tok = tokens.issue("console", "owner")
         self.agent = tokens.issue("hermes", "private")
+        self.tokens = tokens
         self.T = Tasks(self.k)
 
     def tearDown(self):
@@ -270,6 +271,191 @@ class Plane(unittest.TestCase):
         self.assertEqual(c1["reply"] or "", "")
         self.assertFalse(self.plane.busy.locked())                                          # no double release, no leak
         self.assertEqual(self.call("POST", "/v1/jarvis/owner/command", {"text": "third"})[0], 202)
+
+    # ---- a command and the tasks it started (the command <-> task link)
+    def agent_act(self, body, tok=None):
+        r = urllib.request.Request(self.url + "/v1/jarvis/actions", data=json.dumps(body).encode(), method="POST",
+                                   headers={"Authorization": "Bearer " + (tok or self.agent), "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(r, timeout=10) as resp:
+                return resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def start_lab_task(self, goal, tok=None):
+        """What the owner's agent does inside a command: open a task and hand it to the lab (the owner approves the sharing)."""
+        code, r = self.agent_act({"tool": "task", "op": "create", "target": goal, "params": {"request": goal + " please", "goal": goal, "criteria": ["it works"]}}, tok)
+        self.assertEqual(code, 200, r)
+        tid = r["task"]
+        code, r = self.agent_act({"tool": "task", "op": "dispatch", "target": tid, "params": {"public_ok": True, "instructions": "Do " + goal, "criteria": ["it works"]}}, tok)
+        self.assertEqual(code, 202, r)
+        self.assertTrue(self.k.approve(r["approval_id"]))
+        code, r = self.agent_act({"tool": "task", "op": "dispatch", "target": tid, "params": {"public_ok": True}, "approval_id": r["approval_id"]}, tok)
+        self.assertEqual((code, r["status"]), (200, "queued"), r)
+        return tid, r["job"]
+
+    def settle(self):
+        """Let the agent's hanging call return before the kernel is closed (an orphaned call's late answer is ignored)."""
+        self.release.set()
+        time.sleep(0.3)
+
+    def state_of(self, tid):
+        return self.T.get(tid)["state"]
+
+    def job_state(self, jid):
+        return self.k.db.execute("SELECT state FROM jobs WHERE id=?", (jid,)).fetchone()[0]
+
+    def dispatch_waiting_for_approval(self, goal):
+        """A task whose lab dispatch is waiting for the owner's approval of the sharing (the card is still pending)."""
+        code, r = self.agent_act({"tool": "task", "op": "create", "target": goal, "params": {"request": goal + " please", "goal": goal, "criteria": ["it works"]}})
+        self.assertEqual(code, 200, r)
+        tid = r["task"]
+        code, r = self.agent_act({"tool": "task", "op": "dispatch", "target": tid, "params": {"public_ok": True, "instructions": "Do " + goal, "criteria": ["it works"]}})
+        self.assertEqual(code, 202, r)
+        return tid, r["approval_id"]
+
+    def approval_state(self, aid):
+        return self.k.approval_info(aid)["state"]
+
+    def test_stopping_a_commands_tasks_denies_the_pending_approvals_of_those_tasks_only(self):
+        """Before: the task was cancelled but its sharing approval stayed pending, approvable in the console."""
+        other, other_aid = self.dispatch_waiting_for_approval("another thing, started with no command running")   # not linked to the command
+        self.release.clear()
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "build me a thing"})
+        cid = r["id"]
+        tid, aid = self.dispatch_waiting_for_approval("build a thing")
+        self.assertEqual((self.approval_state(aid), self.state_of(tid)), ("pending", "waiting_approval"))
+        out = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": cid, "stop_tasks": True})[1]
+        self.assertIn(tid, out["tasks_stopped"])
+        self.assertIn(aid, out["approvals_denied"])
+        self.assertEqual((self.state_of(tid), self.approval_state(aid)), ("cancelled", "denied"))
+        self.assertNotIn(other, out["tasks_stopped"])                                        # a task that is not this command's is left alone
+        self.assertEqual((self.state_of(other), self.approval_state(other_aid)), ("waiting_approval", "pending"))
+        self.assertFalse(self.k.approve(aid), "a denied approval must never be approvable afterwards")
+        self.assertEqual(self.approval_state(aid), "denied")
+        again = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": cid, "stop_tasks": True})[1]
+        self.assertEqual(again["approvals_denied"], [])                                       # nothing left to deny: no error
+        self.settle()
+
+    def test_an_approved_but_unused_card_is_withdrawn_when_its_task_is_stopped(self):
+        """Re-check D (2026-10-19) CHANGED this on purpose (it used to pin "left as it is"): stopping a task also withdraws a card the
+        owner approved but nobody used yet, so approve-then-cancel can never leave a usable approval. A USED card stays used."""
+        self.release.clear()
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "build me a thing"})
+        tid, aid = self.dispatch_waiting_for_approval("build a thing")
+        self.assertTrue(self.k.approve(aid))                                                  # the owner approved first
+        out = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r["id"], "stop_tasks": True})[1]
+        self.assertEqual(out["approvals_denied"], [aid])
+        self.assertEqual(self.approval_state(aid), "denied")
+        self.assertFalse(self.k.withdraw(aid), "already withdrawn: nothing more to do")
+        self.settle()
+
+    def test_cancelling_a_task_from_the_console_denies_its_pending_approval(self):
+        self.release.clear()
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "build me a thing"})
+        tid, aid = self.dispatch_waiting_for_approval("build a thing")
+        self.assertEqual(self.call("POST", "/v1/jarvis/owner/task", {"id": tid, "op": "cancel"})[0], 200)
+        self.assertEqual((self.state_of(tid), self.approval_state(aid)), ("cancelled", "denied"))
+        self.settle()
+
+    def test_stop_waiting_alone_does_not_stop_the_tasks_the_command_started(self):
+        """Documented behaviour of the plain button, kept: only stop_all (or the explicit option) stops tasks."""
+        self.release.clear()
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "build me a thing"})
+        tid, jid = self.start_lab_task("build a thing")
+        out = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r["id"]})[1]
+        self.assertEqual(out, {"cancelled": True})                                          # the plain reply is unchanged
+        self.assertEqual((self.state_of(tid), self.job_state(jid)), ("queued", "queued"))
+        for bad in ("true", 1, "yes"):                                                       # only a real true asks for it
+            self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r["id"], "stop_tasks": bad})
+        self.assertEqual(self.state_of(tid), "queued")
+        self.settle()
+
+    def test_cancelling_a_command_with_stop_tasks_cancels_its_tasks_and_their_lab_jobs(self):
+        """Before: the command was cancelled, the task stayed queued and the lab job stayed queued (they were never linked)."""
+        self.release.clear()
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "build me a thing"})
+        cid = r["id"]
+        t_mine, j_mine = self.start_lab_task("build a thing")
+        out = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": cid, "stop_tasks": True})[1]
+        self.assertEqual(out["cancelled"], True)
+        self.assertEqual(out["tasks_stopped"], [t_mine])
+        self.assertEqual(out["jobs_cancelled"], [j_mine])
+        self.assertEqual((self.state_of(t_mine), self.job_state(j_mine)), ("cancelled", "cancelled"))
+        self.assertIn("stopped with command " + cid, self.T.get(t_mine)["events"][0]["note"])
+        kinds = [e["kind"] for e in self.call("GET", "/v1/jarvis/owner/events?since=0&limit=500")[1]["events"]]
+        self.assertIn("owner_command_tasks_stopped", kinds)
+        self.settle()
+
+    def test_only_the_tasks_of_that_command_are_stopped(self):
+        before_tid = self.T.create("hermes", "private", "r", "made before any command")      # no command was running
+        self.release.clear()
+        code, r1 = self.call("POST", "/v1/jarvis/owner/command", {"text": "first"})
+        t1, j1 = self.start_lab_task("first job")
+        self.assertTrue(self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r1["id"]})[1]["cancelled"])    # plain: only the gate
+        code, r2 = self.call("POST", "/v1/jarvis/owner/command", {"text": "second"})
+        self.assertEqual(code, 202)
+        t2, j2 = self.start_lab_task("second job")
+        self.assertEqual(self.T.for_command(r1["id"]), [t1])
+        self.assertEqual(self.T.for_command(r2["id"]), [t2])
+        out = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r2["id"], "stop_tasks": True})[1]
+        self.assertEqual((out["tasks_stopped"], out["jobs_cancelled"]), ([t2], [j2]))
+        self.assertEqual((self.state_of(t1), self.job_state(j1)), ("queued", "queued"))        # the first command's task: untouched
+        self.assertEqual(self.state_of(before_tid), "planning")                                  # a task no command started: untouched
+        self.settle()
+
+    def test_stopping_a_command_that_already_answered_still_stops_the_lab_work_it_started(self):
+        """The lab work outlives the agent's answer ("started, I will tell you"): that is the main case, not a corner."""
+        self.release.clear()
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "build me a thing"})
+        tid, jid = self.start_lab_task("build a thing")
+        self.release.set()
+        self.assertEqual(self.wait_command(r["id"])["state"], "done")
+        out = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r["id"], "stop_tasks": True})[1]
+        self.assertEqual((out["cancelled"], out["tasks_stopped"], out["jobs_cancelled"]), (False, [tid], [jid]))   # nothing to stop waiting on
+        self.assertEqual((self.state_of(tid), self.job_state(jid)), ("cancelled", "cancelled"))
+        again = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r["id"], "stop_tasks": True})[1]       # idempotent
+        self.assertEqual((again["tasks_stopped"], again["jobs_cancelled"]), ([], []))
+
+    def test_a_running_lab_job_is_told_to_stop_and_the_runner_sees_it(self):
+        self.release.clear()
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "build me a thing"})
+        tid, jid = self.start_lab_task("build a thing")
+        self.assertEqual(Jobs(self.k).next_for("lab")["id"], jid)                               # the runner took it: running
+        out = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r["id"], "stop_tasks": True})[1]
+        self.assertEqual((out["tasks_stopped"], out["jobs_cancelled"]), ([tid], [jid]))
+        self.assertEqual(self.state_of(tid), "cancelled")                                       # the runner stops the worker on this
+        row = self.k.db.execute("SELECT state, cancel_requested FROM jobs WHERE id=?", (jid,)).fetchone()
+        self.assertEqual(row[0], "running")                                                      # ... and reports the end itself
+        self.assertIsNotNone(row[1])
+        self.settle()
+
+    def test_a_task_of_a_public_lane_agent_is_not_linked_to_the_owners_command(self):
+        self.release.clear()
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "go"})
+        pub_tok = self.tokens.issue("lab", "public")
+        code, rr = self.agent_act({"tool": "task", "op": "create", "target": "lab's own", "params": {"request": "lab's own task here", "goal": "lab's own"}}, pub_tok)
+        self.assertEqual(code, 200)
+        self.assertEqual(self.T.for_command(r["id"]), [])
+        out = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r["id"], "stop_tasks": True})[1]
+        self.assertEqual(out["tasks_stopped"], [])
+        self.assertEqual(self.state_of(rr["task"]), "planning")
+        self.settle()
+
+    def test_a_task_of_another_private_agent_is_not_linked_to_the_owners_command(self):
+        """Audit Low (2026-10-18): only the owner's own agent starts what a command starts; "stop with tasks" must not cancel the
+        task another private agent happened to create while the command ran."""
+        self.release.clear()
+        code, r = self.call("POST", "/v1/jarvis/owner/command", {"text": "go"})
+        other = self.tokens.issue("skill-operator", "private")
+        code, rr = self.agent_act({"tool": "task", "op": "create", "target": "other's own", "params": {"request": "the other agent's own task", "goal": "other's own"}}, other)
+        self.assertEqual(code, 200)
+        mine = self.agent_act({"tool": "task", "op": "create", "target": "mine", "params": {"request": "the owner's agent task here", "goal": "mine"}}, self.agent)[1]["task"]
+        self.assertEqual(self.T.for_command(r["id"]), [mine])
+        out = self.call("POST", "/v1/jarvis/owner/command/cancel", {"id": r["id"], "stop_tasks": True})[1]
+        self.assertEqual(out["tasks_stopped"], [mine])
+        self.assertEqual(self.state_of(rr["task"]), "planning")                                   # the other agent's task is untouched
+        self.settle()
 
     def test_command_with_a_private_key_is_refused_and_busy_is_reported(self):
         key = "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----"
@@ -431,6 +617,19 @@ class Plane(unittest.TestCase):
 
 class Studio(Plane):
     """Automation Studio, Agent Factory, memory and models through the owner's HTTP routes."""
+    def test_only_the_owner_plane_can_turn_on_sharing_a_file_name_with_the_lab(self):
+        d = {"name": "summarise", "action_kind": "lab_task", "trigger_kind": "event", "event_spec": {"watch": "downloads", "glob": "*.pdf"},
+             "action": {"goal": "Summarise", "instructions": "Write a summary.", "criteria": ["a summary exists"], "share_filename": True}}
+        code, a = self.call("POST", "/v1/jarvis/owner/automations", {"definition": d})
+        self.assertEqual((code, a["action"].get("share_filename")), (201, True))
+        code, a = self.call("POST", "/v1/jarvis/owner/automations", {"definition": dict(d, action=dict(d["action"], share_filename="yes"))})
+        self.assertEqual(code, 400)
+        # an agent has no route that creates or edits an automation at all, so it cannot set the flag
+        for tool in ("automation", "automations"):
+            code, r = self.call("POST", "/v1/jarvis/actions", {"tool": tool, "op": "create", "target": "x", "params": {"definition": d}}, tok=self.agent)
+            self.assertNotEqual(code, 200, (tool, r))
+        self.assertEqual(len(self.call("GET", "/v1/jarvis/owner/automations")[1]["automations"]), 1)
+
     def test_automation_preview_create_run_pause_delete(self):
         d = {"name": "repo check", "action_kind": "job", "trigger_kind": "cron", "schedule": "0 8 * * *", "tz": "UTC",
              "action": {"kind": "project_check", "params": {"project": "jarvis-hq"}}}

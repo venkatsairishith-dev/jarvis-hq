@@ -414,6 +414,56 @@ class Tokens(unittest.TestCase):
             self.assertEqual(browserext.token_file("Profile 1", d), shared)
 
 
+class UiObservations(unittest.TestCase):
+    """What the node itself checked before it said ok is passed on (audit PC-D11, 2026-10-18): the plugin marks every other
+    step "reported ok, not observed". The PowerShell is unchanged and not run here: winbackend._run is replaced, and a script
+    that finds the state wrong raises, exactly as the real one does (REASONS). Unverified on real Windows."""
+
+    def setUp(self):
+        self.ran = []
+        self._run = winbackend._run
+        winbackend._run = lambda script, env: self.ran.append(env)
+
+    def tearDown(self):
+        winbackend._run = self._run
+
+    def act(self, op, target, text=""):
+        return jobs.ui_action({"op": op, "target": target, "text": text}, lister=lambda: [])
+
+    def test_window_state_ops_report_the_state_the_script_read_back(self):
+        for op, state in (("minimize", "minimized"), ("maximize", "maximized"), ("restore", "normal")):
+            r = self.act(op, "notepad|")
+            self.assertEqual((r["ok"], r["done"], r["window_state"]), (True, op, state), op)
+            self.assertEqual(self.ran[-1]["JARVIS_UI_WANT"], state)         # the script is told the state it must find
+
+    def test_focus_and_type_report_what_their_scripts_checked(self):
+        f = self.act("focus", "notepad|")
+        self.assertEqual((f["ok"], f["foreground"]), (True, True))
+        t = self.act("type", "notepad|Text Editor", "hi")
+        self.assertEqual((t["ok"], t["observed"]), (True, "text read back from the field"))
+        self.assertEqual(t["done"], "type")
+
+    def test_clicks_keys_and_scrolls_report_no_observation(self):
+        for op, target, text in (("click", "notepad|Save", ""), ("key", "notepad|", "ctrl+s"), ("scroll", "notepad|", "down"),
+                                 ("click_at", "notepad|10,10", "")):
+            r = self.act(op, target, text)
+            self.assertEqual(r, {"ok": True, "done": op}, op)               # nothing to read: the plugin says "not observed"
+
+    def test_a_failed_check_is_a_failure_not_an_observation(self):
+        def wrong_state(script, env):
+            raise RuntimeError("ui-action-failed:pattern")                    # WINDOW_STATE throws when the state differs
+        winbackend._run = wrong_state
+        r = self.act("minimize", "notepad|")
+        self.assertEqual(r, {"ok": False, "error": "RuntimeError"})
+        self.assertNotIn("window_state", r)
+
+    def test_only_short_fixed_keys_are_passed_on(self):
+        r = jobs.ui_action({"op": "x", "target": "n|", "text": ""}, backend={"x": lambda t, p: {
+            "observed": "ok", "window_state": "normal", "screen_text": "secret words", "foreground": True, "other": "y"}},
+                           lister=lambda: [])
+        self.assertEqual(r, {"ok": True, "done": "x", "observed": "ok", "window_state": "normal", "foreground": True})
+
+
 class Keys(unittest.TestCase):
     def test_sendkeys_mapping_refuses_raw_syntax(self):
         self.assertEqual(winbackend.sendkeys("ctrl+s"), "^s")

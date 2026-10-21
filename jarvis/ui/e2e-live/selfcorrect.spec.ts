@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { consoleHeaders } from "../e2e/console-secret";
 import fs from "node:fs";
 
 // Live: a lab task whose acceptance criteria cannot both hold ("exactly 10 bytes" and "the first 100 digits of pi"). The
@@ -7,7 +8,7 @@ import fs from "node:fs";
 // taught from a task that was never repaired.
 const J = async (page: Page, p: string) => (await page.request.get(p)).json();
 const P = async (page: Page, p: string, body: unknown = {}) =>
-  (await page.request.fetch(p, { method: "POST", data: body, headers: { "X-Jarvis-Console": "1", Origin: "http://127.0.0.1:8799" } })).json();
+  (await page.request.fetch(p, { method: "POST", data: body, headers: await consoleHeaders(page, { Origin: "http://127.0.0.1:8799" }) })).json();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const FINAL = new Set(["completed", "failed", "cancelled"]);
 

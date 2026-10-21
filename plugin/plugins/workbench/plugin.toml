@@ -1,0 +1,28 @@
+[plugin]
+id = "workbench"
+name = "Workbench"
+description = "Turns a client's raw materials (audio, chats, documents) into source-grounded requirements, a plan and checked deliverables; generates structured prompts that can be edited, saved and run through JARVIS; and learns unfamiliar tasks by researching, testing a workflow in a sandbox and refining it (Propose-Probe-Compose) before keeping it."
+short_description = "Client projects, prompt generator and learning new tasks, with checks before anything counts as done."
+keywords = ["client", "project", "requirements", "deliverables", "brief", "transcript", "chat history", "prompt", "prompt generator",
+            "learn", "new task", "workflow", "skill", "客户", "需求", "提示词", "学习"]
+version = "0.1.0"
+type = "plugin"
+entry = "plugin.plugins.workbench:WorkbenchPlugin"
+
+[plugin.sdk]
+recommended = ">=0.1.0,<0.2.0"
+supported = ">=0.1.0,<0.3.0"
+
+[plugin_runtime]
+enabled = true
+auto_start = true
+
+[plugin.ui]
+enabled = true
+
+[[plugin.ui.panel]]
+id = "main"
+title = "Workbench"
+entry = "ui/panel.tsx"
+context = "dashboard"
+permissions = ["state:read", "action:call"]

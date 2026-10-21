@@ -22,6 +22,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import loopback_net  # noqa: E402  loopback only, no proxy, no redirect (completion H)
+import control_auth  # noqa: E402  the servers' master tokens (re-review M3: private reads need them)
+
 DATA = Path(os.environ.get("NEKO_STORAGE_SELECTED_ROOT", r"D:\jarvis\N.E.K.O-data"))
 PLUGIN_URL = "http://127.0.0.1:48916"
 RESULTS: list[tuple[str, bool, str]] = []
@@ -39,7 +42,7 @@ def http(url: str, method: str = "GET", body=None, timeout: float = 20.0, header
     h.update(headers or {})
     req = urllib.request.Request(url, data=data, method=method, headers=h)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with loopback_net.urlopen(req, timeout=timeout) as r:
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
@@ -137,15 +140,20 @@ def deliverables():
 
 def neko_icon():
     """The Neko icon page and its state come from the widget server; the live stream sends the current state at once."""
-    code, s = jget("http://127.0.0.1:48940/api/neko", timeout=20)
-    states = ("error", "needs_permission", "speaking", "working", "thinking", "listening", "completed", "wake_listening", "sleeping")
+    import control_auth                      # jarvis/scripts: the widget's master token is in a private token file (re-review M3)
+    wk = control_auth.headers_for("widget")
+    code, s = jget("http://127.0.0.1:48940/api/neko", timeout=20, headers=wk)
+    states = ("error", "needs_permission", "speaking", "working", "thinking", "listening", "attention", "completed", "wake_listening",
+              "sleeping")
     check("Neko icon: the state server answers with a known state", code == 200 and (s or {}).get("state") in states,
           f"{(s or {}).get('state')}: {(s or {}).get('detail')}"[:120])
     code, raw = http("http://127.0.0.1:48940/neko", timeout=10)
-    check("Neko icon: the page is served", code == 200 and b"<title>Neko</title>" in raw, f"HTTP {code}")
+    check("Neko icon: a bare page load gets a login page, no secret (re-review M3)", code == 401 and b"jarvis-widget-secret" not in raw, f"HTTP {code}")
+    code, raw = http("http://127.0.0.1:48940/neko", timeout=10, headers=wk)
+    check("Neko icon: the page is served to the token", code == 200 and b"<title>Neko</title>" in raw, f"HTTP {code}")
     first = None
     try:
-        with urllib.request.urlopen("http://127.0.0.1:48940/api/events", timeout=20) as r:
+        with loopback_net.urlopen(urllib.request.Request("http://127.0.0.1:48940/api/events", headers=wk), timeout=20) as r:
             for line in r:
                 if line.startswith(b"data:"):
                     first = json.loads(line[5:])
@@ -153,7 +161,10 @@ def neko_icon():
     except (OSError, ValueError):
         pass
     check("Neko icon: the live event stream pushes the state", bool(first and first.get("state") in states), str((first or {}).get("state")))
-    code, raw = http("http://127.0.0.1:48940/api/action", method="POST", body={"action": "open", "path": r"C:\Windows\win.ini"})
+    bad = {"action": "open", "path": r"C:\Windows\win.ini"}
+    code, raw = http("http://127.0.0.1:48940/api/action", method="POST", body=bad)
+    check("Neko icon: a state-changing request without the control secret is refused (audit M15)", code == 403, f"HTTP {code}")
+    code, raw = http("http://127.0.0.1:48940/api/action", method="POST", body=bad, headers=control_auth.headers_for("widget"))
     check("Neko icon: actions refuse files Neko did not make", code == 400, f"HTTP {code}")
 
 
@@ -206,6 +217,8 @@ EXPECTED = {
                      "list_deliverables"},
     "research": {"research_topic"},
     "web_search": {"search"},
+    # the desktop plugin hosts the 60 s PC monitor (crashes, low disk, services down, stuck PC tasks) and runs PC tasks
+    "desktop": {"run_pc_task", "stop_pc_task", "check_pc", "recent_pc_alerts"},
 }
 
 
@@ -394,14 +407,14 @@ def watchdog():
 
 
 def jarvis():
-    code, h = jget("http://127.0.0.1:8799/api/health")
+    code, h = jget("http://127.0.0.1:8799/api/health", headers=control_auth.headers_for("console"))
     k = (h or {}).get("kernel", {})
     check("JARVIS: kernel reachable and authorized, kill switch off", code == 200 and k.get("reachable") and k.get("authorized") and not k.get("killed"), str({x: k.get(x) for x in ("reachable", "authorized", "killed")}))
-    _, st = jget("http://127.0.0.1:8799/api/owner/state", timeout=30)
+    _, st = jget("http://127.0.0.1:8799/api/owner/state", timeout=30, headers=control_auth.headers_for("console"))
     check("JARVIS: owner state readable and not busy", bool(st) and st.get("busy") is False, f"busy={(st or {}).get('busy')}")
-    _, v = jget("http://127.0.0.1:8799/api/owner/audit/verify", timeout=60)
+    _, v = jget("http://127.0.0.1:8799/api/owner/audit/verify", timeout=60, headers=control_auth.headers_for("console"))
     check("JARVIS: audit chain verifies", bool(v) and v.get("ok") is True, str((v or {}).get("message", ""))[:60])
-    _, m = jget("http://127.0.0.1:8799/api/owner/models", timeout=30)
+    _, m = jget("http://127.0.0.1:8799/api/owner/models", timeout=30, headers=control_auth.headers_for("console"))
     nodes = (m or {}).get("nodes") or []
     if isinstance(nodes, dict):
         nodes = [nodes]
@@ -418,7 +431,7 @@ def jarvis():
     leaked = any(x in json.dumps(kd) for x in ("secret_ref", "env_refs", "endpoint"))
     check("bridge: connector overview readable and free of references", k["status"] == "succeeded" and "connectors" in kd and not leaked,
           f"{len(kd.get('connectors', []))} connector(s)")
-    _, c = jget("http://127.0.0.1:8799/api/owner/connectors", timeout=30)
+    _, c = jget("http://127.0.0.1:8799/api/owner/connectors", timeout=30, headers=control_auth.headers_for("console"))
     check("JARVIS: connector registry readable", bool(c) and "connectors" in c, f"{len((c or {}).get('connectors', []))} connector(s)")
 
 

@@ -20,6 +20,7 @@ Coverage:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from datetime import datetime, timedelta
@@ -2097,3 +2098,116 @@ def test_load_facts_full_converges_id_overlap_to_the_active_copy(tmp_path):
     assert survivor["note"] == "active"
     warnings = sink.at_least(logging.WARNING)
     assert any("id 重叠" in m for m in warnings), warnings
+
+
+# ── MEM-M12(b): one damaged counter must not abort a character's archive sweep ──
+
+
+_DAMAGED_COUNTERS = ["garbage", [], {"x": 1}, float("nan"), float("inf"), 10 ** 400]
+
+
+def _sweep_reflection(rid: str, sub_zero, ufrc=0) -> dict:
+    now = datetime.now()
+    return {
+        "id": rid, "text": rid, "entity": "master", "status": "confirmed",
+        "source_fact_ids": [], "created_at": now.isoformat(),
+        "feedback": None, "next_eligible_at": now.isoformat(),
+        "reinforcement": 0.0, "disputation": 5.0,
+        "rein_last_signal_at": None, "disp_last_signal_at": now.isoformat(),
+        "sub_zero_days": sub_zero, "user_fact_reinforce_count": ufrc,
+        "sub_zero_last_increment_date": now.date().isoformat(),   # already counted today: the sweep only reads it
+    }
+
+
+def _sweep_fact(eid: str, sub_zero, ufrc=0) -> dict:
+    row = _sweep_reflection(eid, sub_zero, ufrc)
+    return {k: row[k] for k in ("id", "text", "reinforcement", "disputation", "rein_last_signal_at", "disp_last_signal_at",
+                                "sub_zero_days", "user_fact_reinforce_count", "sub_zero_last_increment_date")} | {
+        "source": "test", "merged_from_ids": [], "protected": False}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("damaged", _DAMAGED_COUNTERS, ids=["text", "list", "dict", "nan", "inf", "huge_int"])
+async def test_archive_sweep_goes_on_past_a_damaged_counter(tmp_path, monkeypatch, damaged):
+    """The sweep read `int(entry.get('sub_zero_days'))` raw: one damaged value raised, the character's sweep stopped there and
+    every later reflection and all persona entries were skipped (logged only at debug level)."""
+    from app.memory_server import evidence_loops, runtime
+    _ev, _fs, pm, re, _rec, _cm = _install(str(tmp_path))
+    name = "小天"
+    await re.asave_reflections(name, [_sweep_reflection("r_bad", damaged), _sweep_reflection("r_due", EVIDENCE_ARCHIVE_DAYS)])
+    persona = await pm.aensure_persona(name)
+    persona.setdefault("master", {})["facts"] = [_sweep_fact("p_bad", damaged), _sweep_fact("p_due", EVIDENCE_ARCHIVE_DAYS)]
+    await pm.asave_persona(name, persona)
+
+    class _Cm:
+        async def aload_characters(self):
+            return {"猫娘": {name: {}}}
+
+    class _Stop(Exception):
+        pass
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(delay, *a, **k):
+        if delay == evidence_loops.EVIDENCE_ARCHIVE_SWEEP_INTERVAL_SECONDS:
+            raise _Stop                                          # one full pass, then leave the loop
+        await real_sleep(0)
+    monkeypatch.setattr(runtime, "reflection_engine", re, raising=False)
+    monkeypatch.setattr(runtime, "persona_manager", pm, raising=False)
+    monkeypatch.setattr(runtime, "_config_manager", _Cm(), raising=False)
+    monkeypatch.setattr(evidence_loops, "_INITIAL_DELAY_ARCHIVE", 0)
+    monkeypatch.setattr(evidence_loops, "_amaybe_sweep_subject_archive", AsyncMock())
+    monkeypatch.setattr(evidence_loops.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(_Stop):
+        await evidence_loops._periodic_archive_sweep_loop()
+
+    left = [r["id"] for r in await re.aload_reflections(name)]
+    assert left == ["r_bad"], left                               # the due one was archived, the damaged one is kept
+    facts = [f["id"] for f in (await pm.aensure_persona(name))["master"]["facts"]]
+    assert facts == ["p_bad"], facts
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("damaged", _DAMAGED_COUNTERS, ids=["text", "list", "dict", "nan", "inf", "huge_int"])
+async def test_sub_zero_increment_survives_a_damaged_reinforce_count(tmp_path, damaged):
+    """aincrement_sub_zero wrote `int(entry['user_fact_reinforce_count'])` into the event payload: a damaged value raised
+    after the entry was staged, so the increment (and with it the archive countdown) never happened."""
+    _ev, _fs, pm, re, _rec, _cm = _install(str(tmp_path))
+    name, now = "小天", datetime(2026, 4, 23, 12, 0, 0)
+    row = _sweep_reflection("r_ufrc", 0, damaged)
+    row["sub_zero_last_increment_date"] = None
+    row["disp_last_signal_at"] = now.isoformat()
+    await re.asave_reflections(name, [row])
+    assert await re.aincrement_sub_zero(name, "r_ufrc", now) == 1
+
+    persona = await pm.aensure_persona(name)
+    fact = _sweep_fact("p_ufrc", 0, damaged)
+    fact["sub_zero_last_increment_date"] = None
+    fact["disp_last_signal_at"] = now.isoformat()
+    persona.setdefault("master", {})["facts"] = [fact]
+    await pm.asave_persona(name, persona)
+    assert await pm.aincrement_sub_zero(name, "master", "p_ufrc", now) == 1
+
+
+@pytest.mark.asyncio
+async def test_merge_into_an_entry_with_a_damaged_reinforce_count(tmp_path):
+    _ev, _fs, pm, _re, _rec, _cm = _install(str(tmp_path))
+    initial = _persona_cache_safety_initial("p_merge", "before")
+    initial["master"]["facts"][0]["user_fact_reinforce_count"] = "garbage"
+    await pm.asave_persona("小天", initial)
+    r = await pm.amerge_into("小天", "p_merge", "after", reflection_evidence={"reinforcement": 3.0, "disputation": 0.0},
+                             source_reflection_id="ref_m", merged_from_ids=["ref_m"])
+    assert r == "merged"
+
+
+def test_counters_survive_an_integer_too_large_for_a_float():
+    """audit Low (2026-10-18): float(10**400) raises OverflowError, which _counter did not catch, so one hand-edited counter
+    aborted the whole sweep. A damaged or absurd counter counts as 0; a normal whole number is kept exactly."""
+    from memory.evidence import _counter, _int_counter
+    for huge in (10 ** 400, -10 ** 400, 2 ** 63, 10 ** 30):
+        assert _int_counter(huge) == 0, huge
+    assert _counter(10 ** 400) == 0.0
+    assert _int_counter(2 ** 53 + 1) == 2 ** 53 + 1                 # no float rounding for a whole number
+    assert _int_counter(7) == 7 and _int_counter("7") == 7 and _int_counter(7.9) == 7 and _int_counter(True) is not None
+    for bad in ("garbage", [], {}, None, float("nan"), float("inf"), -float("inf"), 1e300):
+        assert _int_counter(bad) == 0, bad

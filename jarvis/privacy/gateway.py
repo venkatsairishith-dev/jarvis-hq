@@ -5,9 +5,24 @@
 Windows or macOS. Run it with D:\\jarvis\\tools\\privacy-venv (Presidio + spaCy). Listens on 127.0.0.1 only.
 
 Every request to /v1/chat/completions (and /v1/completions) is redacted before it leaves the PC: passwords, PINs, keys,
-tokens, card numbers, e-mail, phone, Aadhaar, PAN... become placeholders such as [PASSWORD_1]. The reply comes back with
-the placeholders still in it and is restored here, so the caller sees the real values while the public service never does.
-Streaming replies are restored too, including a placeholder split across chunks.
+tokens, card numbers, e-mail, phone, Aadhaar, PAN... become placeholders such as [PASSWORD_1]. Every message role gets the
+same full pass (system prompts carry recalled memory). Images, audio and files are never forwarded: each becomes a short
+"withheld for privacy" note. A POST to any other endpoint is refused, because it would not be redacted. The reply comes
+back with the placeholders still in it and is restored here, so the caller sees the real values while the public service
+never does. Streaming replies are restored too, including a placeholder split across chunks.
+
+Whitelist (audit M2, 2026-10-18): only the fields below leave the PC. Every string in messages (content, name, tool_call_id,
+tool_calls and function_call names and arguments, reasoning, refusal), tools, functions, tool_choice, response_format, stop,
+prediction, suffix and prompt is redacted, parts of a message other than type+text are dropped, plain numbers and flags are
+shape-checked, logit_bias keys must be token numbers, and everything else (user, metadata, store, a field nobody has seen yet)
+is dropped and counted. A request the gateway cannot check (an unknown role, token-array prompts, nesting beyond 24 levels)
+is refused with 400, not forwarded.
+
+Fail closed (audit M3): with the PII model (GLiNER-PII) missing, serve()/main() refuse every model call with 503 and a plain
+message, and /health says ready=false, public_egress=false, degraded=["pii_model_missing"]. A detector error also means 503 and
+nothing is forwarded, and no request text is ever put in a log or an error. Set JARVIS_PRIVACY_REQUIRE_DEEP=0 to accept the
+pattern-only pass (the owner's choice; /health still lists it). POST /redact {"text":..., "names": true} also hides people and
+places for that call and answers with what was really active ("names", "deep", "ready").
 
 The Authorization header is passed through untouched and never stored or logged. Logs hold counts by kind, never values.
 """
@@ -43,42 +58,200 @@ def _count(mapping: Mapping):
 
 # ---------- outbound: redact ----------
 
-DEEP_ROLES = ("user", "tool", "function")      # what the owner typed and what tools read: patterns + PII model + Jev check
+# Every role gets the full pass (patterns + PII model + Jev check), not only user/tool/function (audit MEM-M3, 2026-10-18):
+# N.E.K.O puts recalled memory in the SYSTEM prompt and resends earlier ASSISTANT replies, and the memory server's own
+# summary, correction and fact-extraction calls send the owner's conversation under whatever role they like. Placeholders
+# in replies are restored as before. The redactor caches by sentence, so only new sentences cost model time.
+
+# Anything that is not text is never forwarded to the public model (audit PRO-D9): an image, audio or file part cannot be
+# redacted, and a screenshot or a photo of a document can hold anything. It is replaced by a short note so the
+# conversation keeps working and the model can say it could not see it.
+WITHHELD = {"image_url": "an image", "input_image": "an image", "image": "an image", "input_audio": "an audio clip",
+            "audio": "an audio clip", "file": "a file", "input_file": "a file", "video_url": "a video"}
+
+
+def _withheld_note(kind: str) -> dict:
+    with _lock:
+        STATS["withheld"] = STATS.get("withheld", 0) + 1
+    return {"type": "text", "text": f"[{kind} was withheld for privacy: the privacy gateway never sends it to a public model. "
+                                    "Tell the user you could not see it.]"}
+
+
+class GatewayRefusal(Exception):
+    """A request the gateway will not forward. The message is safe to show: it never repeats any part of the request."""
+
+
+MAX_DEPTH = 24                                      # a deeper JSON value is refused, not walked (recursion bound)
+ROLES = {"system", "user", "assistant", "tool", "function", "developer"}
+MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}")
+LOGIT_KEY = re.compile(r"-?\d{1,12}")
+# Fields that carry no text: forwarded as they are, only when they have the plain shape below.
+SCALARS = {"max_tokens": (int,), "max_completion_tokens": (int,), "temperature": (int, float), "top_p": (int, float),
+           "n": (int,), "seed": (int,), "presence_penalty": (int, float), "frequency_penalty": (int, float),
+           "logprobs": (bool,), "top_logprobs": (int,), "parallel_tool_calls": (bool,), "stream": (bool,), "echo": (bool,),
+           "best_of": (int,)}
+# Provider switches N.E.K.O adds through extra_body (config/providers.py: enable_thinking, thinking.type, thinking_budget,
+# reasoning_effort, chat_template_kwargs). They hold no free text, so they go on only in this exact shape (booleans, integers,
+# and a fixed set of words); anything else under these names is refused.
+THINK_WORDS = {"disabled", "enabled", "auto", "between_tools", "none", "minimal", "low", "medium", "high"}
+CONTROL_KEY = re.compile(r"[a-z_]{1,40}")
+
+
+def _control_ok(key: str, v) -> bool:
+    if key in ("enable_thinking",):
+        return isinstance(v, bool)
+    if key == "thinking_budget":
+        return isinstance(v, int) and not isinstance(v, bool)
+    if key == "reasoning_effort":
+        return isinstance(v, str) and v in THINK_WORDS
+    if key == "thinking":
+        return isinstance(v, dict) and all(k in ("type", "budget_tokens") and ((k == "type" and v[k] in THINK_WORDS) or
+                                            (k == "budget_tokens" and isinstance(v[k], int) and not isinstance(v[k], bool))) for k in v)
+    if key == "chat_template_kwargs":
+        return isinstance(v, dict) and all(isinstance(k, str) and CONTROL_KEY.fullmatch(k) and isinstance(x, (bool, int)) for k, x in v.items())
+    return False
+
+
+CONTROLS = ("enable_thinking", "thinking_budget", "reasoning_effort", "thinking", "chat_template_kwargs")
+
+# Fields whose strings are redacted (deep) wherever they sit in the JSON value. Keys stay (they are identifiers).
+TEXT_FIELDS = {"tools", "functions", "function_call", "tool_choice", "response_format", "stop", "prediction", "suffix",
+               "verbosity"}
+# A string under one of these keys is a fixed word of the API, not the owner's text: redacting it could only break the call.
+SCHEMA_WORDS = {"type", "$schema", "format", "$ref", "strict", "role"}
+# Anything else at the top level (user, metadata, store, service_tier, audio, modalities, web_search_options, a field a
+# future client invents...) is not forwarded: unknown means it was never checked (audit M2, 2026-10-18).
+MESSAGE_TEXT_KEYS = ("name", "tool_call_id", "reasoning_content", "reasoning", "refusal", "reasoning_details", "function_call")
+
+
+def _kept(red, text: str, m: Mapping, deep: bool = True) -> str:
+    return red.redact(text, m, deep)
+
+
+def _scalar_ok(v, types) -> bool:
+    if isinstance(v, bool):                                     # True is an int in Python: a flag only where a flag is expected
+        return bool in types
+    return isinstance(v, tuple(t for t in types if t is not bool))
+
+
+PLAIN_KEY = re.compile(r"[a-z][a-z0-9_]{0,40}")
+
+
+def _key(k, red, m: Mapping):
+    """A JSON object key. Plain lower-case schema words (type, properties, description, city_name ...) stay as they are; any other
+    key (capitals, spaces, dashes, digits first, Indic script, a long value used as a name) is text a caller may have built from
+    private data, so it gets the same deep pass as a value. The reply's placeholders are restored, keys in tool-call arguments too."""
+    if not isinstance(k, str):
+        raise GatewayRefusal("the request holds a value the gateway cannot check, so it was not forwarded")
+    return k if PLAIN_KEY.fullmatch(k) else _kept(red, k, m)
+
+
+def _tree(value, red, m: Mapping, depth: int = 0, key: str = ""):
+    """Every string inside a JSON value redacted (deep); numbers, booleans and null kept; keys kept."""
+    if depth > MAX_DEPTH:
+        raise GatewayRefusal("the request is nested too deeply to be checked, so it was not forwarded")
+    if isinstance(value, str):
+        return value if key in SCHEMA_WORDS else _kept(red, value, m)
+    if isinstance(value, list):
+        return [_tree(v, red, m, depth + 1, key) for v in value]
+    if isinstance(value, dict):
+        return {_key(k, red, m): _tree(v, red, m, depth + 1, k if isinstance(k, str) else "") for k, v in value.items()}
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    raise GatewayRefusal("the request holds a value the gateway cannot check, so it was not forwarded")
 
 
 def redact_content(content, red: Redactor, m: Mapping, deep: bool = True):
+    if content is None:
+        return None
     if isinstance(content, str):
         return red.redact(content, m, deep)
     if isinstance(content, list):                               # [{"type":"text","text":...}, {"type":"image_url",...}]
-        return [{**p, "text": red.redact(p["text"], m, deep)} if isinstance(p, dict) and isinstance(p.get("text"), str) else p
-                for p in content]
-    return content
+        out = []
+        for p in content:
+            if isinstance(p, str):
+                out.append(red.redact(p, m, deep))
+            elif isinstance(p, dict) and isinstance(p.get("text"), str) and p.get("type", "text") in ("text", "input_text"):
+                # only type and text go on: any other key of a text part (a note, a cache hint, a future field) is unchecked text
+                out.append({"type": p.get("type", "text"), "text": red.redact(p["text"], m, deep)})
+            else:                                               # image, audio, file or a shape we do not know: fail closed
+                kind = p.get("type") if isinstance(p, dict) else None
+                out.append(_withheld_note(WITHHELD.get(kind, "an attachment")))
+        return out
+    return _withheld_note("content in an unknown format")["text"]
+
+
+def _redact_message(msg, red: Redactor, m: Mapping):
+    if isinstance(msg, str):
+        return {"role": "user", "content": red.redact(msg, m, True)}
+    if not isinstance(msg, dict):
+        return {"role": "user", "content": _withheld_note("a message in an unknown format")["text"]}
+    if msg.get("role") not in ROLES:
+        raise GatewayRefusal("a message has an unknown role, so the request was not forwarded")
+    out = {"role": msg["role"]}
+    if "content" in msg:
+        out["content"] = redact_content(msg["content"], red, m, deep=True)
+    for k in MESSAGE_TEXT_KEYS:                                 # name, tool_call_id, reasoning text, refusal, legacy function_call
+        if k in msg and msg[k] is not None:
+            out[k] = _tree(msg[k], red, m, key=k)
+    if isinstance(msg.get("tool_calls"), list):
+        calls = []
+        for c in msg["tool_calls"]:
+            if not isinstance(c, dict):
+                raise GatewayRefusal("a tool call has an unknown shape, so the request was not forwarded")
+            fn = c.get("function")
+            calls.append({"id": _tree(c.get("id"), red, m), "type": "function",
+                          "function": _tree(fn if isinstance(fn, dict) else {}, red, m, key="function")})
+        out["tool_calls"] = calls
+    # anything else on the message (an audio reply, annotations, a field not known here) is not forwarded
+    return out
 
 
 def redact_body(body: dict, red: Redactor, m: Mapping) -> dict:
-    body = dict(body)
-    if isinstance(body.get("messages"), list):
-        msgs = []
-        for msg in body["messages"]:
-            if not isinstance(msg, dict):
-                msgs.append(msg)
-                continue
-            msg = dict(msg)
-            if "content" in msg:
-                msg["content"] = redact_content(msg["content"], red, m, deep=msg.get("role") in DEEP_ROLES)
-            if isinstance(msg.get("tool_calls"), list):
-                calls = []
-                for c in msg["tool_calls"]:
-                    fn = (c or {}).get("function") or {}
-                    if isinstance(fn.get("arguments"), str):
-                        c = {**c, "function": {**fn, "arguments": red.redact(fn["arguments"], m)}}
-                    calls.append(c)
-                msg["tool_calls"] = calls
-            msgs.append(msg)
-        body["messages"] = msgs
-    if isinstance(body.get("prompt"), str):
-        body["prompt"] = red.redact(body["prompt"], m)
-    return body
+    """The body that may leave the PC: a WHITELIST. Every text-bearing field is redacted (deep, every role alike), the
+    plain numbers and flags are checked for their shape, and everything else is dropped (names are counted in STATS)."""
+    if not isinstance(body, dict):
+        raise GatewayRefusal("the request must be a JSON object")
+    out, dropped = {}, []
+    for k, v in body.items():
+        if k == "model":
+            if not isinstance(v, str) or not MODEL_NAME.fullmatch(v):
+                raise GatewayRefusal("the model name is not a plain model name, so the request was not forwarded")
+            out[k] = v
+        elif k == "messages":
+            if not isinstance(v, list):
+                raise GatewayRefusal("messages must be a list")
+            out[k] = [_redact_message(x, red, m) for x in v]
+        elif k == "prompt":
+            if isinstance(v, str):
+                out[k] = red.redact(v, m)
+            elif isinstance(v, list) and all(isinstance(x, str) for x in v):    # the completions API takes a list of prompts
+                out[k] = [red.redact(x, m) for x in v]
+            else:                                               # token arrays cannot be read, so cannot be checked
+                raise GatewayRefusal("this prompt format cannot be checked for private values, so it was not forwarded")
+        elif k == "logit_bias":
+            if not isinstance(v, dict) or not all(isinstance(a, str) and LOGIT_KEY.fullmatch(a) and isinstance(b, (int, float))
+                                                  for a, b in v.items()):
+                raise GatewayRefusal("logit_bias must map token numbers to numbers")
+            out[k] = v
+        elif k in CONTROLS:
+            if not _control_ok(k, v):
+                raise GatewayRefusal(f"{k} has an unexpected value, so the request was not forwarded")
+            out[k] = v
+        elif k in TEXT_FIELDS:
+            out[k] = _tree(v, red, m, key=k)
+        elif k == "stream_options":
+            out[k] = {a: b for a, b in v.items() if a == "include_usage" and isinstance(b, bool)} if isinstance(v, dict) else {}
+        elif k in SCALARS:
+            if not _scalar_ok(v, SCALARS[k]):
+                raise GatewayRefusal(f"{k} has an unexpected type, so the request was not forwarded")
+            out[k] = v
+        else:
+            dropped.append(str(k)[:30])
+    if dropped:
+        with _lock:
+            STATS["dropped_fields"] = STATS.get("dropped_fields", 0) + len(dropped)
+    return out
 
 
 # ---------- inbound: restore ----------
@@ -90,7 +263,7 @@ def restore_json(obj, m: Mapping):
     if isinstance(obj, list):
         return [restore_json(x, m) for x in obj]
     if isinstance(obj, dict):
-        return {k: restore_json(v, m) for k, v in obj.items()}
+        return {(restore(k, m) if isinstance(k, str) else k): restore_json(v, m) for k, v in obj.items()}
     return obj
 
 
@@ -202,7 +375,20 @@ def scrub_keys(payload: bytes, keys) -> bytes:
 
 # ---------- HTTP ----------
 
-def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: float = 60.0):
+def degraded_reasons(red, require_deep: bool) -> list[str]:
+    """Why this gateway must not send anything to a public model right now ([] = ready). Names only, never values.
+    The PII model (GLiNER-PII) is what finds secrets written without a cue word; without it the patterns alone ran on every
+    message and nothing said so (audit M3, 2026-10-18). Now the gateway refuses to forward instead."""
+    out = []
+    if require_deep and getattr(red, "model", None) is None:
+        out.append("pii_model_missing")
+    return out
+
+
+def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: float = 60.0, require_deep: bool = False):
+    """require_deep: refuse (503) every model call while the PII model is not loaded. `serve()` and `main()` turn it on
+    unless the owner sets JARVIS_PRIVACY_REQUIRE_DEEP=0; it is off here only so a test or a bench can drive the handler
+    with a stand-in detector that has no model."""
     providers = upstream if isinstance(upstream, list) else [{"name": "upstream", "base_url": upstream.rstrip("/"), "key": "from_request"}]
     upstream = providers[0]["base_url"]
 
@@ -226,11 +412,16 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
 
         def do_GET(self):
             if self.path in ("/health", "/v1/health"):
+                why = degraded_reasons(red, require_deep)
                 with _lock:
                     last = STATS["last_call_end"]
-                    return self._json(200, {"ok": True, "upstream": upstream, "requests": STATS["requests"],
+                    return self._json(200, {"ok": True, "ready": not why, "degraded": why,   # ready=false: no model call is forwarded
+                                            "public_egress": not why, "deep_required": require_deep,
+                                            "names": bool(getattr(red, "names", False)), "upstream": upstream, "requests": STATS["requests"],
                                             "redacted": dict(STATS["redacted"]), "errors": STATS["errors"],
-                                            "pii_model": red.model is not None, "checks": dict(red.stats),
+                                            "pii_model": getattr(red, "model", None) is not None, "checks": dict(getattr(red, "stats", {})),
+                                            "withheld": STATS.get("withheld", 0),   # images/audio/files never forwarded
+                                            "refused": STATS.get("refused", 0), "dropped_fields": STATS.get("dropped_fields", 0),
                                             "inflight": STATS["inflight"],          # model calls waiting right now (the icon's "thinking")
                                             "last_call_age_s": round(time.time() - last, 1) if last else None,
                                             "providers": [p["name"] for p in providers],
@@ -245,11 +436,23 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             raw = self.rfile.read(n) if n else b""
             if self.path == "/redact":                         # local preview: what the public service would receive
                 try:
-                    text = json.loads(raw).get("text", "")
+                    req = json.loads(raw)
+                    text = req.get("text", "")
                 except (ValueError, AttributeError):
                     return self._json(400, {"error": {"message": "send {\"text\": ...}"}})
+                # "names": true also hides people and places for this call (the research plugin asks for it); the answer says
+                # what was really active, so the caller can refuse a preview that was weaker than it needed.
+                want_names = isinstance(req, dict) and req.get("names") is True
                 m = Mapping()
-                return self._json(200, {"text": red.redact(str(text), m), "kinds": m.counts})
+                try:
+                    out = red.redact(str(text), m, True, names=True) if want_names else red.redact(str(text), m)
+                except Exception:                                   # noqa: BLE001 - never echo the text or the error
+                    with _lock:
+                        STATS["errors"] += 1
+                    return self._json(503, {"error": {"message": "the privacy gateway could not check the text"}})
+                return self._json(200, {"text": out, "kinds": m.counts, "deep": getattr(red, "model", None) is not None,
+                                        "names": want_names or bool(getattr(red, "names", False)),
+                                        "ready": not degraded_reasons(red, require_deep)})
             self._forward(raw)
 
         def _forward(self, raw):
@@ -271,8 +474,29 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 except ValueError:
                     return self._json(400, {"error": {"message": "the privacy gateway only forwards JSON"}})
                 if self._path() in ("/chat/completions", "/completions"):
-                    body = redact_body(body, red, m)
+                    why = degraded_reasons(red, require_deep)
+                    if why:                                    # fail closed and say so; the request is not even read further
+                        with _lock:
+                            STATS["refused"] = STATS.get("refused", 0) + 1
+                        return self._json(503, {"error": {"message": "the privacy gateway is degraded (" + ", ".join(why) + "), so "
+                                                                     "nothing was sent to the public model. Restore the PII model or "
+                                                                     "use a local model."}})
+                    try:
+                        body = redact_body(body, red, m)
+                    except GatewayRefusal as e:
+                        with _lock:
+                            STATS["refused"] = STATS.get("refused", 0) + 1
+                        return self._json(400, {"error": {"message": str(e)}})
+                    except Exception:                          # noqa: BLE001 - a detector failure: nothing leaves, nothing is echoed
+                        with _lock:
+                            STATS["errors"] += 1
+                            STATS["refused"] = STATS.get("refused", 0) + 1
+                        return self._json(503, {"error": {"message": "the privacy gateway could not check the request, so nothing "
+                                                                     "was sent to the public model"}})
                     _count(m)
+                else:                                          # fail closed: only calls it knows how to redact leave the PC
+                    return self._json(403, {"error": {"message": "the privacy gateway forwards only chat and completion calls to "
+                                                                 "the public model; this endpoint is not redacted, so it is refused"}})
                 stream = bool(body.get("stream"))
                 raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
             headers = {k: v for k, v in self.headers.items() if k.lower() in PASS_HEADERS}
@@ -373,8 +597,15 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
     return Handler
 
 
-def serve(port: int, upstream, timeout: float = 300.0, red: Redactor | None = None, cooldown: float = 60.0):
-    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(red or Redactor(), upstream, timeout, cooldown))
+def deep_required() -> bool:
+    """On unless the owner sets JARVIS_PRIVACY_REQUIRE_DEEP=0 (then /health still lists the gap)."""
+    return os.environ.get("JARVIS_PRIVACY_REQUIRE_DEEP", "1") != "0"
+
+
+def serve(port: int, upstream, timeout: float = 300.0, red: Redactor | None = None, cooldown: float = 60.0,
+          require_deep: bool | None = None):
+    require_deep = deep_required() if require_deep is None else require_deep
+    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(red or Redactor(), upstream, timeout, cooldown, require_deep))
     srv.daemon_threads = True
     return srv
 
@@ -385,8 +616,11 @@ def main():
     ap.add_argument("--upstream", default=None, help="replace the first provider's address (testing)")
     a = ap.parse_args()
     providers, cooldown = load_providers(upstream=a.upstream)
-    srv = serve(a.port, providers, cooldown=cooldown)
+    red = Redactor()
+    srv = serve(a.port, providers, cooldown=cooldown, red=red)
     print(f"privacy gateway on http://127.0.0.1:{a.port}/v1 -> " + " then ".join(p["name"] for p in providers), flush=True)
+    if degraded_reasons(red, deep_required()):
+        print("WARNING: the PII model is not loaded: model calls are refused (503) until it is; see /health", flush=True)
     srv.serve_forever()
 
 

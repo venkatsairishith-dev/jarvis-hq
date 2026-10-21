@@ -271,3 +271,44 @@ async def test_empty_actions_still_stamps_cluster_members(tmp_path):
     assert e1['last_refine_cluster_hash'] == 'h_noop'
     assert e2['last_refine_cluster_hash'] == 'h_noop'
     assert e1['last_refine_at'] and e2['last_refine_at']
+
+
+# ── a damaged stored counter must not abort a refine action (raw int() on text / nan / inf / list / dict) ──
+
+_DAMAGED = ["garbage", float("nan"), float("inf"), [1, 2], {"x": 1}]
+_DAMAGED_IDS = ["text", "nan", "inf", "list", "dict"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("damaged", _DAMAGED, ids=_DAMAGED_IDS)
+async def test_split_with_damaged_counters_counts_them_as_zero(tmp_path, damaged):
+    pm = _install(str(tmp_path))
+    src = await _seed(pm, "小天", "主人喜欢咖啡且早起", id='p_dmg_split')
+    src['user_fact_reinforce_count'] = damaged            # set after the save/load round trip, as a damaged file would
+    src['sub_zero_days'] = damaged
+    actions = [{'action': 'split', 'source_id': 'p_dmg_split',
+                'produce': [{'text': '主人喜欢咖啡'}, {'text': '主人早起'}]}]
+    applied = await pm.apply_refine_actions("小天", "master", [_annotate(src)], actions, 'h_dmg_split')
+    assert applied == 1
+    section = pm._get_section_facts(await pm.aensure_persona("小天"), "master")
+    produced = [e for e in section if e.get('text') in ('主人喜欢咖啡', '主人早起')]
+    assert len(produced) == 2
+    assert all(e['user_fact_reinforce_count'] == 0 and e['sub_zero_days'] == 0 for e in produced)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("damaged", _DAMAGED, ids=_DAMAGED_IDS)
+async def test_merge_with_damaged_counters_keeps_the_good_sources_values(tmp_path, damaged):
+    pm = _install(str(tmp_path))
+    bad = await _seed(pm, "小天", "主人喜欢咖啡", id='p_dmg_a')
+    good = await _seed(pm, "小天", "主人早上要靠咖啡因开机", id='p_dmg_b',
+                       user_fact_reinforce_count=3, sub_zero_days=2)
+    bad['user_fact_reinforce_count'] = damaged
+    bad['sub_zero_days'] = damaged
+    actions = [{'action': 'merge', 'source_ids': ['p_dmg_a', 'p_dmg_b'],
+                'produce': {'text': '主人对咖啡有强依赖性'}}]
+    applied = await pm.apply_refine_actions("小天", "master", [_annotate(bad), _annotate(good)], actions, 'h_dmg_merge')
+    assert applied == 1
+    section = pm._get_section_facts(await pm.aensure_persona("小天"), "master")
+    merged = next(e for e in section if e.get('text') == '主人对咖啡有强依赖性')
+    assert merged['user_fact_reinforce_count'] == 3 and merged['sub_zero_days'] == 2

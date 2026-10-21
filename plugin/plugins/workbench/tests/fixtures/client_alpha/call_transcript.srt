@@ -1,0 +1,15 @@
+1
+00:00:01,000 --> 00:00:06,000
+Priya: The presentation must include our sales numbers from last year.
+
+2
+00:01:10,500 --> 00:01:15,000
+Priya: Budget is around 40,000 rupees, not more than that.
+
+3
+00:02:00,000 --> 00:02:05,000
+Sam: I will share a draft outline tomorrow.
+
+4
+00:02:30,000 --> 00:02:34,000
+Priya: ప్రెజెంటేషన్ రేపు లోపు కావాలి.

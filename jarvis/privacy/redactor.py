@@ -73,10 +73,13 @@ def _custom_recognizers():
             Pattern("aws", r"\bAKIA[0-9A-Z]{16}\b", 0.95),
             Pattern("google", r"\bAIza[0-9A-Za-z_\-]{35}\b", 0.95),
             Pattern("slack", r"\bxox[abpr]-[A-Za-z0-9\-]{10,}\b", 0.95),
+            Pattern("groq", r"\bgsk_[A-Za-z0-9]{40,}\b", 0.95),           # Groq is this gateway's own fallback (audit SEC-D7)
+            Pattern("stripe", r"\b(?:sk|rk)_live_[A-Za-z0-9]{16,}\b", 0.95),
             Pattern("bearer", r"(?i)\bbearer\s+[A-Za-z0-9._\-]{20,}\b", 0.8),
         ]),
         PatternRecognizer(supported_entity="PRIVATE_KEY", name="PrivateKey", patterns=[
-            Pattern("pem", r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----", 0.99)]),
+            # " BLOCK" is how OpenPGP armour ends the line; without it a PGP secret key passed this pattern (audit SEC-D7)
+            Pattern("pem", r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----", 0.99)]),
         PatternRecognizer(supported_entity="JWT", name="Jwt", patterns=[
             Pattern("jwt", r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b", 0.95)]),
         PatternRecognizer(supported_entity="AADHAAR", name="Aadhaar", patterns=[
@@ -201,6 +204,7 @@ class Redactor:
         self.model = load_pii_model() if model == "auto" else model
         # verifier(sentence, [span, ...]) -> [probability it is a secret, ...]; None keeps every model candidate
         self.verifier = jev_secret_probabilities if verifier == "auto" else verifier
+        self.names = bool(names)                 # people and places hidden on every call (JARVIS_PRIVACY_NAMES=1)
         self.entities = BASE_ENTITIES + CUSTOM_ENTITIES + (NAME_ENTITIES if names else [])
         self.threshold = threshold
         self.stats = {"model_candidates": 0, "kept_by_jev": 0, "dropped_by_jev": 0, "jev_unreachable": 0}
@@ -236,17 +240,20 @@ class Redactor:
             out.extend(RecognizerResult(k, off + s, off + e, sc) for k, s, e, sc in confirmed)
         return out
 
-    def find(self, text: str, deep: bool = True):
-        """deep: also run the PII model (+ decision model). The gateway uses it for what the owner typed and tool results;
-        generated text (system prompt, earlier assistant replies) gets the patterns only, which keeps a turn fast."""
+    def find(self, text: str, deep: bool = True, names: bool | None = None):
+        """deep: also run the PII model (+ decision model). The gateway uses it for every message, whatever its role: the
+        system prompt carries recalled memory and earlier assistant replies repeat private values (audit MEM-M3). The
+        sentence cache keeps a turn fast: only new sentences are read by the model."""
         if not text or not text.strip():
             return []
         deep = deep and self.model is not None
-        hit = self._cache.get((text, deep))
+        names = self.names if names is None else bool(names)       # names=True: also people and places, for this call only
+        hit = self._cache.get((text, deep, names))
         if hit is not None:
             return hit
         unreachable_before = self.stats["jev_unreachable"]
-        results = self.engine.analyze(text=text, language="en", entities=self.entities, score_threshold=self.threshold)
+        entities = self.entities if names == self.names else BASE_ENTITIES + CUSTOM_ENTITIES + (NAME_ENTITIES if names else [])
+        results = self.engine.analyze(text=text, language="en", entities=entities, score_threshold=self.threshold)
         if deep:
             results = results + self._model_spans(text)   # overlaps with pattern hits are resolved below
         # keep the strongest, longest non-overlapping spans
@@ -259,11 +266,11 @@ class Redactor:
         if self.stats["jev_unreachable"] == unreachable_before:     # not remembered while the checker is down
             if len(self._cache) > 512:
                 self._cache.clear()
-            self._cache[(text, deep)] = chosen
+            self._cache[(text, deep, names)] = chosen
         return chosen
 
-    def redact(self, text: str, mapping: Mapping, deep: bool = True) -> str:
-        spans = self.find(text, deep)
+    def redact(self, text: str, mapping: Mapping, deep: bool = True, names: bool | None = None) -> str:
+        spans = self.find(text, deep, names)
         out, pos = [], 0
         for r in spans:
             value = text[r.start:r.end]

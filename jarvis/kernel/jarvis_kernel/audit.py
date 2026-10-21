@@ -1,12 +1,23 @@
-"""Append-only, hash-chained audit log with an off-box anchor. Safe for several threads and processes."""
+"""Append-only, hash-chained audit log with an off-box anchor. Safe for several threads and processes.
+
+Anchors (audit SEC-D8, 2026-10-18). Without an anchor, verify() sees edits and gaps but not a cut-off tail or a rewrite
+from genesis. The kernel now writes the head {seq, hash, ts} to ANCHOR_FILE in its data dir (outside state.db) from the owner
+tick, at most every ANCHOR_EVERY seconds and only when the head moved and the chain still matches the last anchor, so an
+export never launders a truncation. The owner's `audit/verify` route and `jarvis audit verify` check against the newest
+stored anchor. That file lives on the same machine, so it catches a database cut or edit, not someone who can also edit
+the file: copying it off the box (jarvis/scripts/pull-anchor.ps1, or any copy of the file) is still a MANUAL owner step.
+"""
 import hashlib
 import json
+import os
 import sqlite3
 import threading
 import time
 
 GENESIS = "0" * 64
 _LOCK = threading.RLock()
+ANCHOR_FILE = "audit-anchors.jsonl"
+ANCHOR_EVERY = 900          # seconds between anchor exports (when the head moved)
 
 
 def _h(prev: str, ts: float, kind: str, payload: str) -> str:
@@ -79,3 +90,59 @@ class AuditLog:
             elif anchor["hash"] != GENESIS:
                 return False, "malformed anchor"
         return True, f"ok: {count} events"
+
+
+def _valid_anchor(a) -> bool:
+    return isinstance(a, dict) and isinstance(a.get("seq"), int) and not isinstance(a.get("seq"), bool) and a["seq"] >= 0 \
+        and isinstance(a.get("hash"), str) and len(a["hash"]) == 64
+
+
+def latest_anchor(path):
+    """(newest valid stored anchor or None, number of unreadable lines). The file is append-only JSON lines."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = [ln.strip() for ln in fh if ln.strip()]
+    except FileNotFoundError:
+        return None, 0
+    except (OSError, UnicodeDecodeError):
+        return None, 1
+    best, bad = None, 0
+    for ln in lines:
+        try:
+            a = json.loads(ln)
+        except ValueError:
+            bad += 1
+            continue
+        if not _valid_anchor(a):
+            bad += 1
+            continue
+        if best is None or a["seq"] >= best["seq"]:
+            best = a
+    return ({"seq": best["seq"], "hash": best["hash"], "ts": best.get("ts")} if best else None), bad
+
+
+def export_anchor(audit: "AuditLog", path, now: float = None, every: float = ANCHOR_EVERY):
+    """Append the head anchor to `path` (rate-limited). Returns the anchor written, or None when nothing was written: the
+    head did not move, the last export is younger than `every` seconds, or the chain no longer matches the last anchor
+    (then writing a new one would hide the truncation or rewrite)."""
+    now = time.time() if now is None else now
+    last, _ = latest_anchor(path)
+    seq, h = audit.head()
+    if last is not None:
+        if seq == last["seq"] and h == last["hash"]:
+            return None
+        if now - float(last.get("ts") or 0) < every:
+            return None
+        if seq < last["seq"]:
+            return None                                          # cut below the last anchor: keep the evidence
+        if last["seq"]:
+            r = audit.db.execute("SELECT hash FROM audit WHERE seq=?", (last["seq"],)).fetchone()
+            if not r or r[0] != last["hash"]:
+                return None                                      # rewritten: keep the evidence
+    a = {"seq": seq, "hash": h, "ts": now}
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(a, sort_keys=True) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    return a

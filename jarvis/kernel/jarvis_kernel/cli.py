@@ -28,6 +28,22 @@ def _ask_console(prompt: str):
     return line or None
 
 
+def _all_interfaces(addr) -> bool:
+    """True for an address that listens on every interface (0.0.0.0, ::, '', '*', 0, [::])."""
+    import ipaddress
+    import socket
+    a = str(addr or "").strip().strip("[]")
+    if a in ("", "*"):
+        return True
+    try:
+        return ipaddress.ip_address(a).is_unspecified
+    except ValueError:
+        try:
+            return socket.inet_aton(a) == b"\0\0\0\0"                 # "0", "0.0" and other short spellings
+        except OSError:
+            return False
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="jarvis")
     p.add_argument("--data", help="data dir (default ~/.jarvis-kernel or $JARVIS_DATA)")
@@ -37,6 +53,11 @@ def main(argv=None):
     c.add_argument("--untrusted", action="store_true")
     ap = sub.add_parser("approve", help="approve a pending request (interactive only)")
     ap.add_argument("id")
+    rt = sub.add_parser("retention", help="bounded retention of private text in the kernel's stores (retention.py): show, change or run it")
+    rt.add_argument("--show", action="store_true"); rt.add_argument("--run", action="store_true", help="apply the policy now")
+    rt.add_argument("--dry-run", action="store_true", help="count what --run WOULD change, then change nothing")
+    rt.add_argument("--off", action="store_true", help="turn retention off (nothing is removed)"); rt.add_argument("--on", action="store_true")
+    rt.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="e.g. tasks_days=60, approvals_grace_hours=48")
     sub.add_parser("kill"); sub.add_parser("resume"); sub.add_parser("status")
     sv = sub.add_parser("serve", help="run the node endpoint"); sv.add_argument("--bind", required=True); sv.add_argument("--port", type=int, default=8765)
     tg = sub.add_parser("telegram", help="run the Telegram bridge"); tg.add_argument("--providers", default=None)
@@ -50,7 +71,8 @@ def main(argv=None):
     sub.add_parser("set-approval-pin", help="set the PIN the owner's console needs to approve a YELLOW action over HTTP (console only)")
     sub.add_parser("nodes", help="list nodes (no state)")
     an = sub.add_parser("analyze", help="report on a node from its collected state"); an.add_argument("node", nargs="?")
-    a = sub.add_parser("audit"); a.add_argument("what", choices=["verify", "anchor"])
+    a = sub.add_parser("audit", help="verify the audit chain (against --anchor-file, else the newest stored anchor) or print its head")
+    a.add_argument("what", choices=["verify", "anchor"])
     a.add_argument("--anchor-file")
     tr = sub.add_parser("trace", help="redacted trace of one task (read-only)"); tr.add_argument("task")
     tr.add_argument("--public", action="store_true", help="drop all free text"); tr.add_argument("--save", help="folder to write <task>.json")
@@ -76,12 +98,37 @@ def main(argv=None):
     if args.cmd == "check":
         d, aid = k.request(Action(args.tool, args.op, args.target, untrusted_session=args.untrusted))
         print(json.dumps({"level": d.name, "reason": d.reason, "approval_id": aid}))
+    elif args.cmd == "retention":
+        from . import retention as R
+        changes = {}
+        for kv in args.set:
+            key, _, val = kv.partition("=")
+            changes[key.strip()] = (val.strip().lower() == "true") if isinstance(R.DEFAULTS.get(key.strip()), bool) else (int(val) if val.strip().isdigit() else val)
+        if args.off:
+            changes["enabled"] = False
+        if args.on:
+            changes["enabled"] = True
+        try:
+            cfg = R.save_settings(k.db, changes) if changes else R.settings(k.db)
+        except ValueError as e:
+            print("refused:", e, file=sys.stderr); return 1
+        out = {"settings": cfg}
+        if args.dry_run:
+            out["dry_run"] = R.Retention(k).sweep("cli", dry_run=True)
+        if args.run:
+            out["run"] = R.Retention(k).sweep("cli")
+        print(json.dumps(out, indent=1))
     elif args.cmd == "approve":
         info = k.approval_info(args.id)
         if not info or info["state"] != "pending":
             print("refused (unknown, used or expired)", file=sys.stderr); return 1
+        if k.killed():
+            print("refused: the kill switch is on (lift it first; denying still works)", file=sys.stderr); return 1
+        if info.get("incomplete") or info.get("blocked"):
+            print("refused: this card is cut off or has invisible/control characters, so it cannot be approved; deny it", file=sys.stderr); return 1
         typed = _ask_console(
-            f"\nApprove {info['level']} action? ({info['seconds_left']} s left)\n{json.dumps(info['action'], indent=2)}\n"
+            f"\nApprove {info['level']} action? ({info['seconds_left']} s left)\nRequested by: {json.dumps(info.get('requester') or 'the owner')}\n"
+            f"{json.dumps(info['action'], indent=2)}\n"
             f"Type the id again to approve {args.id}: "
         )
         if typed is None:
@@ -105,7 +152,7 @@ def main(argv=None):
         print(json.dumps({"killed": k.killed(), "audit_head": k.audit.anchor()}))
     elif args.cmd == "serve":
         from .nodes import serve
-        if args.bind in ("0.0.0.0", "::", ""):
+        if _all_interfaces(args.bind):
             print("refused: bind to one private address (the Tailscale IP), not all interfaces", file=sys.stderr)
             return 3
         serve(k, args.bind, args.port)
@@ -121,6 +168,9 @@ def main(argv=None):
         telegram.from_files(k, gateway.load(cfg)).run()
     elif args.cmd == "llm-proxy":
         import os
+        if any(_all_interfaces(b) for b in args.bind):        # audit SEC-D10: the same rule as `serve`
+            print("refused: --bind takes one private address (the Tailscale IP), not all interfaces", file=sys.stderr)
+            return 3
         from . import gateway, llm_proxy
         cfg = args.providers or os.path.join(os.path.dirname(__file__), "..", "..", "config", "providers.json")
         llm_proxy.serve(k, gateway.load(cfg), args.port, binds=["127.0.0.1"] + args.bind)
@@ -129,6 +179,8 @@ def main(argv=None):
         from .llm_proxy import AgentTokens
         tok = AgentTokens(k).issue(args.name, args.lane)
         fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        if os.name != "nt":
+            os.fchmod(fd, 0o600)                 # O_CREAT's mode is ignored for a file that already exists: tighten it first
         with os.fdopen(fd, "w") as fh:
             fh.write(tok)
         print("token for", args.name, "written to", args.out)
@@ -157,7 +209,6 @@ def main(argv=None):
     elif args.cmd == "analyze":
         from .nodes import Nodes
         from .analyze import build, unmatched_numbers
-        from .policy import Action
         d = k.authorize(Action("state", "read", args.node or "any-node"))
         if not d.allowed:
             print("refused:", d.reason); return 3
@@ -183,7 +234,14 @@ def main(argv=None):
                     anchor = json.load(open(args.anchor_file))
                 except (OSError, ValueError):
                     print("refused: anchor file unreadable or not JSON", file=sys.stderr); return 2
+            else:                                   # the newest anchor the kernel stored outside state.db (audit SEC-D8)
+                from .audit import ANCHOR_FILE, latest_anchor
+                anchor, _ = latest_anchor(k.dir / ANCHOR_FILE)
             ok, msg = k.audit.verify(anchor)
+            if anchor is None:
+                msg += " (no anchor yet: a cut-off tail cannot be detected)"
+            elif not args.anchor_file:
+                msg += f" (checked against the stored anchor at seq {anchor['seq']})"
             print(msg)
             return 0 if ok else 2
     return 0

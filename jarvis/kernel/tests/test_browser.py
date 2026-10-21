@@ -342,6 +342,127 @@ class ExtensionSession(unittest.TestCase):
         self.assertNotIn("browser_click", fake.calls)
         self.assertFalse(self.X.challenge_required("- heading \"Robots in film\" [ref=e1]\n- button \"Read more\" [ref=e2]"))
 
+    SIGN_IN = ("- Page URL: https://login.example.com/\n- Page Title: Sign in\n- heading \"Sign in\" [ref=e1]\n"
+               "- textbox \"Email\" [ref=e3]\n- textbox \"Password\" [ref=e5]\n- textbox [ref=e6]\n- button \"Sign in\" [ref=e7]")
+
+    def _type(self, snap, target, text="hunter2"):
+        fake = self.Fake(snap=snap)
+        sess = self.X.Session(self.prof, session_factory=lambda argv, env=None: fake)
+        try:
+            return self.X.act(sess, "type", "", target, text, self.prof), fake.calls
+        except self.X.BrowserError as e:
+            return str(e), fake.calls
+
+    def test_a_password_field_is_refused_by_ref_as_well_as_by_name(self):
+        """Audit PC-D3 (2026-10-18): the refusal sat inside `if not REF.match(target)`, so typing by ref 'e5' (a ref from
+        read, as run_browser_action invites) went into the password box. The ref is now resolved in the snapshot and the
+        element itself is judged by role and name."""
+        for target in ("Password", "e5", "e6"):                       # e6: a nameless box on a sign-in page
+            out, calls = self._type(self.SIGN_IN, target)
+            self.assertIsInstance(out, str, target)
+            self.assertIn("sign in yourself", out)
+            self.assertNotIn("browser_type", calls, target)
+        out, calls = self._type(self.SIGN_IN, "e3", "me@example.com")   # the e-mail box is an ordinary field
+        self.assertEqual((out["ok"], out["ref"]), (True, "e3"))
+        self.assertIn("browser_type", calls)
+
+    def test_pin_and_one_time_code_fields_are_refused_on_any_page(self):
+        page = ("- Page URL: https://bank.example/verify\n- Page Title: Confirm\n- textbox \"Enter PIN\" [ref=e2]\n"
+                "- textbox \"One-time password (OTP)\" [ref=e3]\n- textbox \"Verification code\" [ref=e4]\n"
+                "- spinbutton \"CVV\" [ref=e5]\n- searchbox \"Search products\" [ref=e6]\n- textbox \"Pincode\" [ref=e7]")
+        for target in ("e2", "e3", "e4", "e5", "Enter PIN", "Verification code"):
+            out, calls = self._type(page, target, "123456")
+            self.assertIsInstance(out, str, target)
+            self.assertNotIn("browser_type", calls, target)
+        for target in ("e6", "Pincode"):                              # a search box and a postal code are not secrets
+            out, calls = self._type(page, target, "560001")
+            self.assertIsInstance(out, dict, target)
+            self.assertIn("browser_type", calls)
+
+    def test_a_ref_that_is_not_on_the_page_is_refused(self):
+        out, calls = self._type(self.SIGN_IN, "e99")
+        self.assertIn("not on the page", out)
+        self.assertNotIn("browser_type", calls)
+
+    def test_a_captcha_is_refused_by_ref_too(self):
+        snap = ("- Page URL: https://shop.example/checkout\n- heading \"Verify you are human\" [ref=e1]\n"
+                "- checkbox \"I'm not a robot\" [ref=e2]\n- button \"Continue\" [ref=e3]")
+        fake = self.Fake(snap=snap)
+        sess = self.X.Session(self.prof, session_factory=lambda argv, env=None: fake)
+        with self.assertRaises(self.X.BrowserError):
+            self.X.act(sess, "click", "", "e2", "", self.prof)
+        self.assertNotIn("browser_click", fake.calls)
+        self.assertTrue(self.X.act(sess, "click", "", "e3", "", self.prof)["ok"])   # an ordinary button by ref still works
+
+
+class OpenPlainVerification(unittest.TestCase):
+    """Audit PC-D7 (2026-10-18): opening a site without the extension counted ANY Chrome window in front as proof. Now
+    only a Chrome window that changed after the launch counts (new, newly in front, or showing a new tab), and the
+    window title is reported as the only witness of the site. Fake window list and launcher; no Chrome, no Windows."""
+
+    def setUp(self):
+        from types import SimpleNamespace
+        from jarvis_node import browserext, runtime, windows
+        self.X, self.R, self.W = browserext, runtime, windows
+        self.saved = (browserext.CHROME, runtime.popen, runtime.powershell, windows.ON_WINDOWS, windows.list_windows, windows.wait_for)
+        self.screen = []
+        self.on_launch = lambda: None
+        wait = windows.wait_for
+        browserext.CHROME = "chrome.exe"
+        runtime.popen = lambda argv, **kw: self.on_launch()
+        runtime.powershell = lambda *a, **k: SimpleNamespace(stdout="Owner")
+        windows.ON_WINDOWS = True
+        windows.list_windows = lambda *a, **k: [dict(w) for w in self.screen]
+        windows.wait_for = lambda match, timeout=8, **k: wait(match, timeout=0.3, interval=0.05, **k)
+        self.prof = {"dir": "Profile 1", "name": "Owner", "account": "own***@example.com"}
+
+    def tearDown(self):
+        (self.X.CHROME, self.R.popen, self.R.powershell, self.W.ON_WINDOWS, self.W.list_windows, self.W.wait_for) = self.saved
+
+    def chrome(self, hwnd, title, front):
+        return {"hwnd": hwnd, "pid": 7, "process": "chrome", "title": title, "foreground": front, "minimized": False, "w": 900, "h": 700}
+
+    def test_a_chrome_window_already_in_front_and_unchanged_is_not_proof(self):
+        self.screen = [self.chrome(1, "Inbox - Gmail - Google Chrome", True)]       # another profile's window, untouched
+        r = self.X.open_plain(self.prof, "https://www.youtube.com/")
+        self.assertEqual(r["verified"], "unconfirmed")
+        self.assertIn("no Chrome window was seen to change", r["note"])
+
+    def test_a_new_tab_in_the_front_window_counts_and_its_title_is_the_site_witness(self):
+        self.screen = [self.chrome(1, "New Tab - Google Chrome", True)]
+        self.on_launch = lambda: self.screen.__setitem__(0, self.chrome(1, "YouTube - Google Chrome", True))
+        r = self.X.open_plain(self.prof, "https://www.youtube.com/")
+        self.assertEqual((r["verified"], r["site_in_title"], r["profile_name_matches"]), ("window", True, True))
+
+    def test_a_window_brought_to_the_front_counts_but_a_title_without_the_site_is_reported(self):
+        self.screen = [self.chrome(1, "Docs - Google Chrome", False), self.chrome(2, "Notes", False)]
+        self.on_launch = lambda: self.screen.__setitem__(0, self.chrome(1, "Loading - Google Chrome", True))
+        r = self.X.open_plain(self.prof, "https://www.youtube.com/")
+        self.assertEqual((r["verified"], r["site_in_title"]), ("window", False))
+
+    def test_a_tab_still_loading_gets_a_moment_to_show_the_site(self):
+        self.screen = [self.chrome(1, "Docs - Google Chrome", False)]
+
+        def launch():
+            self.screen[0] = self.chrome(1, "New Tab - Google Chrome", True)
+            threading.Timer(0.1, lambda: self.screen.__setitem__(0, self.chrome(1, "YouTube - Google Chrome", True))).start()
+        self.on_launch = launch
+        r = self.X.open_plain(self.prof, "https://www.youtube.com/")
+        self.assertEqual((r["verified"], r["site_in_title"]), ("window", True))
+        self.assertIn("YouTube", r["window"])
+
+    def test_an_unreadable_window_list_proves_nothing(self):
+        def broken(*a, **k):
+            raise OSError("no desktop")
+        self.W.list_windows = broken
+        r = self.X.open_plain(self.prof, "https://www.youtube.com/")
+        self.assertEqual(r["verified"], "unconfirmed")
+
+    def test_site_words(self):
+        self.assertEqual(self.X.site_words("www.youtube.com"), ["youtube"])
+        self.assertEqual(self.X.site_words("mail.google.com"), ["mail", "google"])
+        self.assertEqual(self.X.site_words("localhost"), ["localhost"])
+
 
 class ProxyUnit(unittest.TestCase):
     @classmethod

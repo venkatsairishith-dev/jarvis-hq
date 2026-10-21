@@ -7,6 +7,7 @@ styles, navigation, forms and inline-hidden text are dropped. Results are cached
 from __future__ import annotations
 
 import hashlib
+import http.client
 import ipaddress
 import json
 import os
@@ -31,24 +32,37 @@ class FetchError(Exception):
     pass
 
 
+def _public_ip(addr: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(addr.split("%")[0])
+    except ValueError:
+        return False
+    mapped = getattr(ip, "ipv4_mapped", None)           # ::ffff:127.0.0.1 is 127.0.0.1
+    if mapped is not None:
+        ip = mapped
+    return ip.is_global and not ip.is_multicast
+
+
 def public_host(host: str) -> bool:
     try:
         infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
+    except (socket.gaierror, UnicodeError, ValueError):
         return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0].split("%")[0])
-        if not ip.is_global or ip.is_multicast:
-            return False
-    return bool(infos)
+    return bool(infos) and all(_public_ip(info[4][0]) for info in infos)
 
 
 def check_url(url: str) -> str:
     p = urllib.parse.urlsplit(url)
     if p.scheme not in ("http", "https") or not p.hostname:
         raise FetchError("only http(s) links are fetched")
-    if p.port not in (None, 80, 443):
+    try:
+        port = p.port
+    except ValueError:
+        raise FetchError("unusual port refused") from None
+    if port not in (None, 80, 443):
         raise FetchError("unusual port refused")
+    if p.username is not None or p.password is not None:
+        raise FetchError("links with a user name or password are not fetched")
     if not public_host(p.hostname):
         raise FetchError("address is not public")
     return url
@@ -59,17 +73,58 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-_OPENER = urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler({}))
+def _pinned_socket(host: str, port: int, timeout) -> socket.socket:
+    """Connect to an address that was checked in THIS resolution: check_url resolves the name once and urllib resolves it again at
+    connect time, so a name that answers with a public address first and 169.254.169.254 / 127.0.0.1 second (DNS rebinding) passed the
+    check and then connected inside. Every address of this answer must be public, and the socket is opened to one of them."""
+    infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    if not infos or not all(_public_ip(i[4][0]) for i in infos):
+        raise FetchError("address is not public")
+    last: OSError | None = None
+    for family, kind, proto, _name, addr in infos:
+        sock = socket.socket(family, kind, proto)
+        try:
+            sock.settimeout(timeout)
+            sock.connect(addr)
+            return sock
+        except OSError as exc:
+            sock.close()
+            last = exc
+    raise last or OSError("no address")
 
 
-def _get(url: str) -> tuple[str, bytes, str]:
+class _PinnedHTTP(http.client.HTTPConnection):
+    def connect(self):
+        self.sock = _pinned_socket(self.host, self.port, self.timeout)
+
+
+class _PinnedHTTPS(http.client.HTTPSConnection):
+    def connect(self):
+        sock = _pinned_socket(self.host, self.port, self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _HTTP(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_PinnedHTTP, req)
+
+
+class _HTTPS(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_PinnedHTTPS, req, context=self._context)
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler({}), _HTTP, _HTTPS)
+
+
+def _get(url: str, accept_json: bool = False) -> tuple[str, bytes, str]:
     # TIMEOUT is the whole fetch (redirects and body), not only each socket wait: a server that drips the page out
     # slowly would otherwise hold a research run for as long as it likes.
     deadline = time.monotonic() + TIMEOUT
     for _ in range(MAX_REDIRECTS + 1):
         check_url(url)
-        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
-                                                   "Accept-Language": "en;q=0.9"})
+        accept = "application/json" if accept_json else "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5"
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept, "Accept-Language": "en;q=0.9"})
         left = deadline - time.monotonic()
         if left <= 0:
             raise FetchError("page took too long")
@@ -84,7 +139,7 @@ def _get(url: str) -> tuple[str, bytes, str]:
             raise FetchError(type(e).__name__) from None
         with r:
             ctype = r.headers.get("Content-Type", "")
-            if "html" not in ctype and "text/plain" not in ctype:
+            if "html" not in ctype and "text/plain" not in ctype and not (accept_json and "json" in ctype):
                 raise FetchError(f"not a web page ({ctype.split(';')[0] or 'unknown type'})")
             body = b""
             try:

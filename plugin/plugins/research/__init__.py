@@ -13,19 +13,85 @@ import json
 import urllib.request
 
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr
+from plugin.plugins._shared import loopback_http  # noqa: E402
 
 from . import core, fetch, verify
 from . import search as searchmod
 from .core import ResearchError
 
 LOCAL = "http://127.0.0.1:8080/v1/chat/completions"
-GATEWAY_REDACT = "http://127.0.0.1:48950/redact"
+GATEWAY_BASE = "http://127.0.0.1:48950"
+GATEWAY_REDACT = GATEWAY_BASE + "/redact"
+GATEWAY_HEALTH = GATEWAY_BASE + "/health"
+
+
+NO_GATEWAY = ("The privacy gateway (127.0.0.1:48950) is not answering, so nothing was searched: the question may contain private "
+              "details and nothing may leave this PC unchecked. Start the gateway (neko-start.ps1) and ask again.")
+NOT_READY = ("The privacy gateway is running but cannot hide names and places and check for secrets right now ({why}), so nothing "
+             "was searched: the question may name people or places. Restore the gateway's PII model (see its /health) and ask again.")
+
+
+def _gateway_state() -> tuple[bool, str]:
+    """(ready, why not). The gateway must answer /health with ready=true AND its PII model loaded; an HTTP 200 from anything
+    on that port is not enough (audit M5, 2026-10-18). Never raises, never echoes a payload."""
+    try:
+        with loopback_http.urlopen(GATEWAY_HEALTH, timeout=3) as r:
+            if r.status != 200:
+                return False, f"HTTP {r.status}"
+            health = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception as e:  # noqa: BLE001
+        return False, type(e).__name__
+    if not isinstance(health, dict) or health.get("ok") is not True:
+        return False, "not the privacy gateway"
+    if health.get("ready") is not True:
+        return False, "degraded: " + ", ".join(str(x)[:40] for x in (health.get("degraded") or ["not ready"])[:3])
+    if health.get("pii_model") is not True:
+        return False, "the PII model is not loaded"
+    return True, ""
+
+
+def _gateway_up() -> bool:
+    return _gateway_state()[0]
 
 
 def _redact(text: str) -> str:
-    req = urllib.request.Request(GATEWAY_REDACT, data=json.dumps({"text": text}).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read().decode())["text"]
+    """The question with private details AND names and places replaced, from the privacy gateway. Any failure refuses the run
+    (fail closed): a question the gateway could not check is never searched as typed. The gateway's answer must itself say
+    that names redaction and the PII model were active for this call; an older or weaker gateway is refused."""
+    req = urllib.request.Request(GATEWAY_REDACT, data=json.dumps({"text": text, "names": True}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with loopback_http.urlopen(req, timeout=60) as r:
+            answer = json.loads(r.read().decode())
+        out = answer["text"]
+    except Exception as e:  # noqa: BLE001 - say that it was refused, never the question
+        raise ResearchError(f"The privacy gateway could not check the question ({type(e).__name__}), so nothing was searched.") from None
+    if not isinstance(out, str) or not isinstance(answer, dict):
+        raise ResearchError("The privacy gateway gave an unusable answer, so nothing was searched.")
+    if answer.get("names") is not True or answer.get("deep") is not True or answer.get("ready") is False:
+        raise ResearchError(NOT_READY.format(why="names or the PII model were not active for this check"))
+    return out
+
+
+def _redactor(allow_unredacted: bool = False):
+    """(redact function or None, note or None) for one run. MEM-M11: when the privacy gateway does not answer, the question is
+    NOT searched (ResearchError) - it used to be searched as typed with only a note. `allow_unredacted=True` is the explicit
+    offline/test path (no gateway on the machine); the research_topic entry never sets it and takes no such argument, so a
+    caller of the tool cannot switch the check off. A gateway that answers but is degraded (no PII model) is refused too."""
+    try:
+        up = bool(_gateway_up())
+    except Exception:  # noqa: BLE001
+        up = False
+    if up:
+        return _redact, None
+    if allow_unredacted:
+        return None, "privacy gateway down: the question was searched as typed (explicitly allowed: offline test path)"
+    try:
+        why = _gateway_state()[1]                 # only to word the refusal: not answering, or answering but degraded
+    except Exception:  # noqa: BLE001
+        why = "error"
+    unreachable = why in ("error", "URLError", "ConnectionRefusedError", "TimeoutError", "OSError", "timeout") or why.startswith("HTTP")
+    raise ResearchError(NO_GATEWAY if unreachable else NOT_READY.format(why=why or "not ready"))
 
 
 def _local_llm(system: str, user: str, *, json_schema: dict | None = None, max_tokens: int = 600, think: bool = False) -> str:
@@ -112,12 +178,9 @@ class ResearchPlugin(NekoPluginBase):
 
         def work() -> dict:
             notes: list[str] = []
-            try:
-                redact = _redact if _gateway_up() else None
-            except Exception:  # noqa: BLE001
-                redact = None
-            if redact is None:
-                notes.append("privacy gateway down: the question was searched as typed")
+            redact, why = _redactor()                 # raises ResearchError (nothing searched) when the gateway is down
+            if why:
+                notes.append(why)
             out = core.run(question, depth=depth, search=search, fetch=fetch.fetch, plan_llm=_plan, write_llm=_writer(notes),
                            verifier=verify.supported if verify.available() else None, redact=redact,
                            fallback_llm=lambda s, u: _local_llm(s, u, max_tokens=2500))
@@ -155,11 +218,3 @@ def _save_record(folder: str | None, question: str, data: dict) -> str:
     p = d / ("research.json" if folder else f"{time.strftime('%Y%m%d-%H%M%S')}-{slug(question)}.json")
     p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     return str(p)
-
-
-def _gateway_up() -> bool:
-    try:
-        with urllib.request.urlopen("http://127.0.0.1:48950/health", timeout=3) as r:
-            return r.status == 200
-    except Exception:  # noqa: BLE001
-        return False

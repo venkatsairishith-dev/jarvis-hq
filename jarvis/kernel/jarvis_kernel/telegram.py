@@ -57,7 +57,8 @@ OFF_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", 
 
 def disabled() -> bool:
     """The owner switched Telegram off (2026-10-10: "no need of Telegram for now"): config/telegram.off exists, or
-    JARVIS_TELEGRAM=off. Then the bridge does not run and alerts and reports stay on the server (audit + alerts.log).
+    JARVIS_TELEGRAM=off. Then the bridge does not run and alerts and reports stay on the server (audit + alerts.log in the kernel data folder,
+    ~/.jarvis-kernel; the older ~/jarvis/alerts.log was not writable under Monit's sandbox).
     Delete the file to switch Telegram back on."""
     return os.environ.get("JARVIS_TELEGRAM", "").lower() == "off" or os.path.exists(OFF_FILE)
 
@@ -131,7 +132,8 @@ class Bridge:
 
     # ---------- output ----------
     def say(self, text: str):
-        clean = scrub(text, deep=True)[0]
+        from .visible import neutralize
+        clean = neutralize(scrub(text, deep=True)[0])           # plain text only: no hidden, bidi or ESC characters reach the chat
         for i in range(0, len(clean) or 1, CHUNK):
             self.api.send(self.owner, clean[i:i + CHUNK])
 
@@ -383,6 +385,10 @@ class Bridge:
             T.update(None, t["id"], state=target, note=f"{op} by the owner (Telegram)")
         except TaskError as e:
             return self.say(f"Refused: {e}")
+        if op == "cancel":                              # the same effects as the console's cancel: approvals withdrawn, jobs stopped
+            from .jobs import Jobs
+            from .owner import cancel_task_effects
+            cancel_task_effects(self.k, Jobs(self.k), T, t["id"])
         self.k.audit.append("tg_task_control", {"id": t["id"], "op": op})
         self.say(f"Task {t['id']}: {target}." + (" The lab stops the worker within about 20 s." if op == "cancel" else
                                                   " The lab freezes the worker within about 20 s." if op == "pause" else ""))
@@ -499,14 +505,18 @@ class Bridge:
         if self._locked():
             return self.say("Too many wrong ids. Approvals from Telegram are locked for 10 minutes.")
         info = self.k.approval_info(aid) if aid else None
-        if not info or info["state"] != "pending":
+        if not info or info["state"] != "pending" or info["seconds_left"] <= 0 or info["action"].get("purged"):
             self._bad_id(aid)
             return self.say("No such pending approval.")
         if info["level"] != "YELLOW_APPROVAL":
             return self.say(f"{info['level']} actions are approved at the kernel console, not here.")
-        self.confirm[aid] = self.clock()
         a = info["action"]
-        self.say(f"Approve this {info['level']} action?\n{json.dumps(a, indent=1)[:1500]}\nTo confirm within {CONFIRM_WINDOW} s send exactly: CONFIRM {aid}")
+        shown = json.dumps(a, indent=1)
+        if len(shown) > 1500 or info.get("incomplete") or info.get("blocked"):        # review M6: never approve what the message cannot show in full
+            return self.say("That action is too long to show in full in a chat message, so it cannot be approved here. "
+                            "Read and approve it in the JARVIS console.")
+        self.confirm[aid] = self.clock()
+        self.say(f"Approve this {info['level']} action?\n{shown}\nTo confirm within {CONFIRM_WINDOW} s send exactly: CONFIRM {aid}")
 
     def approve_confirm(self, aid: str):
         if self.k.killed():

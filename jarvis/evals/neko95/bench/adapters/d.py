@@ -1091,10 +1091,22 @@ def _proxy():
         k.db.close()
 
 
+def _owner_approved_dispatch(P, tid, params):
+    """Since 2026-10-18 (audit SEC-D5) a private agent's dispatch to the public-lane lab waits for the OWNER's approval of
+    exactly the shared text. The cases below test the lab lifecycle after a dispatch, so they take the owner's step first,
+    as the console would (Kernel.approve is the human step); what each case checks is unchanged."""
+    code, r = P.act("dispatch", tid, params)
+    if code == 202 and r.get("status") == "needs_approval":
+        assert P.k.approve(r["approval_id"])
+        code, r = P.post("/v1/jarvis/actions", {"tool": "task", "op": "dispatch", "target": tid, "params": {"public_ok": True},
+                                                "approval_id": r["approval_id"]}, P.owner)
+    return code, r
+
+
 def _lab_task(P, attempts=2, start=True):
     tid = P.act("create", "t", {"goal": "A small tool", "criteria": ["tests pass"], "max_attempts": attempts,
                                 "request": f"build me a small tool {time.time()}"})[1]["task"]
-    code, r = P.act("dispatch", tid, {"instructions": "build it and test it", "public_ok": True})
+    code, r = _owner_approved_dispatch(P, tid, {"instructions": "build it and test it", "public_ok": True})
     job = None
     if start:
         job = P.run("next", {})[1]["job"]["id"]

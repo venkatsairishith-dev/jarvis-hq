@@ -16,9 +16,19 @@ import tempfile
 
 BLOCK = [
     ("private_key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    # OpenPGP armour ends its header with "BLOCK" ("... PRIVATE KEY BLOCK-----"), so the rule above never matched it and a
+    # PGP secret key was at best redacted line by line (audit SEC-D7, 2026-10-18). It blocks the send, like any private key.
+    ("pgp_private_key", re.compile(r"-----BEGIN PGP PRIVATE KEY BLOCK-----")),
 ]
 REDACT = [
     ("github_token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")),
+    # Provider keys the gitleaks pass misses or that must be caught when gitleaks is absent (audit SEC-D7): Groq (the
+    # private lane's main provider and the privacy gateway's fallback), Hugging Face, Google API, Slack, Stripe live keys.
+    ("groq_key", re.compile(r"\bgsk_[A-Za-z0-9]{40,}\b")),
+    ("huggingface_token", re.compile(r"\bhf_[A-Za-z0-9]{30,}\b")),
+    ("google_api_key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])")),
+    ("slack_token", re.compile(r"\bxox[abpr]-[A-Za-z0-9-]{10,}")),
+    ("stripe_live_key", re.compile(r"\b(?:sk|rk)_live_[A-Za-z0-9]{16,}\b")),
     ("openai_style_key", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
     ("aws_key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("oci_ocid", re.compile(r"\bocid1\.[a-z0-9]+\.oc\d\.[a-z0-9-]*\.[a-z0-9]{20,}\b")),
@@ -45,6 +55,9 @@ def _gitleaks_secrets(text: str):
     exe = gitleaks_path()
     if not exe or not text.strip():
         return None
+    from . import gitleaks_gate
+    if not gitleaks_gate.must_scan(text, exe):       # a text gitleaks provably finds nothing in: no 0.5 s process (see gitleaks_gate)
+        return []
     try:
         with tempfile.TemporaryDirectory() as d:
             rep = os.path.join(d, "r.json")

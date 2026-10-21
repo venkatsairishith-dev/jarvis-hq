@@ -34,9 +34,11 @@ NEGATIVE = [("en", "Hey Nico, how are you?"), ("en", "Hello there, nice to meet 
 def synth(lang: str, text: str, path: Path) -> bytes:
     if not path.exists():
         import urllib.request
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+        import loopback_net      # no proxy, loopback only, no redirect (completion H)
         req = urllib.request.Request(f"{wl.SPEECH}/v1/audio/speech", data=json.dumps(
             {"model": "local", "input": text, "voice": lang, "response_format": "wav"}).encode(), headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=120) as r:
+        with loopback_net.urlopen(req, timeout=120) as r:
             path.write_bytes(r.read())
     return wl.read_wav_16k(str(path))
 

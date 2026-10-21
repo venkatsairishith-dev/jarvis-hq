@@ -152,7 +152,7 @@ class ConnectorService(Connectors):
             return refuse(f"this connector's limit of {c['max_calls_per_hour']} calls per hour is reached", 429)
         params = self._params(c, "call", tool, args, t["risk"], t["digest"])
         try:
-            action = action_for("connector_op", params, lane, untrusted=True)
+            action = action_for("connector_op", params, lane, untrusted=True, requester=agent)   # an approval is for this agent's call only (SEC-D3)
             aid = str(approval_id or "") or None
             if not aid:
                 d, aid = self.k.request(action)

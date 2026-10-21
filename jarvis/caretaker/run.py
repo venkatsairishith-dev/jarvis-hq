@@ -73,6 +73,16 @@ def _append(path: Path, rows):
             f.write(json.dumps(r, sort_keys=True, default=str) + "\n")
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None                        # a redirect would carry the bearer token to another address: never follow
+
+
+# The kernel endpoint is loopback by default but can be a Tailscale address, so the host is not restricted here; what matters is that the
+# bearer token never goes to an environment proxy (http_proxy/ALL_PROXY) and is never re-sent after a redirect (completion H, 2026-10-19).
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+
+
 class Kernel:
     """The kernel's agent action endpoint, with the caretaker's own token (public lane)."""
 
@@ -85,7 +95,7 @@ class Kernel:
             h["Idempotency-Key"] = key
         r = urllib.request.Request(self.endpoint + "/v1/jarvis/actions", data=json.dumps(body).encode(), method="POST", headers=h)
         try:
-            with urllib.request.urlopen(r, timeout=self.timeout) as resp:
+            with _OPENER.open(r, timeout=self.timeout) as resp:
                 return resp.status, json.loads(resp.read() or b"{}")
         except urllib.error.HTTPError as e:
             try:

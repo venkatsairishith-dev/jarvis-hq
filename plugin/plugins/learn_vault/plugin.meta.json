@@ -1,7 +1,7 @@
 {
   "build_env": {
-    "arch": "AMD64",
-    "os": "win32",
+    "arch": "x86_64",
+    "os": "linux",
     "python": "3.11"
   },
   "entries": [
@@ -1154,11 +1154,9 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 27753,
+  "source_bytes": 28297,
   "source_files": [
     ".gitignore",
-    ".vscode/settings.json",
-    ".vscode/tasks.json",
     "README.md",
     "__init__.py",
     "config.example.toml",
@@ -1170,5 +1168,5 @@
     "tests/test_core.py",
     "tests/test_smoke.py"
   ],
-  "source_sha256": "4771f3e663c4f6c3abf034c226bea6a1048646dc85f7588fd2daeed20fa6f556"
+  "source_sha256": "7ee8d688bfa9681b7fc34db5b4c9146ab895be7e386fad472a29db5816578c88"
 }

@@ -27,6 +27,7 @@ from datetime import datetime
 
 
 
+from memory.evidence import _int_counter
 from memory.facts import safe_int_field
 
 
@@ -129,7 +130,7 @@ class RefinementMixin:
                     # 衰减信号）；天数 / 时间戳 / 溯源直接继承 src。
                     src_rein = float(src.get('reinforcement', 0) or 0)
                     src_disp = float(src.get('disputation', 0) or 0)
-                    src_user_cnt = int(src.get('user_fact_reinforce_count', 0) or 0)
+                    src_user_cnt = _int_counter(src.get('user_fact_reinforce_count', 0))
                     new_entries = []
                     for p in valid_produce:
                         text = str(p.get('text', '')).strip()
@@ -142,7 +143,7 @@ class RefinementMixin:
                         ne['user_fact_reinforce_count'] = src_user_cnt // split_n
                         ne['rein_last_signal_at'] = src.get('rein_last_signal_at')
                         ne['disp_last_signal_at'] = src.get('disp_last_signal_at')
-                        ne['sub_zero_days'] = int(src.get('sub_zero_days', 0) or 0)
+                        ne['sub_zero_days'] = _int_counter(src.get('sub_zero_days', 0))
                         ne['sub_zero_last_increment_date'] = src.get('sub_zero_last_increment_date')
                         new_entries.append(ne)
                     produced.extend(new_entries)
@@ -198,11 +199,11 @@ class RefinementMixin:
                         max_disp = max(max_disp, float(src.get('disputation', 0) or 0))
                         max_user_count = max(
                             max_user_count,
-                            int(src.get('user_fact_reinforce_count', 0) or 0),
+                            _int_counter(src.get('user_fact_reinforce_count', 0)),
                         )
                         max_sub_zero_days = max(
                             max_sub_zero_days,
-                            int(src.get('sub_zero_days', 0) or 0),
+                            _int_counter(src.get('sub_zero_days', 0)),
                         )
                         # ISO timestamp 字符串比较即时间序；取最新
                         for key, current in (

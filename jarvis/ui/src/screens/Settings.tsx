@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, owner } from "../lib/api";
 import { store, useStore } from "../lib/store";
 import { voice } from "../lib/voice";
@@ -27,6 +27,11 @@ function VoiceCheck() {
   const list = phrases[lang] ?? [];
   const done = new Set(rows.filter((r) => r.lang === lang).map((r) => r.expected));
 
+  // The 60 s auto-stop fires long after record() ran, so it must see the language and phrase of that moment, not of the render that
+  // began the recording; and it must do nothing once this screen has been left.
+  const talkRef = useRef({ lang, score: (_t: string | null) => Promise.resolve() });
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const record = async () => {
     setErr(null); setPending(null);
     if (!device) {
@@ -35,10 +40,10 @@ function VoiceCheck() {
         setDevice(ds[0]?.label || "default microphone");
       } catch { /* the label is optional */ }
     }
-    await voice.start();
+    await voice.start({ lang: () => talkRef.current.lang, onAutoStop: (t) => { if (mounted.current) void talkRef.current.score(t); } });
   };
-  const stop = async () => {
-    const heard = await voice.finish(lang);
+  // One place decides what a finished recording does, for the manual stop and for the 60 s auto-stop alike (VOI-D6).
+  const scoreHeard = async (heard: string | null) => {
     if (heard === null) return;
     const t = voice.snapshot().lastTranscript;
     const expected = list[idx] ?? "";
@@ -47,6 +52,8 @@ function VoiceCheck() {
       setPending({ lang, expected, heard, wer: sc.wer, cer: sc.cer, exact: sc.exact, ms: t?.ms ?? null, speech: t?.speech ?? true, model: t?.model ?? "" });
     } catch (e) { setErr((e as Error).message); }
   };
+  const stop = async () => scoreHeard(await voice.finish(lang));
+  talkRef.current = { lang, score: scoreHeard };
   const accept = () => { if (pending) { setRows((r) => [...r, pending]); setPending(null); setIdx((i) => Math.min(i + 1, Math.max(0, list.length - 1))); } };
   const save = async () => {
     try { const r = await api.post<{ saved: string; summary: CheckSummary }>("/api/voice/check/save", { rows, device }); setSaved(r.summary); setRows([]); store.toast("ok", `Saved ${r.saved} on this computer.`); }

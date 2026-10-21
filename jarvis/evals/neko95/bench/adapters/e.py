@@ -365,11 +365,26 @@ class _Console:
 
 
 def _serve(console):
+    # Like the real console (audit SEC-D9, 2026-10-18): its page carries a per-launch secret and a POST without it is
+    # refused, so the desktop client must read the page first. The fake console behaves the same way.
+    secret = "bench-secret-" + str(time.time_ns())
+
     class H(BaseHTTPRequestHandler):
         def _go(self, method):
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n) or b"{}") if n else {}
-            code, out = console.handle(method, self.path, body)
+            if method == "GET" and self.path == "/":
+                page = f'<html><meta name="jarvis-console-secret" content="{secret}"></html>'.encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
+                return
+            if method == "POST" and self.headers.get("X-Jarvis-Console") != secret:
+                code, out = 403, {"error": "refused: missing or stale console secret", "reload": True}
+            else:
+                code, out = console.handle(method, self.path, body)
             data = json.dumps(out).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")

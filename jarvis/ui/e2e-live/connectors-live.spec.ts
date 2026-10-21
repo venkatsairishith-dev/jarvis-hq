@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { consoleHeaders } from "../e2e/console-secret";
 import fs from "node:fs";
 
 // Live: the connector manager against the REAL console, the REAL kernel on the server and the REAL laptop node, with two real
@@ -7,11 +8,11 @@ import fs from "node:fs";
 // throwaway public-lane test agent's token file (as the approval spec does), which is never printed.
 const KERNEL = "http://100.125.91.51:8790";
 const TOKEN_FILE = "D:\\jarvis-secrets\\kernel\\approval-test-agent.token";
-const O = (page: Page, p: string, body?: unknown) =>
+const O = async (page: Page, p: string, body?: unknown) =>
   body === undefined ? page.request.get(`/api/owner/${p}`).then((r) => r.json())
-    : page.request.fetch(`/api/owner/${p}`, { method: "POST", data: body, headers: { "X-Jarvis-Console": "1", Origin: "http://127.0.0.1:8799" }, failOnStatusCode: false }).then(async (r) => ({ ...(await r.json()), http: r.status() }));
-const C = (page: Page, p: string, body?: unknown) =>
-  page.request.fetch(`/api/connectors/${p}`, { method: body === undefined ? "GET" : "POST", data: body, headers: { "X-Jarvis-Console": "1", Origin: "http://127.0.0.1:8799" }, failOnStatusCode: false })
+    : page.request.fetch(`/api/owner/${p}`, { method: "POST", data: body, headers: await consoleHeaders(page, { Origin: "http://127.0.0.1:8799" }), failOnStatusCode: false }).then(async (r) => ({ ...(await r.json()), http: r.status() }));
+const C = async (page: Page, p: string, body?: unknown) =>
+  page.request.fetch(`/api/connectors/${p}`, { method: body === undefined ? "GET" : "POST", data: body, headers: await consoleHeaders(page, { Origin: "http://127.0.0.1:8799" }), failOnStatusCode: false })
     .then(async (r) => ({ ...(await r.json()), http: r.status() }));
 async function agent(page: Page, target: string, args: Record<string, unknown>) {
   const r = await page.request.fetch(`${KERNEL}/v1/jarvis/actions`, {

@@ -57,8 +57,10 @@ if __name__ == "__main__":
 '''
 
 
-@unittest.skipUnless(R is not None and hasattr(os, "geteuid") and os.geteuid() == 0, "lab box only, as root")
+@unittest.skipUnless(R is not None and R.PW is not None and hasattr(os, "geteuid") and os.geteuid() == 0, "lab box only, as root")
 class RepairLoop(unittest.TestCase):
+    CRITERIA = ["slugify lowercases and joins words with hyphens", "tests pass", "files are delivered to the owner"]
+
     def setUp(self):
         from jarvis_kernel.jobs import Jobs
         from jarvis_kernel.llm_proxy import make_handler
@@ -86,9 +88,17 @@ class RepairLoop(unittest.TestCase):
         # point the real runner at the disposable kernel and a private work folder
         self.saved = (R.api, R.run_agent, R.WORK, R.POLL_S)
         R.api, R.run_agent, R.WORK, R.POLL_S = self._api, self._run_agent, self.work, 0.2
+        # Lab isolation (2026-10-19): with the sandbox and verify users present the run is really separated; the OWNER's statement that the
+        # verifier's tools are sandboxed is made here (this scripted verifier is test code), so the kernel may verify. Without those users the
+        # run is not separated and the kernel keeps it as 'completed, NOT verified' (isolation none): the assertions below follow.
+        import lab_isolation as ISO
+        self.ISO, self.iso_saved = ISO, (ISO.REQUEST, ISO.VERIFIER_TOOLS)
+        self.isolated = ISO._getpw(ISO.SANDBOX_USER) is not None and ISO._getpw(ISO.VERIFY_USER) is not None
+        ISO.REQUEST, ISO.VERIFIER_TOOLS = ("identity" if self.isolated else "none"), "sandboxed"
 
     def tearDown(self):
         R.api, R.run_agent, R.WORK, R.POLL_S = self.saved
+        self.ISO.REQUEST, self.ISO.VERIFIER_TOOLS = self.iso_saved
         self.stop.set()
         self.srv.shutdown()
         self.k.db.close()
@@ -134,7 +144,7 @@ class RepairLoop(unittest.TestCase):
             fh.write(text)
         self._own(os.path.dirname(p)); self._own(p)
 
-    def _run_agent(self, job, kind, prompt, folder, timeout, log_name):
+    def _run_agent(self, job, kind, prompt, folder, timeout, log_name, capture=None, on_exit=None, user=None, cwd=None):
         self.prompts.append(prompt)
         if prompt.startswith("You are an independent verifier"):
             self.calls.append(("verify", None))
@@ -144,9 +154,17 @@ class RepairLoop(unittest.TestCase):
             r = subprocess.run([sys.executable, "-m", "unittest"], cwd=d, capture_output=True, text=True)    # a real check, as the verifier would
             tail = (r.stderr or r.stdout).strip().splitlines()[-4:]
             verdict = {"passed": r.returncode == 0, "failure_class": None if r.returncode == 0 else "tests",
-                       "criteria": [{"criterion": "the delivered tests pass", "met": r.returncode == 0, "evidence": " | ".join(tail)[:300]}],
+                       # one row per acceptance criterion of the job (the kernel counts them; audit M8)
+                       "criteria": [{"criterion": c, "met": r.returncode == 0, "evidence": " | ".join(tail)[:300]} for c in self.CRITERIA],
                        "problems": [] if r.returncode == 0 else ["the delivered tests fail: " + " | ".join(tail)[:280]]}
-            self._write(folder, "VERIFY.json", json.dumps(verdict))
+            # audit M8: the runner names a fresh, random verdict file and a nonce; the verdict counts only if it carries them
+            m = re.search(r'Then write (\S+) exactly like \{"nonce": "([0-9a-f]+)", "task": "([^"]+)", "job": "([^"]+)", "attempt": (\d+)', prompt)
+            verdict.update(nonce=m.group(2), task=m.group(3), job=m.group(4), attempt=int(m.group(5)))
+            # the slot file is made by the runner for the agent user and must be written IN PLACE, once, without changing its owner or mode
+            # (the runner's write audit voids any other change; audit M8, second pass)
+            with open(m.group(1), "w") as fh:
+                fh.write(json.dumps(verdict))
+            capture.feed(R.VERDICT_MARK + " " + json.dumps(verdict) + "\n")     # re-review H2: the final answer is the authority
             return 0, 0.1, ""
         attempt = 1 + sum(1 for c in self.calls if c[0] == "work")
         self.calls.append(("work", attempt))
@@ -167,6 +185,11 @@ class RepairLoop(unittest.TestCase):
         code, r = self._agent({"tool": "task", "op": "dispatch", "target": tid, "params": {
             "instructions": "Write slugify.py and test_slugify.py, run the tests, and deliver the files.", "agent": "hermes", "public_ok": True,
             "criteria": ["slugify lowercases and joins words with hyphens", "tests pass", "files are delivered to the owner"]}})
+        # from the private lane the owner approves exactly what is shared with the public lab first (audit SEC-D5, 2026-10-18)
+        self.assertEqual((code, r.get("status")), (202, "needs_approval"), r)
+        self.assertTrue(self.k.approve(r["approval_id"]))
+        code, r = self._agent({"tool": "task", "op": "dispatch", "target": tid, "params": {"public_ok": True},
+                               "approval_id": r["approval_id"]})
         self.assertEqual(code, 200, r)
         return tid, r["job"]
 
@@ -183,7 +206,12 @@ class RepairLoop(unittest.TestCase):
         t = self._run(jid, tid)
         self.assertEqual(t["state"], "completed", t["result"])
         self.assertEqual(t["attempts"], 2)                                            # one repair, not more
-        self.assertTrue(t["verification"]["passed"])
+        if self.isolated:
+            self.assertTrue(t["verification"]["passed"])
+            self.assertEqual(t["verification"]["isolation"]["mode"], "full")
+        else:
+            self.assertNotIn("passed", t["verification"])
+            self.assertEqual((t["verification"]["agent_assessed_pass"], t["verification"]["isolation"]["mode"]), (True, "none"))
         hist = t["verification"]["history"]
         self.assertEqual([h["passed"] for h in hist], [False, True])                  # the first check really failed
         states = [e["state"] for e in reversed(t["events"])]
@@ -204,6 +232,8 @@ class RepairLoop(unittest.TestCase):
         for n in os.listdir(delivered):
             shutil.copy(os.path.join(delivered, n), d)
         self.assertEqual(subprocess.run([sys.executable, "-m", "unittest"], cwd=d, capture_output=True).returncode, 0)
+        if not self.isolated:
+            return                                                                    # a 'NOT verified' pass teaches nothing (below needs a verified one)
         # a lesson is proposed from what the task recorded, and passes the gate
         made = self.plane.capture_lessons()
         self.assertEqual(len(made), 1)
@@ -217,6 +247,8 @@ class RepairLoop(unittest.TestCase):
         tid, jid = self._task(3)
         t = self._run(jid, tid)
         self.assertEqual(t["state"], "completed")
+        if not self.isolated:
+            self.skipTest("a lesson needs a verified repair, which needs the sandbox and verify users")
         made = self.plane.capture_lessons()                                          # a candidate exists from the verified repair
         self.assertEqual(len(made), 1)
         self.plane.tasks._event(tid, "completed", "correction", "Owner-side check: criterion 3 NOT met after all")   # the owner's check disproves it

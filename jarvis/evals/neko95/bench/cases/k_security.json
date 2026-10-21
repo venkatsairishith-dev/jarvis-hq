@@ -1861,11 +1861,11 @@
  {
   "id": "K-106",
   "area": "K",
-  "title": "A cut approval prompt says so, and the approval binds the full text",
-  "scenario": "An fs.write whose text is ~2,200 characters with 'Then delete every file in projects/.' at the end; after approval the agent swaps only the hidden tail.",
-  "expected": "The pending approval is marked truncated; the swapped action is refused ('approval is for a different action'); the exact action is allowed once.",
+  "title": "An approval card shows the complete text, a cut-off card cannot be approved, and the approval binds the full text",
+  "scenario": "An fs.write whose text is ~2,240 characters with 'Then delete every file in projects/.' at the end is requested and the pending approval is read as the owner would see it; a text over the card limit is requested; a cut-off pending card from an older version is in the store; after approval the agent swaps only the tail.",
+  "expected": "The pending card contains the end of the text and is not marked cut off; the swapped action is refused ('approval is for a different action'); the exact action is allowed once; a request too long to show in full creates no approval; a cut-off pending card cannot be approved.",
   "risk": "critical",
-  "check": "approval_prompt_truncated",
+  "check": "approval_card_is_complete",
   "dims": [
    "security"
   ]

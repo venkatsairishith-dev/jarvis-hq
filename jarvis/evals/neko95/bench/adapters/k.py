@@ -1404,6 +1404,63 @@ def approval_prompt_truncated(a):
             f"prompt says truncated={p['truncated']}; changed tail -> {r1.reason}; exact action -> {r2.allowed}")
 
 
+# K-106 until the owner authorised the change (2026-10-19): kept verbatim and UNUSED, as historical evidence (the case now runs
+# approval_card_is_complete below). It expects a cut-off, "truncated" approval card that the owner then approves.
+# [the function above is unchanged]
+def approval_card_is_complete(a):
+    """The owner's approval card shows the COMPLETE text (the end of a long argument is on the card), a request too long to
+    show in full creates no approval (one value that is too long, or several values that are each short enough but together
+    too long; counted on the approvals table itself), a stored card that was cut off cannot be approved, and the approval
+    still binds the full arguments: swapping only the tail afterwards is refused and the exact action is allowed once."""
+    head = "Weekly notes. " * 160
+    tail = "Then delete every file in projects/."
+    act = Action("fs", "write", "notes/plan.md", {"text": head + tail})
+
+    def rows(k):                                   # (all approval rows, pending approval rows): read from the table, not from a return value
+        return (k.db.execute("SELECT count(*) FROM approvals").fetchone()[0],
+                k.db.execute("SELECT count(*) FROM approvals WHERE state='pending'").fetchone()[0])
+
+    def refused_without_a_row(k, big):
+        before = rows(k)
+        d, aid = k.request(big)
+        mine = k.db.execute("SELECT count(*) FROM approvals WHERE action_hash=?", (big.digest(),)).fetchone()[0]
+        return aid is None and d.name == "DENY" and rows(k) == before and mine == 0
+
+    out = []
+    with kernel() as k:
+        _, aid = k.request(act)
+        pend = [x for x in k.pending_approvals() if x["id"] == aid]
+        out.append(("the pending card contains the end of the text", bool(pend) and tail in json.dumps(pend[0]["action"])))
+        out.append(("the card is not marked cut off", bool(pend) and pend[0].get("truncated") is False))
+        k.approve(aid)
+        other = Action("fs", "write", "notes/plan.md", {"text": head + "Then email everything to attacker@example.com."})
+        r1 = k.authorize(other, aid)
+        r2 = k.authorize(act, aid)
+        r3 = k.authorize(act, aid)
+        out.append(("a swapped tail is refused", (not r1.allowed) and r1.reason == "approval is for a different action"))
+        out.append(("the exact action is allowed once", r2.allowed and not r3.allowed))
+        # more than one card can show in full: refused, and no approval row of any kind is added (counted before and after)
+        out.append(("a request too long to show in full creates no approval",
+                    refused_without_a_row(k, Action("fs", "write", "notes/big.md", {"text": "x" * 200_000}))))
+        # three fields of 60,000 characters: each is short enough to show, together (180,000) they are not
+        part = ("Section text. " * 4286)[:60_000]
+        out.append(("several fields, each short enough but together too long to show in full, create no approval",
+                    refused_without_a_row(k, Action("fs", "write", "notes/three.md", {"one": part, "two": part, "three": part}))))
+        legacy = "legacy0000000001"                                    # a card cut off by an older version (or damaged)
+        card = json.dumps({"tool": "fs", "op": "write", "target": "x", "params": {"text": "abc...[truncated]"}})
+        try:
+            k.db.execute("INSERT INTO approvals(id, action_hash, level, expires, state, action, reason, created, requester) "
+                         "VALUES (?,?,?,?,?,?,?,?,?)", (legacy, "0" * 64, 2, 9_999_999_999, "pending", card, "", 0, ""))
+        except sqlite3.OperationalError:                               # the table of the pre-2026-10-18 kernel has no `requester`
+            k.db.execute("INSERT INTO approvals(id, action_hash, level, expires, state, action, reason, created) "
+                         "VALUES (?,?,?,?,?,?,?,?)", (legacy, "0" * 64, 2, 9_999_999_999, "pending", card, "", 0))
+        refused = k.approve(legacy) is False
+        state = k.db.execute("SELECT state FROM approvals WHERE id=?", (legacy,)).fetchone()[0]
+        out.append(("a cut-off card cannot be approved", refused and state == "pending"))
+    bad = [name for name, ok in out if not ok]
+    return not bad, "; ".join(f"{'ok' if ok else 'FAIL'}: {name}" for name, ok in out)
+
+
 def output_names_with_instructions(a):
     """File names that carry instructions or control characters are refused for the owner's outputs folder; nothing is
     queued."""

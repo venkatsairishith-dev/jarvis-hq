@@ -9,6 +9,11 @@ import json
 import re
 import time
 import urllib.request
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "..", "scripts"))
+import loopback_net  # noqa: E402  loopback only, no proxy, no redirect (completion H, 2026-10-19)
 
 CATEGORIES = ["pc_control", "vm_ops", "research", "build_software", "documents", "browser_task", "agent_factory", "automation",
               "memory", "status_control", "smalltalk_qa", "blocked", "clarify"]
@@ -66,7 +71,7 @@ def llm_predict(url: str, model: str, text: str, timeout=20):
     body = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0, "max_tokens": 40}
     req = urllib.request.Request(url.rstrip("/") + "/v1/chat/completions", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     t0 = time.perf_counter()
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with loopback_net.urlopen(req, timeout=timeout) as r:
         o = json.loads(r.read())
     ms = (time.perf_counter() - t0) * 1000
     raw = re.sub(r"<think>.*?</think>", "", (o["choices"][0]["message"].get("content") or ""), flags=re.S).strip()

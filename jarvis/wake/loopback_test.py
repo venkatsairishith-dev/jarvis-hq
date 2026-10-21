@@ -22,7 +22,10 @@ CASES = [("positive-01-en.wav", True), ("negative-04-en.wav", False), ("positive
 
 
 def status():
-    with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/status", timeout=3) as r:
+    sys.path.insert(0, str(HERE.parent / "scripts"))
+    import control_auth, loopback_net       # /status needs the wake token since 2026-10-19; loopback only, no proxy
+    req = urllib.request.Request(f"http://127.0.0.1:{PORT}/status", headers=control_auth.headers_for("wake"))
+    with loopback_net.urlopen(req, timeout=3) as r:
         return json.loads(r.read())
 
 

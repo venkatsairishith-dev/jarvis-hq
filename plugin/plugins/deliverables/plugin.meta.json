@@ -1,7 +1,7 @@
 {
   "build_env": {
-    "arch": "AMD64",
-    "os": "win32",
+    "arch": "x86_64",
+    "os": "linux",
     "python": "3.11"
   },
   "entries": [
@@ -1130,12 +1130,13 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 100586,
+  "source_bytes": 118926,
   "source_files": [
     ".gitignore",
     "README.md",
     "__init__.py",
     "animate.py",
+    "config.schema.json",
     "core.py",
     "deck.py",
     "plugin.toml",
@@ -1153,5 +1154,5 @@
     "themes.py",
     "tools.py"
   ],
-  "source_sha256": "5190f7b8c9b6739cdfb47cae08873316cc208ba3e8ba9a754c98f8d96a5c4fd1"
+  "source_sha256": "09a1406f7ab98f6e8bed08ee3f05264e4a0cd85bfc505cf9e803413329124282"
 }

@@ -599,6 +599,7 @@ class FactsMixin:
             EVT_PERSONA_EVIDENCE_UPDATED,
             EVIDENCE_SOURCE_PROMOTE_MERGE,
         )
+        from memory.evidence import _int_counter
         from memory.reflection import ReflectionEngine
         if self._event_log is None:
             raise RuntimeError(
@@ -749,7 +750,7 @@ class FactsMixin:
                 'disp_last_signal_at': now_iso,
                 'sub_zero_days': 0,
                 'user_fact_reinforce_count':
-                    int(target_entry.get('user_fact_reinforce_count', 0) or 0),
+                    _int_counter(target_entry.get('user_fact_reinforce_count', 0)),
                 'source': EVIDENCE_SOURCE_PROMOTE_MERGE,
             }
 
@@ -853,7 +854,7 @@ class FactsMixin:
         if no increment happened.
         """
         from memory.event_log import EVT_PERSONA_EVIDENCE_UPDATED
-        from memory.evidence import maybe_mark_sub_zero
+        from memory.evidence import _int_counter, maybe_mark_sub_zero
         if self._event_log is None:
             raise RuntimeError(
                 "[Persona.aincrement_sub_zero] event_log 未注入"
@@ -877,7 +878,7 @@ class FactsMixin:
             if not maybe_mark_sub_zero(staged_entry, now):
                 return None
 
-            new_count = int(staged_entry.get('sub_zero_days', 0) or 0)
+            new_count = _int_counter(staged_entry.get('sub_zero_days', 0))
             new_date = staged_entry.get('sub_zero_last_increment_date')
 
             payload = {
@@ -889,8 +890,8 @@ class FactsMixin:
                 'disp_last_signal_at': entry.get('disp_last_signal_at'),
                 'sub_zero_days': new_count,
                 'sub_zero_last_increment_date': new_date,
-                'user_fact_reinforce_count': int(
-                    entry.get('user_fact_reinforce_count', 0) or 0,
+                'user_fact_reinforce_count': _int_counter(
+                    entry.get('user_fact_reinforce_count', 0),
                 ),
                 'source': 'archive_sweep',
             }

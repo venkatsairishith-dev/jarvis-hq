@@ -28,13 +28,18 @@ def tone_wav(rate=22050, seconds=0.5):
 
 class Server:
     def __init__(self, synth, transcribe=None):
-        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), lss.make_handler(synth, transcribe))
+        handler = lss.make_handler(synth, transcribe)
+        self.secret = handler.control_secret
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.port = self.srv.server_address[1]
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
 
-    def request(self, method, path, body=None, headers=None):
+    def request(self, method, path, body=None, headers=None, auth=True):
+        """`auth`: POST /interrupt carries this launch's control secret (audit M15); auth=False sends none."""
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         h = dict(headers or {})
+        if auth and method == "POST" and path == "/interrupt":
+            h.setdefault("X-Jarvis-Control", self.secret)
         data = None
         if body is not None:
             data = json.dumps(body).encode() if not isinstance(body, bytes) else body
@@ -190,6 +195,102 @@ class Transcription(unittest.TestCase):
             self.assertEqual(bare.request("POST", "/v1/audio/transcriptions", body, headers)[0], 501)
         finally:
             bare.close()
+
+
+class Interrupt(unittest.TestCase):
+    """POST /interrupt: cancels in-flight synthesis (its audio is dropped) and clears the speaking estimate."""
+
+    def setUp(self):
+        self.started, self.release = threading.Event(), threading.Event()
+
+        def synth(text, lang):
+            if text == "slow":
+                self.started.set()
+                self.release.wait(5)
+            return tone_wav(22050, 2.0)
+
+        self.s = Server(synth)
+        lss._ACTIVITY.update(tts_at=0.0, tts_audio_s=0.0, asr_at=0.0)
+
+    def tearDown(self):
+        self.release.set()
+        self.s.close()
+
+    def _speak_in_thread(self, text):
+        out = {}
+
+        def run():
+            out["r"] = self.s.request("POST", "/v1/audio/speech", {"input": text})
+
+        t = threading.Thread(target=run, daemon=True)
+        t.start()
+        return t, out
+
+    def test_interrupt_cancels_synthesis_in_flight_and_drops_its_audio(self):
+        t, out = self._speak_in_thread("slow")
+        self.assertTrue(self.started.wait(5))
+        code, _, body = self.s.request("POST", "/interrupt", {})
+        reply = json.loads(body)
+        self.assertEqual(code, 200)
+        self.assertEqual((reply["ok"], reply["cancelled"], reply["playback_stopped"]), (True, 1, False))
+        self.release.set()
+        t.join(5)
+        code, _, body = out["r"]
+        self.assertEqual(code, 409)                                              # no audio reaches the page
+        self.assertTrue(json.loads(body)["interrupted"])
+        self.assertFalse(json.loads(self.s.request("GET", "/activity")[2])["speaking_estimate"])
+        self.assertEqual(lss._SYNTH["inflight"], 0)
+
+    def test_interrupt_with_nothing_in_flight_says_so_and_clears_the_estimate(self):
+        self.assertEqual(self.s.request("POST", "/v1/audio/speech", {"input": "hello"})[0], 200)
+        self.assertTrue(json.loads(self.s.request("GET", "/activity")[2])["speaking_estimate"])    # 2 s of audio just made
+        reply = json.loads(self.s.request("POST", "/interrupt", {})[2])
+        self.assertEqual((reply["cancelled"], reply["speaking_estimate_cleared"], reply["playback_stopped"]), (0, True, False))
+        self.assertFalse(json.loads(self.s.request("GET", "/activity")[2])["speaking_estimate"])
+
+    def test_speech_started_after_an_interrupt_is_served_normally(self):
+        self.s.request("POST", "/interrupt", {})
+        code, ctype, body = self.s.request("POST", "/v1/audio/speech", {"input": "hello"})
+        self.assertEqual((code, ctype), (200, "audio/pcm"))
+        self.assertTrue(json.loads(self.s.request("GET", "/activity")[2])["speaking_estimate"])
+
+    def test_a_failing_engine_does_not_leave_a_request_counted_in_flight(self):
+        bad = Server(lambda text, lang: (_ for _ in ()).throw(RuntimeError("x")))
+        try:
+            self.assertEqual(bad.request("POST", "/v1/audio/speech", {"input": "boom"})[0], 500)
+            self.assertEqual(lss._SYNTH["inflight"], 0)
+            self.assertEqual(json.loads(bad.request("POST", "/interrupt", {})[2])["cancelled"], 0)
+        finally:
+            bad.close()
+
+    def test_interrupt_is_loopback_only(self):
+        self.assertEqual(self.s.request("POST", "/interrupt", {}, headers={"Host": "evil.example"})[0], 403)
+        self.assertEqual(self.s.request("POST", "/interrupt", {}, headers={"Origin": "https://evil.example"})[0], 403)
+        self.assertEqual(self.s.request("POST", "/interrupt", {}, headers={"Origin": "null"})[0], 403)
+        self.assertEqual(self.s.request("POST", "/interrupt", {}, headers={"Origin": "http://127.0.0.1:48911"})[0], 200)
+        self.assertEqual(self.s.request("GET", "/interrupt")[0], 404)             # a state change is never a GET
+
+    def test_interrupt_needs_the_launch_secret_and_does_nothing_without_it(self):
+        """Audit M15: a local program (no Origin) or a page with a forged one cannot cut off speech without the secret."""
+        t, out = self._speak_in_thread("slow")
+        self.assertTrue(self.started.wait(5))
+        epoch = lss._SYNTH["epoch"]
+        port = self.s.port
+        bad = ({}, {"X-Jarvis-Control": ""}, {"X-Jarvis-Control": "1"}, {"X-Jarvis-Control": self.s.secret + "x"},
+               {"X-Jarvis-Control": self.s.secret, "Origin": "http://evil.example"},
+               {"X-Jarvis-Control": self.s.secret, "Origin": "null"},
+               {"X-Jarvis-Control": self.s.secret, "Host": "evil.example"},
+               {"X-Jarvis-Control": self.s.secret, "Host": "127.0.0.1:1"},
+               {"X-Jarvis-Control": self.s.secret, "Host": "127.0.0.1"})
+        for h in bad:
+            self.assertEqual(self.s.request("POST", "/interrupt", {}, headers=h, auth=False)[0], 403, h)
+        self.assertEqual(lss._SYNTH["epoch"], epoch)                              # nothing was interrupted
+        self.release.set()
+        t.join(5)
+        self.assertEqual(out["r"][0], 200)                                        # the speech in flight was delivered
+        ok = {"X-Jarvis-Control": self.s.secret, "Host": "localhost:%d" % port}
+        self.assertEqual(self.s.request("POST", "/interrupt", {}, headers=ok, auth=False)[0], 200)
+        self.assertEqual(lss._SYNTH["epoch"], epoch + 1)
 
 
 if __name__ == "__main__":

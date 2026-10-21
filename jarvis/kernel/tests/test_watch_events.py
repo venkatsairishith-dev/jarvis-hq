@@ -155,6 +155,73 @@ class KernelEvents(unittest.TestCase):
         runs = self.A.runs(a["id"])
         self.assertEqual((len(runs), runs[0]["source"]), (1, "event"))
 
+    # ---- what the public lab is told about a file that arrived
+    def lab_automation(self, **action_extra):
+        sent = []
+
+        def dispatch(agent, lane, tid, params):
+            sent.append({"agent": agent, "lane": lane, "task": tid, "params": params})
+            return 200, {"status": "queued"}
+        A = Automations(self.k, self.T, self.J, owner=None, dispatch=dispatch, clock=lambda: self.now[0])
+        action = {"goal": "Summarise the new file", "instructions": "Write a short summary note.", "criteria": ["a summary exists"]}
+        action.update(action_extra)
+        a = A.create({"name": "summarise statements", "action_kind": "lab_task", "trigger_kind": "event",
+                      "event_spec": {"watch": "downloads", "glob": "*.pdf"}, "action": action})
+        return A, a, sent
+
+    def arrive(self, A, name="Venkat-salary-slip-Oct.pdf"):
+        self.now[0] += 10
+        record_watch_events(self.k, "laptop", {"watch": "downloads", "files": [{"rel": name, "size": 10, "mtime_ns": 5}]})
+        return A.tick()
+
+    def test_a_lab_task_is_not_told_the_name_of_the_file_that_arrived(self):
+        """Before: instructions ended with "Trigger: file arrived in 'downloads': Venkat-salary-slip-Oct.pdf" and went to the
+        public-lane lab without the owner's approval."""
+        A, a, sent = self.lab_automation()
+        self.assertEqual(len(self.arrive(A)["events"]), 1)
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]["lane"], "public")
+        text = sent[0]["params"]["instructions"]
+        self.assertIn("a new file arrived", text)
+        for private in ("Venkat", "salary", "slip", ".pdf", "Oct"):
+            self.assertNotIn(private, text)
+        self.assertNotIn("downloads", text)                                        # not even which folder
+        self.assertEqual(sent[0]["params"]["instructions"], "Write a short summary note.\n\nTrigger: a new file arrived")
+
+    def test_the_owner_can_choose_to_share_the_file_name_with_the_lab_for_one_automation(self):
+        A, a, sent = self.lab_automation(share_filename=True)
+        self.assertIs(a["action"]["share_filename"], True)
+        self.arrive(A)
+        self.assertIn("Venkat-salary-slip-Oct.pdf", sent[0]["params"]["instructions"])
+        # another automation of the same owner that did not choose it stays neutral
+        B, b, sent_b = self.lab_automation()
+        self.assertNotIn("salary", json.dumps(sent_b))
+
+    def test_share_filename_is_a_real_boolean_and_off_unless_set(self):
+        for bad in ("true", 1, "yes", [], {"a": 1}):
+            with self.assertRaises(AutomationError):
+                self.lab_automation(share_filename=bad)
+        A, a, sent = self.lab_automation(share_filename=False)
+        self.assertNotIn("share_filename", a["action"])
+        # an update that leaves it out switches it back off (the safe default), it never keeps a hidden "on"
+        A2, a2, _ = self.lab_automation(share_filename=True)
+        upd = A2.update(a2["id"], {"action": {"goal": "Summarise the new file", "instructions": "Write a short summary note.", "criteria": ["a summary exists"]}})
+        self.assertNotIn("share_filename", upd["action"])
+
+    def test_the_preview_says_whether_the_file_name_goes_to_the_lab(self):
+        A, a, sent = self.lab_automation()
+        d = lambda **kw: dict(name="x", action_kind="lab_task", trigger_kind="event", event_spec={"watch": "downloads", "glob": "*.pdf"},   # noqa: E731
+                              action=dict({"goal": "g", "instructions": "i", "criteria": ["c"]}, **kw))
+        self.assertTrue(any("NOT sent" in e for e in A.preview(d())["side_effects"]))
+        self.assertTrue(any("share_filename" in e and "NOT" not in e for e in A.preview(d(share_filename=True))["side_effects"]))
+
+    def test_the_owners_own_agent_still_gets_the_file_name_in_a_command_automation(self):
+        a = self.A.create(self.definition())
+        self.now[0] += 10
+        record_watch_events(self.k, "laptop", {"watch": "downloads", "files": [{"rel": "invoice.pdf", "size": 10, "mtime_ns": 5}]})
+        self.A.tick()
+        self.assertIn("invoice.pdf", self.cmds[0])                                  # private lane: it stays in the owner's own agent
+
     def test_other_watches_and_files_from_before_the_automation_do_nothing(self):
         record_watch_events(self.k, "laptop", {"watch": "downloads", "files": [{"rel": "early.pdf", "size": 1, "mtime_ns": 1}]})
         self.now[0] += 5

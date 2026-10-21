@@ -89,7 +89,7 @@ def test_the_idempotency_key_is_the_finding_id_so_a_lost_state_file_never_makes_
     (Path(setup["log_dir"]) / "seen.json").unlink()                       # the run "forgot" everything (crash, new disk)
     again = R.run(args_for(setup, kernel))
     assert ntasks(kernel) == 2 and sorted(again["tasks"]) == sorted(first["tasks"])
-    keys = {k for (k,) in kernel.db.execute("SELECT key FROM idempotency WHERE scope='agent:caretaker'").fetchall()}
+    keys = {k for (k,) in kernel.db.execute("SELECT key FROM idempotency WHERE scope LIKE 'agent:caretaker:%'").fetchall()}
     rows = [json.loads(x) for x in (Path(again["log"]) / "findings.jsonl").read_text().splitlines()]
     fids = {r["id"] for r in rows}
     assert fids <= keys and {f + ".dispatch" for f in fids} <= keys
@@ -190,3 +190,34 @@ def kernel_plane_tick(kernel, when):
     from jarvis_kernel.tasks import Tasks
     auto = Automations(kernel, Tasks(kernel), Jobs(kernel), dispatch=lambda *a: (200, {}), clock=lambda: when)
     return auto.tick(when)
+
+
+def test_kernel_calls_never_go_to_an_environment_proxy_or_follow_a_redirect(kernel, monkeypatch):
+    """Completion H (2026-10-19): the bearer token must not reach http_proxy/ALL_PROXY nor a redirect target. A recording proxy sees nothing."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    hits = []
+
+    class Sink(BaseHTTPRequestHandler):
+        def _any(self):
+            hits.append((self.path, self.headers.get("Authorization")))
+            self.send_response(302 if self.path.startswith("/v1/jarvis/actions") else 200)
+            self.send_header("Location", "http://127.0.0.1:9/elsewhere")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        do_GET = do_POST = _any
+
+        def log_message(self, *a):
+            pass
+    proxy = ThreadingHTTPServer(("127.0.0.1", 0), Sink)
+    threading.Thread(target=proxy.serve_forever, daemon=True).start()
+    try:
+        for var in ("http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY"):
+            monkeypatch.setenv(var, f"http://127.0.0.1:{proxy.server_address[1]}")
+        for var in ("no_proxy", "NO_PROXY"):
+            monkeypatch.delenv(var, raising=False)
+        code, _ = R.Kernel(kernel.url, Path(kernel.token_file).read_text()).action({"tool": "task", "op": "list", "target": "", "params": {}})
+        assert code != 0
+        assert hits == []
+    finally:
+        proxy.shutdown()

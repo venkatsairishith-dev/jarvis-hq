@@ -42,7 +42,18 @@ READ_ACTIONS = {("connector", "list"), ("connector", "result"), ("memory", "list
                 ("task", "get"), ("task", "checkpoint"), ("models", "status")}
 SHOWS_PER_HOUR = 12
 PREFERS_PER_DAY = 20
+# The token name of the OWNER's own agent (docs/05_OPERATIONS: the Hermes token is "hermes"). Only its tasks are tied to the owner
+# command that is running (audit Low, 2026-10-18): another private agent's task, created while a command runs, is not that command's.
+OWNER_AGENT = os.environ.get("JARVIS_OWNER_AGENT", "hermes")
 CARETAKER_AGENT = "caretaker"  # the agent token name the caretaker runs under (jarvis/caretaker): its tasks are caretaker tasks
+# The only request fields forwarded to a provider: the standard OpenAI chat fields (audit SEC-D6, 2026-10-18). Anything else
+# an agent sends is dropped: OpenRouter's `models` (a paid fallback list) and `plugins` (billed web search), `n` (multiplies
+# the free quota), `provider`, `user`, llama-server sampling fields such as `n_predict`. The provider entry's own extra_body
+# (owner configuration) is still applied after this.
+CHAT_FIELDS = frozenset({"model", "messages", "max_tokens", "max_completion_tokens", "temperature", "top_p", "stream",
+                         "stream_options", "stop", "tools", "tool_choice", "parallel_tool_calls", "response_format", "seed",
+                         "presence_penalty", "frequency_penalty", "logprobs", "top_logprobs", "logit_bias"})
+VERIFIERS = ("lab-runner", "owner")   # who may record a verification verdict on a task (never an agent token)
 
 
 def _h(s: str) -> str:
@@ -83,6 +94,42 @@ class AgentTokens:
         return None, None
 
 
+TEXT_PART_TYPES = ("text", "input_text")                       # content parts that hold text; every other part is media
+MEDIA_NOTE = ("[{kind} was withheld for privacy: only a local model may receive it. Tell the user you could not see it.]")
+MEDIA_KINDS = {"image_url": "an image", "input_image": "an image", "image": "an image", "input_audio": "an audio clip",
+               "audio": "an audio clip", "file": "a file", "input_file": "a file", "video_url": "a video"}
+
+
+def withhold_media(body: dict):
+    """(copy of the body with every non-text content part replaced by a short text note, how many were replaced).
+    Images, audio and files cannot be scrubbed and a screenshot can hold anything, so only a provider of the local lane
+    gets them; for every other provider this copy is what is sent (audit M2). The input body is not changed."""
+    n = 0
+    msgs = []
+    for m in body.get("messages") or []:
+        m = dict(m)
+        if isinstance(m.get("content"), list):
+            parts = []
+            for part in m["content"]:
+                if isinstance(part, str) or (isinstance(part, dict) and part.get("type", "text") in TEXT_PART_TYPES):
+                    parts.append(part)
+                else:
+                    n += 1
+                    kind = MEDIA_KINDS.get(part.get("type") if isinstance(part, dict) else None, "an attachment")
+                    parts.append({"type": "text", "text": MEDIA_NOTE.format(kind=kind)})
+            m["content"] = parts
+        elif m.get("content") is not None and not isinstance(m.get("content"), str):
+            n += 1
+            m["content"] = MEDIA_NOTE.format(kind="content in an unknown format")
+        if "audio" in m:                                    # an assistant's earlier audio reply
+            n += 1
+            del m["audio"]
+        msgs.append(m)
+    if "messages" in body:
+        body = dict(body, messages=msgs)
+    return body, n
+
+
 def _scrub_messages(body: dict):
     """Scrub every text the agent sends to a model. Returns (body, findings, blocked).
 
@@ -101,17 +148,51 @@ def _scrub_messages(body: dict):
         container[key] = c
         slots.append((container, key))
 
+    def clean_tree(container, key):
+        """Every string inside a JSON value (tool descriptions and parameter schemas), and the key names: a key can carry a token
+        (a property named after a secret value) just as a value can (inventory pass F, 2026-10-19)."""
+        nonlocal blocked
+        v = container[key]
+        if isinstance(v, str):
+            clean(container, key)
+        elif isinstance(v, dict):
+            for k2 in list(v):
+                if isinstance(k2, str):
+                    nk, kf, kb = scrub(k2, deep=False)
+                    found.extend(kf)
+                    blocked = blocked or kb
+                    if nk != k2:
+                        v[nk] = v.pop(k2)
+                        k2 = nk
+                clean_tree(v, k2)
+        elif isinstance(v, list):
+            for i in range(len(v)):
+                clean_tree(v, i)
+
+    # EVERY text field of the request is scrubbed, not a list of known ones (audit M2, 2026-10-18: message `name`, legacy
+    # `function_call`, `reasoning_content`, `refusal`, tool names, extra keys on content parts, `tool_choice` and `stop` used
+    # to reach the provider unscrubbed). Media parts (image, audio, file) are not text and are not scrubbed here: they are
+    # withheld per provider by `withhold_media`, because only a local model may see them.
     for m in body.get("messages") or []:
-        if isinstance(m.get("content"), str):
-            clean(m, "content")
-        elif isinstance(m.get("content"), list):
-            for part in m["content"]:
-                if isinstance(part, dict) and isinstance(part.get("text"), str):
-                    clean(part, "text")
-        for tc in m.get("tool_calls") or []:
-            fn = tc.get("function") or {}
-            if isinstance(fn.get("arguments"), str):
-                clean(fn, "arguments")
+        for key in list(m):
+            if key == "role" or key == "audio":
+                continue
+            if key == "content" and isinstance(m[key], list):
+                for i, part in enumerate(m[key]):
+                    if isinstance(part, str):
+                        clean(m[key], i)
+                    elif isinstance(part, dict) and part.get("type", "text") in TEXT_PART_TYPES:
+                        clean_tree(m[key], i)
+            else:
+                clean_tree(m, key)
+    # Tool names, descriptions and parameter schemas are text the agent wrote and the provider reads (audit SEC-D6: a key in
+    # tools[].function.description reached the upstream unscrubbed), and so are tool_choice, stop and a response_format schema.
+    for k in ("tools", "tool_choice", "stop", "response_format"):
+        if k in body:
+            clean_tree(body, k)
+    if isinstance(body.get("logit_bias"), dict):          # token numbers only: a key that is not a number would be text
+        body["logit_bias"] = {a: b for a, b in body["logit_bias"].items() if isinstance(a, str) and a.lstrip("-").isdigit()
+                              and isinstance(b, (int, float)) and not isinstance(b, bool)}
     if blocked or not slots:
         return body, found, blocked
     # Agents send their whole conversation on every call: a text already deep-scanned is taken from the cache (keyed by
@@ -128,7 +209,16 @@ def _scrub_messages(body: dict):
             found.extend(rules)
     if not todo:
         return body, found, blocked
-    secrets_found = _DEEP_BATCH.scan("\n\n".join(c[k] for c, k, _h in todo), scrub_mod)
+    # A new text that gitleaks provably finds nothing in (no rule keyword, nothing it could decode: scrub.gitleaks_gate) is not
+    # sent to the subprocess, whose start-up alone is ~0.5 s. It stays in `todo`, so what gitleaks finds in the other texts of
+    # this request is still replaced in it, exactly as before; only the scan input is smaller.
+    from . import gitleaks_gate
+    exe = scrub_mod.gitleaks_path()
+    scan_idx = [n for n, (c, k, _h) in enumerate(todo) if not exe or gitleaks_gate.must_scan(c[k], exe)]   # no binary: as before
+    if scan_idx:
+        secrets_found = _DEEP_BATCH.scan("\n\n".join(todo[n][0][todo[n][1]] for n in scan_idx), scrub_mod)
+    else:
+        secrets_found = []                           # every new text is one gitleaks provably finds nothing in: a clean verdict
     per = [[] for _ in todo]                     # gitleaks rules found in each new text
     # the same rule as scrub(deep=True): a gitleaks finding of 6+ characters is replaced wherever it occurs
     for rule, secret in (secrets_found or []):
@@ -239,6 +329,30 @@ def _usage_from_tail(tail: bytes) -> dict:
     return out
 
 
+def _unmet_criteria(verdict: dict, criteria: list) -> str:
+    """'' when a verifier's per-criterion report (VERIFY.json "criteria") backs its passed verdict, else what is missing.
+
+    `criteria` must be the JOB's snapshot taken at dispatch (the params of the lab job), never the task's current criteria: an
+    agent may rewrite the task's criteria while the lab works (audit M8/M11, 2026-10-18). When there are criteria to check, a
+    verdict without the per-criterion list (a bare {"passed": true}) is NOT accepted: it is exactly what a forged VERIFY.json
+    looks like. Every criterion needs its own row (distinct texts) with met true. The row text is not compared with the
+    criterion text because verifiers paraphrase; the count of distinct rows is."""
+    rows = verdict.get("criteria")
+    if rows is None:
+        return "the verdict has no per-criterion report" if criteria else ""
+    if not isinstance(rows, list):
+        return "the per-criterion report is not a list"
+    unmet = [str(r.get("criterion", "?"))[:100] if isinstance(r, dict) else "?" for r in rows
+             if not (isinstance(r, dict) and r.get("met") is True)]
+    if unmet:
+        return "not met: " + "; ".join(unmet)
+    distinct = {" ".join(str(r.get("criterion", "")).lower().split()) for r in rows}
+    distinct.discard("")
+    if len(distinct) < len(criteria):
+        return f"only {len(distinct)} of {len(criteria)} criteria were checked"
+    return ""
+
+
 def _recent(times: list, now: float, window: float) -> list:
     return [t for t in times if now - t < window]
 
@@ -249,10 +363,24 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
     from .store import Killed
     tokens = AgentTokens(kernel)
     jobs = Jobs(kernel)
-    from .tasks import Tasks, TaskError
+
+    def _warm_gitleaks_gate():                  # read the gitleaks version once, off the request path (it costs ~0.3 s the first time)
+        try:
+            from . import gitleaks_gate
+            exe = scrub_gitleaks_path()
+            if exe:
+                gitleaks_gate.gitleaks_version(exe)
+        except Exception:
+            pass
+    from .scrub import gitleaks_path as scrub_gitleaks_path
+    threading.Thread(target=_warm_gitleaks_gate, daemon=True).start()
+    from .tasks import FINAL, Tasks, TaskError
     from .memory import Conflict, Memories, MemoryError
     tasks = Tasks(kernel)
     memories = Memories(kernel)
+    # a private agent's dispatch text waiting for the owner's approval (dispatch_to_lab); removed when used, pruned after
+    kernel.db.execute("CREATE TABLE IF NOT EXISTS lab_share_pending(approval_id TEXT PRIMARY KEY, task TEXT, agent TEXT, kind TEXT, "
+                      "instructions TEXT, criteria TEXT, created REAL)")
     from . import owner as owner_mod
     if owner_hermes == "auto":                  # the owner's own Hermes, when this server has its API key
         key = os.path.join(gateway.secrets_dir(), "hermes_api_key.txt")
@@ -313,6 +441,17 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 return 429, {"status": "refused", "reason": f"{'read' if read else 'action'} limit ({limit} per hour)"}
             ts.append(now); acts[key] = ts
         try:
+            # A job the agent runs FOR one of its open tasks (params.task) is linked to it when it is created: only such jobs,
+            # finished after the task started, count as evidence that the task is done (audit SEC-D1).
+            for_task = str(p.get("task") or "")[:12] if tool in ("output", "ui", "pc") else ""
+            if for_task:
+                ft = tasks.get(for_task, owner=agent)
+                if not ft or ft["state"] in FINAL:
+                    return 409, {"status": "refused", "reason": "params.task must name one of your own open tasks"}
+
+            def link(jid):
+                if for_task:
+                    tasks.link_job(for_task, jid)
             if tool == "output" and op in ("save", "show"):
                 params = {"agent": agent, "name": target}
                 if op == "save":
@@ -336,37 +475,40 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                             return 429, {"status": "refused", "reason": "show limit (12 per hour)"}
                         s.append(now); shows[agent] = s
                 jid = jobs.create(OUTPUT_NODE, "output_" + op, params, owner=agent, lane=lane)
+                link(jid)
                 return 200, {"status": "queued", "job": jid}
             if tool == "ui" and op in UI_OPS:
                 params = {"agent": agent, "op": op, "target": target, "text": str(p.get("text", ""))[:500]}
                 aid = str(body.get("approval_id") or "") or None
                 if not aid:
-                    d, aid = kernel.request(action_for("ui_action", params, lane, untrusted=True))
+                    d, aid = kernel.request(action_for("ui_action", params, lane, untrusted=True, requester=agent))
                     if d.denied:
                         return 403, {"status": "refused", "level": d.name, "reason": d.reason}
                     if aid:
                         return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
                                      "next": "the owner approves " + aid + " in the JARVIS console (Command Center) or at the kernel console; then send the same action again with approval_id"}
                 jid = jobs.create(OUTPUT_NODE, "ui_action", params, approval_id=aid, owner=agent, lane=lane)
+                link(jid)
                 return 200, {"status": "queued", "job": jid}
             if tool == "ui" and op in ("list_windows", "snapshot"):
                 # Looking at the owner's desktop (read-only): the owner's own agent at once, a lab agent only with approval.
                 kind, params = (("ui_windows", {}) if op == "list_windows" else ("ui_snapshot", {"target": re.sub(r"[^A-Za-z0-9_.-]", "", target)[:40]}))
                 aid = str(body.get("approval_id") or "") or None
                 if not aid:
-                    d, aid = kernel.request(action_for(kind, params, lane, untrusted=True))
+                    d, aid = kernel.request(action_for(kind, params, lane, untrusted=True, requester=agent))
                     if d.denied:
                         return 403, {"status": "refused", "level": d.name, "reason": d.reason}
                     if aid:
                         return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
                                      "next": "the owner approves in the console; then send the same action again with approval_id"}
                 jid = jobs.create(OUTPUT_NODE, kind, params, approval_id=aid, owner=agent, lane=lane)
+                link(jid)
                 return 200, {"status": "queued", "job": jid}
             if tool == "skill" and op in ("activate", "deactivate"):
                 # A staged skill becomes active (or is rolled back) only with the kernel's say-so: policy decides by the
                 # risk the skill gate recorded; the owner approves anything above low risk (hq/skills/skillgate.py).
                 a = Action("skill", op, target[:80], {"risk": str(p.get("risk", ""))[:10], "where": str(p.get("where", ""))[:10],
-                                                     "sha256": str(p.get("sha256", ""))[:64]}, lane, True)
+                                                     "sha256": str(p.get("sha256", ""))[:64]}, lane, True, requester=agent)
                 aid = str(body.get("approval_id") or "") or None
                 if aid:
                     d = kernel.authorize(a, aid)
@@ -387,13 +529,14 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 params = {"agent": agent, "op": op, "target": target[:80], "path": str(p.get("path", ""))[:200]}
                 aid = str(body.get("approval_id") or "") or None
                 if not aid:
-                    d, aid = kernel.request(action_for("pc_open", params, lane, untrusted=True))
+                    d, aid = kernel.request(action_for("pc_open", params, lane, untrusted=True, requester=agent))
                     if d.denied:
                         return 403, {"status": "refused", "level": d.name, "reason": d.reason}
                     if aid:
                         return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name,
                                      "next": "the owner approves " + aid + " in the JARVIS console (Command Center) or at the kernel console; then send the same action again with approval_id"}
                 jid = jobs.create(OUTPUT_NODE, "pc_open", params, approval_id=aid, owner=agent, lane=lane)
+                link(jid)
                 return 200, {"status": "queued", "job": jid}
             if tool == "models" and op == "status":
                 if not kernel.authorize(Action("models", "status", lane, {}, lane, True)).allowed:
@@ -430,14 +573,13 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                     return connectors.result_for(agent, target)
                 return 400, {"status": "refused", "reason": "unknown connector operation"}
             if tool == "task":
-                return task_action(agent, lane, op, target, p)
+                return task_action(agent, lane, op, target, p, str(body.get("approval_id") or "") or None)
             if tool == "caretaker" and op == "report":
                 return caretaker_report(agent, lane, p)
             if tool == "memory":
                 return memory_action(agent, lane, op, target, p)
             if tool == "lab" and op == "task":
-                d = kernel.authorize(Action("lab", "task", target, {"chars": len(str(p.get("prompt", "")))}, lane, True))
-                return (200, {"status": "allowed"}) if d.allowed else (403, {"status": "refused", "reason": d.reason})
+                return lab_subtask(agent, lane, target, p, str(body.get("approval_id") or "") or None)
             return 400, {"status": "refused", "reason": "unknown action"}
         except JobError as e:
             return 403, {"status": "refused", "reason": str(e)[:200]}
@@ -450,35 +592,77 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
         """The agent's own durable memory (memory.py): stable ids, versions, verified deletion. Policy first."""
         if op not in ("list", "get", "resolve", "render", "add", "update", "forget"):
             return 400, {"status": "refused", "reason": "unknown memory operation"}
-        d = kernel.authorize(Action("memory", op, target[:80], {}, lane, True))
+        # The audit row keeps the op, the lane, the agent and an entry id, never the text or query in `target` (review H1;
+        # policy.Action.describe reduces it). The agent is named so the record stays useful without the words.
+        d = kernel.authorize(Action("memory", op, target[:80], {}, lane, True, requester=agent))
         if not d.allowed:
             return 403, {"status": "refused", "reason": d.reason}
         scope = str(p.get("scope") or "default")[:40]
         try:
             if op == "list":
-                return 200, {"status": "done", "entries": memories.list(agent, scope, p.get("query"))}
+                return 200, {"status": "done", "entries": memories.list(agent, scope, p.get("query"), lane=lane)}
             if op == "get":
-                m = memories.get(agent, target)
+                m = memories.get(agent, target, lane=lane)
                 return (200, {"status": "done", "entry": m}) if m else (404, {"status": "refused", "reason": "no such entry"})
             if op == "resolve":
-                return 200, {"status": "done", **memories.resolve(agent, target, scope)}
+                return 200, {"status": "done", **memories.resolve(agent, target, scope, lane=lane)}
             if op == "render":
-                return 200, {"status": "done", "text": memories.render(agent, scope)}
+                return 200, {"status": "done", "text": memories.render(agent, scope, query=p.get("query"), lane=lane)}
             if op == "add":
-                return 200, {"status": "done", "entry": memories.add(agent, target, str(p.get("kind") or "preference"), scope)}
+                return 200, {"status": "done", "entry": memories.add(agent, target, str(p.get("kind") or "preference"), scope, lane=lane)}
             if op == "update":
-                return 200, {"status": "done", "entry": memories.update(agent, target, p.get("text"), p.get("expected_version", -1))}
+                return 200, {"status": "done", "entry": memories.update(agent, target, p.get("text"), p.get("expected_version", -1), lane=lane)}
             mid = target
             if not mid.startswith("m-"):                  # forget by content: only one clear match, never a guess
-                r = memories.resolve(agent, target, scope)
+                r = memories.resolve(agent, target, scope, lane=lane)
                 if not r["unique"]:
                     return 409, {"status": "refused", "reason": "no single entry clearly matches; forget by id", "candidates": r["candidates"]}
                 mid = r["candidates"][0]["id"]
-            return 200, {"status": "done", **memories.forget(agent, mid, p.get("expected_version"))}
+            return 200, {"status": "done", **memories.forget(agent, mid, p.get("expected_version"), lane=lane)}
         except Conflict as e:
             return 409, {"status": "refused", "reason": str(e), "current": {k: e.current[k] for k in ("id", "text", "version")}}
         except MemoryError as e:
             return 400, {"status": "refused", "reason": str(e)[:200]}
+
+    def lab_subtask(agent, lane, target, p, aid):
+        """An agent hands work to another lab agent (jarvis_mcp start_lab_task): the lab agent runs on public-lane models.
+        The action carries the whole prompt, so an approval is bound to exactly that text; the audit rows record only its
+        length and digest (policy.Action.describe). From the private lane it needs the owner's approval, like a dispatch
+        (audit MEM-M8). A private key is refused whatever the lane."""
+        prompt = str(p.get("prompt", ""))
+        if len(prompt) > 20000:
+            return 400, {"status": "refused", "reason": "the prompt is longer than 20000 characters"}
+        if scrub(prompt)[2]:
+            return 400, {"status": "refused", "reason": "the prompt contains a private key"}
+        a = Action("lab", "task", target[:20], {"prompt": prompt}, lane, True, requester=agent)
+        if not aid:
+            d, aid = kernel.request(a)
+            if d.denied:
+                return 403, {"status": "refused", "level": d.name, "reason": d.reason}
+            if aid:
+                return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name, "reason": d.reason,
+                             "shares": {"prompt_chars": len(prompt)},
+                             "next": "the owner approves " + aid + " in the JARVIS console with the PIN; then call start_lab_task again with "
+                                     "the same agent and prompt plus approval_id"}
+        d = kernel.authorize(a, aid)
+        return (200, {"status": "allowed"}) if d.allowed else (403, {"status": "refused", "level": d.name, "reason": d.reason})
+
+    def replay_recheck(agent, lane, body):
+        """Before a kept reply (idempotency.py) is served again: the checks that can have changed since it was recorded. None
+        = serve it. The kill switch ends everything, a replay included. A kept lab.task "allowed" is a grant the caller then
+        acts on, so policy is asked again and a DENY now (a protected resource, a changed rule) wins over the old answer. Every
+        other kept reply only reports an effect that already happened (a queued job, an entry, an approval id), so serving it
+        again grants nothing new; the lane is part of the key's scope. (Review M1.)"""
+        if kernel.killed():
+            return 503, {"status": "refused", "reason": "kill switch is on"}
+        if str(body.get("tool", "")) == "lab" and str(body.get("op", "")) == "task":
+            from .policy import decide
+            p = body.get("params") if isinstance(body.get("params"), dict) else {}
+            a = Action("lab", "task", str(body.get("target", ""))[:200][:20], {"prompt": str(p.get("prompt", ""))}, lane, True, requester=agent)
+            d = decide(a, None, kernel.protected)
+            if d.denied:
+                return 403, {"status": "refused", "level": d.name, "reason": d.reason}
+        return None
 
     def caretaker_report(agent, lane, p):
         """One caretaker run's summary into the audit chain: counts by kind and severity, and the task ids it created."""
@@ -496,15 +680,32 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
         seq = kernel.audit.append("caretaker_run", rec)
         return 200, {"status": "done", "audit_seq": seq}
 
-    def dispatch_to_lab(agent, lane, target, p):
+    def share_pending(aid, target, agent):
+        """What a private agent asked to share with the public lab under approval `aid`, kept until the approval is used or
+        expires, so the agent can send the approved dispatch again with the approval id alone."""
+        r = kernel.db.execute("SELECT instructions, criteria, kind FROM lab_share_pending WHERE approval_id=? AND task=? AND agent=?",
+                              (str(aid)[:40], target, agent)).fetchone()
+        return (r[0], json.loads(r[1]), r[2]) if r else None
+
+    def dispatch_to_lab(agent, lane, target, p, approval_id=None):
         """Hand a task to the lab: the one guarded path (scrubbed instructions, no owner paths, one active dispatch per task).
-        Used by an agent's lab_work, by automations and by agent-definition test runs. Returns (http status, reply)."""
-        # dispatch: the lab runs on public-lane models, so only what may be shared goes there (scrubbed; keys refused)
+        Used by an agent's lab_work, by automations and by agent-definition test runs. Returns (http status, reply).
+
+        The lab runs on public-lane models. From the private lane (the owner's agent, which holds the owner's data) a dispatch
+        shares that content with public models, so it needs the OWNER's approval of exactly what is shared (audit SEC-D5,
+        2026-10-18): the agent's public_ok flag is its own claim, not authorization. The approval is bound to the digest of
+        the agent kind, the full scrubbed instructions and the criteria; it is used once. The kernel has no PII redactor of
+        its own (the privacy gateway runs on the laptop), so the approval is the gate; secrets are still scrubbed."""
         t = tasks.get(target, owner=agent)
         if not t:
             return 404, {"status": "refused", "reason": "no such task"}
         if lane == "private" and p.get("public_ok") is not True:
-            return 400, {"status": "refused", "reason": "the lab uses public-lane models: send only what may be shared and set public_ok true"}
+            return 400, {"status": "refused", "reason": "the lab uses public-lane models: send only what may be shared and set public_ok true "
+                         "(the owner then approves exactly what is shared)"}
+        aid = str(approval_id or "")[:40] or None
+        held = share_pending(aid, target, agent) if (lane == "private" and aid and not str(p.get("instructions") or "").strip()) else None
+        if held:                                   # the approved text itself: the agent sends only the approval id again
+            p = dict(p, instructions=held[0], criteria=held[1], agent=held[2])
         instr, _, blocked = scrub(str(p.get("instructions", ""))[:8000], deep=True)
         crit = [scrub(str(c)[:500], deep=True)[0] for c in (p.get("criteria") or t["criteria"])[:20]]
         if blocked or not instr.strip() or not crit:
@@ -520,18 +721,55 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
             if why:
                 kernel.audit.append("caretaker_dispatch_refused", {"task": target, "agent": agent, "why": why[:5]})
                 return 400, {"status": "refused", "reason": "caretaker lab text must come from the caretaker template: " + "; ".join(why)[:300]}
-        agent_kind = str(p.get("agent") or "hermes")
+        agent_kind = str(p.get("agent") or "hermes")[:20]
+        share = None
+        if lane == "private":
+            share = Action("lab", "share", target, {"agent": agent_kind, "instructions": instr, "criteria": crit,
+                                                    "to": "public-lane lab models"}, lane, True, requester=agent)
+            if not aid:
+                if t["state"] not in ("planning", "paused", "waiting_approval"):
+                    return 409, {"status": "refused", "reason": f"the lab is already on this task (state {t['state']}); do not dispatch again. "
+                                 "End your turn: you will be told in this conversation when it ends."}
+                d, aid = kernel.request(share)       # the approval card shows the whole scrubbed text (never cut: store.Kernel.request); the audit row counts only
+                if d.denied:
+                    return 403, {"status": "refused", "level": d.name, "reason": d.reason}
+                if aid:
+                    now = clock()
+                    # pruned here, not when used: a dispatch sent twice at once must still find the approved text (the
+                    # lab_run job holds the same text from then on). Gone once its approval is used, denied or long expired.
+                    kernel.db.execute("DELETE FROM lab_share_pending WHERE created < ? OR approval_id IN "
+                                      "(SELECT id FROM approvals WHERE state IN ('used','denied'))", (now - 2 * kernel.APPROVAL_TTL,))
+                    kernel.db.execute("INSERT OR REPLACE INTO lab_share_pending VALUES (?,?,?,?,?,?,?)",
+                                      (aid, target, agent, agent_kind, instr, json.dumps(crit), now))
+                    if t["state"] == "planning":
+                        tasks.update(agent, target, state="waiting_approval", step="waiting for the owner to approve sharing it with the public lab",
+                                     note=f"approval {aid}: {len(instr)} characters of instructions and {len(crit)} criteria for the public lab")
+                    return 202, {"status": "needs_approval", "approval_id": aid, "level": d.name, "reason": d.reason,
+                                 "shares": {"instruction_chars": len(instr), "criteria": len(crit), "agent": agent_kind},
+                                 "next": (f"The lab uses public-lane models, so the owner must approve sharing this task's text first. Tell the "
+                                          f"owner in one line: approve {aid} in the JARVIS console with the PIN. Then END your turn. When the "
+                                          f"owner says it is approved, call lab_work again with task {target} and approval_id {aid} "
+                                          "(the approved text is kept; do not change it).")}
+                # no approval needed (never for this action today): the final gate below still decides
         with dispatch_lock:                    # check and create as one step: two requests at once must not both pass
             t = tasks.get(target, owner=agent)
             active = kernel.db.execute("SELECT id FROM jobs WHERE kind='lab_run' AND state IN ('queued','running') AND params LIKE ?",
                                        (f'%"task": "{target}"%',)).fetchone()
-            if active or t["state"] not in ("planning", "paused"):
+            if active or t["state"] not in ("planning", "paused", "waiting_approval"):
                 return 409, {"status": "refused", "reason": f"the lab is already on this task (state {t['state']}); do not dispatch again. "
                              "End your turn: you will be told in this conversation when it ends."}
+            if share is not None:              # the owner's approval of exactly this text, used once (raises Killed)
+                d = kernel.authorize(share, aid)
+                if not d.allowed:
+                    return 403, {"status": "refused", "level": d.name, "reason": d.reason + (
+                        " (the approval covers exactly the text it was asked for: send lab_work with the approval id and the same "
+                        "instructions, or with no instructions to use the approved ones)" if "different action" in d.reason else "")}
             params = {"task": target, "agent": agent_kind, "instructions": instr, "criteria": crit,
                       "max_attempts": int(t["max_attempts"]), "timeout_s": max(120, min(int(t["deadline"] - clock()), 5400))}
             jid = jobs.create("lab", "lab_run", params, owner=agent, lane=lane)
-            tasks.update(agent, target, state="queued", step=f"dispatched to the lab ({agent_kind})", criteria=crit, note="lab job " + jid)
+            tasks.link_job(target, jid)
+            tasks.update(agent, target, state="queued", step=f"dispatched to the lab ({agent_kind})", criteria=crit, note="lab job " + jid
+                         + (f" (shared with the owner's approval {aid})" if share is not None else ""))
         return 200, {"status": "queued", "task": target, "job": jid, "next": (
             "Tell the owner in one or two lines that the lab has started (give the task id) and END your turn now. "
             "Do not wait, poll or dispatch again: you will be told the verified outcome in this conversation.")}
@@ -548,12 +786,18 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
         source = "caretaker" if agent == CARETAKER_AGENT else str(p.get("source") or "agent")
         tid = tasks.create(agent, lane, p.get("request", ""), p.get("goal", target), p.get("plan"), p.get("criteria"),
                            source, int(p.get("max_attempts") or 3), int(p.get("budget_s") or 3600))
+        if lane == "private" and agent == OWNER_AGENT and agent != CARETAKER_AGENT:
+            # The owner's agent works inside one owner command at a time (the owner plane has a single busy gate): link the task
+            # to it, so stopping that command can stop what it started (owner.cancel_command with stop_tasks).
+            cid = owner_plane.current_command()
+            if cid:
+                tasks.link_command(tid, cid)
         return 200, {"status": "done", "task": tid, "next": (
             "Hands-on work (writing and running code, tests, browsing, files) goes to the lab now: "
             "lab_work(task_id, instructions, public_ok=true). You cannot run or test anything yourself, and this task "
             "can only be marked completed with independent verification or finished job ids as evidence.")}
 
-    def task_action(agent, lane, op, target, p):
+    def task_action(agent, lane, op, target, p, approval_id=None):
         """Outcome tasks (tasks.py): create, update, get, dispatch to the lab. Each goes through policy first."""
         if op == "checkpoint":                            # the agent's open tasks, compact, for a fresh or compacted session
             if not kernel.authorize(Action("task", "get", "checkpoint", {}, lane, True)).allowed:
@@ -573,22 +817,48 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
             t = tasks.get(target, owner=agent)
             return (200, {"status": "done", "task": t}) if t else (404, {"status": "refused", "reason": "no such task"})
         if op == "update":
+            # A verdict is the verifier's, never the worker's (audit SEC-D1, 2026-10-18: an agent wrote {"passed": true} and then
+            # closed its own task as "verified"). Only the lab runner's independent check or the owner records one.
+            if p.get("verification") is not None:
+                kernel.audit.append("task_verification_refused", {"agent": agent[:30], "task": str(target)[:12]})
+                return 403, {"status": "refused", "reason": "verification is recorded only by the lab runner's independent check or by the "
+                             "owner, never by an agent. Cite evidence (job:<id> of jobs done for this task) or hand the work to the lab (lab_work)."}
             busy = kernel.db.execute("SELECT 1 FROM jobs WHERE kind='lab_run' AND state IN ('queued','running') AND params LIKE ?",
                                      (f'%"task": "{target}"%',)).fetchone()
             if busy and p.get("state") not in (None, "", "paused", "cancelled"):
                 return 409, {"status": "refused", "reason": "the lab owns this task's state while it works (you may pause or cancel "
                              "it, or add a note). End your turn: you will be told the outcome."}
+            verdict = None
             if p.get("state") == "completed":       # completion needs proof, not a claim
                 cur = tasks.get(target, owner=agent)
-                cited = [m for e in (p.get("evidence") or []) for m in re.findall(r"job:([0-9a-f]{12})", str(e))]
-                done = [j for j in cited if kernel.db.execute("SELECT 1 FROM jobs WHERE id=? AND owner=? AND state='done'", (j, agent)).fetchone()]
-                if cur and not ((cur.get("verification") or {}).get("passed") is True or done):
-                    return 409, {"status": "refused", "reason": "completed needs proof: an independent verification (lab_work) or "
-                                 "evidence citing finished jobs as job:<id>. If it cannot be verified, use state failed with the blocker."}
+                if not cur:
+                    return 404, {"status": "refused", "reason": "no such task"}
+                if cur["state"] in FINAL:           # a repeated completion: refused cleanly, the first outcome stands
+                    return 409, {"status": "refused", "reason": f"task is already {cur['state']}"}
+                v = cur.get("verification") or {}
+                trusted = v.get("verifier") in VERIFIERS
+                if trusted and v.get("passed") is False:
+                    return 409, {"status": "refused", "reason": "the independent check found unmet criteria; this task cannot be completed. "
+                                 "Use state failed with the blocker, or hand the repair to the lab."}
+                if not (trusted and v.get("passed") is True):
+                    cited = [m for e in (p.get("evidence") or []) for m in re.findall(r"job:([0-9a-f]{12})", str(e))]
+                    ok_jobs, problems = tasks.evidence_jobs(target, agent, cited)
+                    if problems or not ok_jobs:
+                        kernel.audit.append("task_completion_refused", {"agent": agent[:30], "task": str(target)[:12], "cited": len(cited),
+                                                                        "accepted": len(ok_jobs)})
+                        return 409, {"status": "refused", "reason": "completed needs proof: an independent verification (lab_work) or "
+                                     "evidence citing jobs that were done FOR this task as job:<id> (start them with this task's id). "
+                                     "If it cannot be verified, use state failed with the blocker.",
+                                     "problems": problems[:10] or ["no job:<id> evidence was cited"]}
+                    # the kernel records who decided and on what: finished jobs linked to the task. It cannot judge the
+                    # criteria themselves, so this is not "verified" (no passed flag); the owner sees "NOT verified yet".
+                    verdict = {"verifier": "kernel", "method": "finished jobs created for this task", "outcome": "evidence accepted",
+                               "evidence": [f"job:{j}" for j in ok_jobs], "criteria_checked": False, "agent": agent[:40],
+                               "recorded_at": clock()}
             t = tasks.update(agent, target, state=p.get("state"), step=p.get("step"), plan=p.get("plan"), criteria=p.get("criteria"),
-                             note=p.get("note"), result=p.get("result"), evidence=p.get("evidence"), verification=p.get("verification"))
+                             note=p.get("note"), result=p.get("result"), evidence=p.get("evidence"), verification=verdict)
             return 200, {"status": "done", "state": t["state"]}
-        return dispatch_to_lab(agent, lane, target, p)
+        return dispatch_to_lab(agent, lane, target, p, approval_id)
 
     def runner_call(path, body):
         """The lab runner's only endpoints: next lab job, task progress, job result. Reports apply only to the task of a
@@ -598,16 +868,88 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
             j = jobs.next_for("lab")
             return 200, {"job": j}
         job = str(body.get("job", ""))[:40]
-        row = kernel.db.execute("SELECT params, state FROM jobs WHERE id=? AND node='lab' AND kind='lab_run'", (job,)).fetchone()
+        row = kernel.db.execute("SELECT params, state, cancel_requested FROM jobs WHERE id=? AND node='lab' AND kind='lab_run'", (job,)).fetchone()
+        if path == "/v1/jarvis/runner/status" and kernel.killed():
+            # The kill switch stops a lab run that is already going (audit SEC-D10): the runner polls this and kills the worker
+            # and its children at once. Answered for any job id while the switch is on; it reveals nothing but that state.
+            t = tasks.get(json.loads(row[0])["task"]) if row else None
+            return 200, {"state": t["state"] if t else "failed", "killed": True}
         if not row or row[1] != "running":
             return 404, {"status": "refused", "reason": "no running lab job"}
         tid = json.loads(row[0])["task"]
         if path == "/v1/jarvis/runner/status":
             t = tasks.get(tid)
-            return 200, {"state": t["state"] if t else "failed"}
+            # `cancel_requested` is the owner's cancel of THIS job (jobs.cancel marks a running job and waits for its node: the
+            # lab runner used to ignore that mark). Present only when true, so the plain answer stays {"state": ...}.
+            return 200, dict({"state": t["state"] if t else "failed"}, **({"cancel_requested": True} if row[2] is not None else {}))
         if path == "/v1/jarvis/runner/report":
+            ver = body.get("verification")
+            # What is checked is what was dispatched: the criteria stored on the JOB when it was created, not the task's current
+            # criteria (an agent can rewrite those while the lab runs). Older jobs without a snapshot fall back to the task's.
+            try:
+                snap = json.loads(row[0]).get("criteria")
+            except ValueError:
+                snap = None
+            snapshot = [str(c) for c in snap] if isinstance(snap, list) else None
+            cur = tasks.get(tid) or {}
+            demoted = ""
+            if ver is not None:                  # the kernel stamps who recorded the verdict and for which lab job
+                from .tasks import assure_verdict, criteria_sha256
+                ver = dict(ver) if isinstance(ver, dict) else {"note": str(ver)[:1000]}
+                # Lab verdict audit (2026-10-18): a verdict is bound to the TRUSTED identity the kernel holds, never to a secret the
+                # checked code could learn. Task, job and attempt must all be present and equal what the kernel dispatched and counted
+                # (a stale, replayed or forged file names another one); the criteria hash must be that of the job's own snapshot;
+                # the task must be in verification right now (a late report is refused); and each (job, attempt) takes one verdict.
+                if ver.get("task") != tid or ver.get("job") != job:                 # exact: an int 123 must not pass for the task id "123"
+                    kernel.audit.append("lab_verdict_identity_mismatch", {"job": job[:40], "task": tid[:12]})
+                    return 409, {"status": "refused", "reason": "task identity mismatch: the verdict is not for this task and lab job"}
+                att = ver.get("attempt")
+                if isinstance(att, bool) or not isinstance(att, int) or att != cur.get("attempts"):
+                    kernel.audit.append("lab_verdict_attempt_mismatch", {"job": job[:40], "task": tid[:12]})
+                    return 409, {"status": "refused", "reason": "attempt mismatch: the verdict is not for the attempt the kernel counted"}
+                if snapshot is not None and ver.get("criteria_sha256") != criteria_sha256(snapshot):
+                    kernel.audit.append("lab_verdict_criteria_mismatch", {"job": job[:40], "task": tid[:12]})
+                    return 409, {"status": "refused", "reason": "criteria mismatch: the verdict was made for other criteria than the job's"}
+                if cur.get("state") != "verifying":
+                    kernel.audit.append("lab_verdict_out_of_order", {"job": job[:40], "task": tid[:12], "state": str(cur.get("state"))[:20]})
+                    return 409, {"status": "refused", "reason": f"a verdict is accepted only while the task is being verified (it is {cur.get('state')})"}
+                if not tasks.claim_verdict(job, att, str(ver.get("artifact_sha256", ""))):
+                    kernel.audit.append("lab_verdict_repeated", {"job": job[:40], "task": tid[:12], "attempt": att})
+                    return 409, {"status": "refused", "reason": "this attempt already has a verdict; a second one is refused"}
+                ver.update(verifier="lab-runner", lab_job=job, recorded_at=clock())
+                if snapshot is not None:
+                    ver["criteria_checked_against"] = len(snapshot)
+                # Only the runner's own execution of the delivered tests makes a pass "verified" (see tasks.assure_verdict).
+                ver, demoted = assure_verdict(ver, body.get("trusted_execution"), tid, job, att)
+                kernel.audit.append("lab_verdict", {"job": job[:40], "task": tid[:12], "attempt": att, "passed": ver.get("passed") is True,
+                                                    "assurance": str(ver.get("assurance", "none"))[:30], "demoted": demoted[:100],
+                                                    # the evidence the decision rests on (re-review H2, 2026-10-18)
+                                                    "harness_sha256": str(ver.get("harness_sha256", ""))[:16],
+                                                    "verdict_channel_sha256": str(ver.get("verdict_channel_sha256", ""))[:16],
+                                                    "isolation": str((ver.get("isolation") or {}).get("mode", "none"))[:12]})
+            want = snapshot if snapshot is not None else (cur.get("criteria") or [])
+            if ver is not None and (ver.get("passed") is True or ver.get("agent_assessed_pass") is True) and body.get("state") != "completed":
+                gap = _unmet_criteria(ver, want)
+                if gap:                          # recorded, but never as a pass: an agent's later "completed" would trust it
+                    ver = dict(ver, passed=False, agent_assessed_pass=False, kernel_check=gap[:300])
+            if body.get("state") == "completed":
+                v = ver if ver is not None else (cur.get("verification") or {})
+                if v.get("verifier") not in VERIFIERS or not (v.get("passed") is True or v.get("agent_assessed_pass") is True):
+                    if demoted and cur.get("state") not in FINAL:
+                        # the runner claimed a pass the kernel cannot back with the runner's own execution: the task fails honestly
+                        tasks.update(None, tid, state="failed", result=("not completed: " + demoted)[:600], evidence=body.get("evidence"),
+                                     verification=ver)
+                        return 409, {"status": "refused", "reason": "not verified: " + demoted[:300]}
+                    return 409, {"status": "refused", "reason": "completed needs the independent check's passed verdict"}
+                gap = _unmet_criteria(v, want)
+                if gap and cur.get("state") not in FINAL:
+                    # the verifier's own report contradicts its "passed": the task fails honestly instead of closing as verified
+                    tasks.update(None, tid, state="failed", result=("not completed: the verifier's report does not show every criterion "
+                                                                    "met: " + gap)[:600], evidence=body.get("evidence"),
+                                 verification=dict(v, passed=False, agent_assessed_pass=False, kernel_check=gap[:300]))
+                    return 409, {"status": "refused", "reason": "incomplete criteria: " + gap[:300]}
             t = tasks.update(None, tid, state=body.get("state"), step=body.get("step"), note=body.get("note"), result=body.get("result"),
-                             evidence=body.get("evidence"), verification=body.get("verification"), attempt=bool(body.get("attempt")))
+                             evidence=body.get("evidence"), verification=ver, attempt=bool(body.get("attempt")))
             return 200, {"status": "done", "state": t["state"]}
         if path == "/v1/jarvis/runner/deliver":
             # verified deliverables go to the owner's laptop through the normal output job, each task in its own folder
@@ -774,8 +1116,9 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 except (ValueError, OSError):
                     return self._json(400, {"status": "refused", "reason": "bad request"})
                 # a retried action with the same Idempotency-Key gets its first reply back instead of acting twice
-                code, reply = idem.run("agent:" + agent, idempotency.key_from(self.headers, body), body,
-                                       lambda: agent_action(agent, lane, body))
+                # The scope names the lane too: the same agent name re-issued in the other lane never gets the first lane's reply.
+                code, reply = idem.run(f"agent:{agent}:{lane}", idempotency.key_from(self.headers, body), body,
+                                       lambda: agent_action(agent, lane, body), recheck=lambda: replay_recheck(agent, lane, body))
                 kernel.audit.append("agent_action", {"agent": agent, "lane": lane, "tool": str(body.get("tool", ""))[:20],
                                                      "op": str(body.get("op", ""))[:20], "status": reply.get("status")})
                 return self._json(code, reply)
@@ -796,15 +1139,21 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 if n <= 0 or n > MAX_BODY:
                     return self._json(413, {"error": {"message": "bad size"}})
                 body = json.loads(self.rfile.read(n))
-            except (ValueError, OSError):
+                # a malformed body is a 400, not a dropped connection (audit SEC-D10/R8): an object, a list of message objects
+                if not isinstance(body, dict) or not isinstance(body.get("messages", []), list) \
+                        or not all(isinstance(m, dict) for m in body.get("messages") or []):
+                    raise ValueError
+                for k in ("max_tokens", "max_completion_tokens"):
+                    if k in body:
+                        body[k] = min(int(body[k] or MAX_OUT_TOKENS), MAX_OUT_TOKENS)
+            except (ValueError, TypeError, OSError):
                 return self._json(400, {"error": {"message": "bad request"}})
+            dropped = sorted(str(k)[:30] for k in body if k not in CHAT_FIELDS)[:12]   # names only, never values
+            body = {k: v for k, v in body.items() if k in CHAT_FIELDS}
             body, findings, blocked = _scrub_messages(body)
             if blocked:
                 kernel.audit.append("agent_model_refused", {"agent": agent, "why": "private key in prompt"})
                 return self._json(400, {"error": {"message": "refused: the request contains a private key"}})
-            for k in ("max_tokens", "max_completion_tokens"):
-                if k in body:
-                    body[k] = min(int(body[k] or MAX_OUT_TOKENS), MAX_OUT_TOKENS)
             if "max_tokens" not in body and "max_completion_tokens" not in body:
                 body["max_tokens"] = MAX_OUT_TOKENS
             for k in ("reasoning_effort", "reasoning"):   # agent-side reasoning settings vary by client and break some providers;
@@ -851,10 +1200,15 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 return self._rate_limited(agent, lane, wait)
             last, outcomes = "none", []
             for p in chain:
+                if kernel.killed():                    # re-checked before EVERY provider (audit M9: store.check_alive says callers must
+                    return self._stopped_by_kill(agent, "before a provider")      # re-check between steps): a fallback must not run
                 model, why = p.default_model, "other"
                 if not p.model_ok(model):
                     continue
                 payload = dict(body, model=model)
+                withheld = 0
+                if getattr(p, "lane", "") != "local":                # images, audio and files go to a local model only (audit M2)
+                    payload, withheld = withhold_media(payload)
                 for k in ("max_tokens", "max_completion_tokens"):    # shrink the answer budget to what still fits this provider
                     if k in payload:
                         payload[k] = sizing.output_budget(p, est, payload[k])
@@ -872,6 +1226,8 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
                 resp, t_call = None, time.time()
                 for attempt in (1, 2):
+                    if attempt == 2 and kernel.killed():   # the retry of the same provider is a new step too
+                        return self._stopped_by_kill(agent, "before a retry")
                     try:
                         resp = urllib.request.urlopen(req, timeout=p.timeout_s or 120)
                         break
@@ -903,6 +1259,9 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 if resp is None:
                     outcomes.append(why)
                     continue
+                if kernel.killed():                        # the switch went on while the provider was answering: nothing is passed on
+                    resp.close()
+                    return self._stopped_by_kill(agent, "before the answer was passed on")
                 if summary:
                     try:
                         with resp:
@@ -937,21 +1296,26 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                             chunk = resp.read1(65536) if hasattr(resp, "read1") else resp.read(65536)
                             if not chunk:
                                 break
+                            if kernel.killed():                        # between chunks: the kill switch ends a stream that is going
+                                raise Killed("kill switch is on")
                             self.wfile.write(chunk)
                             self.wfile.flush()
                             sent += len(chunk)
                             tail = (tail + chunk)[-8192:]              # the provider's own token count sits at the end of the body/stream
                     except Exception as e:                             # stalled/cut mid-answer: end here, never invent a [DONE]
-                        broke = type(e).__name__
+                        broke = "KillSwitch" if isinstance(e, Killed) else type(e).__name__
                         self.close_connection = True                   # the agent sees a cut-off answer, not a complete one
                 if broke:
                     kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": broke,
-                                                                    "class": "stream_broken", "stream": stream, "bytes_out": sent,
+                                                                    "class": "killed" if broke == "KillSwitch" else "stream_broken",
+                                                                    "stream": stream, "bytes_out": sent,
                                                                     "est_tokens": est, "ms": int((time.time() - t_call) * 1000)})
                     return
                 kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "stream": stream, "bytes_out": sent,
                                                          "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
                                                          "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings,
+                                                         **({"media_withheld": withheld} if withheld else {}),
+                                                         **({"dropped_fields": dropped} if dropped else {}),
                                                          "usage": _usage_from_tail(tail),
                                                          "est_tokens": est, "ms": int((time.time() - t_call) * 1000)})
                 return
@@ -963,6 +1327,11 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                     waits = [cooling.get(p.name, 0) - clock() for p in chain]
                 return self._rate_limited(agent, lane, max(1, math.ceil(min(waits))) if waits else 30)
             self._json(502, {"error": {"message": f"all providers failed ({last})"}})
+
+        def _stopped_by_kill(self, agent, where):
+            """The kill switch went on while a model request was being served: stop here, call no further provider."""
+            kernel.audit.append("agent_model_stopped_by_kill", {"agent": agent, "where": where})
+            return self._json(503, {"error": {"message": "kill switch is on"}})
 
         def _send_reply(self, reply, stream):
             """A checked, complete reply: as JSON, or as a one-chunk event stream when the agent asked to stream."""
@@ -1035,6 +1404,10 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
     from .agents import AgentDefs
     owner_plane.attach(Automations(kernel, tasks, jobs, owner_plane, dispatch=dispatch_to_lab, clock=clock),
                        AgentDefs(kernel, tasks, dispatch=dispatch_to_lab, clock=clock), providers=providers)
+    # projectfix (2026-10-18): fix a failing build in an allowlisted project. Owner routes only (owner/project_fix); the
+    # owner's tick advances open fixes. The lab is reached only through dispatch_to_lab (the owner approves the sharing).
+    from .projectfix import ProjectFix
+    owner_plane.attach_projectfix(ProjectFix(kernel, tasks, jobs, dispatch=dispatch_to_lab, node=owner_plane.node))
     H.owner_plane = owner_plane
     return H, tokens
 
@@ -1050,6 +1423,11 @@ class ProxyServer(ThreadingHTTPServer):
 def serve(kernel, providers, port=8790, binds=("127.0.0.1",)):
     """Loopback always; extra binds (e.g. the Tailscale address, for agents in the laptop's WSL box) only when asked."""
     H, _ = make_handler(kernel, providers)
+    try:                                         # re-review M4: bound the private text already stored (retention.py; idempotent, audited)
+        from .retention import Retention
+        Retention(kernel).sweep("startup")
+    except Exception as e:
+        print("retention at start failed:", type(e).__name__)
     from .owner import start_ticker
     start_ticker(H.owner_plane)                  # stuck jobs, deadlines, finished lab work: the kernel's own loop
     servers = [ProxyServer((b, port), H) for b in binds]

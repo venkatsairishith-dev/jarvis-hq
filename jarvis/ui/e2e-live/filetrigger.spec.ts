@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { consoleHeaders } from "../e2e/console-secret";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -9,7 +10,7 @@ const DIR = "D:\\jarvis\\cache\\watch-test";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const J = async (page: Page, p: string) => (await page.request.get(p)).json();
 const P = async (page: Page, p: string, body: unknown = {}) =>
-  (await page.request.fetch(p, { method: "POST", data: body, headers: { "X-Jarvis-Console": "1", Origin: "http://127.0.0.1:8799" } })).json();
+  (await page.request.fetch(p, { method: "POST", data: body, headers: await consoleHeaders(page, { Origin: "http://127.0.0.1:8799" }) })).json();
 
 async function runs(page: Page, id: string) {
   const a = (await J(page, "/api/owner/automations")).automations.find((x: { id: string }) => x.id === id);

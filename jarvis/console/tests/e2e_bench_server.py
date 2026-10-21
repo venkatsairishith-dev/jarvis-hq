@@ -54,6 +54,8 @@ def main():
         return [sys.executable, "-u", FAKE, spec.get("area") or "all", "30", delay]
     srv = make_server(cfg, bench=benchmod.Bench(cfg, command=command))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    import control_auth                      # the throwaway console publishes its master token like main() does (JARVIS_RUN_DIR)
+    control_auth.publish("console", srv.console_secret)
     print(json.dumps({"console": PORT, "tmp": tmp}), flush=True)
     try:
         while True:

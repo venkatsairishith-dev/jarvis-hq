@@ -148,13 +148,48 @@ if ($b) { $b.Current.Name }
 """
 
 
+def _chrome_windows(windows) -> dict | None:
+    """{hwnd: (title, foreground)} of the Chrome windows now, or None when the list cannot be read."""
+    try:
+        return {w["hwnd"]: (w.get("title"), bool(w.get("foreground"))) for w in windows.list_windows()
+                if str(w.get("process", "")).lower() == "chrome"}
+    except Exception:  # noqa: BLE001 - no list: nothing can be compared, so nothing will count as seen
+        return None
+
+
+def site_words(host: str) -> list[str]:
+    """The names a page title may show for a host: www.youtube.com -> ['youtube']; mail.google.com -> ['mail', 'google']."""
+    labels = [x for x in (host or "").lower().split(".") if x and x != "www"]
+    return [x for x in labels[:-1] if len(x) >= 3] if len(labels) > 1 else labels
+
+
 def open_plain(profile: dict, url: str) -> dict:
     if not CHROME:
         raise BrowserError("Chrome is not installed in the usual place")
-    runtime.popen([CHROME, f"--profile-directory={profile['dir']}", url], close_fds=True, creationflags=0)
     from . import windows
+    # What Chrome showed BEFORE the launch: a Chrome window that was already in front with the same title is not the
+    # evidence that this page opened (audit PC-D7: any foreground Chrome window used to count).
+    before = _chrome_windows(windows) if windows.ON_WINDOWS else None
+    runtime.popen([CHROME, f"--profile-directory={profile['dir']}", url], close_fds=True, creationflags=0)
     want = urllib.parse.urlsplit(url).hostname or ""
-    w = windows.wait_for(lambda x: x.get("process", "").lower() == "chrome" and x.get("foreground"), timeout=8) if windows.ON_WINDOWS else None
+
+    def changed(x) -> bool:
+        if before is None or str(x.get("process", "")).lower() != "chrome" or not x.get("foreground"):
+            return False
+        old = before.get(x.get("hwnd"))
+        return old is None or not old[1] or old[0] != x.get("title")       # new, newly in front, or a new tab shown
+    try:
+        w = windows.wait_for(changed, timeout=8) if before is not None else None
+    except Exception:  # noqa: BLE001 - the window list failed: Chrome was started, but nothing was seen
+        w = None
+    words = site_words(want)
+    if w and words and not any(x in str(w.get("title") or "").lower() for x in words):
+        try:                                       # a tab still loading shows "New Tab": give its title a moment
+            w = windows.wait_for(lambda x: x.get("hwnd") == w.get("hwnd") and any(y in str(x.get("title") or "").lower() for y in words),
+                                 timeout=3) or w
+        except Exception:  # noqa: BLE001
+            pass
+    title = str((w or {}).get("title") or "")
     shown = ""
     if w:
         try:
@@ -163,10 +198,14 @@ def open_plain(profile: dict, url: str) -> dict:
         except Exception:  # noqa: BLE001 - only a second witness
             shown = ""
     return {"ok": True, "opened": url, "profile": profile["dir"], "account": profile["account"], "via": "chrome --profile-directory",
-            "window": (w or {}).get("title", "")[:120], "verified": "window" if w else "unconfirmed",
+            "window": title[:120], "verified": "window" if w else "unconfirmed",
             "profile_name_shown": shown, "profile_name_matches": bool(shown) and shown.lower() == profile["name"].lower(),
-            "note": f"opened in the {profile['name']} profile" + ("" if extension_ready(profile) else
-                    "; page reading and playback checks need the Playwright extension"), "host": want}
+            # the address itself is not readable without the extension; the window title is the only witness of the site
+            "site_in_title": bool(w) and any(x in title.lower() for x in words),
+            "note": (f"opened in the {profile['name']} profile" if w else
+                     f"started Chrome in the {profile['name']} profile, but no Chrome window was seen to change within 8 s")
+                    + ("" if extension_ready(profile) else "; page reading and playback checks need the Playwright extension"),
+            "host": want}
 
 
 def token_file(profile_dir: str, folder: str = os.path.dirname(TOKEN_FILE)) -> str | None:
@@ -191,7 +230,7 @@ class Session:
 
     def __init__(self, profile: dict, session_factory=None, isolated: bool = False):
         self.profile = profile
-        env = dict(os.environ)
+        env = runtime.safe_environ()                      # no GitHub/git credential variables by inheritance (completion E)
         tok = token_file(profile["dir"])
         if tok:
             with open(tok, encoding="utf-8") as f:
@@ -310,6 +349,27 @@ def find_ref(snapshot: str, name: str, roles=CLICKABLE) -> str:
         if len(hit) > 1:
             raise BrowserError("more than one element matches '" + name + "': " + "; ".join(f"{r} '{n[:40]}'" for r, n, _ in hit[:4]))
     raise BrowserError(f"no {'/'.join(roles[:3])} named '{name}' on this page")
+
+
+def element_by_ref(snapshot: str, ref: str) -> tuple[str, str, str] | None:
+    """(role, name, ref) of the element with exactly this ref in the snapshot, or None."""
+    hit = [e for e in elements(snapshot) if e[2] == ref]
+    if not hit:                                      # an unnamed element still has a role: - textbox [ref=e5]
+        m = re.search(r"-\s+'?([a-z]+)\b[^\n]*\[ref=" + re.escape(ref) + r"\]", snapshot or "")
+        return (m.group(1), "", ref) if m else None
+    return hit[0]
+
+
+# Fields Neko never types into: passwords and passcodes, PINs, one-time and verification codes, card security codes.
+SECRET_FIELD = re.compile(r"(?i)pass(?:word|code|phrase)|\bpin\b|\botp\b|one[- ]?time|\b2fa\b|two[- ]?factor|"
+                          r"(?:verification|security|confirmation|auth(?:entication|enticator)?|access|sms|login|sign[- ]?in) ?code|"
+                          r"\bcvv\b|\bcvc\b|\bcsc\b|card security|secret")
+NO_SECRET_TYPING = "Neko does not type into sign-in, password, PIN or one-time-code fields: please sign in yourself"
+
+
+def secret_field(role: str, name: str) -> bool:
+    """A text field for a password, PIN or one-time code, by its accessible role and name."""
+    return role in TYPABLE and bool(SECRET_FIELD.search(name or ""))
 
 
 AUTH_HOSTS = ("accounts.google.com", "login.microsoftonline.com", "login.live.com", "github.com/login")
@@ -442,15 +502,30 @@ def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | N
         t = sess.call("browser_tabs", {"action": "list"})
         return {"ok": True, "tabs": len(re.findall(r"^\s*-\s*\d+:", t, re.M)), "local_result": save_local("tabs", t)}
     if op in ("click", "type"):
-        ref = target
-        if not REF.match(target or ""):
-            snap = sess.call("browser_snapshot", {})
-            if CHALLENGE.search(target) and challenge_required(snap, page_meta(snap).get("url", "")):
+        # The element is always resolved against a fresh snapshot, whether it was named or given as a ref: the refusals
+        # below are checked on the element itself (its role and accessible name), so a ref cannot bypass them (audit
+        # PC-D3: typing by ref "e5" went into a password box).
+        snap = sess.call("browser_snapshot", {})
+        url = page_meta(snap).get("url", "")
+        if REF.match(target or ""):
+            el = element_by_ref(snap, target)
+            if el is None:
+                raise BrowserError(f"element {target} is not on the page now: read the page again")
+        else:
+            if CHALLENGE.search(target) and challenge_required(snap, url):
                 raise BrowserError("this page asks for a human check (CAPTCHA): Neko does not answer it; please complete it "
                                    "yourself in the browser, then ask again")
-            if op == "type" and auth_required(snap, page_meta(snap).get("url", "")) and re.search(r"(?i)password", target):
-                raise BrowserError("Neko does not type into sign-in or password fields: please sign in yourself")
+            if op == "type" and auth_required(snap, url) and SECRET_FIELD.search(target):
+                raise BrowserError(NO_SECRET_TYPING)
             ref = find_ref(snap, target, CLICKABLE if op == "click" else TYPABLE)
+            el = element_by_ref(snap, ref) or ("", target, ref)
+        role, name, ref = el
+        if CHALLENGE.search(name) and challenge_required(snap, url):
+            raise BrowserError("this page asks for a human check (CAPTCHA): Neko does not answer it; please complete it "
+                               "yourself in the browser, then ask again")
+        # a field with no name on a sign-in page is unknown, not safe: it may well be the password box
+        if op == "type" and (secret_field(role, name) or (not name.strip() and auth_required(snap, url))):
+            raise BrowserError(NO_SECRET_TYPING)
         if op == "click":
             t = sess.call("browser_click", {"target": ref, "element": target or ref})
             return {"ok": True, "clicked": (target or ref)[:80], "ref": ref, **page_meta(t)}

@@ -142,8 +142,33 @@ def find_text(lines: list[dict], label: str) -> dict | None:
     return dict(h, cx=h["x"] + h["w"] // 2, cy=h["y"] + h["h"] // 2)
 
 
+def _on_this_pc(url: str) -> bool:
+    """Whether the vision model's address is on this PC (loopback, plain http/https, no credentials in it)."""
+    from urllib.parse import urlsplit
+    try:
+        u = urlsplit(str(url or ""))
+        return u.scheme in ("http", "https") and (u.hostname or "").lower() in ("127.0.0.1", "localhost", "::1") and u.username is None
+    except ValueError:
+        return False
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None                                   # a 3xx is an error here, never followed
+
+
+# The picture goes to a model on THIS PC: an explicit empty proxy map, so http_proxy / https_proxy / ALL_PROXY in the environment can
+# never send a screenshot to a proxy instead of the loopback server (re-review M13). Same rule as plugin/plugins/_shared/loopback_http.py,
+# repeated here because the node does not import the plugin package.
+_LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+
+
 def ask_vision(png: str, prompt: str, schema: dict | None = None, timeout: float = 120) -> str:
-    """The local vision model's answer (INFERRED, never treated as observation)."""
+    """The local vision model's answer (INFERRED, never treated as observation). The screenshot goes only to a model on THIS PC:
+    NEKO_VISION_URL pointing anywhere else is refused before the picture is even read (a screenshot is the most private thing
+    this node holds)."""
+    if not _on_this_pc(VISION_URL):
+        raise VisionError("the vision model's address is not on this PC, so the screenshot was not sent")
     with open(png, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
     body = {"model": VISION_MODEL, "temperature": 0, "max_tokens": 200,
@@ -153,7 +178,7 @@ def ask_vision(png: str, prompt: str, schema: dict | None = None, timeout: float
         body["response_format"] = {"type": "json_schema", "json_schema": {"name": "answer", "schema": schema}}
     req = urllib.request.Request(VISION_URL, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with _LOCAL_OPENER.open(req, timeout=timeout) as r:
             out = json.loads(r.read().decode("utf-8", "replace"))
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise VisionError(f"the local vision model did not answer ({type(e).__name__})") from None

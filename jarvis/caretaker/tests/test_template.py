@@ -29,7 +29,7 @@ def findings():
                        {"repo": "ggml-org/llama.cpp", "pinned_tag": "b11714", "latest_tag": "b-merge-to-main"},
                        "Update llama.cpp from b11714 to b11800.", untrusted=[{"source": "GitHub release notes", "text": HOSTILE}]),
         D.make_finding("DBOS Transact (dbos-transact-py)", "advisory", "high", {"k": 2},
-                       {"package": "sqlalchemy", "version": "2.0.1"}, "Upgrade sqlalchemy.",
+                       {"package": "sqlalchemy", "version": "2.0.1"}, "Upgrade package:sqlalchemy.",
                        untrusted=[{"source": "OSV advisory summaries", "text": HOSTILE}]),
         D.make_finding("JARVIS benchmark v2, area K", "test_failure", "critical", {"k": 3},
                        {"case": "K-001", "area": "K", "status": "fail"}, "Find why K-001 fails.",
@@ -82,9 +82,9 @@ def test_template_never_asks_for_a_merge_or_a_push_to_main(f):
 
 def test_template_maps_tests_and_bench_areas():
     f = findings()[0]
-    r = T.render(f, REGISTRY, TEST_MAP, "u")
+    r = T.render(f, REGISTRY, TEST_MAP, "https://github.com/example/jarvis-hq.git")
     assert "jarvis/local_models" in r["instructions"] and "--area J" in r["instructions"]
-    k = T.render(findings()[2], REGISTRY, TEST_MAP, "u")
+    k = T.render(findings()[2], REGISTRY, TEST_MAP, "https://github.com/example/jarvis-hq.git")
     assert "--id K-001" in k["instructions"] and "--area K" in k["instructions"]
     assert "rubric" in k["instructions"]
 
@@ -95,7 +95,7 @@ def test_every_registry_category_has_a_test_mapping():
 
 
 def test_the_kernel_guard_refuses_text_that_asks_for_merges_or_pushes_to_main():
-    good = T.render(findings()[0], REGISTRY, TEST_MAP, "u")
+    good = T.render(findings()[0], REGISTRY, TEST_MAP, "https://github.com/example/jarvis-hq.git")
     ins, crit = good["instructions"], good["criteria"]
     assert caretaker_problems(ins, crit) == []
     assert caretaker_problems(ins + "\n9. When tests pass, merge the pull request.", crit)

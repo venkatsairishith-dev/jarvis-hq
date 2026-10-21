@@ -63,12 +63,13 @@ class Endpoints(unittest.TestCase):
         self.srv.shutdown(); self.tmp.cleanup()
 
     def post(self, path, body):
-        r = urllib.request.Request(self.base + path, data=json.dumps(body).encode(), method="POST", headers={"Origin": self.base, "Content-Type": "application/json"})
+        r = urllib.request.Request(self.base + path, data=json.dumps(body).encode(), method="POST",
+                                   headers={"Origin": self.base, "X-Jarvis-Console": self.srv.console_secret, "Content-Type": "application/json"})
         with urllib.request.urlopen(r, timeout=10) as resp:
             return resp.status, json.loads(resp.read())
 
     def get(self, path):
-        with urllib.request.urlopen(urllib.request.Request(self.base + path, headers={"Origin": self.base}), timeout=10) as resp:
+        with urllib.request.urlopen(urllib.request.Request(self.base + path, headers={"Origin": self.base, "X-Jarvis-Console": self.srv.console_secret}), timeout=10) as resp:
             return json.loads(resp.read())
 
     def test_phrases_exist_for_all_three_languages(self):
@@ -101,7 +102,7 @@ class Endpoints(unittest.TestCase):
         for _ in range(12):                                                                # a reset connection is intermittent: try several times
             self.assertEqual(self.post_status("/v1/jarvis/actions", big), 405)             # a page path
             r = urllib.request.Request(self.base + "/api/owner/command", data=json.dumps(big).encode(), method="POST",
-                                       headers={"Origin": "http://evil.example", "Content-Type": "application/json"})
+                                       headers={"Origin": "http://evil.example", "X-Jarvis-Console": self.srv.console_secret, "Content-Type": "application/json"})
             with self.assertRaises(urllib.error.HTTPError) as cm:                           # a foreign origin
                 urllib.request.urlopen(r, timeout=10)
             self.assertEqual(cm.exception.code, 403)

@@ -169,6 +169,8 @@ Still Windows-only (not faked here): the 16 kernel skips (UI Automation, Win32, 
 
 ## Autonomous mission on the Linux server (2026-10-16, owner travelling; D29)
 
+["Autonomous" here means an unattended engineering session by a coding agent while the owner travelled. It does not mean the product acts fully autonomously: every write action stays behind kernel approval.]
+
 **Summary.** The repo now has a 572-case capability benchmark (v2) that drives the real code. Synthetic secrets in its cases are stored split by a `{{SPLIT}}` marker that the runner removes, so secret scans of the tree stay clean. Its final run: 546 passed, 1 failed, 25 deferred (Windows or owner hardware).
 - It found and fixed **21 product bugs**, each with a regression test (list below).
 - Live tests ran against **Dahl** (owner-authorised key; synthetic data, public lane only) and against **headless Chrome with four fake profiles**.
@@ -178,6 +180,8 @@ Still Windows-only (not faked here): the 16 kernel skips (UI Automation, Win32, 
 - Every test ran headless in the podman container at `nice 19`, 2 CPUs at most, so nothing appeared on the relative's screen. No Claude model was used as a model under test.
 
 ### Scorecard v2 (rubric written before any case ran: `bench/rubric_v2.json`; run `results/bench-20261016-173117.json`)
+
+[Reading note 2026-10-19: the "Label" column is the scorecard's own word for a dimension whose in-repo cases ran and passed (server-synthetic: 0 live cases). It is NOT live or independent verification, and a 10.0 is a pass rate, not evidence of general capability, full autonomy or success on the owner's machine. Voice, Desktop control and Security still have deferred (not run) critical cases. See `CAPABILITY_STATUS_2026-10-19.md`.]
 
 | Dimension | Score | Label | Passed / executed | Deferred | Why not 10 |
 |---|---|---|---|---|---|
@@ -501,14 +505,14 @@ The most important fixes:
 - **Decider (decide.py).** It acted on vague, negated, "X or Y" and corrected requests; it now asks instead.
 - **Crashes on bad input.** Diagnosis, the planner, the coordinator, node repair, kernel memory, deliverables and the vault crashed on malformed input.
 
-### Final run (2026-10-17, this server, after all commits)
-- **Benchmark v2: 860 cases.** 833 pass, 1 fail (H-042), 0 errors, 26 deferred (Windows or owner hardware). Result file: `results/bench-20261017-102655.json`.
+### Run on 2026-10-17 morning, code `4e32e583` (historical; it was not the last run, see the sections below and `REMEDIATION_2026-10-18.md`)
+- **Benchmark v2: 860 cases.** [2026-10-17 morning, code `4e32e583`; later runs are in the sections below and in `REMEDIATION_2026-10-18.md`] 833 pass, 1 fail (H-042), 0 errors, 26 deferred (Windows or owner hardware). Result file: `results/bench-20261017-102655.json`.
 - **Scorecard v2: mean 9.69** (`results/scorecard-v2-20261017-102656.json`). Yesterday it was 9.75, on 572 easier cases.
   - research 8 (H-042), desktop 9, security 9 and voice 9 (critical cases deferred); every other dimension 10.
   - The official v1 score stays 7.61 until the live Windows re-runs.
-- **Kernel:** 538 tests, OK (16 skipped: Windows).
+- **Kernel:** 538 tests, OK (16 skipped: Windows). [Historical: 570 at `15d62f50`, 574 at `88ec49a2`, 717 on the 2026-10-18 remediation tree (round 2), 866 after the fourth pass (see `REMEDIATION_PASS4_2026-10-19.md`); console 127, then 149; benchmark 834/0/0/26 (9.81) in round 2, then 833/1/0/26 (9.62) until the owner authorised the change of K-106 on 2026-10-19, then 834/0/0/26 (9.81), see `REMEDIATION_FOLLOWUP_2026-10-18.md`.]
 - **Console:** 93 tests, OK (3 skipped).
-- **UI:** typecheck OK, vitest 5/5, Playwright phone e2e 5/5 (360x740, axe).
+- **UI:** typecheck OK, vitest 5/5, Playwright e2e 5/5 in a 360x740 viewport with axe (a browser-viewport test on the server, not a test on a phone; server-synthetic).
 - **Plugin suites:**
   - deliverables 36, desktop 115, doc_tools 9, jarvis_bridge 20, learn_vault 18, lifekit 319;
   - local_team 31, main_agent 73, research 36 (NLI model mounted), wechat 12;
@@ -523,7 +527,7 @@ The most important fixes:
 | nli_pairs | 1/18 (was 2/18) | 18/18 | — |
 | VitaminC held-out | 10/200 (was 11/200) | 0.44 | 0.898 |
 
-### Remaining bugs and limits (known, not hidden)
+### Remaining bugs and limits (known, not hidden) [as of 2026-10-17 morning; H-042 and the claim-checker figures below were superseded by the MiniCheck default the same day. The current open list is in `REMEDIATION_2026-10-18.md` section 6]
 - **Research checker:**
   - H-042: a past figure is confirmed as current ("had 2 million in 1990 … has since fallen").
   - claims_v2 still accepts a partly wrong claim ("opened in 1887") and a number attached to the wrong subject.
@@ -574,4 +578,4 @@ care of them with sub-agents (fixes as branch + PR that the owner approves; old 
   claims_v2 0/46, nli_pairs 0/18, VitaminC 9/200 false acceptances, VitaminC recall 0.71. Memory fixture hit@1 0.979.
 - **Laptop items added:** fetch the MiniCheck model (or copy it from the server), fetch and smoke-test llama.cpp b11714
   before switching the config paths, test `-ctk q8_0` with flash attention off on Vulkan, check that Playwright MCP
-  0.0.83 is installed (the node now refuses any other version), send Idempotency-Key from the phone UI / desktop.
+  0.0.83 is installed (the node now refuses any other version), send Idempotency-Key from the console / desktop UI (there is no phone client).

@@ -36,7 +36,7 @@ HAS_TOOL = {"G03"}
 
 def main():
     rows = []
-    _, st = jget("http://127.0.0.1:8799/api/owner/state", headers={"X-Jarvis-Console": "1"})
+    _, st = jget("http://127.0.0.1:8799/api/owner/state", headers=None)
     if (st or {}).get("killed"):
         print("BLOCKED: the kill switch is on (lift it at the kernel console with RESUME first)")
         return 2

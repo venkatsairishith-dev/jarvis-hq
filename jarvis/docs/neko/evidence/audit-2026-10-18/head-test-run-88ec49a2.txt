@@ -1,0 +1,47 @@
+# Test run at HEAD for the 2026-10-18 audit
+commit 88ec49a2ba056f85ae5bbcfc65509852b58ad4f0 dirty=0 start 2026-10-18T04:55:10Z
+end 2026-10-18T05:15:15Z
+
+## kernel
+Ran 574 tests in 520.126s
+OK (skipped=16)
+## console
+Ran 93 tests in 35.469s
+OK (skipped=3)
+## suites
+plugin/plugins/deliverables/tests: 36 passed in 4.81s
+plugin/plugins/desktop/tests: 115 passed in 21.79s
+plugin/plugins/doc_tools/tests: 9 passed in 1.42s
+plugin/plugins/jarvis_bridge/tests: 20 passed in 6.25s
+plugin/plugins/learn_vault/tests: 18 passed in 0.86s
+plugin/plugins/lifekit/tests: 319 passed, 1 skipped in 5.17s
+plugin/plugins/local_team/tests: 31 passed in 0.87s
+plugin/plugins/main_agent/tests: 73 passed in 5.00s
+plugin/plugins/research/tests: 40 passed in 20.97s
+plugin/plugins/wechat_integration/tests: 12 passed in 1.10s
+jarvis/local_models: 12 passed in 0.62s
+jarvis/wake/test_wake_listener.py: 17 passed in 3.17s
+jarvis/tools: 52 passed in 17.19s
+jarvis/caretaker/tests: 44 passed in 48.96s
+## benchmark v2 + scorecard
+FAIL  J-018 Proxy: primary success relayed, key added: run 1/1: HTTP 200 in 505 ms; upstream model openai/gpt-oss-120b; key added by proxy=True
+{"pass": 833, "fail": 1, "error": 0, "deferred": 26}
+saved /src/jarvis/evals/neko95/results/bench-20261018-051514.json
+intent       10.00 verified    74/74 passed, 1 deferred
+planning     10.00 verified    70/70 passed, 1 deferred
+desktop       9.00 verified    32/32 passed, 5 deferred (critical cases deferred)
+browser      10.00 verified    85/85 passed, 2 deferred
+autonomy     10.00 verified    74/74 passed, 1 deferred
+recovery     10.00 verified    139/139 passed, 3 deferred
+research     10.00 verified    72/72 passed, 1 deferred
+memory       10.00 verified    61/61 passed, 1 deferred
+routing       6.00 verified    77/78 passed, 0 deferred; failed ['J-018'] (a critical case failed)
+security      6.00 verified    326/327 passed, 4 deferred; failed ['J-018'] (a critical case failed; critical cases deferred)
+reliability  10.00 verified    249/249 passed, 0 deferred
+speed         6.00 verified    23/24 passed, 0 deferred; failed ['J-018'] (a critical case failed)
+resources    10.00 verified    81/81 passed, 2 deferred
+skills       10.00 verified    39/39 passed, 0 deferred
+ux           10.00 verified    123/123 passed, 2 deferred
+voice         9.00 verified    28/28 passed, 9 deferred (critical cases deferred)
+mean of scored dimensions: 9.12 | unverified: []
+saved /src/jarvis/evals/neko95/results/scorecard-v2-20261018-051515.json

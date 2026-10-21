@@ -1,16 +1,26 @@
 # WSL lab box (JarvisLab): runs outcome tasks JARVIS dispatched to the lab (work -> independent verify -> repair).
 # Root only to start agent sessions as the unprivileged agent user and to keep its token (/etc/jarvis-lab/runner.token,
-# 600) away from the agents. Install: hq/lab/lab_runner.py -> /opt/jarvis-hub/lab_runner.py (root 644).
+# 600) away from the agents. Install: hq/lab/lab_runner.py AND hq/lab/lab_isolation.py -> /opt/jarvis-hub/ (root 644, both, same folder).
+# Isolation (2026-10-19): the runner starts all delivered code as the user jarvis-sandbox and the verifier as jarvis-verify; without those two
+# users (see jarvis/caretaker/README.md, 'Deploying the isolation boundary') nothing can be 'verified', only 'completed, NOT verified'.
 [Unit]
 Description=JARVIS lab runner (execute, verify, repair dispatched tasks)
 After=network-online.target jarvis-lab-fw.service
 
 [Service]
-ExecStart=/usr/bin/python3 -u /opt/jarvis-hub/lab_runner.py
+Environment=JARVIS_LAB_ISOLATION=auto
+# Environment=JARVIS_LAB_VERIFIER_TOOLS=sandboxed   # ONLY after the agent CLI's tool execution is confirmed to run as another user/container (owner decision)
+# -I: ignore PYTHON* variables, user site and the current folder; -B: write no .pyc (the runner's own files stay exactly as installed).
+ExecStart=/usr/bin/python3 -I -B -u /opt/jarvis-hub/lab_runner.py
 Restart=always
 RestartSec=10
 ProtectSystem=full
+# ProtectSystem=full leaves /opt writable for root: the runner's own files are read-only for the whole service (and so for everything it starts).
+ReadOnlyPaths=/opt/jarvis-hub
 PrivateTmp=yes
+# Optional, NOT tested (needs the lab box): hide other users' processes (the verifier's command line holds the run's nonce) from the sandbox user.
+#ProtectProc=invisible
+#ProcSubset=pid
 
 [Install]
 WantedBy=multi-user.target

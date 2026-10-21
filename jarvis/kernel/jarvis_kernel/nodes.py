@@ -172,7 +172,11 @@ def make_handler(kernel):
                     raw = data.get("action", {})
                     a = Action(tool=str(raw.get("tool", "")), op=str(raw.get("op", "")), target=str(raw.get("target", "")),
                                params=raw.get("params") if isinstance(raw.get("params"), dict) else {},
-                               lane=str(raw.get("lane", "private")), untrusted_session=bool(raw.get("untrusted_session", False)))
+                               lane=str(raw.get("lane", "private")), untrusted_session=bool(raw.get("untrusted_session", False)),
+                               # The node is trusted, but an approval is for ONE requester (audit SEC-D3): the node's own actions
+                               # carry no requester ("" = the owner's), so it cannot consume an approval an agent asked for
+                               # unless it names that agent, and then the audit row says who it acted for.
+                               requester=str(raw.get("requester") or "")[:80])
                     if self.path == "/request":
                         d, aid = kernel.request(a)
                         return self._json(200, {"level": d.name, "reason": d.reason, "approval_id": aid})

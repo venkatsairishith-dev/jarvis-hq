@@ -96,7 +96,7 @@ def _split(target: str):
 
 def _run(script, env):
     from . import runtime                                  # stoppable: a cancelled job kills this PowerShell
-    r = runtime.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], timeout=30, env={**os.environ, **env})
+    r = runtime.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], timeout=30, env={**runtime.safe_environ(), **env})
     if r.returncode:
         # Only fixed reason codes raised by our own scripts are passed on; other error text could contain screen content.
         text = (r.stderr or "") + (r.stdout or "")
@@ -131,6 +131,7 @@ def type_text(target, params):
     # "typed" means the text is in the field now: read it back (value pattern, else the control's own window text).
     # Only yes/no leaves this machine. A live run on 2026-10-16 reported success while nothing had arrived.
     _run(READBACK, {"JARVIS_UI_PROC": proc, "JARVIS_UI_ELEM": elem, "JARVIS_UI_TEXT": text})
+    return {"observed": "text read back from the field"}      # the script above throws when the text is not there
 
 
 # ---- 2026-10-16: focus, keys, scroll and (last resort) a click at a point, for the owner's direct requests ----------
@@ -241,6 +242,7 @@ def _proc(target):
 
 def focus(target, params):
     _run(FOCUS, {"JARVIS_UI_PROC": _proc(target)})
+    return {"observed": "the target is the foreground window", "foreground": True}      # FOCUS throws when it is not
 
 
 def key(target, params):
@@ -286,6 +288,8 @@ def _window_state(op):
     def run(target, params):
         n, want = SHOW[op]
         _run(WINDOW_STATE, {"JARVIS_UI_PROC": _proc(target), "JARVIS_UI_SHOW": n, "JARVIS_UI_WANT": want})   # checked after
+        # WINDOW_STATE throws unless the window now is in the wanted state, so reaching here IS the node's observation of it
+        return {"observed": "window state read back", "window_state": want}
     return run
 
 

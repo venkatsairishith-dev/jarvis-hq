@@ -275,7 +275,13 @@ async def test_timeout_ignoring_provider_retains_bounded_capacity(monkeypatch):
         return "late"
 
     monkeypatch.setattr(service, "_invoke", invoke)
-    tasks = [asyncio.create_task(service.analyze_game_vision(text="Example", attachments=[picture()], timeout=.02)) for _ in range(4)]
+    # The service's deadline starts when the request is admitted, i.e. BEFORE the
+    # image preparation that precedes the provider call. 0.02 s raced that
+    # preparation on a busy machine (the request timed out before the provider
+    # was ever entered, so there was no ignoring provider to retain capacity for).
+    # The deadline only has to outlast preparation; it is still the expiry that
+    # ends each request.
+    tasks = [asyncio.create_task(service.analyze_game_vision(text="Example", attachments=[picture()], timeout=1.0)) for _ in range(4)]
     try:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         assert entered == 4 and all(isinstance(result, ValueError) and str(result) == "timeout" for result in results)

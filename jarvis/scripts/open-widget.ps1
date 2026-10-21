@@ -11,6 +11,7 @@ param([ValidateSet("neko", "status")][string]$Page = "neko", [int]$Width = 0, [i
 if ($Page -eq "neko") { $url = "http://127.0.0.1:48940/neko"; $title = "Neko"; if (-not $Width) { $Width = 270 }; if (-not $Height) { $Height = 400 } }
 else { $url = "http://127.0.0.1:48940/"; $title = "JARVIS Widget"; if (-not $Width) { $Width = 380 }; if (-not $Height) { $Height = 340 } }
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'jarvis-auth.ps1')
 $py = "D:\jarvis\tools\neko-venv\Scripts\python.exe"
 $server = (Resolve-Path (Join-Path $PSScriptRoot "..\widget\widget_server.py")).Path
 function Listening($p) { [bool](Get-NetTCPConnection -State Listen -LocalPort $p -ErrorAction SilentlyContinue) }
@@ -42,6 +43,7 @@ if (-not $w) {
   $profile = "D:\jarvis-apps\widget-profile"
   New-Item -ItemType Directory $profile -Force | Out-Null
   Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+  $url = Get-LaunchUrl "widget" 48940 $(if ($Page -eq "neko") { "/neko" } else { "/" })   # one-time launch code: signs the window in
   Start-Process $edge -ArgumentList "--app=$url", "--user-data-dir=$profile", "--window-size=$Width,$Height", "--no-first-run", "--no-default-browser-check"
   foreach ($i in 1..40) { Start-Sleep -Milliseconds 500; $w = Find-Widget; if ($w) { break } }
 }

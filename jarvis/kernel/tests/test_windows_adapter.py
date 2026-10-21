@@ -79,6 +79,31 @@ class NodeSide(unittest.TestCase):
         self.assertEqual([w["title"] for w in r["windows"]], ["Downloads", "main.py - Visual Studio Code"])
         self.assertNotIn("hwnd", r["windows"][0])                       # handles are not sent to the kernel
 
+    def test_ui_windows_gives_each_window_a_stable_opaque_id(self):
+        """Audit PC-D1 (2026-10-18): without an identity per window the plugin could never tell a NEW window from an old
+        one. The node sends an opaque id (not the handle), the same for the same window on every listing, different for
+        different windows, the ids of all windows (not only the 40 described), and the epoch of this node process."""
+        a = nodejobs.ui_windows({}, lister=lambda: self.WINS)
+        b = nodejobs.ui_windows({}, lister=lambda: list(reversed(self.WINS)))
+        ids_a = [w["id"] for w in a["windows"]]
+        self.assertTrue(all(isinstance(i, str) and i.startswith("w") and len(i) == 17 for i in ids_a))
+        self.assertEqual(len(set(ids_a)), 2)
+        self.assertEqual({w["title"]: w["id"] for w in a["windows"]}, {w["title"]: w["id"] for w in b["windows"]})
+        self.assertEqual(sorted(a["ids"]), sorted(ids_a))
+        self.assertTrue(a["ids_complete"])
+        self.assertEqual(a["id_epoch"], b["id_epoch"])
+        for w in a["windows"]:
+            self.assertNotIn(w["id"], ("1", "2", "w1", "w2"))                 # not the handle itself
+            self.assertNotIn("hwnd", w)
+            self.assertNotIn("pid", w)
+        many = [dict(self.WINS[0], hwnd=100 + i, title=f"W{i}") for i in range(45)]
+        m = nodejobs.ui_windows({}, lister=lambda: many)
+        self.assertEqual((len(m["windows"]), len(m["ids"]), m["ids_complete"]), (40, 45, True))
+        # a window whose handle is unknown has no id, and the list says it is incomplete (the plugin then claims nothing)
+        broken = nodejobs.ui_windows({}, lister=lambda: [self.WINS[0], dict(self.WINS[1], hwnd=None)])
+        self.assertIsNone(broken["windows"][1]["id"])
+        self.assertFalse(broken["ids_complete"])
+
     def test_open_is_verified_by_looking_for_the_window(self):
         before = set()
         ok = nodejobs._verify_open({"ok": True, "opened": "Downloads"}, {"op": "open_folder"}, lister=lambda: self.WINS, before=before, timeout=0.5)

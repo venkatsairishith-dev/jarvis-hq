@@ -74,19 +74,27 @@ def resolve_readable(path_str: str) -> Path:
     return real
 
 
-def _read_pdf(path: Path) -> str:
+NO_TEXT_LAYER = "no text layer: the PDF may be scanned; OCR is not available here"
+
+
+def _read_pdf(path: Path) -> tuple[str, int, int]:
+    """(text, pages read, pages that had no extractable text). Scanned or image-only pages give no text: there is no OCR
+    here, so the caller says so instead of returning silent empty text."""
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))
     if reader.is_encrypted:
         raise DocError("That PDF is password protected.")
-    pages = []
+    pages, read, empty = [], 0, 0
     for i, page in enumerate(reader.pages):
         if i >= MAX_PDF_PAGES:
             pages.append(f"[stopped after {MAX_PDF_PAGES} pages]")
             break
-        pages.append(page.extract_text() or "")
-    return "\n\n".join(pages)
+        text = page.extract_text() or ""
+        read += 1
+        empty += not text.strip()
+        pages.append(text)
+    return "\n\n".join(pages), read, empty
 
 
 def _read_docx(path: Path) -> str:
@@ -104,9 +112,15 @@ def read_document(path_str: str, max_chars: int = DEFAULT_CHARS) -> dict[str, An
     real = resolve_readable(path_str)
     limit = max(500, min(int(max_chars or DEFAULT_CHARS), MAX_CHARS))
     suffix = real.suffix.lower()
+    note = ""
     try:
         if suffix == ".pdf":
-            text, kind = _read_pdf(real), "pdf"
+            text, read, empty = _read_pdf(real)
+            kind = "pdf"
+            if read and empty == read:
+                note = NO_TEXT_LAYER
+            elif empty:
+                note = f"{empty} of {read} pages have no text layer (they may be scanned; OCR is not available here)"
         elif suffix == ".docx":
             text, kind = _read_docx(real), "docx"
         elif suffix in HTML_SUFFIXES:
@@ -123,7 +137,10 @@ def read_document(path_str: str, max_chars: int = DEFAULT_CHARS) -> dict[str, An
     except Exception as exc:                                   # a broken PDF or docx: say so without echoing internals
         raise DocError(f"That file could not be read ({type(exc).__name__}).")
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    return {"name": real.name, "kind": kind, "chars_total": len(text), "truncated": len(text) > limit, "text": text[:limit]}
+    out = {"name": real.name, "kind": kind, "chars_total": len(text), "truncated": len(text) > limit, "text": text[:limit]}
+    if note:
+        out["note"] = note
+    return out
 
 
 def safe_name(name: str) -> str:

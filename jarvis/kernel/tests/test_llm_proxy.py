@@ -98,6 +98,80 @@ class P(unittest.TestCase):
         sent = json.dumps(self.seen[-1][1])
         for bad in ("gho_abc", "hunter2", "sk-abcdefghij"): self.assertNotIn(bad, sent)
 
+    def test_only_standard_chat_fields_reach_the_provider_and_tool_text_is_scrubbed(self):
+        # audit SEC-D6 (2026-10-18): `payload = dict(body, model=model)` forwarded models/plugins/n/provider unchanged, and a
+        # key in a tool description reached the upstream unscrubbed. Synthetic keys, written in pieces.
+        self.proxy([self.good()])
+        aws, gh = "AKIA" + "QWERTYUIOPASDFGH", "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789"
+        tools = [{"type": "function", "function": {"name": "lookup", "description": f"signs requests with {aws}",
+                  "parameters": {"type": "object", "properties": {"q": {"type": "string", "description": f"use token {gh}",
+                                                                        "enum": ["a", f"x {aws}"]}}}}}]
+        self.call({"model": "x", "messages": [{"role": "user", "content": "hi"}], "tools": tools, "temperature": 0.2, "stop": ["\n\n"],
+                   "models": ["paid-vendor/expensive-model"], "plugins": [{"id": "web"}], "n": 64, "provider": {"order": ["paid"]},
+                   "user": "owner-synth@example.com", "n_predict": 99999, "response_format": {"type": "json_schema", "json_schema": {
+                       "name": "r", "schema": {"type": "object", "description": f"key {aws}"}}}})
+        body = self.seen[-1][1]
+        for k in ("models", "plugins", "n", "provider", "user", "n_predict"):
+            self.assertNotIn(k, body)
+        self.assertEqual((body["temperature"], body["stop"], body["tools"][0]["function"]["name"]), (0.2, ["\n\n"], "lookup"))
+        self.assertEqual(body["tools"][0]["function"]["parameters"]["properties"]["q"]["type"], "string")   # the schema still works
+        sent = json.dumps(body)
+        self.assertNotIn(aws, sent); self.assertNotIn(gh, sent)
+        rows = " ".join(r[0] for r in self.k.db.execute("SELECT payload FROM audit"))
+        self.assertIn('"dropped_fields": ["models", "n", "n_predict", "plugins", "provider", "user"]', rows)   # names only
+        self.assertNotIn("owner-synth@example.com", rows); self.assertNotIn("paid-vendor", rows)
+
+    def test_every_text_field_is_scrubbed_not_only_a_known_list(self):
+        # audit M2 (2026-10-18): message `name`, legacy `function_call`, `reasoning_content`, `refusal`, tool names, extra keys on
+        # content parts, `tool_choice` and `stop` reached the provider unscrubbed. A recorder at the provider's HTTP edge.
+        self.proxy([self.good()])
+        keys = {n: "AKIA" + n.upper().ljust(16, "Z")[:16] for n in
+                ("name", "fcname", "fcargs", "reasoning", "refusal", "extra", "tcname", "tcid", "toolout", "toolname", "choice", "stop", "rfname")}
+        self.call({"model": "x", "tool_choice": {"type": "function", "function": {"name": f"pick-{keys['choice']}"}}, "stop": [f"end {keys['stop']}"],
+                   "messages": [
+                       {"role": "user", "name": f"n-{keys['name']}", "content": [{"type": "text", "text": "hi", "note": f"extra {keys['extra']}"}]},
+                       {"role": "assistant", "content": None, "reasoning_content": f"r {keys['reasoning']}", "refusal": f"no {keys['refusal']}",
+                        "function_call": {"name": f"f-{keys['fcname']}", "arguments": json.dumps({"a": keys["fcargs"]})},
+                        "tool_calls": [{"id": f"id-{keys['tcid']}", "type": "function", "function": {"name": f"t-{keys['tcname']}", "arguments": "{}"}}]},
+                       {"role": "tool", "tool_call_id": "1", "content": f"out {keys['toolout']}"}],
+                   "tools": [{"type": "function", "function": {"name": f"tool-{keys['toolname']}", "parameters": {"type": "object"}}}],
+                   "response_format": {"type": "json_schema", "json_schema": {"name": f"rf-{keys['rfname']}", "schema": {"type": "object"}}}})
+        sent = json.dumps(self.seen[-1][1])
+        for tag, key in keys.items():
+            self.assertNotIn(key, sent, tag)
+
+    def test_media_reaches_a_local_model_only(self):
+        """images/audio/files are not scrubbable text: a cloud provider of the private lane gets a note, a local model the part."""
+        img = {"type": "image_url", "image_url": {"url": "data:image/png;base64,QUJDREVGRw=="}}
+        body = {"model": "x", "messages": [{"role": "user", "content": [{"type": "text", "text": "what is this"}, img,
+                                                                         {"type": "input_audio", "input_audio": {"data": "UklGRg", "format": "wav"}}]},
+                                           {"role": "assistant", "content": "ok", "audio": {"id": "a1"}}]}
+        self.proxy([self.good()])                                  # a private cloud provider
+        self.call(body)
+        cloud = json.dumps(self.seen[-1][1])
+        for leak in ("QUJDREVGRw", "UklGRg", "image_url", "input_audio", '"audio"'):
+            self.assertNotIn(leak, cloud, leak)
+        self.assertIn("an image was withheld for privacy", cloud)
+        self.assertEqual(self.seen[-1][1]["messages"][0]["content"][0]["text"], "what is this")   # the text still goes
+        rows = " ".join(r[0] for r in self.k.db.execute("SELECT payload FROM audit"))
+        self.assertIn('"media_withheld": 3', rows)
+        self.servers[-1].shutdown()
+        local = Provider("llama", "local", self.up_url, None, ["any"], default_model="local-vlm", key_optional=True)
+        self.proxy([local])                                        # a local model may see them
+        self.call(body)
+        got = self.seen[-1][1]
+        self.assertEqual(got["messages"][0]["content"][1], img)
+        self.assertIn("QUJDREVGRw", json.dumps(got))
+
+    def test_malformed_bodies_get_a_400_not_a_dropped_connection(self):
+        self.proxy([self.good()])
+        for body in ([{"role": "user", "content": "hi"}], {"messages": "hi"}, {"messages": ["a string, not a message"]},
+                     {"messages": [], "max_tokens": "abc"}):
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                self.call(body)
+            self.assertEqual(cm.exception.code, 400, body)
+        self.assertEqual(self.seen, [])
+
     def test_deep_scan_runs_once_per_request_not_once_per_message(self):
         # gitleaks is a subprocess (~0.5 s each): per message, a 40-message agent call took 21 s before the provider was asked
         from jarvis_kernel import scrub as scrub_mod
@@ -295,6 +369,97 @@ if __name__ == "__main__":
     unittest.main()
 
 
+def tripping_upstream(name, seen, trip, status=500, stream_after=None):
+    """A provider that switches the kill switch on (`trip()`) while it handles its request, then answers with `status`, or, when
+    `stream_after` is set, streams one event, trips, and streams the rest."""
+    class U(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+        def log_message(self, *a): pass
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            seen.append((name, body, self.headers.get("Authorization")))
+            if stream_after:
+                self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
+                self.wfile.write(SSE[0]); self.wfile.flush()
+                trip()
+                try:
+                    for c in SSE[1:]: self.wfile.write(c); self.wfile.flush()
+                except OSError:
+                    pass
+                return
+            trip()
+            self.send_response(status); self.send_header("Content-Length", "0"); self.end_headers()
+    s = ThreadingHTTPServer(("127.0.0.1", 0), U); threading.Thread(target=s.serve_forever, daemon=True).start()
+    return s, f"http://127.0.0.1:{s.server_address[1]}/v1"
+
+
+class KillSwitchBetweenSteps(unittest.TestCase):
+    """Audit M9: the kill switch is checked again between provider fallbacks, before a retry and between stream chunks (the real
+    handler, real upstream servers; the switch is flipped from inside the first provider's request)."""
+    setUp, tearDown, proxy, good, call = P.setUp, P.tearDown, P.proxy, P.good, P.call       # P's fixtures, without P's tests
+
+    def failing_then_good(self, status, **kw):
+        flaky, flaky_url = tripping_upstream("flaky", self.seen, self.k.kill, status=status, **kw)
+        self.servers.append(flaky)
+        self.proxy([Provider("flaky", "private", flaky_url, None, ["any"], priority=1), self.good(priority=2)])
+
+    def post(self, body):
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            self.call(body)
+        return cm.exception.code, cm.exception.read()
+
+    def test_a_kill_between_the_first_provider_failing_and_the_fallback_calls_no_fallback(self):
+        self.failing_then_good(422)                                      # not retried: the fallback would be next
+        code, body = self.post({"messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(code, 503); self.assertIn(b"kill switch is on", body)
+        self.assertEqual([n for n, b, a in self.seen], ["flaky"])         # the good provider was never asked
+        rows = [r[0] for r in self.k.db.execute("SELECT kind FROM audit WHERE kind='agent_model_stopped_by_kill'")]
+        self.assertEqual(rows, ["agent_model_stopped_by_kill"])
+
+    def test_a_kill_after_a_5xx_does_not_retry_the_same_provider_either(self):
+        self.failing_then_good(500)                                      # a 500 would be retried once, then fall back
+        self.assertEqual(self.post({"messages": [{"role": "user", "content": "hi"}]})[0], 503)
+        self.assertEqual([n for n, b, a in self.seen], ["flaky"])
+
+    def test_without_the_kill_switch_the_same_chain_still_falls_back(self):
+        flaky, flaky_url = tripping_upstream("flaky", self.seen, lambda: None, status=422)
+        self.servers.append(flaky)
+        self.proxy([Provider("flaky", "private", flaky_url, None, ["any"], priority=1), self.good(priority=2)])
+        out, _ = self.call({"messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(json.loads(out), TOOL_REPLY)
+        self.assertEqual([n for n, b, a in self.seen], ["flaky", "good"])
+
+    def test_a_kill_during_a_stream_stops_the_relay_between_chunks(self):
+        flaky, flaky_url = tripping_upstream("streamer", self.seen, self.k.kill, stream_after=True)
+        self.servers.append(flaky)
+        self.proxy([Provider("streamer", "private", flaky_url, None, ["any"], priority=1)])
+        try:
+            out, _ = self.call({"messages": [{"role": "user", "content": "hi"}], "stream": True})
+        except (urllib.error.URLError, OSError, ConnectionError) as e:   # a cut-off stream may also surface as a read error
+            out = b""
+        self.assertNotIn(b"[DONE]", out)                                 # never a complete-looking answer
+        self.assertNotIn(b'"lo"', out)                                   # nothing after the switch went on reached the agent
+        import time as _t
+        # Two correct stops, depending on how fast the proxy reads: the check between chunks (agent_model_call_failed, class
+        # killed) or, when the proxy only looks after the whole answer was already sent, the check right after the provider
+        # answered (agent_model_stopped_by_kill). Either way the stream is cut and nothing is passed on; a completed call is not.
+        for _ in range(50):
+            stopped = [json.loads(r[0]) for r in self.k.db.execute("SELECT payload FROM audit WHERE kind='agent_model_stopped_by_kill'")]
+            failed = [json.loads(r[0]) for r in self.k.db.execute("SELECT payload FROM audit WHERE kind='agent_model_call_failed'")]
+            if stopped or failed:
+                break
+            _t.sleep(0.1)
+        self.assertEqual(len(stopped) + len(failed), 1)
+        self.assertEqual([r.get("class") for r in failed], ["killed"] * len(failed))
+        self.assertEqual(self.k.db.execute("SELECT count(*) FROM audit WHERE kind='agent_model_call'").fetchone()[0], 0)
+
+    def test_the_request_start_check_still_refuses(self):
+        self.proxy([self.good()])
+        self.k.kill()
+        self.assertEqual(self.post({"messages": [{"role": "user", "content": "hi"}]})[0], 503)
+        self.assertEqual(self.seen, [])
+
+
 class DeepScanCache(unittest.TestCase):
     """A conversation re-sent on every call is deep-scanned once per new text, and the cache never weakens redaction."""
     def setUp(self):
@@ -316,7 +481,7 @@ class DeepScanCache(unittest.TestCase):
         hist = [{"role": "user", "content": "my token is Qx7FakeSecretValue9 please keep it"}]
         b1, f1, _ = self.lp._scrub_messages({"messages": [dict(m) for m in hist]})
         self.assertNotIn("Qx7FakeSecretValue9", json.dumps(b1)); self.assertIn("gitleaks:generic-api-key", f1)
-        hist.append({"role": "assistant", "content": "ok"}); hist.append({"role": "user", "content": "next question"})
+        hist.append({"role": "assistant", "content": "ok"}); hist.append({"role": "user", "content": "next question about my token"})   # a text the gitleaks gate scans
         b2, f2, _ = self.lp._scrub_messages({"messages": [dict(m) for m in hist]})
         self.assertNotIn("Qx7FakeSecretValue9", json.dumps(b2)); self.assertIn("gitleaks:generic-api-key", f2)
         self.assertEqual(len(self.runs), 2)
@@ -326,8 +491,32 @@ class DeepScanCache(unittest.TestCase):
     def test_a_failed_scan_is_not_cached(self):
         self.sm._gitleaks_secrets = lambda text: self.runs.append(text) or None
         for _ in range(2):
-            self.lp._scrub_messages({"messages": [{"role": "user", "content": "same text"}]})
+            self.lp._scrub_messages({"messages": [{"role": "user", "content": "same token text"}]})
         self.assertEqual(len(self.runs), 2)
+
+
+class JsonKeysAreScrubbed(unittest.TestCase):
+    """A JSON key is text a provider reads: a token used as a property name was forwarded as it was (inventory pass F, 2026-10-19)."""
+    def test_secret_shaped_keys_in_tools_and_schemas_are_redacted_and_values_keep_their_place(self):
+        from jarvis_kernel import llm_proxy
+        tok = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
+        body = {"messages": [{"role": "user", "content": "hi"}],
+                "tools": [{"type": "function", "function": {"name": "t", "parameters": {"type": "object", "properties": {
+                    tok: {"type": "string", "description": "plain"}, "ok_name": {"type": "string"}}}}}],
+                "response_format": {"type": "json_schema", "json_schema": {"schema": {"properties": {f"key {tok}": {"type": "string"}}}}}}
+        out, found, blocked = llm_proxy._scrub_messages(body)
+        sent = json.dumps(out)
+        self.assertNotIn(tok, sent)
+        self.assertFalse(blocked)
+        self.assertIn("github_token", found)
+        self.assertIn("ok_name", sent)
+        self.assertEqual(out["tools"][0]["function"]["parameters"]["properties"]["[REDACTED]"]["description"], "plain")
+
+    def test_a_private_key_used_as_a_key_blocks_the_request(self):
+        from jarvis_kernel import llm_proxy
+        _, found, blocked = llm_proxy._scrub_messages({"messages": [], "tools": [{"x": {"-----BEGIN RSA PRIVATE KEY-----": 1}}]})
+        self.assertTrue(blocked)
+        self.assertIn("private_key", found)
 
 
 class DeepScanBatch(unittest.TestCase):
@@ -368,7 +557,7 @@ class DeepScanBatch(unittest.TestCase):
         scrub_mod._gitleaks_secrets = lambda text: (_ for _ in ()).throw(RuntimeError("boom"))
         llm_proxy._DEEP_CACHE.clear()
         try:
-            b, f, blocked = llm_proxy._scrub_messages({"messages": [{"role": "user", "content": "plain text"}]})
+            b, f, blocked = llm_proxy._scrub_messages({"messages": [{"role": "user", "content": "plain token text"}]})
         finally:
             scrub_mod._gitleaks_secrets = real
         self.assertEqual((f, blocked), ([], False))

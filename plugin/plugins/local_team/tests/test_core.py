@@ -136,7 +136,7 @@ def test_post_stream_joins_sse_deltas(monkeypatch):
     def fake_open(req, timeout=0):
         seen["body"] = req.data
         return Resp()
-    monkeypatch.setattr(core.urllib.request, "urlopen", fake_open)
+    monkeypatch.setattr(core.loopback_http, "urlopen", fake_open)       # the loopback seam (re-review M13)
     assert core.post_stream("http://127.0.0.1:48950/v1/chat/completions", {"model": "m"}) == "Hello"
     assert b'"stream": true' in seen["body"]
 
@@ -151,7 +151,7 @@ def test_post_stream_reports_a_budget_spent_on_reasoning(monkeypatch):
 
         def __exit__(self, *a):
             return False
-    monkeypatch.setattr(core.urllib.request, "urlopen", lambda req, timeout=0: Resp())
+    monkeypatch.setattr(core.loopback_http, "urlopen", lambda req, timeout=0: Resp())
     with pytest.raises(core.TeamError, match="token budget"):
         core.post_stream("http://127.0.0.1:48950/v1/chat/completions", {"model": "m"})
 
@@ -218,3 +218,11 @@ def test_empty_and_too_long_tasks_refused():
         core.ask_local("", post=FakePost())
     with pytest.raises(core.TeamError, match="too long"):
         core.ask_local("x" * (core.MAX_TASK + 1), post=FakePost())
+
+
+def test_the_adviser_gate_follows_the_gateways_own_port_setting(monkeypatch):
+    """One setting, three readers (gateway, main_agent memory gate, this gate): moving the gateway moves all of them."""
+    monkeypatch.setenv("JARVIS_PRIVACY_PORT", "49000")
+    assert core.adviser_allowed("http://127.0.0.1:49000/v1") and not core.adviser_allowed("http://127.0.0.1:48950/v1")
+    monkeypatch.setenv("JARVIS_PRIVACY_PORT", "not-a-number")
+    assert core.adviser_allowed("http://127.0.0.1:48950/v1")

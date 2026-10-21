@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { consoleHeaders } from "../e2e/console-secret";
 import { execFileSync, spawn } from "node:child_process";
 
 // Live operational reliability against the real console, kernel and laptop node. Read-only requests only; nothing here
@@ -7,7 +8,7 @@ const BASE = "http://127.0.0.1:8799";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const J = async (page: Page, p: string) => (await page.request.get(p)).json();
 const P = async (page: Page, p: string, body: unknown = {}) =>
-  (await page.request.fetch(p, { method: "POST", data: body, headers: { "X-Jarvis-Console": "1", Origin: BASE } })).json();
+  (await page.request.fetch(p, { method: "POST", data: body, headers: await consoleHeaders(page, { Origin: BASE }) })).json();
 const cmd = async (page: Page, text: string) => (await J(page, "/api/owner/commands")).commands.find((c: { text: string }) => c.text === text);
 const idle = async (page: Page) => {
   for (let i = 0; i < 40; i++) {
@@ -115,7 +116,7 @@ test("D: stopping the wait cancels the command and its late answer is ignored", 
 });
 
 test("E: the console keeps the owner token to itself and the browser cannot reach the kernel's other planes", async ({ page }) => {
-  const h = { Origin: BASE, "X-Jarvis-Console": "1" };
+  const h = await consoleHeaders(page, { Origin: BASE });
   const secretish = /Bearer\s+[A-Za-z0-9_\-]{16,}|owner\.token|jarvis-secrets|\"token\"\s*:\s*\"[A-Za-z0-9_\-]{20,}/;
   for (const p of ["/api/health", "/api/owner/state", "/api/owner/commands", "/api/owner/models", "/api/voice/status", "/api/owner/automations"]) {
     const r = await page.request.get(p, { headers: h });
@@ -123,7 +124,7 @@ test("E: the console keeps the owner token to itself and the browser cannot reac
     expect(secretish.test(await r.text()), `${p} must not contain a token`).toBe(false);
   }
   // another website's page cannot drive the console, and a request without the console header is refused
-  const foreign = await page.request.post("/api/owner/command", { data: { text: "hello" }, headers: { Origin: "http://evil.example", "X-Jarvis-Console": "1" } });
+  const foreign = await page.request.post("/api/owner/command", { data: { text: "hello" }, headers: await consoleHeaders(page, { Origin: "http://evil.example" }) });
   expect(foreign.status()).toBeGreaterThanOrEqual(400);
   const neither = await page.request.post("/api/owner/command", { data: { text: "hello" } });      // no Origin and no console header
   expect(neither.status()).toBeGreaterThanOrEqual(400);
@@ -172,7 +173,7 @@ test("F: the kernel service restarts while a command is waiting: it fails honest
 
 test("G: when the model providers are resting the owner sees why, with the time, and nothing was sent", async ({ page }) => {
   const probe = await page.request.fetch("/api/owner/command", { method: "POST", data: { text: "Reliability check G probe", source: "text" },
-    headers: { "X-Jarvis-Console": "1", Origin: BASE }, failOnStatusCode: false });
+    headers: await consoleHeaders(page, { Origin: BASE }), failOnStatusCode: false });
   test.skip(probe.status() !== 429, "the providers are not resting right now, so there is nothing to show");
   await page.goto("/");
   await page.locator("#command-input").fill("Reliability check G: say ok");

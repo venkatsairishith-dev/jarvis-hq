@@ -480,6 +480,11 @@ def status_host_and_origin(a):
     port = srv.server_address[1]
 
     def req(method, path, headers):
+        # Since 2026-10-18 (review M15) every state-changing route also needs the launch secret. The case still checks what it
+        # always checked (Host and Origin decide the outcome), so a first-party caller's secret is sent on every POST: a
+        # refusal below is then caused by the Host or Origin, not by the missing secret.
+        if method == "POST":
+            headers = {**headers, "X-Jarvis-Control": srv.control_secret}
         r = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=b"" if method == "POST" else None, method=method, headers=headers)
         try:
             with urllib.request.urlopen(r, timeout=5) as x:

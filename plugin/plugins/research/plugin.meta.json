@@ -1,7 +1,7 @@
 {
   "build_env": {
-    "arch": "AMD64",
-    "os": "win32",
+    "arch": "x86_64",
+    "os": "linux",
     "python": "3.11"
   },
   "entries": [
@@ -299,21 +299,33 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 45943,
+  "source_bytes": 281490,
   "source_files": [
     ".gitignore",
     "README.md",
     "__init__.py",
+    "config.schema.json",
     "core.py",
     "fetch.py",
     "plugin.toml",
     "pyproject.toml",
     "rank.py",
     "ruff.toml",
+    "search.py",
+    "sources.py",
     "tests/__init__.py",
+    "tests/fixtures/claims_v2.json",
+    "tests/fixtures/nli_pairs.json",
+    "tests/fixtures/vitaminc_sample.json",
     "tests/test_core.py",
+    "tests/test_gateway_required.py",
+    "tests/test_outage_and_hostile.py",
+    "tests/test_screen_egress.py",
+    "tests/test_search.py",
     "tests/test_smoke.py",
+    "tests/test_sources.py",
+    "tests/test_ssrf_and_queries.py",
     "verify.py"
   ],
-  "source_sha256": "c91d87d09988886487a5992a15df0043459200bc9863a45e6d2e8ad704f89a81"
+  "source_sha256": "874e728d349dabd5dfce4c99788216b9c2f19bbda0069a4b6768820b4af6de29"
 }

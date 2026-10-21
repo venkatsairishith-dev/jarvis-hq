@@ -13,10 +13,25 @@ This private repository (github.com/venkatsairishith-dev/jarvis-hq, branch `main
   ```
   `:O` is a throw-away overlay. The research (H) cases need the claim-checker model mounted and `RESEARCH_NLI_DIR` set.
   Windows tests: `jarvis/docs/05_OPERATIONS.md` and the laptop checklist in the progress report.
-- **Status (2026-10-17, measured on the Linux server):** benchmark v2, 860 cases: 833 pass, 1 fail (H-042), 0 errors,
-  26 deferred (Windows or owner hardware), `jarvis/evals/neko95/results/bench-20261017-102655.json`. Scorecard v2 9.69
-  (`results/scorecard-v2-20261017-102656.json`). The official v1 score stays 7.61
-  (`results/score-20261016-154951-server-rescore.json`) until the live Windows re-runs.
+- **Status, all measured on the Linux test server (nothing on the owner's laptop hardware), never combined across commits.**
+  Benchmark v2 has 860 cases (658 integration, 202 mocked, 0 live; 26 deferred because they need Windows or the owner's hardware):
+  - 2026-10-17, code `4e32e583`: 833 pass, 1 fail (H-042, old claim checker), scorecard 9.69 (`bench-20261017-102655.json`).
+  - 2026-10-17, code `15d62f50` (MiniCheck checker): 834 pass, 0 fail, scorecard 9.81 (`bench-20261017-220721.json`).
+  - 2026-10-18, audit at `88ec49a2`: 833 pass, 1 fail (J-018, a 500 ms timing limit, took 505 ms), scorecard 9.12.
+  - 2026-10-18, remediation tree (local branch `remediation-2026-10-18`, uncommitted, on top of `88ec49a2`): 834 pass, 0 fail, 0 error,
+    scorecard 9.81 after round 1 (`bench-20261018-113507.json`); after round 2 (final tree): 834 pass, 0 fail, 0 error, 26 deferred, scorecard 9.81
+    (`bench-20261018-134602.json`, `scorecard-v2-20261018-134603.json`); kernel 717 OK, console 127 OK. A full run in between scored 9.12 (five troubleshooter
+    cases failed because the benchmark's fake console lacked the new console secret); that was fixed and the file is kept as evidence. 9.81 is the highest this server can score:
+    a v2 "10" means the in-repo cases pass, not that JARVIS works on the owner's machine. J-018 passes or fails with CPU and load.
+  - 2026-10-18, after the independent review's fixes (same tree, uncommitted; `jarvis/docs/neko/REMEDIATION_FOLLOWUP_2026-10-18.md`): kernel 791 OK, console 149 OK, benchmark v2 833 pass / 1 fail (K-106) / 0 error / 26 deferred, scorecard 9.62
+    (`bench-20261018-205900.json`; run 12 of the second pass). After the third pass (2026-10-19, kernel 808 OK, console 149 OK, desktop 376, lab 108+14 skipped): see the next line. After the fourth pass (2026-10-19; `jarvis/docs/neko/REMEDIATION_PASS4_2026-10-19.md`): kernel 866 OK (22 skipped), console 176 OK, desktop 397 (seeded and file order), lab 176 passed with real separate users (132 passed, 45 skipped without them), benchmark 834/0/0/26 scorecard 9.81 (`bench-20261019-141001.json`); `plugin/tests` 9 failed and `tests/unit` 11 failed are the known failures plus intermittent ones (classified there). **Branch protection on `main` is verified NOT enabled and cannot be enabled on this GitHub plan** (read-only check, 2026-10-19). The lab verifier isolation boundary is implemented and tested with real users in a container but is NOT live-verified and not claimed complete.
+  - 2026-10-19, after the owner authorised the change of case K-106 (only K-106; original preserved): benchmark v2 **834 pass / 0 fail / 0 error / 26 deferred, scorecard 9.81**
+    (`bench-20261019-083512.json`, `scorecard-v2-20261019-083513.json`, third pass; the K-106 change is `bench-20261019-041842.json`); only K-106 changed outcome. The independent re-review returned CONDITIONAL PASS; its blockers 1–4 are addressed in `REMEDIATION_FOLLOWUP_2026-10-18.md` section 1d, blocker 5 (Medium items) is partly open and blocker 6 (branch protection on `main`) is unverified. 9.81 is the ceiling for this server, not proof on the owner's machine (0 live, 202 mocked). K-106 failed because the approval-card fix (full text, no cut-off card) contradicted that case's old expectation; resolved on 2026-10-19 (next line).
+    Verdict now: READY FOR INDEPENDENT RE-REVIEW. Windows, microphone, GPU, lab-box and live-desktop checks are still PENDING; the lab verifier's same-user residual is narrowed, not closed.
+  - Per-capability status (what is implemented, tested only on Linux with fakes, or NOT RUN / BLOCKED): `jarvis/docs/neko/CAPABILITY_STATUS_2026-10-19.md`. Nothing here is claimed as production ready, fully autonomous, phone-accessible or GPU-verified on macOS/NVIDIA; Telegram is off.
+  - The official v1 score stays 7.61 (`results/score-20261016-154951-server-rescore.json`, from 16 Oct laptop runs) until the live Windows re-runs.
+  - Audit: `jarvis/docs/neko/JARVIS_AUDIT_2026-10-18.md`. Fixes: `jarvis/docs/neko/REMEDIATION_2026-10-18.md`.
+    Laptop verification (all PENDING): `jarvis/docs/neko/LAPTOP_VERIFICATION_2026-10.md`.
 - **GitHub Actions is switched off for this repository on purpose.** N.E.K.O ships 19 workflows in `.github/workflows/`;
   one of them (`health-check.yml`) runs every 5 minutes. Pushing happens only when the owner asks.
 

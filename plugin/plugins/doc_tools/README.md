@@ -5,7 +5,7 @@ plain text for a model to work with: data, never instructions, and never execute
 
 | Entry | What it does |
 |---|---|
-| `read_document(path, max_chars?)` | The text of a PDF, Word (`.docx`), Markdown, text, CSV, JSON or HTML file. Give the full path. Returns 20,000 characters by default, at most 100,000, and says when it cut. |
+| `read_document(path, max_chars?)` | The text of a PDF, Word (`.docx`), Markdown, text, CSV, JSON or HTML file. Give the full path. Returns 20,000 characters by default, at most 100,000, and says when it cut. A PDF page with no text layer (a scan) gives no text: there is no OCR here, so the answer has a `note` saying so instead of looking empty. |
 | `write_document(name, content, format=md\|txt\|docx)` | A new file from Markdown text. Word files get headings, bullets and numbered lists. A name that exists gets `-2`, `-3`, ...; nothing is overwritten. |
 | `list_outputs()` | The documents written, newest first. |
 

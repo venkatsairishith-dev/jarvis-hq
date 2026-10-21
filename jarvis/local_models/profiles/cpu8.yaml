@@ -25,8 +25,23 @@ models:
     aliases: [math, maths, local-math]
     ttl: 300
 
+  # PC-task decision model: the alias "decider" (plugin/plugins/desktop/decide.py DEFAULT_MODEL). It was missing from this
+  # profile, so on this hardware every PC task fell back to "no plan" (MEM-M5, 2026-10-18).
+  # Qwen3-1.7B is the low-memory choice in PC_CONTROL_BENCHMARK.md (82.9% dev, 76.7% held-out, 1.0 s median on the laptop GPU; 1.1 GB file) and fits 8 GB RAM; the
+  # 4B model (92.9%) would not leave room for Windows, the browser and the N.E.K.O servers.
+  # The model files here are pinned in jarvis/tools/jarvis.lock.json (models/gguf/...); fetch them with the lock fetcher, not with
+  # fetch_models.py --profile (that one only knows the models/llm set). NOT yet run on this hardware class.
+  decider-qwen3-1.7b:
+    cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-1.7B-Q4_K_M.gguf -c 4096
+    aliases: [decider]
+    ttl: 300
+  # Vision (alias vision-ground, jarvis_node/vision.py) is deliberately NOT defined for cpu8: UI-Venus-1.5-2B plus its
+  # projector is about 2.1 GB of files and a CPU-only run on 8 GB RAM would starve the PC the owner is using. With no
+  # "vision-ground" alias llama-swap refuses the request and jarvis_node/vision.py reports "the local vision model did not
+  # answer"; OCR and UI Automation still work. (no vision on cpu8)
+
 groups:
   one-at-a-time:
     swap: true
     exclusive: true
-    members: [qwen3.5-2b, qwen-coder-1.5b, qwen-math-1.5b]
+    members: [qwen3.5-2b, qwen-coder-1.5b, qwen-math-1.5b, decider-qwen3-1.7b]

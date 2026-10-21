@@ -1,7 +1,7 @@
 {
   "build_env": {
-    "arch": "AMD64",
-    "os": "win32",
+    "arch": "x86_64",
+    "os": "linux",
     "python": "3.11"
   },
   "entries": [
@@ -575,17 +575,19 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 31252,
+  "source_bytes": 47276,
   "source_files": [
     ".gitignore",
     "README.md",
     "__init__.py",
+    "config.schema.json",
     "core.py",
     "plugin.toml",
     "pyproject.toml",
     "ruff.toml",
     "tests/test_core.py",
+    "tests/test_hostile_and_outage.py",
     "tests/test_smoke.py"
   ],
-  "source_sha256": "70a39dc67d11b7b200bae1fd97b364d7dc7c20a4b6283b522db35563102fccf2"
+  "source_sha256": "28beba4c6e0586dff147d1113a43270e598d00c2ede29433d8c3b83111b75889"
 }

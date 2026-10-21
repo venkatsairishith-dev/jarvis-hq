@@ -33,6 +33,9 @@ $env:HF_HOME = "D:\jarvis\cache\hf"          # local speech-recognition model we
 # Speech recognition for N.E.K.O goes to JARVIS's int8 recognizers (Parakeet; IndicConformer for Hindi and Telugu) through the
 # local speech server instead of loading Whisper in-process. Loopback only. Remove this line to go back to Whisper base.
 $env:NEKO_WHISPER_ENDPOINT = "http://127.0.0.1:48930/v1/audio/transcriptions"
+# Upstream's optional monitor server (app/monitor.py) binds 0.0.0.0 with no token unless told otherwise. This launcher does not start it,
+# but if it is ever started from this shell it must stay on loopback (completion H, 2026-10-19).
+$env:NEKO_MONITOR_HOST = "127.0.0.1"
 # The small helper calls (emotion enrichment, suggested-reply chips, topic search) have budgets sized for a model that answers
 # directly. Dahl's MiniMax reasons inline first, which used up the time and the output cap (timeouts, cut-off JSON). Remove to restore upstream's.
 $env:NEKO_AUX_LLM_TIMEOUT_SCALE = "3"
@@ -92,7 +95,8 @@ if (-not $NoWake -and $wakeModel -and -not (Listening 48945) -and (Test-Path $wa
   foreach ($i in 1..30) { if (Listening 48945) { break }; Start-Sleep 1 }
 }
 if (Listening 48945) {
-  try { $w = Invoke-RestMethod http://127.0.0.1:48945/status -TimeoutSec 5; $wake = "$($w.state)" + $(if ($w.dry_run) { " (dry run)" } else { "" }) } catch { $wake = "listening but not answering" }
+  . (Join-Path $PSScriptRoot 'jarvis-auth.ps1')
+  try { $w = Invoke-RestMethod http://127.0.0.1:48945/status -Headers (Get-JarvisHeaders "wake") -TimeoutSec 5; $wake = "$($w.state)" + $(if ($w.dry_run) { " (dry run)" } else { "" }) } catch { $wake = "listening but not answering" }
 }
 # The agent server (started by the launcher above) hosts the plugin runtime (48916) and routes tasks; the JARVIS plugins live there.
 
@@ -125,7 +129,8 @@ if (-not (Listening 8799)) {
 }
 if (Listening 8799) {
   try {
-    $h = Invoke-RestMethod http://127.0.0.1:8799/api/health -TimeoutSec 10
+    . (Join-Path $PSScriptRoot 'jarvis-auth.ps1')
+    $h = Invoke-RestMethod http://127.0.0.1:8799/api/health -Headers (Get-JarvisHeaders "console") -TimeoutSec 10     # the full health needs the console token
     $jarvis = "console up, kernel " + $(if ($h.kernel.reachable -and $h.kernel.authorized) { "reachable and authorized" } else { "NOT reachable/authorized" })
   } catch { $jarvis = "console listening but not answering" }
 }

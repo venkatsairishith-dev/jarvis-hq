@@ -31,6 +31,8 @@ numbers in PC_CONTROL_BENCHMARK.md and the test results in PC_CONTROL_TEST_REPOR
    playing, a window that appeared, an error gone). Only checked steps count as done.
    - Only a boolean `ok` of `True` from an agent counts as success (2026-10-17).
    - After a stop, the summary says what already happened: "Stopped. Before the stop: …".
+   - [Added 2026-10-19] A step the node could not observe (for example a key press) is reported as "Done, but not everything was observed", never as plain success. This is tested on Linux with fakes; on a real desktop it is NOT RUN.
+   - [Added 2026-10-19] Stop (button, console, spoken) reaches every PC operation and answers `requested / stopped / still_running` honestly; the PC lock stays held until the kernel confirms the node job ended (the reaper still frees it after 900 s); the cancelled task's own pending approvals are denied. Live Windows check: NOT RUN.
 6. **Record:** `<data>\neko\pc_tasks\<id>.json` holds the plan (model, time), each step (agent, attempts, result,
    check, uncertainty) and the status. The Neko icon shows the active agent and step; the record has no screen or page text.
 
@@ -66,7 +68,7 @@ numbers in PC_CONTROL_BENCHMARK.md and the test results in PC_CONTROL_TEST_REPOR
 ## Privacy
 - **Screen and page text:** written by the node to `outputs\neko-local`, read once and deleted by the plugin. Anything
   older than 10 minutes there is swept automatically.
-  - The model sees page text only if `NEKO_SCREEN_TEXT_TO_MODEL=1` is set (off).
+  - The model sees page text only if `NEKO_SCREEN_TEXT_TO_MODEL=1` is set (off). Since 2026-10-18 the flag means: the text is offered only after the privacy gateway cleared it (names and deep redaction confirmed ready; paths, file names and e-mails are reduced first), or to a verified local model; with the gateway not ready the text is withheld and the model gets a neutral note.
 - **Playwright MCP console logs:** kept in a private folder, removed after each session.
 - **Screenshots:** no PC-control flow takes or keeps them.
 - **Remote models:** only via the privacy gateway (48950, redaction first). Decisions are local.
@@ -81,7 +83,7 @@ numbers in PC_CONTROL_BENCHMARK.md and the test results in PC_CONTROL_TEST_REPOR
 | YouTube | `jarvis\tests\neko_youtube_live.py` | plays, verifies, pauses |
 | Owner-guided (PIN, deny, voice, RESUME) | `jarvis\tests\neko_guided_owner_test.py` | needs the owner at the PC |
 | Benchmark v2 (860 cases) | `...\python.exe jarvis\evals\neko95\bench\bench.py` | on Windows, the Windows-only cases run instead of deferring |
-| Benchmark Console | console as usual, then http://127.0.0.1:8799, Bench tab | a route of the existing loopback console, no new port |
+| Benchmark Console | console as usual, then open it with `python jarvis\scripts\open_console.py` (a bare http://127.0.0.1:8799 now shows the login page, since 2026-10-19), Bench tab | a route of the existing loopback console, no new port; 127.0.0.1 only, not reachable from a phone |
 | Model server flags | `...\python.exe -m pytest jarvis\local_models -q` | every llama-server stays loopback, with no web UI and no agent flags |
 
 ## Emergency stop
@@ -89,6 +91,7 @@ numbers in PC_CONTROL_BENCHMARK.md and the test results in PC_CONTROL_TEST_REPOR
   and the node stops the job in hand.
   - Since 2026-10-17, the lab runner also gets no queued jobs while the kill switch is on (D-075).
   - A lab job that crashed, expired or was cancelled closes its task, so the owner hears about it.
+  - [Added 2026-10-19] While the kill switch is on no approval can be granted or used. An approval granted BEFORE the kill and not yet used becomes usable again after resume, once, for the exact action (bounded by the 600 s approval lifetime); whether to revoke those is the owner's open decision (`KILLSWITCH_APPROVAL_POLICY_2026-10-19.md`, today alternative A). Approvals granted during a kill are withdrawn at resume.
 - **Lift:** only at the kernel console, typed by a person: in a Windows terminal run
   `ssh -t -i D:\jarvis-secrets\ssh\jarvis_vm_ed25519 ubuntu@100.125.91.51 "cd ~/jarvis/kernel && python3 -m jarvis_kernel resume"`,
   then type `RESUME`.

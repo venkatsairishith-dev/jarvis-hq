@@ -4,7 +4,7 @@ import fs from "node:fs";
 // The approval workflow through the real UI, the real console and a real (throwaway) kernel. An agent token (held by the
 // test, as an agent would hold it) asks for actions; the owner decides in the browser; the agent then tries to use the
 // decision. Nothing is mocked: every outcome is read back from the kernel.
-const info = () => JSON.parse(fs.readFileSync("D:\\jarvis\\cache\\e2e-state.json", "utf-8")) as { kernel: number; agent_token: string };
+const info = () => JSON.parse(fs.readFileSync(process.env.E2E_STATE_FILE ?? "D:\\jarvis\\cache\\e2e-state.json", "utf-8")) as { kernel: number; agent_token: string };
 const PIN = "correct horse";
 
 async function agent(page: Page, body: Record<string, unknown>) {

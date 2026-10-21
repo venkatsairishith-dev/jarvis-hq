@@ -8,10 +8,22 @@ between the two: no engine code, no model download, no cloud.
                           -> raw PCM16 mono at 24 kHz (what N.E.K.O expects) or a WAV file
   POST /v1/audio/transcriptions   multipart (file, language) or a raw audio/wav body -> {"text": "..."}
                           int8 speech recognition: Parakeet for English, IndicConformer for Hindi and Telugu
-  GET  /v1/models, GET /health
+  POST /interrupt         cancel the synthesis requests in flight (their audio is dropped and they answer 409) and clear the
+                          "speaking" estimate; answers what it did: {"ok", "cancelled", "playback_stopped": false, ...}
+  GET  /v1/models, GET /health, GET /activity
 
-Loopback only (Host header must be 127.0.0.1 or localhost, so a web page cannot reach it by DNS rebinding), no credentials,
-at most 1,500 characters per synthesis request and 12 MB of audio per recognition request, one job at a time.
+Loopback only (Host header must be 127.0.0.1 or localhost, so a web page cannot reach it by DNS rebinding), no credentials for
+the compute routes (speech, transcription: they change no state beyond the "speaking" estimate), at most 1,500 characters per
+synthesis request and 12 MB of audio per recognition request, one job at a time.
+
+Route classes (re-review M3, 2026-10-19): public-harmless: GET /health, /v1/models, /activity (timestamps and a speaking estimate, no
+text, no audio). Compute routes, left open on purpose: POST /v1/audio/speech and /v1/audio/transcriptions take text or audio from the
+caller and return the result; they keep no history and change nothing but the speaking estimate, and N.E.K.O's own TTS/ASR clients
+(not ours to change) call them without a credential. The cost of that is free local compute for any loopback client, not data.
+POST /interrupt is the one route that changes what is happening (it drops speech in progress), so (audit M15) it needs this
+launch's control secret in `X-Jarvis-Control`, an exact loopback Host on this port and no foreign Origin. main() publishes the
+secret to <run dir>/speech.token (jarvis/scripts/control_auth.py) for the wake listener. A process of the same OS user can still
+read that file; the worst a forged /interrupt does is cut off speech, never start an action.
 
 Run with the JARVIS console's Python:  D:\\jarvis\\tools\\jarvis-venv\\Scripts\\python.exe local_speech_server.py [--port 48930]
 """
@@ -24,12 +36,15 @@ import json
 import os
 import re
 import sys
+import threading
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "console"))
+sys.path.insert(0, HERE)
+import control_auth   # noqa: E402  per-launch secret for the one state-changing route (audit M15)
 
 OUT_RATE = 24000                 # the PCM rate N.E.K.O's OpenAI-compatible TTS worker plays
 MAX_BODY = 64 * 1024
@@ -108,6 +123,25 @@ def _wav_seconds(wav: bytes) -> float:
         return 0.0
 
 
+# Synthesis requests in flight, and a counter that every /interrupt bumps. A request that started before the bump has its
+# audio dropped when the engine returns: the engine call itself cannot be aborted, but nothing from it reaches the page.
+_SYNTH = {"epoch": 0, "inflight": 0}
+_SYNTH_LOCK = threading.Lock()
+
+
+def interrupt() -> dict:
+    """Cancel in-flight synthesis and clear the speaking estimate. Truthful by construction: `cancelled` counts requests
+    whose audio was dropped; `playback_stopped` is always false because audio the page already received is played by the page
+    (N.E.K.O has no HTTP route to stop it), which this server cannot reach. UNVERIFIED on real hardware."""
+    with _SYNTH_LOCK:
+        _SYNTH["epoch"] += 1
+        cancelled = _SYNTH["inflight"]
+        was_speaking = activity()["speaking_estimate"]
+        _ACTIVITY.update(tts_at=0.0, tts_audio_s=0.0)
+    return {"ok": True, "cancelled": cancelled, "speaking_estimate_cleared": was_speaking, "playback_stopped": False,
+            "note": "synthesis in flight was cancelled; audio the page already received keeps playing"}
+
+
 def activity(now: float | None = None) -> dict:
     """Seconds since the last synthesis and transcription, and how long the last synthesized audio lasts. The page plays
     audio right after synthesis, so 'speaking' is estimated as: synthesized less than its own length ago (+1 s)."""
@@ -120,9 +154,11 @@ def activity(now: float | None = None) -> dict:
             "speaking_estimate": bool(tts_age is not None and tts_age <= a["tts_audio_s"] + 1.0)}
 
 
-def make_handler(synthesize, transcribe=None):
+def make_handler(synthesize, transcribe=None, secret=None, readiness=None):
     """`synthesize(text, lang) -> wav_bytes` and `transcribe(wav_bytes, lang) -> text`; both raise ValueError for unusable
-    input (the message is safe to return). Without `transcribe` the recognition endpoint answers 501."""
+    input (the message is safe to return). Without `transcribe` the recognition endpoint answers 501. `secret`: the control
+    secret for POST /interrupt (a fresh random one when not given; read it back from `Handler.control_secret`)."""
+    control_secret = secret or control_auth.new_secret()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "jarvis-local-speech"
@@ -145,7 +181,7 @@ def make_handler(synthesize, transcribe=None):
                 pass
 
         def _host_ok(self) -> bool:
-            host = (self.headers.get("Host") or "").lower().rsplit(":", 1)[0].strip("[]")
+            host = (control_auth.host_value(self.headers) or "").lower().rsplit(":", 1)[0].strip("[]")      # none/duplicate Host: refused
             return host in ("127.0.0.1", "localhost", "::1")
 
         def _send(self, code, body=b"", ctype="application/json"):
@@ -155,8 +191,17 @@ def make_handler(synthesize, transcribe=None):
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
+
+        def _origin_ok(self) -> bool:
+            """A browser page on another site names itself in Origin; scripts and the wake listener send none."""
+            origin = self.headers.get("Origin")
+            if origin is None:
+                return True
+            host = (urlsplit(origin).hostname or "").lower()
+            return host in ("127.0.0.1", "localhost", "::1")
 
         def _json(self, code, obj):
             self._send(code, json.dumps(obj).encode("utf-8"))
@@ -165,7 +210,15 @@ def make_handler(synthesize, transcribe=None):
             if not self._host_ok():
                 return self._json(403, {"error": {"message": "loopback only"}})
             if self.path in ("/health", "/"):
-                return self._json(200, {"status": "ok", "service": "jarvis-local-speech", "languages": ["en", "hi", "te"]})
+                # liveness AND honesty (completion H): "ok" only when recognition and synthesis can really run; otherwise "degraded" with
+                # the names of what is missing (model/engine names only: no paths, no private data)
+                try:
+                    info = (readiness or getattr(transcribe, "readiness", None) or (lambda: {"problems": [] if transcribe else ["transcription_unavailable"]}))()
+                    problems = [str(x)[:60] for x in (info.get("problems") or [])][:12]
+                except Exception:
+                    problems = ["readiness_unknown"]
+                return self._json(200, {"status": "degraded" if problems else "ok", "ready": not problems, "problems": problems,
+                                        "service": "jarvis-local-speech", "languages": ["en", "hi", "te"]})
             if self.path == "/activity":
                 return self._json(200, activity())
             if self.path in ("/v1/models", "/models"):
@@ -216,6 +269,11 @@ def make_handler(synthesize, transcribe=None):
             if not self._host_ok():
                 return self._json(403, {"error": {"message": "loopback only"}})
             route = urlsplit(self.path).path.rstrip("/")
+            if route == "/interrupt":
+                if not (self._origin_ok() and control_auth.host_exact(control_auth.host_value(self.headers), self.server.server_address[1])
+                        and control_auth.secret_ok(self.headers.get(control_auth.HEADER), control_secret)):
+                    return self._json(403, {"error": {"message": "refused: control secret, loopback Host and own origin required"}})
+                return self._json(200, interrupt())
             if route in ("/v1/audio/transcriptions", "/audio/transcriptions"):
                 return self._transcribe()
             if route not in ("/v1/audio/speech", "/audio/speech"):
@@ -240,10 +298,24 @@ def make_handler(synthesize, transcribe=None):
             fmt = str(req.get("response_format") or "pcm").lower()
             if fmt not in ("pcm", "wav"):
                 return self._json(400, {"error": {"message": "response_format must be pcm or wav"}})
+            with _SYNTH_LOCK:
+                epoch = _SYNTH["epoch"]
+                _SYNTH["inflight"] += 1
             try:
-                wav = synthesize(text, pick_language(req.get("voice"), text))
+                try:
+                    wav = synthesize(text, pick_language(req.get("voice"), text))
+                except BaseException:
+                    with _SYNTH_LOCK:
+                        _SYNTH["inflight"] -= 1
+                    raise
                 import time as _t
-                _ACTIVITY.update(tts_at=_t.time(), tts_audio_s=_wav_seconds(wav))
+                with _SYNTH_LOCK:
+                    _SYNTH["inflight"] -= 1
+                    interrupted = _SYNTH["epoch"] != epoch     # /interrupt arrived while the engine ran: drop the audio
+                    if not interrupted:
+                        _ACTIVITY.update(tts_at=_t.time(), tts_audio_s=_wav_seconds(wav))
+                if interrupted:
+                    return self._json(409, {"error": {"message": "interrupted"}, "interrupted": True})
                 if fmt == "wav":
                     return self._send(200, wav, "audio/wav")
                 return self._send(200, wav_to_pcm16(wav), "audio/pcm")
@@ -252,6 +324,7 @@ def make_handler(synthesize, transcribe=None):
             except Exception as exc:                       # never a traceback to the caller
                 return self._json(500, {"error": {"message": "synthesis failed: " + type(exc).__name__}})
 
+    Handler.control_secret = control_secret          # for main() and tests; never served by a route
     return Handler
 
 
@@ -273,6 +346,16 @@ def build_engines():
         except VoiceError as exc:                          # includes "not a readable WAV file" and "too long"
             raise ValueError(str(exc))
 
+    def readiness() -> dict:
+        """What /health reports: the engine, each language's recognizer and voice, and the voice-activity model must all be present."""
+        st = voice.status()
+        problems = [] if st.get("engine") else ["engine_missing"]
+        problems += [f"stt_{lang}_missing" for lang, v in sorted((st.get("stt") or {}).items()) if not v.get("available")]
+        problems += [f"tts_{lang}_missing" for lang, v in sorted((st.get("tts") or {}).items()) if not v.get("available")]
+        problems += [] if st.get("vad") else ["vad_missing"]
+        return {"problems": problems}
+
+    transcribe.readiness = readiness
     return synthesize, transcribe
 
 
@@ -281,12 +364,19 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=48930)
     args = ap.parse_args()
     synthesize, transcribe = build_engines()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(synthesize, transcribe))
+    handler = make_handler(synthesize, transcribe)
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
+    try:
+        control_auth.publish("speech", handler.control_secret)       # for the wake listener's POST /interrupt
+    except OSError as e:
+        print(f"warning: could not publish the control token ({type(e).__name__}); POST /interrupt will be refused", flush=True)
     print(f"jarvis-local-speech listening on http://127.0.0.1:{args.port}/v1", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        control_auth.unpublish("speech")
     return 0
 
 

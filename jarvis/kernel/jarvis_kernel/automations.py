@@ -262,7 +262,16 @@ class Automations:
         ma, bs = a.get("max_attempts", 2), a.get("budget_s", 1800)
         if not isinstance(ma, int) or not 1 <= ma <= 5 or not isinstance(bs, int) or not 120 <= bs <= 5400:
             raise AutomationError("max_attempts is 1-5 and budget_s is 120-5400")
-        return {"goal": goal, "instructions": instr, "criteria": crit, "agent": agent, "max_attempts": ma, "budget_s": bs}
+        out = {"goal": goal, "instructions": instr, "criteria": crit, "agent": agent, "max_attempts": ma, "budget_s": bs}
+        share = a.get("share_filename", False)
+        if not isinstance(share, bool):
+            raise AutomationError("share_filename must be true or false")
+        if share:
+            # The lab runs on public-lane models. By default a file-arrival run tells the lab only "a new file arrived", never the
+            # file's name (a name such as "salary-slip-Oct.pdf" is the owner's private data; audit, 2026-10-18). Only the owner,
+            # on the owner plane, can turn that on for one automation; it is stored with the definition and shown in the preview.
+            out["share_filename"] = True
+        return out
 
     def preview(self, d: dict, owner="owner") -> dict:
         """What would happen, without creating anything: the checked definition, the next runs and every side effect."""
@@ -280,6 +289,9 @@ class Automations:
         effects = {"lab_task": ["creates an outcome task and dispatches it to the lab (public-lane models; files are delivered to outputs\\task-<id>\\ after independent verification)"],
                    "job": [f"queues a '{a['action'].get('kind')}' job on node '{a['action'].get('node')}' (fixed kind, checked by policy at run time)"],
                    "command": ["sends the command text to JARVIS (your own agent), which acts only through kernel-gated tools"]}[a["action_kind"]]
+        if a["trigger_kind"] == "event" and a["action_kind"] == "lab_task":
+            effects = effects + ["the lab (public-lane models) is told 'a new file arrived'" + (
+                ", with the file's name (you turned on share_filename)" if a["action"].get("share_filename") else "; the file's name is NOT sent to it")]
         if a["trigger_kind"] == "event":
             effects = [f"runs once for each file that arrives in the laptop's '{a['event_spec']['watch']}' folder matching '{a['event_spec']['glob']}' "
                        "(a file must stop changing for a few seconds first; the same file is never run twice)"
@@ -319,6 +331,17 @@ class Automations:
         a["event_spec"] = json.loads(a["event_spec"]) if a.get("event_spec") else None
         a["runs"] = self.runs(aid, 8)
         return a
+
+    def _get_or_quarantine(self, aid: str):
+        """get() for the scheduler. A definition whose stored JSON is damaged (a truncated write, a hand edit) must not stop the
+        scheduler for every other automation: it is switched off with the reason, audited, and skipped. None = skip it."""
+        try:
+            return self.get(aid)
+        except (ValueError, TypeError, AttributeError) as e:
+            self.k.db.execute("UPDATE automations SET enabled=0, state='paused', paused_reason=? WHERE id=?",
+                              ("switched off: its stored definition is damaged (" + type(e).__name__ + "); recreate it", str(aid)[:20]))
+            self.k.audit.append("automation_damaged", {"id": str(aid)[:20], "type": type(e).__name__})
+            return None
 
     def list(self):
         return [self.get(r[0]) for r in self.k.db.execute("SELECT id FROM automations ORDER BY created DESC LIMIT 200").fetchall()]
@@ -385,8 +408,12 @@ class Automations:
                                 "VALUES (?,?,?,?,?,?)", (a["id"], key, slot, source, status, detail))
         return cur.rowcount == 1
 
-    def _fire(self, a: dict, key: str, context: str = "") -> str:
-        """Create the task/job/command for a claimed run. Returns the run's new status."""
+    def _fire(self, a: dict, key: str, context: str = "", public_context: str = None) -> str:
+        """Create the task/job/command for a claimed run. Returns the run's new status.
+
+        `context` says what triggered the run, for the owner's own agent (a command) and may name the private file that
+        arrived. `public_context` is the neutral version of it, and is all a lab task is told unless the automation was created
+        with share_filename true: the lab uses public-lane models, which never see a private file name unapproved."""
         act, now = a["action"], self.clock()
         # The fence: only one caller moves a claimed run to 'firing', so a retry loop in another process cannot fire it again.
         got = self.k.db.execute("UPDATE automation_runs SET status='firing', fired_at=? WHERE automation_id=? AND run_key=? AND status='claimed'",
@@ -411,7 +438,8 @@ class Automations:
                 tid = self.tasks.create("automation", "public", f"automation '{a['name']}' ({key})", act["goal"], None, act["criteria"],
                                         "schedule", act["max_attempts"], act["budget_s"])
                 row["task_id"] = tid
-                code, reply = self.dispatch("automation", "public", tid, {"instructions": (act["instructions"] + (f"\n\nTrigger: {context.strip(' ,')}" if context else ""))[:8000],
+                lab_context = context if (public_context is None or act.get("share_filename") is True) else public_context
+                code, reply = self.dispatch("automation", "public", tid, {"instructions": (act["instructions"] + (f"\n\nTrigger: {lab_context.strip(' ,')}" if lab_context else ""))[:8000],
                                                                          "criteria": act["criteria"],
                                                                          "agent": act["agent"], "public_ok": True})
                 if code != 200:
@@ -451,7 +479,7 @@ class Automations:
         due = [r[0] for r in self.k.db.execute("SELECT id FROM automations WHERE enabled=1 AND state='scheduled' AND next_run IS NOT NULL "
                                                "AND next_run<=? ORDER BY next_run LIMIT 50", (now,)).fetchall()]
         for aid in due:
-            a = self.get(aid)
+            a = self._get_or_quarantine(aid)
             if not a or not a["enabled"] or a["next_run"] > now:
                 continue
             slots, cur = [], a["next_run"]
@@ -508,10 +536,19 @@ class Automations:
         for a while (an automation created a minute later still sees nothing: it only acts on new arrivals)."""
         import fnmatch
         out = []
+        # `expires` holds for event automations exactly as for scheduled ones in tick(): past it, the automation is switched
+        # off and marked completed ('expired') and never fires again. Event automations have no next_run, so tick()'s own
+        # check never sees them; they are expired here, before any event is matched (and whether or not one arrived).
+        self.k.db.execute("UPDATE automations SET enabled=0, state='completed', paused_reason='expired' WHERE trigger_kind='event' "
+                          "AND enabled=1 AND state='scheduled' AND expires IS NOT NULL AND expires>0 AND ?>expires", (now,))
         rows = self.k.db.execute("SELECT id, node, watch, rel, size FROM watch_events WHERE handled=0 ORDER BY ts LIMIT 50").fetchall()
         for eid, node, watch, rel, size in rows:
             for (aid,) in self.k.db.execute("SELECT id FROM automations WHERE trigger_kind='event' AND enabled=1 AND state='scheduled'").fetchall():
-                a = self.get(aid)
+                a = self._get_or_quarantine(aid)
+                if not a:
+                    continue
+                if a["expires"] and now > a["expires"]:
+                    continue                                             # expired (switched off above)
                 spec = a["event_spec"] or {}
                 if spec.get("watch") != watch or not fnmatch.fnmatchcase(os.path.basename(rel).lower(), str(spec.get("glob", "*")).lower()):
                     continue
@@ -528,7 +565,7 @@ class Automations:
                 elif busy and a["overlap"] == "skip":
                     self.k.db.execute("UPDATE automation_runs SET status='skipped_overlap', detail='the previous run is still going' WHERE automation_id=? AND run_key=?", (aid, key))
                 else:
-                    self._fire(a, key, f", file arrived in '{watch}': {os.path.basename(rel)[:80]}")
+                    self._fire(a, key, f", file arrived in '{watch}': {os.path.basename(rel)[:80]}", public_context=", a new file arrived")
                     out.append(key)
             self.k.db.execute("UPDATE watch_events SET handled=1 WHERE id=?", (eid,))
         return out
@@ -541,7 +578,7 @@ class Automations:
         rows = self.k.db.execute("SELECT automation_id, run_key, scheduled_for, status, detail, COALESCE(fired_at, scheduled_for) "
                                  "FROM automation_runs WHERE status IN ('claimed','firing')").fetchall()
         for aid, key, sched, status, detail, since in rows:
-            a = self.get(aid)
+            a = self._get_or_quarantine(aid)
             waiting = status == "claimed" and str(detail or "").startswith("waiting")
             if not waiting:
                 if now - (since or now) > CLAIM_GRACE:

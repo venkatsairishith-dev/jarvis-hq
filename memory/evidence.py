@@ -127,14 +127,17 @@ def _counter(value) -> float:
     """A stored evidence counter as a number; a damaged one (text, a list; manual edits, legacy formats) counts as 0."""
     try:
         return float(value or 0.0)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):      # OverflowError: an int too large for a float (10**400)
         return 0.0
 
 
 def _int_counter(value) -> int:
-    """A stored whole-number counter (sub_zero_days, user_fact_reinforce_count); damaged, nan or infinite counts as 0."""
+    """A stored whole-number counter (sub_zero_days, user_fact_reinforce_count); damaged, nan, infinite or absurdly large
+    (beyond 2**63) counts as 0. A whole number is kept exactly, not squeezed through a float (precision is lost above 2**53)."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value if abs(value) < 2 ** 63 else 0
     v = _counter(value)
-    return int(v) if math.isfinite(v) else 0
+    return int(v) if math.isfinite(v) and abs(v) < 2 ** 63 else 0
 
 
 def effective_reinforcement(entry: dict, now: datetime) -> float:

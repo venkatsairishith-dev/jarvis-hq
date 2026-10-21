@@ -18,6 +18,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
+sys.path.insert(0, str(HERE))
+from console_secret import headers as console_headers  # noqa: E402
 from live_check import jget, run_entry  # noqa: E402
 
 CONSOLE = "http://127.0.0.1:8799/api/owner"
@@ -32,7 +34,7 @@ def report(n, name, verdict, detail):
 
 
 def console(method, name, body=None, timeout=30):
-    return jget(f"{CONSOLE}/{name}", method=method, body=body, timeout=timeout, headers={"X-Jarvis-Console": "1"})
+    return jget(f"{CONSOLE}/{name}", method=method, body=body, timeout=timeout, headers=(console_headers(CONSOLE.rsplit("/api/owner", 1)[0]) if method != "GET" else None))
 
 
 def deny_next_approval(match, seen=None, wait=120):

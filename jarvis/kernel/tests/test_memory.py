@@ -156,3 +156,50 @@ class Erasure(unittest.TestCase):
                 self.assertEqual([x["text"] for x in m.list("hermes")], ["an unrelated preference that stays"])
             finally:
                 k.db.close()
+
+
+class Lanes(TT.Base):
+    """MEM-M2 (2026-10-18): an entry records the lane of the token that wrote it and is read only in that lane. Before, rows
+    were keyed by the token NAME only, so re-issuing a name in the public lane exposed its private entries (audit R2)."""
+    def mem(self, op, target, tok, **params):
+        return self.post("/v1/jarvis/actions", {"tool": "memory", "op": op, "target": target, "params": params}, tok)
+
+    def test_a_name_reissued_in_the_public_lane_never_reads_its_private_entries(self):
+        priv = self.tokens.issue("agentx", "private")
+        e = self.mem("add", "Private fact: the PAN card is in the blue folder", priv)[1]["entry"]
+        pub = self.tokens.issue("agentx", "public")                       # the audit's repro: same name, public lane
+        self.assertEqual(self.mem("list", "", pub)[1]["entries"], [])
+        self.assertEqual(self.mem("list", "", pub, query="PAN card")[1]["entries"], [])
+        self.assertEqual(self.mem("get", e["id"], pub)[0], 404)
+        self.assertNotIn("PAN", self.mem("render", "", pub)[1]["text"])
+        self.assertEqual(self.mem("resolve", "PAN card blue folder", pub)[1]["candidates"], [])
+        self.assertEqual(self.mem("update", e["id"], pub, text="changed by the public token", expected_version=1)[0], 400)
+        self.assertEqual(self.mem("forget", e["id"], pub)[0], 400)
+        self.assertEqual(self.mem("forget", "PAN card blue folder", pub)[0], 409)
+        self.assertEqual(self.mem("add", "Private fact: the PAN card is in the blue folder", pub)[1]["entry"].get("duplicate"), None)
+        lanes = dict(self.k.db.execute("SELECT lane, count(*) FROM memories WHERE owner='agentx' GROUP BY lane").fetchall())
+        self.assertEqual(lanes, {"private": 1, "public": 1})                # the public copy is its own public row
+        priv = self.tokens.issue("agentx", "private")                     # back in the private lane: its own entry, untouched
+        got = self.mem("get", e["id"], priv)[1]["entry"]
+        self.assertEqual((got["text"], got["version"], got["lane"]), ("Private fact: the PAN card is in the blue folder", 1, "private"))
+        self.assertEqual(len(self.mem("list", "", priv)[1]["entries"]), 1)
+
+    def test_rows_from_before_the_lane_column_are_private(self):
+        import tempfile as _t
+        from jarvis_kernel.llm_proxy import AgentTokens
+        from jarvis_kernel.memory import Memories
+        from jarvis_kernel.store import Kernel
+        with _t.TemporaryDirectory() as d:
+            k = Kernel(os.path.join(d, "old"))
+            k.db.execute("CREATE TABLE memories(id TEXT PRIMARY KEY, owner TEXT, scope TEXT, kind TEXT, text TEXT, version INT, "
+                         "state TEXT, created REAL, updated REAL, history TEXT)")                 # the schema before 2026-10-18
+            k.db.execute("INSERT INTO memories VALUES ('m-0000aaaa','agenty','default','fact','Old private fact',1,'active',1,1,'[]')")
+            AgentTokens(k).issue("agenty", "public")
+            m = Memories(k)                                               # migrates: unknown lane means private
+            self.assertEqual(m.list("agenty"), [])
+            self.assertEqual(m.render("agenty"), "")
+            self.assertEqual([x["text"] for x in m.list("agenty", lane="private")], ["Old private fact"])
+            self.assertIn("memories_lane_migrated", [r[0] for r in k.db.execute("SELECT kind FROM audit").fetchall()])
+            Memories(k)                                                   # a second start does not migrate again
+            self.assertEqual(k.db.execute("SELECT count(*) FROM audit WHERE kind='memories_lane_migrated'").fetchone()[0], 1)
+            k.db.close()

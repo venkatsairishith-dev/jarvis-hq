@@ -152,7 +152,7 @@ class EvidenceFlowMixin:
         incremented today / score >= 0).
         """
         from memory.event_log import EVT_REFLECTION_EVIDENCE_UPDATED
-        from memory.evidence import maybe_mark_sub_zero
+        from memory.evidence import _int_counter, maybe_mark_sub_zero
         if self._event_log is None:
             raise RuntimeError(
                 "[Reflection.aincrement_sub_zero] event_log 未注入"
@@ -172,7 +172,7 @@ class EvidenceFlowMixin:
             if not maybe_mark_sub_zero(staged_entry, now):
                 return None
 
-            new_count = int(staged_entry.get('sub_zero_days', 0) or 0)
+            new_count = _int_counter(staged_entry.get('sub_zero_days', 0))
             new_date = staged_entry.get('sub_zero_last_increment_date')
 
             payload = {
@@ -183,8 +183,8 @@ class EvidenceFlowMixin:
                 'disp_last_signal_at': entry.get('disp_last_signal_at'),
                 'sub_zero_days': new_count,
                 'sub_zero_last_increment_date': new_date,
-                'user_fact_reinforce_count': int(
-                    entry.get('user_fact_reinforce_count', 0) or 0,
+                'user_fact_reinforce_count': _int_counter(
+                    entry.get('user_fact_reinforce_count', 0),
                 ),
                 'source': 'archive_sweep',
             }

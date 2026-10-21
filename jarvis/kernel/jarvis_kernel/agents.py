@@ -229,6 +229,8 @@ class AgentDefs:
         cur = self.get(aid)
         if not cur:
             raise AgentError("no such agent", 404)
+        if str(cur.get("instructions", "")).startswith("[text removed"):          # retention.py removed this definition's text
+            raise AgentError("this agent's text was removed by the retention policy, so it cannot be cloned", 409)
         keys = ("purpose", "role", "instructions", "runtime", "lane", "tools", "skills", "model_pref", "model_fallback", "workspace",
                 "permissions", "criteria", "verification", "max_attempts", "budget_s", "max_runs_per_day")
         d = {k: cur[k] for k in keys}

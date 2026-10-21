@@ -1,10 +1,62 @@
 {
   "build_env": {
-    "arch": "AMD64",
-    "os": "win32",
+    "arch": "x86_64",
+    "os": "linux",
     "python": "3.11"
   },
   "entries": [
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.cancel_task.description",
+        "default": "Cancel one command this bridge handed to JARVIS, by its command_id: JARVIS stops waiting for its answer and the lab tasks that command started are stopped too (with their queued or running jobs). Other commands' tasks are not touched. This is not the kill switch."
+      },
+      "event_key": "jarvis_bridge.cancel_task",
+      "event_type": "plugin_entry",
+      "id": "cancel_task",
+      "input_schema": {
+        "properties": {
+          "command_id": {
+            "description": "The command_id returned by delegate_task.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "command_id",
+        "cancelled",
+        "tasks_stopped",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "cancelled": {},
+          "command_id": {},
+          "message": {},
+          "tasks_stopped": {}
+        },
+        "required": [
+          "command_id",
+          "cancelled",
+          "tasks_stopped",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.cancel_task.name",
+        "default": "Cancel a task handed to JARVIS"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
     {
       "auto_start": false,
       "description": {
@@ -223,6 +275,7 @@
   ],
   "entries_config_sha256": "",
   "entry_methods": {
+    "cancel_task": "cancel_task",
     "connector_overview": "connector_overview",
     "delegate_task": "delegate_task",
     "jarvis_status": "jarvis_status",
@@ -230,6 +283,65 @@
     "task_result": "task_result"
   },
   "handlers": {
+    "jarvis_bridge.cancel_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.cancel_task.description",
+        "default": "Cancel one command this bridge handed to JARVIS, by its command_id: JARVIS stops waiting for its answer and the lab tasks that command started are stopped too (with their queued or running jobs). Other commands' tasks are not touched. This is not the kill switch."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "cancel_task",
+      "input_schema": {
+        "properties": {
+          "command_id": {
+            "description": "The command_id returned by delegate_task.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "command_id",
+        "cancelled",
+        "tasks_stopped",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "cancelled": {},
+          "command_id": {},
+          "message": {},
+          "tasks_stopped": {}
+        },
+        "required": [
+          "command_id",
+          "cancelled",
+          "tasks_stopped",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.cancel_task.name",
+        "default": "Cancel a task handed to JARVIS"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
     "jarvis_bridge.connector_overview": {
       "auto_start": false,
       "description": {
@@ -532,6 +644,65 @@
       },
       "timeout": null
     },
+    "jarvis_bridge:plugin_entry:cancel_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.cancel_task.description",
+        "default": "Cancel one command this bridge handed to JARVIS, by its command_id: JARVIS stops waiting for its answer and the lab tasks that command started are stopped too (with their queued or running jobs). Other commands' tasks are not touched. This is not the kill switch."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "cancel_task",
+      "input_schema": {
+        "properties": {
+          "command_id": {
+            "description": "The command_id returned by delegate_task.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "command_id",
+        "cancelled",
+        "tasks_stopped",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "cancelled": {},
+          "command_id": {},
+          "message": {},
+          "tasks_stopped": {}
+        },
+        "required": [
+          "command_id",
+          "cancelled",
+          "tasks_stopped",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.cancel_task.name",
+        "default": "Cancel a task handed to JARVIS"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
     "jarvis_bridge:plugin_entry:connector_overview": {
       "auto_start": false,
       "description": {
@@ -785,11 +956,9 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 44612,
+  "source_bytes": 63931,
   "source_files": [
     ".gitignore",
-    ".vscode/settings.json",
-    ".vscode/tasks.json",
     "README.md",
     "__init__.py",
     "client.py",
@@ -800,8 +969,9 @@
     "ruff.toml",
     "tests/test_client.py",
     "tests/test_dashboard.py",
+    "tests/test_result_cleaning_bridge.py",
     "tests/test_smoke.py",
     "ui/panel.tsx"
   ],
-  "source_sha256": "c197bfa3b0c0766eeeb5f05f0a1794feebeeed6901c84777a5d3ef55e7939463"
+  "source_sha256": "6f2202f41296eb85220d72aa3e321e8f94c997aa7f327fb97e643af62bf78686"
 }

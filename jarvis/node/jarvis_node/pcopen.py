@@ -16,6 +16,8 @@ import re
 import subprocess
 import time
 
+from .sensitive import sensitive_target  # (the kernel's list, config/sensitive_sites.json, with the node's floor)
+
 KNOWN_FOLDERS = {   # name -> Windows KNOWNFOLDERID
     "downloads": "{374DE290-123F-4565-9164-39C4925E467B}", "documents": "{FDD39AD0-238F-46AF-ADB4-6C85480369C7}",
     "desktop": "{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}", "pictures": "{33E28130-4E1E-4676-835A-98395C3BC3BB}",
@@ -25,6 +27,13 @@ DOC_TYPES = {".pdf", ".txt", ".md", ".rtf", ".doc", ".docx", ".odt", ".xls", ".x
              ".mkv", ".mov", ".avi", ".webm", ".html", ".htm", ".json", ".xml", ".log", ".zip", ".epub"}
 SENSITIVE = re.compile(r"1password|bitwarden|keepass|lastpass|dashlane|password|credential|metamask|wallet|paypal|bank|"
                        r"\bupi\b|broker|jarvis-secrets", re.I)
+REFUSED = "refused: password managers, wallets, banking and secrets are never opened"
+
+
+def _sensitive(*texts) -> bool:
+    """The words above, plus the kernel's financial sites and app names (audit PC-D10: 'Zerodha Kite', 'PhonePe', 'YONO SBI'
+    and 'ICICI iMobile' had none of these words and opened)."""
+    return bool(SENSITIVE.search(" ".join(texts)) or sensitive_target(list(texts)))
 MAX_SCAN = 5000            # entries looked at when matching a name inside a folder
 MAX_LIST = 200
 _apps_cache = {"t": 0.0, "apps": []}
@@ -137,16 +146,16 @@ def find_app(query: str, apps: list):
 def pc_open(p: dict, roots: dict = None, apps: list = None, opener=None, launcher=None) -> dict:
     """Run one authorized pc_open job: open_app, open_folder, open_file or list_folder."""
     op, target, rel = str(p.get("op", "")), str(p.get("target", "")), str(p.get("path", ""))
-    if SENSITIVE.search(target + " " + rel):
-        return {"ok": False, "error": "refused: password managers, wallets, banking and secrets are never opened"}
+    if _sensitive(target, rel):
+        return {"ok": False, "error": REFUSED}
     opener = opener or os.startfile
     if op == "open_app":
         found, near = find_app(target, apps if apps is not None else start_apps())
         if not found:
             return {"ok": False, "error": "no such app in the Start list", "closest": near}
         name, appid = found
-        if SENSITIVE.search(name):
-            return {"ok": False, "error": "refused: password managers, wallets, banking and secrets are never opened"}
+        if _sensitive(name):
+            return {"ok": False, "error": REFUSED}
         (launcher or (lambda a: subprocess.Popen(["explorer.exe", "shell:AppsFolder\\" + a], close_fds=True)))(appid)
         return {"ok": True, "opened": name}
     root = known_folder(target, roots)
@@ -158,8 +167,8 @@ def pc_open(p: dict, roots: dict = None, apps: list = None, opener=None, launche
     if not path:
         return {"ok": False, "error": "no single " + ("file" if op == "open_file" else "folder") + " matches", "closest": near}
     inside = os.path.relpath(path, root) if path != root else ""
-    if SENSITIVE.search(inside):
-        return {"ok": False, "error": "refused: password managers, wallets, banking and secrets are never opened"}
+    if _sensitive(inside):
+        return {"ok": False, "error": REFUSED}
     shown = os.path.join(target.strip().title(), inside) if inside else target.strip().title()
     if op == "open_file":
         if os.path.splitext(path)[1].lower() not in DOC_TYPES:

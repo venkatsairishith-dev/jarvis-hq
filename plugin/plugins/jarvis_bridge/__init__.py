@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from plugin.plugins._shared import screen_text
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko_plugin, plugin_entry, tr, ui
 
 from .client import BridgeError, JarvisClient, SOURCE, speak_full_reply
@@ -87,6 +88,7 @@ class JarvisBridgePlugin(NekoPluginBase):
         timeout=20,
         llm_result_fields=["command_id", "state", "message"],
     )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def delegate_task(self, task: str = "", **_):
         try:
             sent = await JarvisClient().delegate(task)
@@ -117,6 +119,7 @@ class JarvisBridgePlugin(NekoPluginBase):
         timeout=20,
         llm_result_fields=["command_id", "state", "message", "reply"],
     )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def task_result(self, command_id: str = "", **_):
         try:
             rows = await JarvisClient().commands(15)
@@ -142,6 +145,40 @@ class JarvisBridgePlugin(NekoPluginBase):
             out["message"] = f"The task is {state}."
         return Ok(out)
 
+    @plugin_entry(
+        id="cancel_task",
+        name=tr("entry.cancel_task.name", default="Cancel a task handed to JARVIS"),
+        description=tr("entry.cancel_task.description", default=(
+            "Cancel one command this bridge handed to JARVIS, by its command_id: JARVIS stops waiting for its answer and the lab "
+            "tasks that command started are stopped too (with their queued or running jobs). Other commands' tasks are not "
+            "touched. This is not the kill switch.")),
+        input_schema={"type": "object", "properties": {
+            "command_id": {"type": "string", "description": "The command_id returned by delegate_task."}},
+            "required": ["command_id"]},
+        timeout=20,
+        llm_result_fields=["command_id", "cancelled", "tasks_stopped", "message"],
+    )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    async def cancel_task(self, command_id: str = "", **_):
+        try:
+            out = await JarvisClient().cancel(command_id)
+        except BridgeError as exc:
+            return _err(exc)
+        stopped = out.get("tasks_stopped", [])
+        n = len(stopped)
+        if out["cancelled"]:
+            message = "JARVIS cancelled that command: its answer is ignored and JARVIS is free for the next one."
+        elif n:
+            message = "That command had already finished or been stopped."
+        else:
+            message = "That command was no longer running (it had finished, failed or was already stopped)."
+        if n:
+            message += f" {n} lab task{'s' if n != 1 else ''} it had started {'were' if n != 1 else 'was'} stopped."
+        if out.get("tasks_not_stopped"):
+            message += f" {out['tasks_not_stopped']} could not be stopped (already ended or changing); check the JARVIS console."
+        message += " A task that cannot be tied to this command is stopped only by Stop all in the JARVIS console."
+        return Ok({"command_id": out["id"], "cancelled": out["cancelled"], "tasks_stopped": stopped, "message": message})
+
     @ui.action(id="jarvis_status", label=tr("actions.jarvis_status.label", default="Check JARVIS"), tone="default", refresh_context=True)
     @plugin_entry(
         id="jarvis_status",
@@ -150,6 +187,7 @@ class JarvisBridgePlugin(NekoPluginBase):
         timeout=20,
         llm_result_fields=["ready", "message"],
     )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def jarvis_status(self, **_):
         try:
             s = await JarvisClient().status()
@@ -177,6 +215,7 @@ class JarvisBridgePlugin(NekoPluginBase):
         timeout=20,
         llm_result_fields=["count", "approvals"],
     )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def pending_approvals(self, **_):
         try:
             rows = await JarvisClient().approvals()
@@ -193,6 +232,7 @@ class JarvisBridgePlugin(NekoPluginBase):
         timeout=20,
         llm_result_fields=["connectors"],
     )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def connector_overview(self, **_):
         try:
             rows = await JarvisClient().connectors()

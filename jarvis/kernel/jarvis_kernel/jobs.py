@@ -3,10 +3,13 @@
 Flow: owner asks (Telegram /check) -> kernel authorizes -> job is queued for a node -> the node polls, runs it from its own
 whitelist, posts the result -> the Telegram bridge reports it once. Jobs expire if the node is offline too long.
 """
+import hashlib
 import json
 import re
 import secrets
 import time
+
+from .store import add_column
 
 JOB_TTL = 1800          # a queued job waits at most 30 minutes for the node to come back
 RUN_TTL = 1800          # a job that starts but never reports (laptop slept, node died) is failed after 30 minutes
@@ -44,10 +47,17 @@ KINDS = {
     "diag": ("diag", None),
     "repair": ("repair", None),
     "media_state": ("media", "state"),
+    # projectfix (2026-10-18): apply an owner-approved fix (a git patch from the lab) to an allowlisted project. Its own rule
+    # project.apply_patch (YELLOW_APPROVAL): the approval binds the patch digest and its file list; the policy's secret-path
+    # rule (DENY), agent-rule files and, when the project is JARVIS itself, its safety files (RED) see every file name. The
+    # node proves the fix in a scratch clone, backs up each file, then applies.
+    "project_apply": ("project", "apply_patch"),
 }
 CONNECTOR_OPS = {"discover", "test", "connect", "disconnect", "call", "status"}
 RESULT_LIMITS = {"connector_op": 250_000}   # a tool list is larger than most results; every other kind keeps 60,000
 LAB_AGENTS = {"hermes", "opencode", "goose"}
+PATCH_MAX = 100_000                        # project_apply: one fix as a unified git diff
+PROJECT_FILE = re.compile(r"^(?!/)(?!.*(?:^|/)\.\.?(?:/|$))(?!\.git(?:/|$))[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}$")   # = projectfix.PROJECT_FILE
 LAB_RUN_TTL = 2 * 3600                     # a lab run that never reports is failed after 2 h (task deadlines are shorter)
 
 
@@ -62,6 +72,14 @@ def _check_params(kind: str, params: dict):
     keys = set(params)
     if kind == "project_check":
         ok = keys == {"project"} and NAME.match(str(params.get("project", "")))
+    elif kind == "project_apply":
+        files, patch = params.get("files"), params.get("patch")
+        ok = (keys == {"project", "base", "patch", "digest", "files"} and NAME.match(str(params["project"])) is not None
+              and re.fullmatch(r"[0-9a-f]{40}", str(params["base"])) is not None
+              and isinstance(patch, str) and 0 < len(patch) <= PATCH_MAX and SAFE_TEXT.match(patch.replace("\n", "").replace("\r", "")) is not None
+              and params["digest"] == hashlib.sha256(patch.encode()).hexdigest()
+              and isinstance(files, list) and 0 < len(files) <= 5 and len(set(map(str, files))) == len(files)
+              and all(isinstance(f, str) and PROJECT_FILE.match(f) for f in files))
     elif kind == "output_save":
         ok = (keys == {"agent", "name", "content"} and NAME.match(str(params["agent"])) and OUTPUT_NAME.match(str(params["name"]))
               and ".." not in params["name"] and isinstance(params["content"], str) and len(params["content"]) <= MAX_OUTPUT)
@@ -134,11 +152,15 @@ def _check_params(kind: str, params: dict):
         raise JobError("bad job parameters")
 
 
-def action_for(kind: str, params: dict, lane: str = "private", untrusted: bool = False, owner_direct: bool = False):
+def action_for(kind: str, params: dict, lane: str = "private", untrusted: bool = False, owner_direct: bool = False,
+               requester: str = ""):
     """The policy Action a job stands for. Output content is NOT part of it (its words must not trip path rules);
-    the file name is, so a secret-looking name is still refused. owner_direct: the owner asked for it on the owner plane."""
+    the file name is, so a secret-looking name is still refused. owner_direct: the owner asked for it on the owner plane.
+    requester: the agent that asked (its token name), "" for the owner. It is part of the action's digest, so an approval
+    is for that agent's request only (audit SEC-D3). Both the request step and Jobs.create must pass the same value."""
     a = _action_for(kind, params, lane, untrusted)
     a.owner_direct = bool(owner_direct) and not untrusted
+    a.requester = str(requester or "")[:80]
     return a
 
 
@@ -159,6 +181,9 @@ def _action_for(kind: str, params: dict, lane: str, untrusted: bool):
         return Action("media", "state", "system", {}, lane, untrusted)
     if kind == "project_check":
         return Action(tool, op, params["project"])
+    if kind == "project_apply":               # the approval binds exactly this patch (its digest) and these files
+        return Action(tool, op, f"project {params['project']}", {"files": list(params["files"]), "base": params["base"],
+                                                                 "digest": params["digest"]}, lane, untrusted)
     if kind in ("output_save", "output_show"):
         return Action(tool, op, f"outputs/{params['agent']}/{params['name']}", {}, lane, untrusted)
     if kind == "ui_windows":
@@ -187,10 +212,7 @@ class Jobs:
             "CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, node TEXT, kind TEXT, params TEXT, state TEXT, created REAL, expires REAL, "
             "result TEXT, notified INT DEFAULT 0, started REAL)")
         for col in ("started REAL", "owner TEXT", "finished REAL", "cancel_requested REAL"):   # older databases lack these columns
-            try:
-                kernel.db.execute("ALTER TABLE jobs ADD COLUMN " + col)
-            except Exception:
-                pass
+            add_column(kernel.db, "jobs", col)
         kernel.db.execute("CREATE INDEX IF NOT EXISTS jobs_node_state ON jobs(node, state, created)")
         kernel.db.execute("CREATE INDEX IF NOT EXISTS jobs_owner_kind ON jobs(owner, kind, state)")
 
@@ -202,7 +224,9 @@ class Jobs:
         if kind not in KINDS:
             raise JobError("unknown job kind")
         _check_params(kind, params)
-        a = action_for(kind, params, lane, untrusted=owner is not None, owner_direct=owner_direct and owner is None)
+        # the requester is the agent that asked (`owner`); an approval taken for another agent's request does not fit (SEC-D3)
+        a = action_for(kind, params, lane, untrusted=owner is not None, owner_direct=owner_direct and owner is None,
+                       requester=owner or "")
         d = self.k.authorize(a, approval_id)        # raises Killed when the kill switch is on
         if not d.allowed:
             raise JobError("refused by policy: " + d.reason)

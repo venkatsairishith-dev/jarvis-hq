@@ -9,6 +9,7 @@ on the owner's laptop in D:\\jarvis\\outputs\\<agent>\\ (written by the laptop n
 """
 import json
 import os
+import re
 import subprocess
 import time
 import urllib.error
@@ -138,18 +139,18 @@ OWNER_BUSY = {"status": "waiting", "reason": "the owner has taken control of thi
 
 
 @tool("lab", "owner")
-def save_output(name: str, content: str) -> str:
-    r"""Give the owner a file: saved on their laptop in D:\jarvis\outputs\<agent>\<name> (never overwrites). name: plain file name ending .md .txt .html .json .csv .log .py; content: the full text. Code you cannot run is refused: use task_start + lab_work for code."""
+def save_output(name: str, content: str, task_id: str = "") -> str:
+    r"""Give the owner a file: saved on their laptop in D:\jarvis\outputs\<agent>\<name> (never overwrites). name: plain file name ending .md .txt .html .json .csv .log .py; content: the full text. Code you cannot run is refused: use task_start + lab_work for code. task_id: the open task this file is for (only such jobs count as that task's evidence)."""
     _log("save_output", name)
-    r = _act("output", "save", name, {"content": content})
+    r = _act("output", "save", name, {"content": content, **({"task": task_id} if task_id else {})})
     return _say(_outcome("save_output", _wait(r["job"]) if r.get("status") == "queued" else r))
 
 
 @tool("lab", "owner")
-def show_output(name: str) -> str:
-    r"""Open on the owner's screen a file you already delivered with save_output (same name). At most 12 per hour."""
+def show_output(name: str, task_id: str = "") -> str:
+    r"""Open on the owner's screen a file you already delivered with save_output (same name). At most 12 per hour. task_id: the open task it is for, if any."""
     _log("show_output", name)
-    r = _act("output", "show", name)
+    r = _act("output", "show", name, {"task": task_id} if task_id else {})
     return _say(_outcome("show_output", _wait(r["job"]) if r.get("status") == "queued" else r))
 
 
@@ -175,20 +176,20 @@ def connector_result(job: str) -> str:
 
 
 @tool("lab", "owner")
-def pc_action(op: str, target: str, text: str = "", approval_id: str = "") -> str:
+def pc_action(op: str, target: str, text: str = "", approval_id: str = "", task_id: str = "") -> str:
     r"""Act on the owner's PC: op launch (notepad, calc, mspaint), click or type; target 'app|element'. Every action needs the owner's approval: the first call returns an approval_id; the owner approves at the kernel console; then repeat the same call with that approval_id. Password managers, banking and wallets are refused."""
     _log("pc_action", f"{op} {target}" + (" (approved)" if approval_id else ""))
-    r = _act("ui", op, target, {"text": text} if text else {}, approval_id)
+    r = _act("ui", op, target, {**({"text": text} if text else {}), **({"task": task_id} if task_id else {})}, approval_id)
     if r.get("status") == "queued":
         return _say(_outcome("pc_action", _wait(r["job"])))
     return _say(r)
 
 
-def _pc(op, target, path="", approval_id=""):
+def _pc(op, target, path="", approval_id="", task_id=""):
     """Open something on the owner's laptop through the kernel (pc.<op>): the owner's own agent at once, a lab agent
     after the owner approves in the JARVIS console (call again with the same arguments plus approval_id)."""
     _log(op, f"{target} {path}".strip() + (" (approved)" if approval_id else ""))
-    r = _act("pc", op, target, {"path": path} if path else {}, approval_id)
+    r = _act("pc", op, target, {**({"path": path} if path else {}), **({"task": task_id} if task_id else {})}, approval_id)
     if r.get("status") == "queued":
         return _say(_outcome(op, _wait(r["job"])))
     return _say(r)
@@ -231,7 +232,7 @@ def task_start(goal: str, criteria: list[str], plan: list[str] | None = None, re
 @tool("owner")
 def task_update(task_id: str, state: str = "", step: str = "", note: str = "", result: str = "",
                 evidence: list[str] | None = None) -> str:
-    r"""Record progress on your task: state (running, paused, completed, failed, cancelled), step, note, result, evidence. completed needs evidence for every criterion; otherwise failed with the exact blocker."""
+    r"""Record progress on your task: state (running, paused, completed, failed, cancelled), step, note, result, evidence. completed needs proof: the lab's independent check, or evidence citing job:<id> of jobs you ran FOR this task (pass its task_id when you start them) that finished after it started. You can never record a verification yourself. Otherwise use failed with the exact blocker."""
     params = {k: v for k, v in (("state", state), ("step", step), ("note", note), ("result", result)) if v}
     if evidence:
         params["evidence"] = evidence
@@ -246,10 +247,10 @@ def task_get(task_id: str) -> str:
 
 
 @tool("owner")
-def lab_work(task_id: str, instructions: str, agent: str = "hermes", public_ok: bool = False) -> str:
-    r"""Send a task's hands-on work (code, tests, web, files) to the lab ONCE; an independent check verifies every criterion and failures are repaired. You are told the outcome later: tell the owner it started and stop. agent: hermes, opencode (coding) or goose. Public-lane models: only shareable info, public_ok=true. The lab cannot see the owner's PC: no D:\ or C:\ paths; verified files are delivered to D:\jarvis\outputs\task-<id>\ automatically (add a criterion 'files delivered to the owner'). Delivered files are flat (no sub-folders): never require folder layouts such as tests/x.py in criteria."""
-    _log("lab_work", f"{task_id} {agent}")
-    return _say(_act("task", "dispatch", task_id, {"instructions": instructions, "agent": agent, "public_ok": public_ok}))
+def lab_work(task_id: str, instructions: str = "", agent: str = "hermes", public_ok: bool = False, approval_id: str = "") -> str:
+    r"""Send a task's hands-on work (code, tests, web, files) to the lab ONCE; an independent check verifies every criterion and failures are repaired. You are told the outcome later: tell the owner it started and stop. agent: hermes, opencode (coding) or goose. Public-lane models: only shareable info, public_ok=true. The lab cannot see the owner's PC: no D:\ or C:\ paths; verified files are delivered to D:\jarvis\outputs\task-<id>\ automatically (add a criterion 'files delivered to the owner'). Delivered files are flat (no sub-folders): never require folder layouts such as tests/x.py in criteria. The owner approves what is shared (needs_approval with an approval_id): tell the owner, end your turn, and when they say it is approved call lab_work again with task_id and approval_id only."""
+    _log("lab_work", f"{task_id} {agent}" + (" (approved)" if approval_id else ""))
+    return _say(_act("task", "dispatch", task_id, {"instructions": instructions, "agent": agent, "public_ok": public_ok}, approval_id))
 
 
 @tool("lab", "owner")
@@ -265,19 +266,35 @@ def switch_model(provider: str) -> str:
     return _say(_act("models", "prefer", provider))
 
 
+# Environment names that carry or point at a GitHub/git credential (same list as lab_runner.GIT_HOST_CREDENTIAL_ENV).
+GIT_HOST_CREDENTIAL_ENV = re.compile(r"^(GH_|GITHUB_|GIT_ASKPASS|GIT_CONFIG|GIT_SSH|GIT_CREDENTIAL|GIT_TERMINAL|SSH_AUTH_SOCK|SSH_ASKPASS|NETRC|CREDENTIAL)", re.I)
+
+
+def agent_env(base=None):
+    """The environment a sub-agent runs with. ~/.local/bin goes LAST on PATH, as in lab_runner.agent_env: a worker once
+    planted ~/.local/bin/python3 (D14), and putting that folder first would let any earlier task choose the next one's tools
+    (audit MEM-M8, 2026-10-18)."""
+    env = {k: v for k, v in dict(os.environ if base is None else base).items() if not GIT_HOST_CREDENTIAL_ENV.search(k)}   # completion H: no GitHub/git credential inherited
+    local = os.path.expanduser("~/.local/bin")
+    parts = [x for x in env.get("PATH", "").split(os.pathsep) if x and os.path.realpath(x) != os.path.realpath(local)]
+    env["PATH"] = os.pathsep.join(parts + [local])
+    return env
+
+
 @tool("lab")
-def start_lab_task(agent: str, prompt: str) -> str:
-    """Hand a task to another lab agent (hermes, opencode or goose). Returns a task id; check it with lab_task_result."""
+def start_lab_task(agent: str, prompt: str, approval_id: str = "") -> str:
+    """Hand a task to another lab agent (hermes, opencode or goose). Returns a task id; check it with lab_task_result. If
+    the kernel answers needs_approval, the owner approves it; then call again with the same agent and prompt plus approval_id."""
     if agent not in AGENT_CMDS:
         return _say({"status": "refused", "reason": "agent must be hermes, opencode or goose"})
-    _log("start_lab_task", f"{agent}: {prompt[:100]}")
-    r = _act("lab", "task", agent, {"prompt": prompt})
+    _log("start_lab_task", f"{agent}: {len(prompt)} characters" + (" (approved)" if approval_id else ""))   # never the text itself
+    r = _act("lab", "task", agent, {"prompt": prompt}, approval_id)
     if r.get("status") != "allowed":
         return _say(r)
     tid = uuid.uuid4().hex[:10]
     d = os.path.join(TASKS, tid)
     os.makedirs(d)
-    env = dict(os.environ, PATH=os.path.expanduser("~/.local/bin") + ":" + os.environ.get("PATH", ""))
+    env = agent_env()
     if agent == "goose":
         for line in open(os.path.expanduser("~/.jarvis-goose.env")):
             if "=" in line and not line.startswith("#"):

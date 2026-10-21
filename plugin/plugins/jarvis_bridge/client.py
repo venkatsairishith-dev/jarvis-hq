@@ -8,6 +8,7 @@ approvals, risk rules, lane separation and audit all happen there.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -17,6 +18,47 @@ DEFAULT_URL = "http://127.0.0.1:8799"
 LOOPBACK = ("127.0.0.1", "localhost", "::1")
 MAX_TASK_CHARS = 2000          # the kernel refuses longer commands; fail early with a clear message
 SOURCE = "neko"                # shows as the origin of the command in the JARVIS console
+
+
+_META = re.compile(r'<meta name="jarvis-console-secret" content="([^"]+)"')
+_SECRETS: dict[str, str] = {}      # console base URL -> the secret of its current launch
+
+
+def _read_token_file() -> str:
+    """console.token from the per-user run folder (same rule as jarvis/scripts/control_auth.py); "" when absent or not private."""
+    from pathlib import Path
+    override = os.environ.get("JARVIS_RUN_DIR")
+    if override:
+        folder = Path(override)
+    elif os.name == "nt":
+        folder = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "jarvis" / "run"
+    else:
+        xdg = os.environ.get("XDG_RUNTIME_DIR")
+        folder = Path(xdg) / "jarvis" if xdg else Path.home() / ".jarvis" / "run"
+    try:
+        f = folder / "console.token"
+        st = f.stat()
+        if os.name != "nt" and (st.st_mode & 0o077 or st.st_uid != os.getuid()):
+            return ""
+        return f.read_text(encoding="ascii").strip()
+    except (OSError, ValueError):
+        return ""
+
+
+def _says_reload(resp: httpx.Response) -> bool:
+    try:
+        data = resp.json()
+    except ValueError:
+        return False
+    return isinstance(data, dict) and data.get("reload") is True
+
+
+def _says_login(resp: httpx.Response) -> bool:
+    try:
+        data = resp.json()
+    except ValueError:
+        return False
+    return isinstance(data, dict) and data.get("login") is True
 
 
 class BridgeError(Exception):
@@ -48,11 +90,40 @@ class JarvisClient:
         self.base = resolve_base_url(base_url)
         self.timeout = timeout
 
+    async def _console_secret(self, client: httpx.AsyncClient, refresh: bool = False) -> str:
+        """The console's MASTER token (re-review M3, 2026-10-19). The console no longer puts any credential in `GET /`: it writes
+        `console.token`, a 0600 file in the per-user run folder, and refuses every request (reads included) without it. A file that
+        other users could read, or that belongs to someone else, is not used. A console that still serves its secret in its page
+        (a test server, an older console) is read the old way. A program of the same OS user can read the file: this blocks other
+        users, other sites and programs that cannot read it, not malware running as the owner (the PIN is the boundary)."""
+        if refresh or self.base not in _SECRETS:
+            token = _read_token_file()
+            if not token:
+                resp = await client.get(self.base + "/", headers={"Accept": "text/html"})
+                m = _META.search(resp.text) if resp.status_code == 200 else None
+                if not m:
+                    raise BridgeError("The JARVIS console token is not available: is the console running (it writes console.token), "
+                                      "and is this the JARVIS console's address?", 502)
+                token = m.group(1)
+            _SECRETS[self.base] = token
+        return _SECRETS[self.base]
+
     async def _request(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
-        headers = {"X-Jarvis-Console": "1", "Accept": "application/json"}
         try:
             async with httpx.AsyncClient(timeout=self.timeout, trust_env=False, follow_redirects=False) as client:
+                headers = {"Accept": "application/json"}
+                write = method.upper() in ("POST", "DELETE")
+                try:
+                    headers["X-Jarvis-Console"] = await self._console_secret(client)    # every request: private reads need it too
+                except BridgeError:
+                    if write:
+                        raise
+                    # a read without a token still goes out (an older console allows it); the new console answers 401 and says so
                 resp = await client.request(method, self.base + path, json=body, headers=headers)
+                if ((write and resp.status_code == 403 and _says_reload(resp))
+                        or (resp.status_code == 401 and _says_login(resp))):             # the console restarted since the token was read
+                    headers["X-Jarvis-Console"] = await self._console_secret(client, refresh=True)
+                    resp = await client.request(method, self.base + path, json=body, headers=headers)
         except httpx.ConnectError:
             raise BridgeError("The JARVIS console is not running on this laptop. Start it with start-console.ps1.", 503)
         except httpx.TimeoutException:
@@ -78,6 +149,27 @@ class JarvisClient:
         if not isinstance(data, dict) or not data.get("id"):
             raise BridgeError("JARVIS accepted the task but returned no id.", 502)
         return {"id": str(data["id"]), "state": str(data.get("state", "running"))}
+
+    async def cancel(self, command_id: str) -> dict[str, Any]:
+        """Cancel ONE command this bridge handed over, and stop what it started: the kernel's command/cancel route with
+        `stop_tasks` (the console's plain "Stop waiting" does not stop tasks; this explicit option does).
+
+        The kernel stops waiting for the agent's answer, frees the command gate, and cancels the lab tasks that were created
+        while this command was the running one, together with their queued or running jobs. Nothing else is touched: other
+        commands' tasks, and any task the kernel could not tie to this command, are stopped with Stop all in the console.
+        Never the kill switch.
+        """
+        cid = str(command_id or "").strip()
+        if not cid or len(cid) > 40 or not all(c.isalnum() or c in "-_" for c in cid):
+            raise BridgeError("A command id from delegate_task is needed to cancel a JARVIS command.", 400)
+        data = await self._request("POST", "/api/owner/command/cancel", {"id": cid, "stop_tasks": True})
+        data = data if isinstance(data, dict) else {}
+        out: dict[str, Any] = {"id": cid, "cancelled": bool(data.get("cancelled"))}
+        if "tasks_stopped" in data:         # an older console ignores stop_tasks and says nothing about tasks: nothing is claimed
+            out["tasks_stopped"] = [str(t)[:20] for t in (data.get("tasks_stopped") or []) if isinstance(t, (str, int))][:20]
+            out["jobs_cancelled"] = len(data.get("jobs_cancelled") or [])
+            out["tasks_not_stopped"] = len(data.get("tasks_not_stopped") or [])
+        return out
 
     async def commands(self, limit: int = 10) -> list[dict[str, Any]]:
         data = await self._request("GET", f"/api/owner/commands?limit={max(1, min(int(limit), 50))}")

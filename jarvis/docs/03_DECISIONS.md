@@ -150,7 +150,7 @@ Reading: Verdict can stand in for the 4B LLM in the union at the same false-allo
 ## D13 Telegram switched off (owner, 2026-10-10)
 The owner: "no need of Telegram totally for now". The switch is the file `config/telegram.off`. While it exists:
 - **Bridge:** the `jarvis-telegram` service is stopped and disabled, and it refuses to start. Monit no longer watches it.
-- **Monit alerts:** they go to the kernel audit log (`monit_alert`) and to `~/jarvis/alerts.log` on the server.
+- **Monit alerts:** they go to the kernel audit log (`monit_alert`) and to `alerts.log` in the kernel data folder (`~/.jarvis-kernel/alerts.log` on the server; the old `~/jarvis/alerts.log` was not writable by the Monit service).
 - **Nightly report:** it is saved as before, but not sent.
 - **Approvals** (medium-risk skills, PC actions, RED actions): given at the kernel console on the server: `ssh -t ubuntu@hermes-agent-vm`, then `cd ~/jarvis/kernel && python3 -m jarvis_kernel approve <id>`.
 - **Task outcomes:** they show in Mission Control's Outcome tasks panel.
@@ -210,7 +210,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
   - Wiring: all five N.E.K.O model URLs (conversation, summary, correction, emotion, agent) now point at it. Backup: `D:\jarvis-apps\tmp\core_config.before-privacy-gateway-20261015-230616.json`.
   - Measured live: Dahl received `[PASSWORD_1]` and `[EMAIL_ADDRESS_1]`, and N.E.K.O got the real e-mail back.
 - **Lanes do not change.** Dahl stays public-lane only and still gets no private connector data. The gateway is a second layer for what the owner types, not permission to send private material.
-- **Local models** (`jarvis/local_models/llama-swap.yaml`). llama.cpp b11669 runs them on the Vulkan GPU, behind llama-swap (MIT) at 127.0.0.1:8080. A model loads on first use and unloads after 5 idle minutes, and one specialist is on the GPU at a time.
+- **Local models** (`jarvis/local_models/llama-swap.yaml`). [Scope 2026-10-19: the Vulkan GPU numbers here and in the D-entries above were measured only on the owner's Windows laptop (Radeon Pro 5500M, Boot Camp). macOS Metal, ROCm and NVIDIA CUDA/Vulkan are UNVERIFIED; no GPU exists on the Linux test server (CPU only). See `neko/MODEL_PLAN_LAPTOPS_2026-10.md`.] llama.cpp b11669 runs them on the Vulkan GPU, behind llama-swap (MIT) at 127.0.0.1:8080. A model loads on first use and unloads after 5 idle minutes, and one specialist is on the GPU at a time.
   - Generalist and router: Ling-3.0-tiny Q4_K_M, a mixture-of-experts model with 7.9B parameters in total but only 1.3B active per token (MIT). 31 tok/s, with 16 layers' experts kept in system RAM.
   - Code: Qwen2.5-Coder-1.5B, 80 tok/s.
   - Maths: Qwen2.5-Math-1.5B, 96 tok/s.
@@ -279,7 +279,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
   - Any settings.json stays console-only (existing rule).
 - **Privacy:** window and page text is written by the node to `outputs\neko-local`, and only a summary goes to the server.
   The plugin reads the file once and deletes it. The main agent gets a diagnosis, not the screen text, unless the owner
-  sets `NEKO_SCREEN_TEXT_TO_MODEL=1`. Screenshots are never taken by this flow.
+  sets `NEKO_SCREEN_TEXT_TO_MODEL=1`; **since 2026-10-18 that flag means "the text may be offered after the privacy gateway cleared it (names and deep redaction confirmed ready)", or to a verified local model; with the gateway not ready it is withheld** (see `neko/REMEDIATION_FOLLOWUP_2026-10-18.md`). Screenshots are never taken by this flow.
 - **Cancel:** `job/cancel`. The node reports every 3 s while busy, and `runtime.cancel` kills the process tree of the
   job. The kill switch now also stops the job in hand.
 - **Rejected:** a fake desktop interface; free-form PowerShell from a model; a dedicated browser profile (owner).
@@ -300,7 +300,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **Measured** (synthetic voices, threshold 0.25):
   - English: 15 of 15 clean clips, faster and slower; Hindi voice: 10 of 10; Telugu voice: weak.
   - No false alarm on ordinary sentences; only on the near-misses "Hey Nico" and "Hey Mekko".
-  - 10 minutes of live microphone: 0 false wakes.
+  - 10 minutes of live microphone: 0 false wakes. [Note 2026-10-19: a one-off Windows measurement from 2026-10-16; it was not re-run on the current tree, and no live microphone exists on the Linux test server (NOT RUN there). Telugu was weak.]
   - Speaker-to-microphone loopback at this volume, with speech about 10 dB over the noise: 2 of 3, then 0 of 3.
   - An automatic gain in front of the detector made it worse and was removed. The command, not the detector input, is
     gain-adjusted from the wake word's level.
@@ -450,7 +450,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
   policy/approval gates (evidence: `neko/evidence/08-runtimes-agents-infra-2026-10-17.md`). The llama-server options that
   make it an agent or open it up (`--tools`, `--agent`, MCP, `--props`, web UI, a plain `--api-key`) are banned by a test
   (`jarvis/local_models/test_server_flags.py`).
-- **Claim checker: keep nli-deberta-v3-xsmall**, plus deterministic guards: units, dropped qualifiers, comparators, hedges,
+- **Claim checker [first decision 2026-10-17 morning; superseded by the MiniCheck update below]: keep nli-deberta-v3-xsmall**, plus deterministic guards: units, dropped qualifiers, comparators, hedges,
   and sentences addressed to AI assistants removed before any text is evidence. The larger NLI models accepted MORE false
   claims (VitaminC 16 and 21 of 200, against 11). Measured with `bench/claims_eval.py` (precision, recall, false acceptance
   and rejection, calibration). The newer checkers from the research (FactCG, MiniCheck, HHEM) are deferred until one is
@@ -462,7 +462,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
     VitaminC recall 0.71 (0.44), 3.6-3.9x the time. FactCG, MiniCheck-DeBERTa and HHEM failed the rule (int8 breaks both
     DeBERTa-large models; FactCG fp32 is strictest but recall 0.31 and 7x). Evidence: `neko/evidence/11-claim-checker-candidates-2026-10-17.md`.
     The laptop needs the converted file copied (Windows task, when the owner is home).
-- **Benchmark Console** (`/api/bench/*`, Bench screen): a loopback-only phone screen inside the existing console. Jobs are
+- **Benchmark Console** (`/api/bench/*`, Bench screen): a loopback-only (127.0.0.1) screen with a phone-sized layout inside the existing console (it is NOT reachable from a phone; no phone access path is implemented or tested). Jobs are
   built only from allow-listed groups, existing case ids, pinned model names and fixed sets; the screen never downloads.
   Challenge-lab results are saved as untrusted and never become expectations.
 - **Benchmark v2 grew from 572 to 860 cases**, each driving real code. The new cases found about 60 product bugs; each fix

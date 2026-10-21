@@ -56,16 +56,20 @@ def test_live_repo_passes() -> None:
     a non-zero exit and a stderr explanation; both are surfaced in the
     pytest failure so the offending edges are immediately visible.
     """
-    # 30s timeout: the script normally finishes in <2s on this repo. The cap
-    # protects CI from hanging if the AST walker ever regresses into an
-    # infinite loop on a malformed file.
+    # The cap protects CI from hanging if the AST walker ever regresses into an
+    # infinite loop on a malformed file. It is NOT a speed assertion: the walk is
+    # CPU-bound and deterministic (about 1200 files, ~4.5 s of CPU on the
+    # 2026-10 tree measured on a lab server), so on a CPU-starved shared runner
+    # its wall-clock time is a multiple of that (40 s at 4x oversubscription,
+    # which failed this test with a 30 s cap although the check was finishing).
+    # 300 s still catches a real infinite loop.
     try:
         result = subprocess.run(
             [sys.executable, str(SCRIPT_PATH)],
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=300,
         )
     except subprocess.TimeoutExpired as exc:
         pytest.fail(

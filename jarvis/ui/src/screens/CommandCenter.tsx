@@ -3,6 +3,7 @@ import { api, ApiError, owner } from "../lib/api";
 import { store, useStore } from "../lib/store";
 import { voice } from "../lib/voice";
 import { ago, bytes, TERMINAL } from "../lib/format";
+import { canApprove, cardBlocked, cardChars, cardFields, cardIncomplete, cardInvisible, cardNeedsAck } from "../lib/approval";
 import type { Approval, ApprovalOutcome, Command, FileRow, Job, Task } from "../lib/types";
 import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, inputCls, stateTone } from "../components/ui";
 import { go } from "../App";
@@ -22,7 +23,14 @@ function ApprovalCard({ a, pinSet, onDone }: { a: Approval; pinSet: boolean; onD
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const red = a.level !== "YELLOW_APPROVAL";
-  const target = String(a.action.target ?? "").slice(0, 120);
+  const target = String(a.action.target ?? "");                       // all of it: a long target is part of what is approved
+  const fields = cardFields(a);
+  const incomplete = cardIncomplete(a);                              // cut off or unreadable: it cannot be approved (review M6)
+  const total = cardChars(a);
+  const blocked = cardBlocked(a);                                    // invisible, control or direction characters: cannot be approved
+  const inv = cardInvisible(a);
+  const needsAck = cardNeedsAck(a);                                   // a look-alike or mixed-script host: approve only after acknowledging it
+  const [ack, setAck] = useState(false);
   const approve = async () => {
     setBusy(true); setErr(null);
     try { await owner.post("approve", { id: a.id, confirm, pin }); setOpen(false); store.toast("ok", "Approved. It is single-use and expires in minutes."); onDone(); }
@@ -38,28 +46,53 @@ function ApprovalCard({ a, pinSet, onDone }: { a: Approval; pinSet: boolean; onD
         <span className="text-sm font-medium">{a.action.tool}.{a.action.op}</span>
         <span className="num ml-auto text-xs text-fg3">{a.seconds_left}s left</span>
       </div>
-      <p className="mt-1 break-words text-sm text-fg2">{target || "(no target)"}{a.action.lane ? ` · ${a.action.lane} lane` : ""}</p>
-      {a.action.params && Object.keys(a.action.params).length > 0 && (
+      <p className="mt-1 break-words text-sm text-fg2">{target || "(no target)"}{a.action.lane ? ` · ${a.action.lane} lane` : ""} · asked by <strong>{a.requester || "you"}</strong></p>
+      {fields.length > 0 && (
         <dl className="mt-2 space-y-1 rounded-lg bg-bg2 p-2 text-sm" aria-label="Exact arguments">
-          {Object.entries(a.action.params).map(([k, v]) => (
-            <div key={k} className="grid grid-cols-[auto_minmax(0,1fr)] gap-2"><dt className="font-mono text-xs text-fg3">{k}</dt>
-              <dd className="whitespace-pre-wrap break-words font-mono text-xs">{typeof v === "string" ? v : JSON.stringify(v)}</dd></div>))}
+          {fields.map((f) => (
+            <div key={f.key} className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+              <dt className="font-mono text-xs text-fg3">{f.key}{f.long && <span className="block">{f.chars} chars</span>}
+                {f.invisible > 0 && <span className={`block ${f.hostile ? "text-err-fg" : "text-wait-fg"}`}>{f.invisible} invisible</span>}</dt>
+              <dd className={`whitespace-pre-wrap break-words font-mono text-xs ${f.long ? "max-h-64 overflow-auto rounded border border-edge p-1" : ""}`}
+                tabIndex={f.long ? 0 : undefined}>{f.text}</dd>
+            </div>))}
         </dl>)}
       <p className="mt-1 text-xs text-fg3">Why it asks: {a.reason || "policy requires your approval"} · digest <span className="font-mono">{a.digest}</span></p>
-      {a.truncated && <p className="mt-1 text-xs text-wait-fg">Some values are longer than can be shown here; what you approve is the full original.</p>}
+      {incomplete
+        ? <div className="mt-2"><ErrorNote>This card is cut off: part of the text is NOT shown here, so it cannot be approved. Deny it and ask the agent to send shorter text.</ErrorNote></div>
+        : <p className="mt-1 text-xs text-fg3">Everything this approval covers is shown above ({total} characters). Scroll the boxes to read all of it.</p>}
+      {blocked && inv && (
+        <div className="mt-2"><ErrorNote>
+          This card contains {inv.invisible_chars} invisible, control or text-direction character{inv.invisible_chars === 1 ? "" : "s"} (shown as &lt;U+XXXX&gt;), so what it shows
+          may not be what it does. It cannot be approved: deny it and ask the agent to resend plain text.
+          {inv.flags.length > 0 && <ul className="mt-1 list-disc pl-5">{inv.flags.map((f, i) => <li key={i} className="break-words">{f}</li>)}</ul>}
+        </ErrorNote></div>)}
+      {!blocked && inv && inv.status === "warning" && (
+        <div role="alert" className="mt-2 rounded-lg border border-wait/60 bg-wait-bg px-3 py-2 text-sm text-wait-fg">
+          Check the web address: {inv.flags.map((f, i) => <span key={i} className="block break-words">{f}</span>)}
+        </div>)}
+      {!blocked && inv && inv.status === "notice" && (
+        <p className="mt-1 text-xs text-wait-fg">{inv.invisible_chars} joiner or space character{inv.invisible_chars === 1 ? "" : "s"} in ordinary text (shown as &lt;U+XXXX&gt;); the approval covers them exactly.</p>)}
       <div className="mt-2 flex flex-wrap gap-2">
         {red
           ? <p className="text-xs text-fg3">This level is approved at the kernel console only.</p>
-          : <Button kind="primary" onClick={() => setOpen(true)} disabled={!pinSet} title={pinSet ? "" : "Set an approval PIN at the kernel console first"}>Approve…</Button>}
+          : <Button kind="primary" onClick={() => setOpen(true)} disabled={!canApprove(a, pinSet)}
+              title={incomplete ? "This card is cut off, so it cannot be approved" : pinSet ? "" : "Set an approval PIN at the kernel console first"}>Approve…</Button>}
         <Button onClick={deny}>Deny</Button>
       </div>
       {!pinSet && !red && <p className="mt-2 text-xs text-fg3">No approval PIN is set, so approving here is disabled. Set one with <code>python3 -m jarvis_kernel set-approval-pin</code> on the server.</p>}
       <Dialog open={open} onClose={() => setOpen(false)} title="Approve this action"
-        footer={<><Button onClick={() => setOpen(false)}>Cancel</Button><Button kind="primary" disabled={busy || confirm !== a.id || pin.length < 6} onClick={approve}>Approve once</Button></>}>
+        footer={<><Button onClick={() => setOpen(false)}>Cancel</Button><Button kind="primary" disabled={busy || incomplete || blocked || (needsAck && !ack) || confirm !== a.id || pin.length < 6} onClick={approve}>Approve once</Button></>}>
         <p className="mb-2 text-sm text-fg2">{a.action.tool}.{a.action.op} on <strong>{target}</strong>. Single use, expires in {a.seconds_left}s.</p>
-        {a.action.params && Object.keys(a.action.params).length > 0 && (
-          <pre className="mb-3 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg2 p-2 font-mono text-xs">{JSON.stringify(a.action.params, null, 2)}</pre>)}
-        <p className="mb-3 text-xs text-fg3">Approving this exact action only: a different action needs its own approval. Digest {a.digest}.</p>
+        {fields.length > 0 && (
+          <pre tabIndex={0} aria-label={`All ${total} characters of the action`}
+            className="mb-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg2 p-2 font-mono text-xs">{fields.map((f) => `${f.key}: ${f.text}`).join("\n\n")}</pre>)}
+        <p className="mb-3 text-xs text-fg3">Approving this exact action only: a different action needs its own approval, and so does the same action asked by another agent (this one was asked by {a.requester || "you"}). Digest {a.digest}.</p>
+        {needsAck && (
+          <label className="mb-3 flex items-start gap-2 text-sm text-wait-fg">
+            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-1" />
+            <span>I have checked the web address above: it uses look-alike letters or mixes scripts, and I still want to approve this exact action.</span>
+          </label>)}
         <div className="space-y-3">
           <Field label={`Type the approval id to confirm: ${a.id}`}><input className={inputCls} value={confirm} onChange={(e) => setConfirm(e.target.value.trim())} autoComplete="off" /></Field>
           <Field label="Approval PIN"><input className={inputCls} type="password" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="off" /></Field>
@@ -170,9 +203,8 @@ export function CommandCenter() {
     return () => window.clearTimeout(h);
   }, [text]);
 
-  const startTalk = async () => { holdStart.current = performance.now(); if (countdown.current) { clearInterval(countdown.current); countdown.current = null; setAuto(null); } await voice.start(); };
-  const stopTalk = async () => {
-    const t = await voice.finish(prefs.lang);
+  // One place decides what a finished recording does, for the manual stop and for the 60 s auto-stop alike (VOI-D6).
+  const acceptTranscript = (t: string | null) => {
     if (t === null) return;
     if (!t.trim()) return;
     fromVoice.current = true;
@@ -185,6 +217,21 @@ export function CommandCenter() {
       }, 1000);
     }
   };
+  // The 60 s auto-stop fires long after startTalk ran, so it must see the language and settings of that moment, not of the render
+  // that began the recording; and it must do nothing once this screen has been left.
+  const talkRef = useRef({ lang: prefs.lang, accept: acceptTranscript });
+  talkRef.current = { lang: prefs.lang, accept: acceptTranscript };
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; if (countdown.current) { clearInterval(countdown.current); countdown.current = null; } };
+  }, []);
+  const startTalk = async () => {
+    holdStart.current = performance.now();
+    if (countdown.current) { clearInterval(countdown.current); countdown.current = null; setAuto(null); }
+    await voice.start({ lang: () => talkRef.current.lang, onAutoStop: (t) => { if (mounted.current) talkRef.current.accept(t); } });
+  };
+  const stopTalk = async () => acceptTranscript(await voice.finish(prefs.lang));
   const onMicClick = () => { if (vs.mode === "recording") void stopTalk(); else if (vs.mode === "idle" || vs.mode === "speaking") void startTalk(); };
   const onMicUp = () => { if (vs.mode === "recording" && performance.now() - holdStart.current > 700) void stopTalk(); };
 

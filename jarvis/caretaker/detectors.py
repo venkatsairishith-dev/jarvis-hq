@@ -224,7 +224,7 @@ def _gh(tool, repo, tag, entries, http, base):
         else:
             return [make_finding(tool, "upstream_release", "high", {"repo": repo, "tag": tag, "problem": "release gone"},
                                  {"repo": repo, "pinned_tag": tag, "lock_entries": names, "problem": "the pinned release no longer exists upstream"},
-                                 "Tell the owner: the pinned release was removed upstream. Keep the local copy; do not re-pin blindly.",
+                                 "Tell the owner: the pinned version was removed upstream. Keep the local copy; do not re-pin blindly.",
                                  owner_only=True)], []
     elif code != 200:
         return [], [f"upstream_release: {repo}: GitHub answered {code} for tag {tag}; not checked"]
@@ -267,9 +267,9 @@ def _gh(tool, repo, tag, entries, http, base):
             tool, "upstream_release", "medium", {"repo": repo, "pinned": tag, "behind": True},     # one issue per stale pin
             {"source": "github", "repo": repo, "pinned_tag": tag, "latest_tag": lt, "latest_published": latest.get("published_at"),
              "latest_url": latest.get("html_url"), "lock_entries": names},
-            f"Update {tool} from {tag} to {lt}: the lock entries ({', '.join(names)}: url, tag, commit, sha256 and bytes from "
-            "the GitHub release asset digests) and the registry's pinned_version and pin locations. Hashes come only from "
-            "upstream metadata; nothing is executed.",
+            f"Update {tool} from {tag} to {lt}: the lock entries (url, tag, revision, sha256 and bytes from "
+            "the maintainers' asset digests) and the registry's pinned_version and pin locations. Hashes come only from "
+            "upstream metadata; nothing is run.",
             untrusted=[{"source": f"GitHub release notes {repo} {lt}", "text": _clip(f"{latest.get('name') or ''}\n{latest.get('body') or ''}")}]))
     return findings, []
 
@@ -309,12 +309,12 @@ def _hf(tool, repo, commit, entries, http, base):
     ev = {"source": "huggingface", "repo": repo, "pinned_commit": commit, "main_commit": main, "files": files}
     if changed:
         return [make_finding(tool, "upstream_release", "medium", {"repo": repo, "pinned": commit, "changed": sorted(c["path"] for c in changed)}, ev,
-                             f"Re-pin {repo}: the pinned file(s) changed or moved on the main branch. Update revision commit, url, "
+                             f"Re-pin {repo}: the pinned file(s) changed or moved on upstream. Update the revision, url, "
                              "sha256 and bytes in jarvis/tools/jarvis.lock.json from the Hugging Face API only, and the registry "
                              "pin locations; keep the old values in the PR body. Only adopt the new weights if the mapped tests "
                              "and bench areas show no regression.")], []
     return [make_finding(tool, "upstream_release", "info", {"repo": repo, "pinned": commit, "files": "unchanged"}, ev,
-                         "Nothing to do: the repo moved on but the pinned files are byte-identical at main.")], []
+                         "Nothing to do: the repo moved on but the pinned files are byte-identical upstream.")], []
 
 
 def _node(tool, version, entries, http, base):
@@ -473,13 +473,13 @@ def detect_advisory(repo: Path, registry: list, http: Http, endpoints=None, batc
             target = max((x for x in per if x), key=_ver_tuple, default=None)
             unfixed = [a["id"] for a, x in zip(advs, per) if x is None]
             where = ("jarvis/ui/package.json and package-lock.json" if eco == "npm"
-                     else "pyproject.toml [dependency-groups] and uv.lock, or jarvis/tools/requirements/*.txt, wherever it is pinned")
+                     else "pyproject.toml (the dependency groups) and uv.lock, or the jarvis/tools/requirements files, wherever it is pinned")
             findings.append(make_finding(
                 tool, "advisory", top, {"ecosystem": eco, "package": name, "version": ver, "advisories": [a["id"] for a in advs]},
                 {"ecosystem": eco, "package": name, "version": ver, "used_by": tool,
                  "advisories": [{k: v for k, v in a.items() if not k.startswith("_")} for a in advs], "fixed_versions": fix[:5],
                  "fixes_all_known": target, "no_fix_known": unfixed},
-                f"Upgrade {name} from {ver} to {target or 'a fixed version (see the advisories)'}, the lowest version that fixes every "
+                f"Upgrade package:{name} from {ver} to {target or 'a fixed version (see the advisories)'}, the lowest version that fixes every "
                 f"advisory with a known fix, in {where}; or state why the vulnerable code path is not used"
                 + (f" (no fix is known yet for {', '.join(unfixed[:3])})" if unfixed else "") + ". Do not upgrade unrelated packages.",
                 untrusted=[{"source": f"OSV advisory summaries for {name} {ver}",

@@ -35,6 +35,8 @@ MAX_COMMAND = 2000
 MAX_REPLY = 12000
 PIN_TRIES = 5                 # wrong PINs allowed ...
 PIN_WINDOW = 600              # ... in this many seconds, then HTTP approval rests for the same time
+PROJECTFIX_TICK = 10          # project fixes advanced per tick (each advance is bounded by projectfix itself) ...
+PROJECTFIX_SCAN = 200         # ... out of at most this many open ones looked at (one cheap read each)
 NOISE = ("node_report", "report_refused", "agent_model_call", "agent_model_skipped")   # not shown in the live event feed
 
 
@@ -67,11 +69,12 @@ class Owner:
         self._gate = threading.Lock()   # guards the three fields below
         self._current = None            # id of the command whose agent call holds `busy`
         self._released = set()          # commands the owner stopped waiting on: their gate was handed back already
-        self.bad_pins = []
+        self.bad_pins = []                  # times of wrong PINs; kept in owner_config too, so a restart does not reset them
         self._pin_lock = threading.Lock()   # guards bad_pins and _pin_checking (PIN checks in flight)
         self._pin_checking = 0
         self.node = "laptop"     # the node PC jobs are queued for (set from the kernel's output node)
         self.lane_wait = None     # lane -> seconds until a model provider may be asked again (set by the gateway)
+        self._pc_seen = {}        # (holder token, seq) -> the PC job reply it got (duplicate delivery)
         self.routes = {}          # (method, name) -> fn(body, query) -> (code, reply); other modules register theirs here
         self.idem = None          # idempotency keys (idempotency.py), created on the first request that carries one
         kernel.db.execute("CREATE TABLE IF NOT EXISTS owner_commands(id TEXT PRIMARY KEY, ts REAL, source TEXT, text TEXT, "
@@ -82,6 +85,7 @@ class Owner:
         # History is never re-announced: only tasks that end after the plane first started are handed back to JARVIS.
         if not kernel.db.execute("SELECT 1 FROM owner_config WHERE key='announce_since'").fetchone():
             kernel.db.execute("INSERT OR IGNORE INTO owner_config(key, value) VALUES ('announce_since', ?)", (str(clock()),))
+        self.bad_pins = self._load_bad_pins()
         # a command still "running" at start-up belongs to a process that no longer exists
         kernel.db.execute("UPDATE owner_commands SET state='failed', error='the kernel restarted before JARVIS answered', finished=? "
                           "WHERE state='running'", (clock(),))
@@ -93,6 +97,21 @@ class Owner:
             raise OwnerError("the PIN must have 6 to 64 characters")
         self.k.db.execute("INSERT OR REPLACE INTO owner_config(key, value) VALUES ('approval_pin', ?)", (_hash_pin(pin),))
         self.k.audit.append("owner_pin_set", {})
+
+    def _load_bad_pins(self) -> list:
+        """Wrong-PIN times from the kernel DB (audit SEC-D10: the lockout used to reset on a kernel restart). An unreadable
+        record counts as a full lockout for one window: fail closed."""
+        r = self.k.db.execute("SELECT value FROM owner_config WHERE key='pin_failures'").fetchone()
+        if not r:
+            return []
+        try:
+            return [float(t) for t in json.loads(r[0])][-PIN_TRIES * 4:]
+        except (ValueError, TypeError):
+            return [self.clock()] * PIN_TRIES
+
+    def _save_bad_pins(self):
+        self.k.db.execute("INSERT OR REPLACE INTO owner_config(key, value) VALUES ('pin_failures', ?)",
+                          (json.dumps(self.bad_pins[-PIN_TRIES * 4:]),))
 
     def pin_set(self) -> bool:
         return self.k.db.execute("SELECT 1 FROM owner_config WHERE key='approval_pin'").fetchone() is not None
@@ -251,25 +270,72 @@ class Owner:
                         self._current = None
                     self.busy.release()
 
-    def cancel_command(self, cid: str):
+    def current_command(self):
+        """The id of the command whose agent call holds the gate right now (None when none does, or the owner stopped waiting on
+        it). There is one at a time: `busy` is a single lock. A task the owner's agent creates now was started by this command."""
+        with self._gate:
+            return self._current if self.busy.locked() else None
+
+    def cancel_command(self, cid: str, stop_tasks: bool = False):
         """The owner stopped waiting. The agent's HTTP call cannot be aborted from here, so the answer is ignored when
-        it arrives (the row is no longer 'running'); the tasks it started are stopped by stop_all, not by this."""
-        cur = self.k.db.execute("UPDATE owner_commands SET state='cancelled', finished=? WHERE id=? AND state='running'",
-                                (self.clock(), str(cid)[:40]))
-        self.k.audit.append("owner_command_cancelled", {"id": str(cid)[:40], "ok": cur.rowcount == 1})
+        it arrives (the row is no longer 'running').
+
+        Plain "Stop waiting" (stop_tasks False) does NOT stop the tasks the command started: they are stopped by stop_all.
+        With stop_tasks True (the explicit option; jarvis_bridge:cancel_task uses it) the tasks created while this command was
+        the running one are cancelled too, with their queued or running lab and PC jobs, even if the command had already
+        answered (the lab work outlives the answer). Only tasks the kernel linked to the command at creation are touched;
+        a task an orphaned agent turn creates after the owner stopped waiting cannot be tied to any command (stop_all)."""
+        cid = str(cid)[:40]
+        cur = self.k.db.execute("UPDATE owner_commands SET state='cancelled', finished=? WHERE id=? AND state='running'", (self.clock(), cid))
+        self.k.audit.append("owner_command_cancelled", {"id": cid, "ok": cur.rowcount == 1, "stop_tasks": bool(stop_tasks)})
         if cur.rowcount == 1:
-            self._abandon(str(cid)[:40])
-        return {"cancelled": cur.rowcount == 1}
+            self._abandon(cid)
+        out = {"cancelled": cur.rowcount == 1}
+        if stop_tasks:
+            out.update(self.stop_command_tasks(cid))
+        return out
+
+    def stop_command_tasks(self, cid: str) -> dict:
+        """Cancel the open tasks linked to command `cid` and the jobs still queued or running for them (a running job is asked to
+        stop: the lab runner and the node kill what it started). Stopping is the safe direction: no PIN."""
+        from .tasks import FINAL, TaskError
+        stopped, left, jobs, denied = [], [], [], []
+        for tid in self.tasks.for_command(cid):
+            t = self.tasks.get(tid)
+            if not t or t["state"] in FINAL:
+                continue
+            try:
+                self.tasks.update(None, tid, state="cancelled", note=f"stopped with command {cid} by the owner")
+                stopped.append(tid)
+                denied += self._deny_task_approvals(tid)
+            except TaskError:
+                left.append(tid)
+            for jid in self.tasks.job_ids(tid):
+                res = self.jobs.cancel(jid)
+                if res["state"] in ("cancelled", "cancelling"):
+                    jobs.append(jid)
+        self.k.audit.append("owner_command_tasks_stopped", {"id": cid, "tasks": stopped, "not_stopped": left, "jobs": jobs,
+                                                           "approvals_denied": denied})
+        return {"tasks_stopped": stopped, "tasks_not_stopped": left, "jobs_cancelled": jobs, "approvals_denied": denied}
+
+    def _deny_task_approvals(self, tid: str) -> list:
+        """A cancelled task's pending approvals (the sharing approval its lab_work dispatch asked for, recorded in
+        lab_share_pending) are denied, so the card cannot be approved and used after the task was stopped. Only approvals recorded
+        for THIS task; one already decided or expired is left as it is. A kernel without the lab wiring has no such table."""
+        return _withdraw_task_approvals(self.k, tid)["approvals_withdrawn"]
 
     # ---------- approvals ----------
     def approve(self, aid: str, confirm: str, pin: str):
         aid = str(aid or "")[:40]
         if str(confirm or "") != aid:
             raise OwnerError("type the approval id again to confirm", 400)
+        if self.k.killed():                       # review C: nothing is approved while the kill switch is on (deny still works)
+            raise OwnerError("the kill switch is on: approving is paused (you can still deny). Resume first, then approve again", 409)
         now = self.clock()
         # The limit counts checks still running too: the PBKDF2 check is slow, so parallel guesses used to all pass the
         # count before any failure was recorded (30 simultaneous guesses were all checked; bench N-006, 2026-10-16).
         with self._pin_lock:
+            # A failure time later than now (the clock went back) still counts: the rest is never shortened (bench N-025).
             self.bad_pins = [t for t in self.bad_pins if now - t < PIN_WINDOW]
             if len(self.bad_pins) + self._pin_checking >= PIN_TRIES:
                 raise OwnerError("too many wrong PINs; approving over HTTP rests for a few minutes", 429)
@@ -287,6 +353,7 @@ class Owner:
                 self._pin_checking -= 1
                 if not good:
                     self.bad_pins.append(now)
+                    self._save_bad_pins()
         if not good:
             self.k.audit.append("owner_approve_bad_pin", {"id": aid})
             raise OwnerError("wrong PIN", 403)
@@ -296,6 +363,13 @@ class Owner:
         if info["level"] != "YELLOW_APPROVAL":
             self.k.audit.append("owner_approve_refused", {"id": aid, "level": info["level"]})
             raise OwnerError(f"{info['level']} actions are approved at the kernel console only", 403)
+        if info.get("blocked"):                   # re-review M1 (2026-10-19): invisible, control or direction characters on the card
+            raise OwnerError("this approval card contains invisible, control or text-direction characters (shown as <U+XXXX> on the card), "
+                             "so what it shows may not be what it does and it cannot be approved: deny it and ask the agent to resend "
+                             "plain text", 409)
+        if info.get("incomplete"):                # review M6: never approve a card that was cut off or cannot be read
+            raise OwnerError("this approval card is cut off (part of the text is not shown), so it cannot be approved: deny it and "
+                             "ask the agent to send shorter text", 409)
         ok = self.k.approve(aid)
         self.k.audit.append("owner_approved_http", {"id": aid, "ok": ok})
         if not ok:
@@ -324,6 +398,8 @@ class Owner:
             t = self.tasks.update(None, tid, state=target, note=f"{op} by the owner (console)")
         except TaskError as e:
             raise OwnerError(str(e), 409)
+        if op == "cancel":
+            cancel_task_effects(self.k, self.jobs, self.tasks, tid)     # its approvals are withdrawn and its queued/running jobs stopped
         self.k.audit.append("owner_task_control", {"id": tid, "op": op})
         return {"id": tid, "state": t["state"]}
 
@@ -338,7 +414,8 @@ class Owner:
                 cancelled.append(tid)
             except TaskError:
                 failed.append(tid)
-        denied = self.k.db.execute("UPDATE approvals SET state='denied' WHERE state='pending'").rowcount
+        denied = self.k.db.execute("UPDATE approvals SET state='denied', decided=?, reason='withdrawn: stop all' "
+                                   "WHERE state IN ('pending','approved')", (time.time(),)).rowcount     # approved-but-unused ones too
         expired = self.k.db.execute("UPDATE jobs SET state='expired' WHERE state='queued'").rowcount
         if self.busy.locked():
             self.k.db.execute("UPDATE owner_commands SET state='cancelled', finished=? WHERE state='running'", (self.clock(),))
@@ -398,10 +475,113 @@ class Owner:
         """Sweep stuck jobs, fail tasks past their deadline, and hand finished lab work to JARVIS once each."""
         out = {"jobs": self.jobs.sweep(), "expired_tasks": self.tasks.expire()}
         if getattr(self, "automations", None) is not None:
-            out["automations"] = self.automations.tick()
+            try:                                # a scheduler fault never stops the rest of the tick (announcements, retention, audit anchor)
+                out["automations"] = self.automations.tick()
+            except Exception as e:
+                out["automations"] = {"error": type(e).__name__}
+                self.k.audit.append("owner_tick_error", {"type": type(e).__name__, "part": "automations"})
+        if getattr(self, "projectfix", None) is not None:
+            out["projectfix"] = self.advance_projectfixes()
         out["announced"] = self.announce_finished()
         out["lessons"] = self.capture_lessons()
+        try:                                    # bounded retention of private text (retention.py): about once an hour
+            if getattr(self, "retention", None) is None:
+                from .retention import Retention
+                self.retention = Retention(self.k, self.clock)
+            out["retention"] = self.retention.maybe_sweep("tick")
+        except Exception as e:                  # never stops the tick
+            out["retention"] = {"error": type(e).__name__}
+        from .audit import ANCHOR_FILE, export_anchor
+        try:                                    # the audit head, copied outside state.db (rate-limited; audit SEC-D8)
+            out["anchor"] = export_anchor(self.k.audit, self.k.dir / ANCHOR_FILE, self.clock())
+        except OSError as e:
+            out["anchor"] = {"error": type(e).__name__}
         return out
+
+    def advance_projectfixes(self, limit: int = PROJECTFIX_TICK):
+        """Move each open project fix on as far as it can go (projectfix.py). Bounded: at most `limit` advances per tick,
+        least recently moved first, so a long queue takes turns. One broken task never stops the tick: its error is audited,
+        it goes to the back of the queue and the next one runs. A fix waiting for an approval the owner has not answered yet
+        is skipped (asking again would only add an audit row every tick); approving, denying or expiry is picked up on the
+        next tick."""
+        pf = self.projectfix
+        out = {"advanced": 0, "skipped": 0, "errors": 0}
+        try:
+            rows = self.k.db.execute("SELECT task, stage, data FROM projectfix WHERE stage NOT IN ('done','failed') "
+                                     "ORDER BY updated ASC LIMIT ?", (PROJECTFIX_SCAN,)).fetchall()
+        except Exception as e:                      # no table yet (nothing ever started): nothing to do
+            out["error"] = type(e).__name__
+            return out
+        now = time.time()
+        for tid, stage, data in rows:
+            if out["advanced"] + out["errors"] >= max(1, int(limit)):
+                break
+            try:
+                d = json.loads(data or "{}")
+                aid = d.get({"share": "share_approval", "approve": "apply_approval"}.get(stage, ""), "")
+                if aid and self.k.db.execute("SELECT 1 FROM approvals WHERE id=? AND state='pending' AND expires>=?",
+                                             (aid, now)).fetchone():
+                    out["skipped"] += 1
+                    continue
+                pf.advance(tid)
+                out["advanced"] += 1
+            except Exception as e:
+                out["errors"] += 1
+                try:
+                    self.k.db.execute("UPDATE projectfix SET updated=? WHERE task=?", (time.time(), tid))   # to the back
+                    self.k.audit.append("projectfix_tick_error", {"task": str(tid)[:20], "type": type(e).__name__})
+                except Exception:
+                    pass
+        return out
+
+    def attach_projectfix(self, pf):
+        """Owner routes for the build-fix procedure (projectfix.py). Owner plane only: an agent can neither start nor advance
+        one. No PIN: these only start or move the procedure on; its own steps keep their approvals (sharing with the lab,
+        applying the patch), each approved with the PIN like any other."""
+        from .jobs import JobError
+        from .projectfix import ProjectFixError
+        from .store import Killed
+        from .tasks import TaskError
+        self.projectfix = pf
+        R = self.routes
+
+        def guard(fn):
+            def run(body, q):
+                try:
+                    return fn(body, q)
+                except ProjectFixError as e:
+                    return (404 if "no such" in str(e) else 400), {"error": str(e)}
+                except (JobError, TaskError) as e:
+                    return 403, {"error": str(e)[:200]}
+                except Killed:
+                    return 503, {"error": "the kill switch is on"}
+            return run
+
+        def task_of(x):
+            tid = str(x.get("task") or x.get("id") or "")
+            if not re.fullmatch(r"[0-9a-f]{12}", tid):
+                raise ProjectFixError("task must be a project fix's task id")
+            return tid
+
+        def start(b, q):
+            req = b.get("request")
+            if req is not None and not isinstance(req, str):
+                raise ProjectFixError("request must be text")
+            r = pf.start(str(b.get("project") or ""), scrub((req or "")[:MAX_COMMAND])[0])
+            self.k.audit.append("owner_projectfix", {"op": "start", "task": r.get("task")})
+            return 201, r
+
+        def advance(b, q):
+            return 200, pf.advance(task_of(b))
+
+        def report(b, q):
+            if q.get("task"):
+                return 200, pf.report(task_of(q))
+            rows = self.k.db.execute("SELECT task, project, stage, updated FROM projectfix ORDER BY updated DESC LIMIT 20").fetchall()
+            return 200, {"project_fixes": [dict(zip(("task", "project", "stage", "updated"), r)) for r in rows]}
+        R[("POST", "project_fix")] = guard(start)
+        R[("POST", "project_fix/advance")] = guard(advance)
+        R[("GET", "project_fix")] = guard(report)
 
     def capture_lessons(self):
         """A task that failed, was repaired and then completed *verified* teaches something. Build a candidate from what
@@ -475,6 +655,9 @@ class Owner:
         with that approval_id (it is bound to exactly this action and used once)."""
         from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, action_for
         from .store import Killed
+        holder, dup = self._pc_holder(body.get("holder"))
+        if dup is not None:                                           # the same request delivered twice: the job it made, no second one
+            return dup
         op = str(body.get("op", ""))
         target, path = str(body.get("target", ""))[:80], str(body.get("path", ""))[:200]
         s = lambda k, n: str(body.get(k) or "")[:n]       # noqa: E731
@@ -525,7 +708,46 @@ class Owner:
         except Killed:                  # an honest 503 like command(), not a 500 "Killed" logged as an internal error
             raise OwnerError("the kill switch is on", 503) from None
         self.k.audit.append("owner_pc", {"op": op, "job": jid})
-        return {"job": jid, "kind": kind, "node": self.node, "status": "queued"}
+        out = {"job": jid, "kind": kind, "node": self.node, "status": "queued"}
+        if holder:
+            self._pc_seen[holder] = out
+            while len(self._pc_seen) > 200:
+                self._pc_seen.pop(next(iter(self._pc_seen)))
+        return out
+
+    # Fencing (completion A, 2026-10-19). The desktop plugin sends body["holder"] = {token, task, seq} with every PC job request.
+    # token = the PC-lock holder's identity; seq = that holder's request counter. A request whose token is NOT the one now in the
+    # PC lock file is from a stale executor (its lock was taken over or recovered): refused, no job. The file is read only when
+    # the kernel is told where it is (JARVIS_PC_LOCK, or NEKO_STORAGE_SELECTED_ROOT/neko/pc_task.lock); when it is not (kernel
+    # and plugin on different machines) only the plugin-side fence and the duplicate rule apply. A (token, seq) seen before is
+    # answered with the job it made. Requests without a holder (the console's own buttons) are unchanged.
+    def _pc_lock_file(self):
+        p = os.environ.get("JARVIS_PC_LOCK")
+        if not p and os.environ.get("NEKO_STORAGE_SELECTED_ROOT"):
+            p = os.path.join(os.environ["NEKO_STORAGE_SELECTED_ROOT"], "neko", "pc_task.lock")
+        return getattr(self, "pc_lock_path", None) or p
+
+    def _pc_holder(self, h):
+        if h is None:
+            return None, None
+        if not (isinstance(h, dict) and re.fullmatch(r"[0-9a-f]{8,64}", str(h.get("token") or "")) and isinstance(h.get("seq"), int)
+                and not isinstance(h.get("seq"), bool) and 0 < h["seq"] < 10**9):
+            raise OwnerError("the PC lock holder in this request is malformed", 400)
+        key = (h["token"], h["seq"])
+        if key in self._pc_seen:
+            return key, dict(self._pc_seen[key], duplicate=True)
+        path = self._pc_lock_file()
+        if path:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    cur = json.load(f).get("token")
+            except (OSError, ValueError, AttributeError):
+                cur = None
+            if cur != h["token"]:
+                self.k.audit.append("owner_pc_stale_holder", {"task": str(h.get("task") or "")[:40]})
+                raise OwnerError("refused: this request comes from a PC task that no longer holds the PC lock (it was taken over or "
+                                 "recovered); nothing was started", 409)
+        return key, None
 
     def cancel_job(self, jid: str):
         """Stop one PC job (no PIN: stopping is the safe direction)."""
@@ -638,7 +860,7 @@ class Owner:
             R[("GET", "lessons")] = guard(lessons_get)
             R[("POST", "lessons/activate")] = guard(lessons_post("activate"))
             R[("POST", "lessons/reject")] = guard(lessons_post("reject"))
-        R[("GET", "audit/verify")] = guard(lambda b, q: (200, dict(zip(("ok", "message"), self.k.audit.verify()))))
+        R[("GET", "audit/verify")] = guard(lambda b, q: (200, self.audit_verify()))
         if automations is not None:
             def a_create(body, q):
                 d = body.get("definition") or {}
@@ -670,6 +892,26 @@ class Owner:
             R[("POST", "agents/clone")] = guard(lambda b, q: (201, agents.clone(str(b.get("id")), b.get("name"))))
             R[("POST", "agents/delete")] = guard(lambda b, q: (need_confirm(b, "agent"), (200, agents.delete(str(b.get("id")))))[1])
             R[("POST", "agents/test")] = guard(lambda b, q: (202, agents.test(str(b.get("id")), b.get("task"))))
+
+    def audit_verify(self):
+        """The audit chain checked against the newest anchor the kernel stored outside state.db (audit SEC-D8: without one a
+        cut-off tail passed as "ok"). Says plainly when there is no anchor yet, and that the off-box copy is manual."""
+        from .audit import ANCHOR_EVERY, ANCHOR_FILE, latest_anchor
+        path = self.k.dir / ANCHOR_FILE
+        anchor, bad = latest_anchor(path)
+        ok, msg = self.k.audit.verify(anchor)
+        out = {"ok": ok, "message": msg, "anchored": anchor is not None,
+               "anchor": {"seq": anchor["seq"], "ts": anchor.get("ts")} if anchor else None, "anchor_file": ANCHOR_FILE}
+        if anchor is None:
+            out["note"] = (f"no anchor yet: the chain itself is checked, but a cut-off tail cannot be seen until the kernel "
+                           f"stores its first anchor (about every {ANCHOR_EVERY // 60} minutes while it runs)")
+        else:
+            out["note"] = ("checked against the newest anchor stored on this machine. Copying the anchor file off the box is "
+                           "still a manual owner step (jarvis/scripts/pull-anchor.ps1); only that copy catches someone who "
+                           "can also edit the file")
+        if bad:
+            out["anchor_file_problems"] = f"{bad} unreadable line(s) in the anchor file"
+        return out
 
     # ---------- HTTP-shaped entry point ----------
     def handle(self, method: str, path: str, body: dict, headers=None):
@@ -708,7 +950,7 @@ class Owner:
                 if name == "command":
                     return 202, self.command(body.get("text"), str(body.get("source") or "console"))
                 if name == "command/cancel":
-                    return 200, self.cancel_command(body.get("id"))
+                    return 200, self.cancel_command(body.get("id"), stop_tasks=body.get("stop_tasks") is True)
                 if name == "approve":
                     return 200, self.approve(body.get("id"), body.get("confirm"), body.get("pin"))
                 if name == "deny":
@@ -732,6 +974,44 @@ class Owner:
         except Exception as e:                                          # never a traceback to the client
             self.k.audit.append("owner_error", {"route": name[:40], "type": type(e).__name__})
             return 500, {"error": f"{type(e).__name__}"}
+
+
+def _withdraw_task_approvals(kernel, tid) -> dict:
+    """Withdraw each approval recorded for task `tid` on its own. Only a missing lab_share_pending table (a kernel without the lab
+    wiring) means "nothing to withdraw"; any other database error is raised, and one approval that cannot be withdrawn is
+    audited and reported without hiding the others (static finding ST-1: this used to swallow every error)."""
+    import sqlite3
+    try:
+        rows = kernel.db.execute("SELECT p.approval_id FROM lab_share_pending p JOIN approvals a ON a.id = p.approval_id "
+                                 "WHERE p.task=? AND a.state IN ('pending','approved')", (str(tid),)).fetchall()
+    except sqlite3.OperationalError as e:
+        if "no such table" in str(e).lower():
+            return {"approvals_withdrawn": [], "approval_failures": []}
+        raise
+    done, failed = [], []
+    for (aid,) in rows:
+        try:
+            if kernel.withdraw(aid, "its task was cancelled"):
+                done.append(aid)
+        except Exception as e:                              # noqa: BLE001 - recorded, and the next approval is still tried
+            failed.append(aid)
+            try:
+                kernel.audit.append("approval_withdraw_failed", {"id": aid, "task": str(tid)[:40], "type": type(e).__name__})
+            except Exception:                               # noqa: BLE001
+                pass
+    return {"approvals_withdrawn": done, "approval_failures": failed}
+
+
+def cancel_task_effects(kernel, jobs, tasks, tid) -> dict:
+    """What cancelling a task must also do, for EVERY way of cancelling it (console, Telegram, stop-command): withdraw the
+    approvals recorded for it (pending or approved-but-unused) and stop the jobs still queued or running for it, so nothing
+    the owner cancelled can still be approved, used or executed (re-check D, 2026-10-19)."""
+    res = _withdraw_task_approvals(kernel, tid)
+    denied, failed, stopped = res["approvals_withdrawn"], res["approval_failures"], []
+    for jid in tasks.job_ids(tid):
+        if jobs.cancel(jid)["state"] in ("cancelled", "cancelling"):
+            stopped.append(jid)
+    return {"approvals_withdrawn": denied, "approval_failures": failed, "jobs_stopped": stopped}
 
 
 def start_ticker(owner: Owner, interval: float = 30.0, stop: threading.Event = None):

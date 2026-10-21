@@ -18,8 +18,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from live_check import jget, run_entry  # noqa: E402
+import control_auth  # noqa: E402  (jarvis/scripts: the wake listener's POST routes need its launch secret, audit M15)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from console_secret import headers as console_headers  # noqa: E402
 
-H = {"X-Jarvis-Console": "1"}
 CFG = r"D:\jarvis\tests\neko-sample-app\config.json"
 OUT = Path(r"D:\jarvis\outputs\neko\guided-owner-test.json")
 R = {"started": time.strftime("%Y-%m-%d %H:%M:%S")}
@@ -35,11 +37,11 @@ def say(msg):
 
 
 def console(method, name, body=None, timeout=30):
-    return jget(f"http://127.0.0.1:8799/api/owner/{name}", method=method, body=body, headers=H, timeout=timeout)
+    return jget(f"http://127.0.0.1:8799/api/owner/{name}", method=method, body=body, headers=console_headers(), timeout=timeout)       # reads need the token too (re-review M3)
 
 
 def wake():
-    return jget("http://127.0.0.1:48945/status", timeout=5)[1] or {}
+    return jget("http://127.0.0.1:48945/status", timeout=5, headers=control_auth.headers_for("wake"))[1] or {}
 
 
 def step1():
@@ -149,7 +151,7 @@ def step4():
         s = wait_change("detections", c0.get("detections", 0), 12)
         near.append({"attempt": i, "woke": (s.get("counts") or {}).get("detections", 0) > c0.get("detections", 0), "loudest_s_dbfs": PEAK["dbfs"]})
         if near[-1]["woke"]:                              # do not start a task from a near miss: cancel it
-            jget("http://127.0.0.1:48945/cancel", method="POST", body={}, timeout=5)
+            jget("http://127.0.0.1:48945/cancel", method="POST", body={}, headers=control_auth.headers_for("wake"), timeout=5)
         print("   ->", "woke (false wake)" if near[-1]["woke"] else "stayed asleep", flush=True)
         time.sleep(4)
     c0 = wake().get("counts") or {}
@@ -160,7 +162,7 @@ def step4():
     R["wake_attempts"] = attempts
     R["near_misses"] = near
     R["wake_after"] = {"counts": s1.get("counts"), "audio": s1.get("audio")}
-    _, status = jget("http://127.0.0.1:48940/api/status", timeout=20)
+    _, status = jget("http://127.0.0.1:48940/api/status", timeout=20, headers=control_auth.headers_for("widget"))
     R["newest_task_after"] = {k: (status.get("task") or {}).get(k) for k in ("id", "state", "summary", "age_s")}
     save()
 

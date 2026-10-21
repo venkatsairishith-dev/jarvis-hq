@@ -4,7 +4,7 @@ import path from "node:path";
 
 // The connector workflows through the real UI, console, kernel and a real MCP server process (a deterministic fake, started by
 // the node's own connector code from the owner's local allowlist). Nothing is mocked: every state shown is read back from the kernel.
-const info = () => JSON.parse(fs.readFileSync("D:\\jarvis\\cache\\e2e-state.json", "utf-8")) as
+const info = () => JSON.parse(fs.readFileSync(process.env.E2E_STATE_FILE ?? "D:\\jarvis\\cache\\e2e-state.json", "utf-8")) as
   { kernel: number; agent_token: string; secrets_dir: string; fixture: string; python: string; connectors_file: string };
 
 async function agentCall(page: Page, body: Record<string, unknown>) {
@@ -22,8 +22,14 @@ test.describe.configure({ mode: "serial" });
 
 test("an empty catalogue explains itself, and Alt+0 opens the screen", async ({ page }) => {
   await page.goto("/");
-  await page.keyboard.press("Alt+0");
-  await expect(page.getByRole("heading", { name: "Connectors", level: 1 })).toBeVisible();
+  // The key listener is attached by a React effect after the first paint, so a single early Alt+0 can be lost (it was, on a
+  // slow machine, and then every later spec in this serial file "did not run"). Pressing is idempotent: wait for the app to
+  // be rendered, then press until the screen opens.
+  await expect(page.getByRole("navigation", { name: "Screens" })).toBeVisible();
+  await expect(async () => {
+    await page.keyboard.press("Alt+0");
+    await expect(page.getByRole("heading", { name: "Connectors", level: 1 })).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 20_000 });
   await expect(page.getByText("No connectors yet")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Screens" }).getByRole("link", { name: /^Connectors/ })).toHaveAttribute("aria-current", "page");
 });
@@ -33,10 +39,14 @@ test("a program that is not allowed is refused in the form and nothing is added"
   await page.getByRole("button", { name: "Add connector" }).first().click();
   const dlg = page.getByRole("dialog", { name: "Add connector" });
   await dlg.getByLabel(/^Name/).fill("evil");
-  await dlg.getByLabel(/^Program/).fill("C:\\Windows\\System32\\cmd.exe");
-  await dlg.getByLabel("Arguments (one per line)").fill("/c\ncalc");
+  // The same intent on each OS: a shell given code to run is refused in the form and nothing is added. The Windows path in this
+  // spec only means something on Windows (elsewhere it is not an absolute path and fails the "full path" rule before the shell
+  // rules are reached), so Linux/macOS use the system shell, which the shell rule refuses.
+  const windows = process.platform === "win32";
+  await dlg.getByLabel(/^Program/).fill(windows ? "C:\\Windows\\System32\\cmd.exe" : "/bin/sh");
+  await dlg.getByLabel("Arguments (one per line)").fill(windows ? "/c\ncalc" : "-c\ncalc");
   await dlg.getByRole("button", { name: "Add connector" }).click();
-  await expect(dlg.getByRole("alert")).toContainText(/shell|Windows folder/);
+  await expect(dlg.getByRole("alert")).toContainText(windows ? /shell|Windows folder/ : /is a shell or system tool/);
   await dlg.getByRole("button", { name: "Cancel" }).click();
   const list = await owner(page, "connectors");
   expect(list.connectors).toEqual([]);

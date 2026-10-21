@@ -15,6 +15,8 @@ import urllib.request
 import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import loopback_net  # noqa: E402  loopback only, no proxy, no redirect (completion H)
 os.environ["NEKO_WHISPER_ENDPOINT"] = "http://127.0.0.1:48930/v1/audio/transcriptions"
 os.environ.pop("NEKO_WHISPER_MODEL", None)
 from main_logic.asr_client._infra import AsrSessionConfig, _AsrWorkerRequest
@@ -30,7 +32,7 @@ DEMO = [
 def speak16k(text, voice):
     req = urllib.request.Request("http://127.0.0.1:48930/v1/audio/speech", data=json.dumps(
         {"model": "m", "input": text, "voice": voice, "response_format": "pcm"}).encode(), headers={"Content-Type": "application/json"})
-    pcm = np.frombuffer(urllib.request.urlopen(req, timeout=180).read(), dtype="<i2").astype("float32") / 32768.0
+    pcm = np.frombuffer(loopback_net.urlopen(req, timeout=180).read(), dtype="<i2").astype("float32") / 32768.0
     n = int(len(pcm) * 16000 / 24000)
     a = np.interp(np.linspace(0, len(pcm) - 1, n), np.arange(len(pcm)), pcm)
     return (a * 32767).astype("<i2").tobytes()

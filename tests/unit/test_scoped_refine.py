@@ -2296,3 +2296,33 @@ async def test_scoped_refine_round_caps_calls_and_rotates_characters(monkeypatch
     assert calls == ["丙"]
     assert locale_contexts == ["丙"]
     assert refine_loops._scoped_refine_character_cursor == "丙"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "damaged", ["garbage", float("nan"), float("inf"), [1, 2], {"x": 1}],
+    ids=["text", "nan", "inf", "list", "dict"],
+)
+async def test_apply_persona_merge_counts_a_damaged_counter_as_zero(tmp_path, damaged):
+    """The merge read `int(src['user_fact_reinforce_count'] or 0)` raw: text, nan, inf, a list or a dict aborted the merge."""
+    _fs, pm, _re = _install(str(tmp_path))
+    persona = await pm.aensure_persona("小天")
+    section = pm._get_section_facts(persona, GROUP_A.kind, subject=GROUP_A)
+    for i in range(2):
+        entry = pm._build_fact_entry(f"群友们喜欢周五联机打游戏（表述{i}）", 'reflection_time_driven', None, subject=GROUP_A)
+        entry['id'] = f"p{i}"
+        section.append(entry)
+    section[0]['user_fact_reinforce_count'] = damaged
+    section[0]['sub_zero_days'] = damaged
+    section[1]['user_fact_reinforce_count'] = 3
+    section[1]['sub_zero_days'] = 2
+    await pm.asave_persona("小天", persona)
+    cluster = [dict(e) for e in section]
+    applied = await apply_scoped_persona_merge(
+        pm, "小天", GROUP_A, cluster,
+        [{'action': 'merge', 'source_ids': ['p0', 'p1'], 'produce': {'text': '群友们固定周五晚联机打游戏'}}], "hash-dmg",
+    )
+    assert applied == 1
+    facts = (await pm.aensure_persona("小天"))[GROUP_A.persona_section_key]['facts']
+    merged = next(e for e in facts if e.get('merged_from_ids'))
+    assert merged['user_fact_reinforce_count'] == 3 and merged['sub_zero_days'] == 2

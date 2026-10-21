@@ -8,13 +8,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from live_check import jget  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from console_secret import headers as console_headers  # noqa: E402
 
-H = {"X-Jarvis-Console": "1"}
 SSH = ["ssh", "-i", r"D:\jarvis-secrets\ssh\jarvis_vm_ed25519", "-o", "BatchMode=yes", "ubuntu@100.125.91.51"]
 
 
 def console(method, name, body=None):
-    return jget(f"http://127.0.0.1:8799/api/owner/{name}", method=method, body=body, headers=H, timeout=30)
+    return jget(f"http://127.0.0.1:8799/api/owner/{name}", method=method, body=body, headers=console_headers() if method != "GET" else None, timeout=30)
 
 
 out = {}

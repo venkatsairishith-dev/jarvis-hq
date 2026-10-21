@@ -1,0 +1,61 @@
+{
+  "about": "Sites and apps JARVIS never drives (policy DENY for ui, browser and pc actions; the owner still can). Audit PC-D10, 2026-10-18. Domains match the host itself and every subdomain (chase.com matches www.chase.com and secure.chase.com), never a substring of a word, and never the URL path (wikipedia.org/wiki/Bank is not a bank). label_affix words match a whole host label, a hyphen part of it, or its start or end (icicibank, hdfcbank, netbanking, bankrate). label_exact words match only a whole label or hyphen part (upi). app_names match whole words in app names and window titles. This file can only ADD to the built-in floor in jarvis/kernel/jarvis_kernel/policy.py; a missing or broken file never removes anything. Changing it is console-only (policy SAFETY_COMPONENTS). Known, accepted false positives of the label rule: bankrate.com, tradingview.com, tradingeconomics.com and similar finance-news or charting sites are DENY too (fail closed).",
+  "domains": {
+    "banks_india": [
+      "sbi", "sbi.co.in", "onlinesbi.com", "onlinesbi.sbi", "yonobusiness.sbi", "sbicard.com",
+      "icicibank.com", "icicibank.co.in", "icicidirect.com", "hdfcbank.com", "hdfc.com", "hdfcsec.com",
+      "axisbank.com", "axisbank.co.in", "kotak.com", "kotak811.com", "kotaksecurities.com", "yesbank.in",
+      "indusind.com", "pnbindia.in", "netpnb.com", "bankofbaroda.in", "bobibanking.com", "bobcard.co.in",
+      "canarabank.com", "canarabank.in", "unionbankofindia.co.in", "idfcfirstbank.com", "idbibank.in",
+      "federalbank.co.in", "rblbank.com", "bandhanbank.com", "aubank.in", "indianbank.in", "iob.in",
+      "centralbankofindia.co.in", "ucobank.com", "bankofindia.co.in", "southindianbank.com", "kvb.co.in",
+      "karnatakabank.com", "csb.co.in", "dbs.com", "paytmbank.com", "airtelbank.com", "finobank.com",
+      "equitasbank.com", "ujjivansfb.in", "hsbc.co.in", "sc.com"
+    ],
+    "banks_uk": ["hsbc.co.uk"],
+    "banks_us": [
+      "chase.com", "jpmorgan.com", "jpmorganchase.com", "bankofamerica.com", "bofa.com", "wellsfargo.com",
+      "citi.com", "citibank.com", "citibankonline.com", "usbank.com", "pnc.com", "truist.com", "capitalone.com",
+      "td.com", "tdbank.com", "ally.com", "discover.com", "americanexpress.com", "goldmansachs.com", "marcus.com",
+      "sofi.com", "chime.com", "navyfederal.org", "usaa.com", "citizensbank.com", "53.com", "key.com",
+      "regions.com", "huntington.com", "mtb.com", "synchrony.com", "mysynchrony.com", "barclaysus.com",
+      "hsbc.com", "us.hsbc.com", "morganstanley.com", "bmoharris.com", "bmo.com", "santanderbank.com"
+    ],
+    "payments_and_upi": [
+      "paypal.com", "paypal.me", "venmo.com", "cash.app", "wise.com", "revolut.com", "payoneer.com",
+      "zellepay.com", "skrill.com", "westernunion.com", "remitly.com", "stripe.com", "squareup.com",
+      "paytm.com", "paytm.in", "paytmmoney.com", "phonepe.com", "pay.google.com", "payments.google.com",
+      "mobikwik.com", "freecharge.in", "bhimupi.org.in", "npci.org.in", "cred.club", "razorpay.com",
+      "cashfree.com", "payu.in", "billdesk.com", "ccavenue.com", "amazonpay.in", "airtelpaymentsbank.com"
+    ],
+    "brokers_and_funds": [
+      "zerodha.com", "kite.trade", "groww.in", "upstox.com", "angelone.in", "angelbroking.com", "5paisa.com",
+      "motilaloswal.com", "sharekhan.com", "dhan.co", "fyers.in", "smallcase.com", "mstock.com",
+      "aliceblueonline.com", "cdslindia.com", "nsdl.co.in", "camsonline.com", "kfintech.com", "mfcentral.com",
+      "robinhood.com", "schwab.com", "fidelity.com", "vanguard.com", "etrade.com", "tdameritrade.com",
+      "webull.com", "interactivebrokers.com", "ibkr.com", "merrilledge.com", "firstrade.com", "tastytrade.com",
+      "public.com", "m1.com", "wealthfront.com", "betterment.com", "acorns.com", "tradestation.com"
+    ],
+    "crypto": [
+      "coinbase.com", "binance.com", "binance.us", "kraken.com", "gemini.com", "crypto.com", "bitstamp.net",
+      "kucoin.com", "okx.com", "bybit.com", "bitfinex.com", "htx.com", "huobi.com", "gate.io", "wazirx.com",
+      "coindcx.com", "coinswitch.co", "zebpay.com", "bitbns.com", "giottus.com", "metamask.io", "phantom.app",
+      "trustwallet.com", "exodus.com", "ledger.com", "trezor.io", "blockchain.com", "uniswap.org"
+    ],
+    "password_managers": [
+      "1password.com", "1password.eu", "bitwarden.com", "bitwarden.eu", "lastpass.com", "dashlane.com",
+      "keepersecurity.com", "nordpass.com", "roboform.com", "enpass.io", "pass.proton.me", "passwords.google.com"
+    ]
+  },
+  "label_affix": ["bank", "banking", "netbanking", "ebanking", "netbank", "wallet", "broker", "brokerage", "trading", "paypal"],
+  "label_exact": ["upi"],
+  "app_names": [
+    "zerodha", "groww", "upstox", "angel one", "5paisa", "fyers", "paytm", "paytm money", "phonepe",
+    "google pay", "gpay", "bhim", "mobikwik", "yono", "imobile", "icici", "hdfc", "sbi", "kotak",
+    "coinbase", "binance", "wazirx", "coindcx", "robinhood", "webull", "schwab", "etrade", "e*trade",
+    "exodus wallet", "ledger live", "trezor", "metamask", "venmo", "cash app", "revolut",
+    "jpmorgan", "wells fargo", "bank of america", "citibank", "capital one", "amex", "american express",
+    "enpass", "keeper password", "nordpass", "roboform"
+  ],
+  "app_names_note": "Whole words only. Common English words that are also brand names (chase, fidelity, vanguard, exodus, kraken, keeper, dhan) are left out of app_names on purpose: their sites are still refused through domains above, and a window title or song called 'Chase' or 'Dhan' should not be refused."
+}

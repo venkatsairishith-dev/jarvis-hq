@@ -17,13 +17,13 @@ import secrets
 import shutil
 import time
 
-from . import runtime
+from . import runtime, sensitive
 
 BACKUPS = os.environ.get("NEKO_REPAIR_BACKUPS", r"D:\jarvis\N.E.K.O-data\repair-backups")
 MAX_FILE = 2_000_000
 PROTECTED_PROCS = {"system", "idle", "csrss", "lsass", "winlogon", "wininit", "services", "smss", "svchost", "dwm", "fontdrvhost",
                    "msmpeng", "securityhealthservice", "registry", "memcompression", "taskmgr", "jarvis_node", "python", "pythonw"}
-SENSITIVE = re.compile(r"(?i)keepass|1password|bitwarden|lastpass|dashlane|enpass|wallet|metamask|exodus|ledger|banking|netbank|paypal")
+SENSITIVE = sensitive.FLOOR          # the node's floor; the check itself is sensitive.sensitive_window (2026-10-18)
 
 
 def _norm(p):
@@ -91,6 +91,7 @@ def edit_file(path: str, find: str, replace: str) -> dict:
     data = new.encode("utf-8")
     if raw.startswith(b"\xef\xbb\xbf"):
         data = b"\xef\xbb\xbf" + data
+    runtime.check()                                                          # a cancel after the backup: the file is not touched
     _atomic_write(path, data)
     ok = _read(path) == data                                                  # verify what is on disk now
     return {"ok": ok, "changed": os.path.basename(path), "backup": bid, "lines_before": text.count("\n") + 1,
@@ -136,8 +137,9 @@ $p = @(Get-Process -Name $env:JARVIS_APP -ErrorAction SilentlyContinue | Where-O
 """
 
 
-def restart_app(name: str) -> dict:
-    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,40}", name or "") or name.lower() in PROTECTED_PROCS or SENSITIVE.search(name):
+def restart_app(name: str, lister=None) -> dict:
+    if (not re.fullmatch(r"[A-Za-z0-9_.-]{1,40}", name or "") or name.lower() in PROTECTED_PROCS
+            or sensitive.sensitive_window(name, lister)):          # its name, or one of its windows (a bank open in Chrome)
         return {"ok": False, "error": "refused: a system, protected or sensitive program"}
     r = runtime.powershell(CLOSE, {"JARVIS_APP": name}, 30)
     try:

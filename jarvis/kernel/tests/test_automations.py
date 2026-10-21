@@ -229,6 +229,32 @@ class Engine(unittest.TestCase):
         self.assertEqual(len(self.A.runs(a["id"])), 1)
         self.assertEqual(self.A.get(a["id"])["state"], "completed")
 
+    def test_a_file_arrival_automation_stops_at_its_expiry_like_a_scheduled_one(self):
+        """PRO-D5b: event automations have no next_run, so tick()'s expiry check never saw them and they kept firing."""
+        job = {"kind": "ui_windows", "params": {}, "node": "laptop"}
+        ev = self.A.create({"name": "files", "action_kind": "job", "trigger_kind": "event", "action": job,
+                            "event_spec": {"watch": "jarvis-test", "glob": "*.txt"}, "expires": self.now[0] + 60})
+        live = self.A.create({"name": "files later", "action_kind": "job", "trigger_kind": "event", "action": job,
+                              "event_spec": {"watch": "jarvis-test", "glob": "*.txt"}, "expires": self.now[0] + 7200})
+        cr = self.A.create(self.job_def(name="interval", trigger_kind="interval", schedule="60", action=job, expires=self.now[0] + 60))
+        self.now[0] += 3600                                            # one hour later: two of the three are past expiry
+        self.k.db.execute("INSERT INTO watch_events(id,node,watch,rel,size,mtime_ns,ts) VALUES ('e1','laptop','jarvis-test','a.txt',1,1,?)",
+                          (self.now[0],))
+        out = self.A.tick()
+        for a in (self.A.get(ev["id"]), self.A.get(cr["id"])):        # the same end state for both kinds of trigger
+            self.assertEqual((a["state"], a["enabled"], a["paused_reason"], a["runs"]), ("completed", 0, "expired", []))
+        self.assertEqual(out["events"], [f"{live['id']}:ev:e1"])     # an automation that has not expired still fires
+        self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0], 1)
+
+    def test_an_expired_file_arrival_automation_is_switched_off_even_when_no_file_arrives(self):
+        ev = self.A.create({"name": "files", "action_kind": "job", "trigger_kind": "event", "event_spec": {"watch": "jarvis-test"},
+                            "action": {"kind": "ui_windows", "params": {}, "node": "laptop"}, "expires": self.now[0] + 60})
+        self.A.tick()
+        self.assertEqual(self.A.get(ev["id"])["state"], "scheduled")
+        self.now[0] += 120
+        self.A.tick()
+        self.assertEqual((self.A.get(ev["id"])["state"], self.A.get(ev["id"])["paused_reason"]), ("completed", "expired"))
+
     def test_lab_task_goes_through_the_dispatch_path(self):
         a = self.A.create({"name": "weekly summary", "action_kind": "lab_task", "trigger_kind": "cron", "schedule": "0 9 * * 1", "tz": "Asia/Kolkata",
                            "action": {"goal": "Write the weekly project summary", "instructions": "Summarise the week from the notes provided.",

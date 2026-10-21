@@ -86,6 +86,8 @@ def run(url, name, once=False, collect_every=60, beat=15, poll=1, clock=time.tim
                 for jid in r.get("cancel") or []:
                     if runtime.cancel(jid):
                         print("cancelled job", jid, file=sys.stderr)
+                    elif runtime.current() == jid:
+                        print("could NOT stop every program of job", jid, "(see the cancel failed line); the job is flagged cancelled", file=sys.stderr)
                 if killed and busy:                          # the kill switch stops the job in hand too
                     runtime.cancel(runtime.current())
                 if killed:

@@ -30,7 +30,7 @@ from config import (
     EVIDENCE_PROMOTION_MERGE_MODEL_TIER,
 )
 
-from memory.evidence import evidence_score
+from memory.evidence import _int_counter, evidence_score
 
 from utils.cloudsave_runtime import assert_cloudsave_writable
 
@@ -110,7 +110,7 @@ class PromotionMergeMixin:
     @staticmethod
     def _exceeds_max_retries(reflection: dict) -> bool:
         return (
-            int(reflection.get('promote_attempt_count', 0) or 0)
+            _int_counter(reflection.get('promote_attempt_count', 0))
             >= EVIDENCE_PROMOTE_MAX_RETRIES
         )
 
@@ -161,7 +161,7 @@ class PromotionMergeMixin:
             )
             return
 
-        new_count = int(entry.get('promote_attempt_count', 0) or 0) + 1
+        new_count = _int_counter(entry.get('promote_attempt_count', 0)) + 1
         payload = {
             'reflection_id': reflection_id,
             # Full-snapshot evidence values (unchanged by this event,
@@ -170,9 +170,9 @@ class PromotionMergeMixin:
             'disputation': float(entry.get('disputation', 0.0) or 0.0),
             'rein_last_signal_at': entry.get('rein_last_signal_at'),
             'disp_last_signal_at': entry.get('disp_last_signal_at'),
-            'sub_zero_days': int(entry.get('sub_zero_days', 0) or 0),
+            'sub_zero_days': _int_counter(entry.get('sub_zero_days', 0)),
             'user_fact_reinforce_count':
-                int(entry.get('user_fact_reinforce_count', 0) or 0),
+                _int_counter(entry.get('user_fact_reinforce_count', 0)),
             # New throttle fields — whitelisted in the handler.
             'last_promote_attempt_at': now_iso,
             'promote_attempt_count': new_count,

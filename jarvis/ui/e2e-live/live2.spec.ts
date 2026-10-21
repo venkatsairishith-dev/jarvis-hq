@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { consoleHeaders } from "../e2e/console-secret";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,7 +10,7 @@ test.describe.configure({ mode: "serial" });
 const shot = (page: Page, name: string) => page.screenshot({ path: `test-results/live/${name}.png` });
 const J = async (page: Page, p: string) => (await page.request.get(p)).json();
 const P = async (page: Page, p: string, body: unknown = {}) =>
-  (await page.request.fetch(p, { method: "POST", data: body, headers: { "X-Jarvis-Console": "1", Origin: "http://127.0.0.1:8799" } })).json();
+  (await page.request.fetch(p, { method: "POST", data: body, headers: await consoleHeaders(page, { Origin: "http://127.0.0.1:8799" }) })).json();
 const FINAL = new Set(["completed", "failed", "cancelled"]);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

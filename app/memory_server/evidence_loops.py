@@ -927,7 +927,7 @@ async def _periodic_archive_sweep_loop():
     INTERVAL=3600s, so even short-session users get one archive pass; afterwards
     it runs at the INTERVAL cadence).
     """
-    from memory.evidence import maybe_mark_sub_zero
+    from memory.evidence import _int_counter, maybe_mark_sub_zero
     await asyncio.sleep(_INITIAL_DELAY_ARCHIVE)
     while True:
         try:
@@ -974,7 +974,7 @@ async def _periodic_archive_sweep_loop():
                     rid = r.get('id')
                     if not rid:
                         continue
-                    pre_sz = int(r.get('sub_zero_days', 0) or 0)
+                    pre_sz = _int_counter(r.get('sub_zero_days', 0))   # a damaged count is 0, never an abort
                     will_increment = maybe_mark_sub_zero(dict(r), now)
                     new_count: int | None = None
                     if will_increment:
@@ -1012,7 +1012,7 @@ async def _periodic_archive_sweep_loop():
                         eid = entry.get('id')
                         if not eid:
                             continue
-                        pre_sz = int(entry.get('sub_zero_days', 0) or 0)
+                        pre_sz = _int_counter(entry.get('sub_zero_days', 0))
                         will_inc = maybe_mark_sub_zero(dict(entry), now)
                         snapshots.append((entity_key, eid, pre_sz, will_inc))
 

@@ -29,6 +29,7 @@ class Approvals(unittest.TestCase):
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
         self.owner, self.agent, self.lab = tokens.issue("console", "owner"), tokens.issue("hermes", "private"), tokens.issue("lab", "public")
+        self.other = tokens.issue("other-private", "private")        # a second agent in the SAME lane (audit SEC-D3)
         self.plane.set_pin(PIN)
 
     def tearDown(self):
@@ -128,6 +129,94 @@ class Approvals(unittest.TestCase):
         self.assertEqual(self.approve(aid)[0], 200)
         code, r = self.ask("lane test", approval_id=aid, tok=self.lab)               # the same words from a public-lane agent
         self.assertNotEqual(code, 200)
+
+    # ---- who asked (audit SEC-D3, 2026-10-18)
+    def test_an_approval_given_for_one_agents_request_cannot_be_used_by_another_agent_in_the_same_lane(self):
+        """R3 of the audit: agent A asks for `ui click Notepad`, the owner approves, agent B (also private) sends the same action
+        with A's approval id. It used to answer 200 queued and run as B's job."""
+        aid = self.ask("x", target="Notepad", op="click", tok=self.agent)[1]["approval_id"]
+        self.assertEqual(self.approve(aid)[0], 200)
+        code, r = self.ask("x", target="Notepad", op="click", approval_id=aid, tok=self.other)
+        self.assertEqual(code, 403, r)
+        self.assertIn("another agent", r["reason"])
+        self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0], 0)
+        self.assertEqual(self.k.approval_info(aid)["state"], "approved")           # the refused attempt did not use it up
+        code, r = self.ask("x", target="Notepad", op="click", approval_id=aid, tok=self.agent)   # the asking agent's retry still works
+        self.assertEqual((code, r["status"]), (200, "queued"))
+        self.assertEqual(self.k.db.execute("SELECT owner FROM jobs").fetchone()[0], "hermes")
+        self.assertNotEqual(self.ask("x", target="Notepad", op="click", approval_id=aid, tok=self.agent)[0], 200)   # still single use
+
+    def test_each_agent_can_ask_for_the_same_action_and_gets_its_own_approval(self):
+        a1 = self.ask("same", tok=self.agent)[1]["approval_id"]
+        a2 = self.ask("same", tok=self.other)[1]["approval_id"]
+        self.assertNotEqual(a1, a2)
+        by_id = {a["id"]: a for a in self.state()["approvals"]}
+        self.assertNotEqual(by_id[a1]["digest"], by_id[a2]["digest"])               # who asked is part of what is approved
+        self.assertEqual(self.approve(a2)[0], 200)
+        self.assertEqual(self.ask("same", approval_id=a2, tok=self.agent)[0], 403)  # B's approval is not A's
+        self.assertEqual(self.ask("same", approval_id=a2, tok=self.other)[1]["status"], "queued")
+
+    def test_the_approval_card_and_history_say_which_agent_asked(self):
+        aid = self.ask("card", tok=self.other)[1]["approval_id"]
+        card = {a["id"]: a for a in self.state()["approvals"]}[aid]
+        self.assertEqual((card["requester"], card["action"]["requester"]), ("other-private", "other-private"))
+        self.assertEqual(self.k.approval_info(aid)["requester"], "other-private")
+        self.assertEqual(self.approve(aid)[0], 200)
+        self.ask("card", approval_id=aid, tok=self.other)
+        h = {x["id"]: x for x in self.state()["approval_history"]}[aid]
+        self.assertEqual((h["state"], h["requester"]), ("used", "other-private"))
+        self.assertIn("other-private", json.dumps([e["payload"] for e in self.call("GET", "/v1/jarvis/owner/events?since=0&limit=500", None, self.owner)[1]["events"]
+                                                   if e["kind"] == "request"]))      # and the audit row
+
+    def test_the_owners_own_requests_carry_no_requester_and_still_work(self):
+        """The owner-direct paths (owner.pc) are unchanged: an approval the owner asked for himself is bound to no agent."""
+        body = {"op": "ui", "action": "type", "target": "notepad|Edit", "text": "delete the draft"}     # a consequential word: the owner approves it
+        code, r = self.call("POST", "/v1/jarvis/owner/pc", body, self.owner)
+        self.assertEqual(r["status"], "needs_approval")
+        aid = r["approval_id"]
+        self.assertEqual(self.k.approval_info(aid)["requester"], "")
+        self.assertEqual(self.approve(aid)[0], 200)
+        code, r = self.call("POST", "/v1/jarvis/owner/pc", dict(body, approval_id=aid), self.owner)
+        self.assertEqual((code, r["status"]), (202, "queued"))
+        # an agent cannot spend an approval the owner took out for himself, even for the same words
+        code, r = self.call("POST", "/v1/jarvis/owner/pc", dict(body, text="delete the other draft"), self.owner)
+        aid2 = r["approval_id"]
+        self.assertEqual(self.approve(aid2)[0], 200)
+        self.assertNotEqual(self.ask("delete the other draft", approval_id=aid2, tok=self.agent)[0], 200)
+
+    def test_the_node_endpoint_cannot_consume_an_approval_an_agent_asked_for_unless_it_names_that_agent(self):
+        from jarvis_kernel.nodes import Nodes, make_handler as node_handler
+        nodes = Nodes(self.k)
+        NH, _ = node_handler(self.k)
+        nsrv = ThreadingHTTPServer(("127.0.0.1", 0), NH)
+        threading.Thread(target=nsrv.serve_forever, daemon=True).start()
+        try:
+            nurl = f"http://127.0.0.1:{nsrv.server_address[1]}"
+
+            def npost(path, obj, tok=None):
+                r = urllib.request.Request(nurl + path, data=json.dumps(obj).encode(), method="POST")
+                if tok:
+                    r.add_header("Authorization", "Bearer " + tok)
+                return json.loads(urllib.request.urlopen(r, timeout=10).read())
+            ntok = npost("/pair", {"code": nodes.new_code(), "name": "laptop"})["token"]
+            aid = self.ask("by agent", tok=self.agent)[1]["approval_id"]
+            self.assertEqual(self.approve(aid)[0], 200)
+            act = {"tool": "ui", "op": "type", "target": "notepad|Edit", "params": {"text": "by agent"}, "lane": "private", "untrusted_session": True}
+            r = npost("/authorize", {"action": act, "approval_id": aid}, ntok)           # the node names no requester: refused
+            self.assertEqual(r["allowed"], False)
+            self.assertIn("another agent", r["reason"])
+            r = npost("/authorize", {"action": dict(act, requester="hermes"), "approval_id": aid}, ntok)   # naming the agent is explicit and audited
+            self.assertEqual(r["allowed"], True)
+            # the node's own request has no requester and is approved and used as before
+            q = npost("/request", {"action": {"tool": "ui", "op": "type", "target": "notepad|Edit", "params": {"text": "node's own"}, "lane": "private"}}, ntok)
+            self.assertTrue(q["approval_id"])
+            self.assertEqual(self.k.approval_info(q["approval_id"])["requester"], "")
+            self.assertEqual(self.approve(q["approval_id"])[0], 200)
+            r = npost("/authorize", {"action": {"tool": "ui", "op": "type", "target": "notepad|Edit", "params": {"text": "node's own"}, "lane": "private"},
+                                     "approval_id": q["approval_id"]}, ntok)
+            self.assertEqual(r["allowed"], True)
+        finally:
+            nsrv.shutdown()
 
     # ---- denial, expiry, invalid
     def test_denial_prevents_execution_and_is_final(self):

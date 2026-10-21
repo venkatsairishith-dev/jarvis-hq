@@ -11,7 +11,7 @@ import re
 import secrets
 import time
 
-from . import runtime
+from . import runtime, sensitive
 from .paths import local_result_dir, sweep_local
 
 NAME = re.compile(r"^[A-Za-z0-9_. :()-]{0,80}$")
@@ -105,7 +105,7 @@ SCRIPTS = {"processes": PROCESSES, "app_errors": APP_ERRORS, "crashes": CRASHES,
            "network": NETWORK, "app_info": APP_INFO, "window_text": WINDOW_TEXT}
 NEEDS_NAME = {"services", "app_info", "window_text"}
 LOCAL_ONLY = {"app_errors", "window_text"}           # free text from the screen or from event messages
-SENSITIVE = re.compile(r"(?i)keepass|1password|bitwarden|lastpass|dashlane|enpass|wallet|metamask|exodus|ledger|banking|netbank|paypal")
+SENSITIVE = sensitive.FLOOR          # the node's floor; the check itself is sensitive.why / sensitive_window (2026-10-18)
 
 
 def _json(text):
@@ -116,13 +116,13 @@ def _json(text):
     return v if isinstance(v, list) else [v] if v is not None else []
 
 
-def run(p: dict, runner=None) -> dict:
+def run(p: dict, runner=None, lister=None) -> dict:
     op, name = str(p.get("op", "")), str(p.get("target", ""))
     if op in ("window_ocr", "window_locate"):                # perception of one window (vision.py): read-only, local
         proc, _, label = name.partition("|")
         if not NAME.match(proc) or not proc or len(label) > 120 or "\n" in label:
             return {"ok": False, "error": "bad target"}
-        if SENSITIVE.search(proc):
+        if sensitive.sensitive_window(proc, lister):       # its name, or the title of one of its windows (a bank in Chrome)
             return {"ok": False, "error": "refused: a password manager, wallet or bank"}
         from . import vision
         try:
@@ -134,7 +134,7 @@ def run(p: dict, runner=None) -> dict:
         return {"ok": False, "error": "unknown diagnostic"}
     if not NAME.match(name) or (op in NEEDS_NAME and not name):
         return {"ok": False, "error": "a short app or service name is needed" if op in NEEDS_NAME else "bad name"}
-    if SENSITIVE.search(name):
+    if sensitive.why(name):
         return {"ok": False, "error": "refused: a password manager, wallet or bank"}
     runner = runner or runtime.powershell
     r = runner(SCRIPTS[op], {"JARVIS_DIAG_NAME": name, "JARVIS_DIAG_HOURS": "24"}, 60)
@@ -144,8 +144,11 @@ def run(p: dict, runner=None) -> dict:
         rows = _json(r.stdout)
     except ValueError:
         return {"ok": False, "error": f"the {op} check returned something unreadable"}
-    if op == "window_text":
-        rows = [w for w in rows if not SENSITIVE.search(str(w.get("title", "")))]
+    if op == "window_text":     # a bank open in Chrome: that window and its dialogs are left out, the others stay
+        rows = [w for w in rows if isinstance(w, dict) and not sensitive.why(str(w.get("title", "")), str(w.get("owner", "")))]
+    if op == "app_info":        # the main window's title goes to the kernel: never a bank's, wallet's or payment app's
+        rows = [dict(w, window_title="(hidden: a bank, wallet or payment window)") if isinstance(w, dict)
+                and sensitive.why(str(w.get("window_title", ""))) else w for w in rows]
     if op not in LOCAL_ONLY:
         return {"ok": True, "check": op, "count": len(rows), "rows": rows[:40]}
     path = save_local(op, rows)

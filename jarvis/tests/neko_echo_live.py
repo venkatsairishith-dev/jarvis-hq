@@ -15,6 +15,8 @@ import urllib.request
 import wave
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import control_auth  # noqa: E402  the wake listener's /status needs its token (re-review M3)
 import numpy as np
 import sounddevice as sd
 
@@ -25,7 +27,7 @@ TEXTS = ["Hey Neko, this is Neko speaking.", "Hey Neko. I will check that for yo
 
 
 def counts():
-    with urllib.request.urlopen(STATUS, timeout=5) as r:
+    with urllib.request.urlopen(urllib.request.Request(STATUS, headers=control_auth.headers_for("wake")), timeout=5) as r:
         return json.loads(r.read()).get("counts") or {}
 
 

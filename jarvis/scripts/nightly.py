@@ -1,6 +1,8 @@
 """Nightly regression of the decision layer on the VM. Real work: it runs the benchmark sets against the always-on
 local services (embedding on :8081, Qwen3-4B on :8080), compares with the last run, and sends a short summary to the
 owner's Telegram chat. A drop in accuracy, or any high-risk request judged GREEN/YELLOW, is flagged at the top.
+Every run is also audited in the kernel (`nightly_run`, plus `nightly_regression_failed` when something is flagged), with
+Telegram on or off, so the flags show in the JARVIS console's list of recent failures.
 
 Usage: python3 nightly.py [--no-telegram]
 """
@@ -19,7 +21,7 @@ SETS = [("own-test", None), ("independent-88", "ood_items.jsonl"), ("fresh-risk-
 
 
 def run_set(name, ood):
-    env = dict(os.environ)
+    env = {k: v for k, v in os.environ.items() if not re.match(r"(GH_|GITHUB_|GIT_ASKPASS|GIT_CONFIG|GIT_SSH|SSH_AUTH_SOCK|NETRC)", k, re.I)}   # no GitHub/git credential by inheritance
     if ood:
         env["OOD"] = os.path.join(BENCH, "data", ood)
         if name == "fresh-risk-156":
@@ -67,13 +69,24 @@ def main():
     summary = "\n".join(lines)
     print(summary)
     sys.path.insert(0, os.path.join(ROOT, "kernel"))
+    from jarvis_kernel.store import Kernel
+    k = Kernel()
+    record(k, flags, len(results))
     from jarvis_kernel import telegram as _tg
-    if "--no-telegram" not in sys.argv and not _tg.disabled():   # config/telegram.off switches the report off too
+    if "--no-telegram" not in sys.argv and not _tg.disabled():   # config/telegram.off switches the message off, never the audit
         from jarvis_kernel import gateway, telegram
-        from jarvis_kernel.store import Kernel
-        k = Kernel()
-        k.audit.append("nightly_run", {"flags": len(flags), "sets": len(results)})
         telegram.from_files(k, gateway.load(os.path.join(ROOT, "config", "providers.json"))).say(summary)
+
+
+def record(k, flags, sets):
+    """The owner sees the result without Telegram: every run leaves a `nightly_run` audit row with its flags, and a run with
+    flags adds `nightly_regression_failed`, which the console lists under recent failures (Settings, event feed: it shows
+    audit kinds containing "fail"). Written before any message is tried, so a send failure cannot lose it."""
+    text = [str(f)[:200] for f in flags[:10]]
+    k.audit.append("nightly_run", {"flags": len(flags), "sets": sets, "flagged": text})
+    if flags:
+        k.audit.append("nightly_regression_failed", {"flags": len(flags), "flagged": text,
+                                                     "where": "~/jarvis/bench-results on the VM"})
 
 
 if __name__ == "__main__":

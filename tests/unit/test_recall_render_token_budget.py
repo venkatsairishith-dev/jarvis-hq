@@ -761,6 +761,9 @@ def test_the_entry_point_has_no_runtime_switch():
 _QUERY_MEMORY_ROUTE_DEFINITION = "app/memory_server/routes.py"
 _KNOWN_RECALL_CLIENTS = {
     "main_logic/core/tool_calling.py",
+    # JARVIS main_agent planner memory (2026-10-18, audit "the planner receives no memory"): selects its own top entries
+    # but renders them through render_recall_block, so the token ceilings above apply to it too.
+    "plugin/plugins/main_agent/memory_context.py",
 }
 
 

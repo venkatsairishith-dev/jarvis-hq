@@ -80,6 +80,8 @@ def main():
                  hub_url="http://127.0.0.1:9", local_llm_url="http://127.0.0.1:9", connectors_file=connectors_file, secrets_dir=secrets_dir)
     srv = make_server(cfg)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    import control_auth                      # the throwaway console publishes its master token like main() does (JARVIS_RUN_DIR)
+    control_auth.publish("console", srv.console_secret)
 
     # A stand-in for the laptop node that runs ONLY connector jobs (other job kinds stay queued, as with an absent node). It uses
     # the node's real connector code, the owner's real local allowlist file and a real MCP server process.

@@ -36,7 +36,7 @@ class DocToolsPlugin(NekoPluginBase):
             "max_chars": {"type": "integer", "description": "Most characters to return (default 20000, at most 100000).", "default": 20000}},
             "required": ["path"]},
         timeout=60,
-        llm_result_fields=["name", "kind", "text", "truncated"],
+        llm_result_fields=["name", "kind", "text", "truncated", "note"],   # note: e.g. a scanned PDF with no text layer
     )
     async def read_document(self, path: str = "", max_chars: int = core.DEFAULT_CHARS, **_):
         try:

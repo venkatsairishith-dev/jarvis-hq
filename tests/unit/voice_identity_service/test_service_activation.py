@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from pathlib import Path
 import threading
 from types import SimpleNamespace
@@ -580,7 +581,13 @@ async def test_public_guards_and_status_shape(tmp_path: Path) -> None:
     }
     enrollment = await service.start_enrollment()
     duplicate = await service.start_enrollment()
-    assert duplicate == enrollment
+    # remaining_seconds is a live countdown (expires_at - monotonic()), so two reads
+    # differ by the elapsed time on a fine-grained clock; every other field must be
+    # identical and the countdown may only go down, by well under a second.
+    assert 0.0 <= enrollment.remaining_seconds - duplicate.remaining_seconds < 1.0
+    assert dataclasses.replace(
+        duplicate, remaining_seconds=enrollment.remaining_seconds
+    ) == enrollment
     assert duplicate.as_dict()["enrollment_id"] == enrollment.enrollment_id
     assert not await service.cancel_enrollment("different-enrollment")
     assert await service.cancel_enrollment(enrollment.enrollment_id)
