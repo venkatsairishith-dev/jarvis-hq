@@ -2628,8 +2628,8 @@
   ]
  },
  {
-  "name": "models.dev (open model catalog, used by OpenCode)",
-  "category": "data",
+  "name": "OpenCode model capability catalog (open data)",
+  "category": "providers",
   "upstream_url": "https://github.com/anomalyco/models.dev",
   "licence": "MIT",
   "pinned_version": "snapshot of https://models.dev/api.json, source sha256 recorded in jarvis/config/model_catalog.json",
