@@ -24,6 +24,11 @@ def _fake_bin(d, body):
     with open(p, "w", encoding="utf-8") as f:
         f.write("#!" + sys.executable + "\n" + body)
     os.chmod(p, os.stat(p).st_mode | stat.S_IEXEC)
+    if os.name == "nt":       # Windows cannot run a #! script: a .cmd launcher runs it with the same interpreter
+        cmd = p + ".cmd"
+        with open(cmd, "w", encoding="utf-8", newline="") as f:
+            f.write('@"%s" "%s" %%*\r\n' % (sys.executable, p))
+        return cmd
     return p
 
 
@@ -119,9 +124,10 @@ class Trim1Safety(unittest.TestCase):
 
     def test_singular_marker_and_verbatim_lines_are_accepted(self):
         # keeps the error line and the last 5 lines, with trim-1's own markers (one of them singular)
-        body = ("import sys\nlines = sys.stdin.read().split('\\n')\ni = next(k for k, l in enumerate(lines) if l.startswith('ValueError'))\n"
+        # bytes in and out: like the real trim-1, UTF-8 with \n whatever the console code page or newline translation
+        body = ("import sys\nlines = sys.stdin.buffer.read().decode('utf-8').split('\\n')\ni = next(k for k, l in enumerate(lines) if l.startswith('ValueError'))\n"
                 "out = ['… %d lines …' % i, lines[i], '… 1 line …', lines[i + 2], '… %d lines …' % (len(lines) - i - 8)] + lines[-5:]\n"
-                "print('\\n'.join(out), end='')\n")
+                "sys.stdout.buffer.write('\\n'.join(out).encode('utf-8'))\n")
         s = self._run(body)
         self.assertEqual(s.mode, "trim1-balanced")
         self.assertIn(ERR, s.text.split("\n"))
