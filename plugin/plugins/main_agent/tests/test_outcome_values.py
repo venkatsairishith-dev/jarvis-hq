@@ -33,7 +33,7 @@ IDS = ["20261019-010101-abcdef", "m20261019-010101-abcdef", "9f1c2b3a-1111-4222-
        "x" * 50000, "", "None"]
 
 
-@pytest.mark.parametrize("ident", IDS)
+@pytest.mark.parametrize("ident", IDS, ids=[f"ident{i}" for i in range(len(IDS))])    # short ids: pytest puts the id in an env var (Windows caps those at 32767)
 def test_identifiers_paths_titles_and_urls_survive_a_step_result_unchanged(ident):
     r = StepResult("s1", "success", json.dumps({"id": ident}, ensure_ascii=False))
     assert json.loads(r.text[:60000] if len(ident) < 40000 else json.dumps({"id": "x"}))["id"] in (ident, "x")
