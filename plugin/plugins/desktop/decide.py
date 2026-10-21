@@ -281,7 +281,7 @@ def normalize_key(key: str) -> str:
 
 FORCED: dict | None = None                    # the regression gate evaluates a staged version without activating it
 FAST_PATH = os.environ.get("NEKO_DECIDE_FAST_PATH", "1") != "0"   # rules for one-command requests (0 = model only, for baselines)
-_OVERLAY = {"mtime": -1.0, "content": {}}
+_OVERLAY = {"mtime": -1.0, "content": {}}      # "mtime" = the signature of the registry last read
 
 
 def overlay() -> dict:
@@ -290,7 +290,10 @@ def overlay() -> dict:
         return FORCED
     from . import skills
     reg = skills.ROOT / "registry.json"
-    mt = reg.stat().st_mtime if reg.exists() else 0.0
+    try:                                       # the signature is the registry's exact bytes (the key keeps its old name: bench adapters
+        mt = reg.read_bytes()                  # reset it to -1.0 to force a re-read). A file time is not enough: two quick rewrites, a
+    except OSError:                            # promote then a rollback, can share one timestamp tick on Windows and leave the old overlay.
+        mt = b""
     if mt != _OVERLAY["mtime"]:
         _OVERLAY.update(mtime=mt, content=skills.active(skills.ROOT) if mt else {})
     return _OVERLAY["content"]
