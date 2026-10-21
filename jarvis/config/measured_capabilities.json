@@ -1,0 +1,18 @@
+{
+ "_note": "Measured by jarvis_kernel/capability_probe.py. Read by model_select.py; changes no route by itself.",
+ "providers": {
+  "local-llama-vulkan": {
+   "tools": {
+    "error_kinds": [],
+    "errors": 0,
+    "method": "fixed get_weather prompt, temperature 0",
+    "model": "decider-qwen3-4b-2507",
+    "ok": true,
+    "passed": 3,
+    "runs": 3,
+    "served_model": "D:\\jarvis\\models\\gguf\\Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+    "when": "2026-10-21"
+   }
+  }
+ }
+}
