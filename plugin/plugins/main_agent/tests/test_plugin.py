@@ -292,3 +292,70 @@ def test_resume_reruns_unknown_read_only_steps_by_itself_but_never_a_step_with_s
     rec = stored(p, "crashed")
     assert rec["state"] == "done" and rec["results"]["s1"]["outcome"] == "success" and rec["results"]["s2"]["outcome"] == "success"
     assert [c for c in p.calls if c[0] == "learn_vault:save_note"] == [("learn_vault:save_note", {"path": "a.md", "content": "SUMMARY TEXT"})]
+
+
+def _fake_llm(monkeypatch, errors, reply="ok"):
+    """_llm with a model that raises each error in turn and then answers; returns the call counter and the waits."""
+    import utils.config_manager as cm
+    import utils.llm_client as lc
+
+    class Cfg:
+        def get_model_api_config(self, kind):
+            return {"base_url": "https://provider.example/v1", "model": "m", "api_key": "", "provider_type": None}
+
+    calls, waits = [], []
+
+    class Model:
+        async def ainvoke(self, messages):
+            calls.append(1)
+            if len(calls) <= len(errors):
+                raise errors[len(calls) - 1]
+            return types.SimpleNamespace(content=reply)
+
+    async def fake_create(**kw):
+        return Model()
+
+    async def fake_sleep(s):
+        waits.append(s)
+
+    monkeypatch.setattr(cm, "get_config_manager", lambda: Cfg())
+    monkeypatch.setattr(lc, "create_chat_llm_async", fake_create)
+    monkeypatch.setattr(ma.asyncio, "sleep", fake_sleep)
+    return calls, waits
+
+
+class RateLimitError(Exception):
+    pass
+
+
+def test_a_rate_limited_model_call_is_asked_again_and_then_answers(monkeypatch):
+    calls, waits = _fake_llm(monkeypatch, [RateLimitError("Error code: 429 - too many requests")] * 2, reply="plan")
+    p = object.__new__(ma.MainAgentPlugin)
+    assert asyncio.run(p._llm([{"role": "user", "content": "hi"}])) == "plan"
+    assert (len(calls), waits) == (3, [6.0, 18.0])
+
+
+def test_retry_after_is_honoured_and_capped(monkeypatch):
+    class Slow(Exception):
+        status_code = 429
+        response = types.SimpleNamespace(headers={"retry-after": "500"}, status_code=429)
+    calls, waits = _fake_llm(monkeypatch, [Slow("busy")], reply="x")
+    asyncio.run(object.__new__(ma.MainAgentPlugin)._llm([{"role": "user", "content": "hi"}]))
+    assert waits == [30.0]
+
+
+def test_a_model_that_stays_rate_limited_fails_after_three_calls_without_provider_text(monkeypatch):
+    from plugin.plugins.main_agent.executor import StepFailed
+    calls, waits = _fake_llm(monkeypatch, [RateLimitError("429 secret-request-id-123")] * 5)
+    with pytest.raises(StepFailed) as e:
+        asyncio.run(object.__new__(ma.MainAgentPlugin)._llm([{"role": "user", "content": "hi"}]))
+    assert len(calls) == 3 and "RateLimitError" in str(e.value) and "secret-request-id" not in str(e.value)
+
+
+def test_a_wrong_key_or_a_bad_request_is_never_asked_again(monkeypatch):
+    from plugin.plugins.main_agent.executor import StepFailed
+    for err in (RuntimeError("Error code: 401 unauthorized"), ValueError("Error code: 400 - bad request")):
+        calls, waits = _fake_llm(monkeypatch, [err] * 3)
+        with pytest.raises(StepFailed):
+            asyncio.run(object.__new__(ma.MainAgentPlugin)._llm([{"role": "user", "content": "hi"}]))
+        assert (len(calls), waits) == (1, [])

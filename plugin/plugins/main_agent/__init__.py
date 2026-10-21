@@ -211,6 +211,28 @@ def _stopped_text(plan: Plan, results: list[StepResult]) -> str:
     return " ".join(lines)
 
 
+LLM_RETRIES = 2                                   # extra tries after a transient provider error (3 calls at most)
+
+
+def _transient_wait(exc: Exception, attempt: int) -> float | None:
+    """Seconds to wait before asking the model again, or None when this error is not worth another try. Only errors that
+    say 'busy, slow or unreachable' qualify (rate limit 429, 5xx, timeout, dropped connection); a wrong key, a refused
+    request or a bad reply never do. A model call has no side effect, so repeating it cannot duplicate anything."""
+    name, low = type(exc).__name__.lower(), str(exc).lower()
+    status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+    transient = (status in (408, 409, 425, 429, 500, 502, 503, 504, 529)
+                 or any(k in name for k in ("ratelimit", "timeout", "connection", "overloaded", "serviceunavailable", "internalserver"))
+                 or any(k in low for k in ("429", "rate limit", "too many requests", "timed out", "overloaded", "temporarily unavailable")))
+    if not transient:
+        return None
+    after = None
+    try:
+        after = float((getattr(getattr(exc, "response", None), "headers", None) or {}).get("retry-after"))
+    except (TypeError, ValueError):
+        pass
+    return max(1.0, min(30.0, after if after is not None else (6.0, 18.0)[min(attempt, 1)]))
+
+
 @neko_plugin
 class MainAgentPlugin(NekoPluginBase):
     # The one authoritative active run: its id and its stop event, set together under the lock, cleared only by that run.
@@ -380,13 +402,19 @@ class MainAgentPlugin(NekoPluginBase):
         llm = await create_chat_llm_async(model=model, base_url=base_url, api_key=str(cfg.get("api_key") or "").strip(),
                                           max_completion_tokens=max_tokens, timeout=timeout, provider_type=cfg.get("provider_type"))
         try:
-            try:
-                reply = await llm.ainvoke(messages)
-            except Exception as exc:               # provider errors can echo request details: say only what the user can act on
-                low = str(exc).lower()
-                if "401" in low or "403" in low or "api key" in low or "unauthorized" in low:
-                    raise StepFailed("The agent model refused the request: its API key is missing or wrong. Set it in N.E.K.O's settings.")
-                raise StepFailed(f"The agent model did not answer ({type(exc).__name__}).")
+            reply = None
+            for attempt in range(LLM_RETRIES + 1):
+                try:
+                    reply = await llm.ainvoke(messages)
+                    break
+                except Exception as exc:           # provider errors can echo request details: say only what the user can act on
+                    low = str(exc).lower()
+                    if "401" in low or "403" in low or "api key" in low or "unauthorized" in low:
+                        raise StepFailed("The agent model refused the request: its API key is missing or wrong. Set it in N.E.K.O's settings.")
+                    wait = _transient_wait(exc, attempt)
+                    if wait is None or attempt >= LLM_RETRIES:
+                        raise StepFailed(f"The agent model did not answer ({type(exc).__name__}).")
+                    await asyncio.sleep(wait)      # a model call changes nothing, so a rate-limited or dropped one is asked again
         finally:
             closer = getattr(llm, "aclose", None)
             if callable(closer):
