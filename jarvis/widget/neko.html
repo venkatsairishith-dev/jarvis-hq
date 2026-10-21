@@ -59,6 +59,7 @@
   body[data-state="speaking"] .mouth { animation: talk .32s infinite; } body[data-state="speaking"] .ring { border-color: color-mix(in srgb, var(--accent2) 60%, transparent); }
   body[data-state="completed"] .ring { border-color: var(--ok); } body[data-state="completed"] .badge { display: grid; background: var(--ok); }
   body[data-state="completed"] .eye { transform: scaleY(.35); }
+  body[data-state="attention"] .ring { border-color: var(--warn); } body[data-state="attention"] .badge { display: grid; background: var(--warn); }
   body[data-state="needs_permission"] .ring { border-color: var(--warn); animation: pulse 1.6s infinite; } body[data-state="needs_permission"] .badge { display: grid; background: var(--warn); }
   body[data-state="error"] .ring { border-color: var(--bad); } body[data-state="error"] .badge { display: grid; background: var(--bad); }
   body[data-state="error"] .ear { fill: var(--bad); } body[data-state="error"] button.orb { filter: grayscale(.4); }
@@ -127,7 +128,7 @@
   </div>
 
   <div class="panel" id="permPanel">
-    <div class="row"><a class="btn" href="http://127.0.0.1:8799/" target="_blank" rel="noopener" style="flex:1">Review in the JARVIS console</a></div>
+    <div class="row"><a class="btn" href="/open-console" target="_blank" rel="noopener" style="flex:1">Review in the JARVIS console</a></div>
     <div class="note">Approving needs your PIN there.</div>
   </div>
 
@@ -137,8 +138,9 @@
 "use strict";
 const TITLES = {sleeping: "Sleeping", wake_listening: "Listening for “Hey Neko”", waking: "Waking up", listening: "Listening",
   thinking: "Thinking", working: "Working", speaking: "Speaking", completed: "Done", needs_permission: "Needs your permission",
-  error: "Something is wrong"};
-const BADGE = {completed: "✓", needs_permission: "!", error: "×"};
+  attention: "Needs your check", error: "Something is wrong"};
+// "attention": finished, but not well (a failed or held task, a deliverable that failed its QA checks): never "Done ✓"
+const BADGE = {completed: "✓", attention: "!", needs_permission: "!", error: "×"};
 const $ = (id) => document.getElementById(id);
 let current = {state: "sleeping"};
 let taskOpen = false;
@@ -150,14 +152,27 @@ function render(s) {
   $("detail").textContent = [s.detail, s.recover].filter(Boolean).join(" · ");
   $("badge").textContent = BADGE[s.state] || "";
   $("clock").textContent = s.time ? "updated " + s.time : "";
-  $("donePanel").classList.toggle("show", s.state === "completed" && !!s.file);
+  $("donePanel").classList.toggle("show", ["completed", "attention"].includes(s.state) && !!s.file);
   $("workPanel").classList.toggle("show", s.state === "working");
   $("permPanel").classList.toggle("show", s.state === "needs_permission");
   $("taskPanel").classList.toggle("show", taskOpen && !["working", "needs_permission"].includes(s.state));
 }
 
+// The control secret: this launch's, put into the page by the widget server (audit M15). Re-read it from the page if the widget restarted.
+let CTL = (document.querySelector('meta[name="jarvis-widget-secret"]') || {}).content || "";
+async function controlPost(url, body) {
+  const send = () => fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-Jarvis-Control": CTL }, body: JSON.stringify(body) });
+  let r = await send();
+  if (r.status === 403) {
+    try {
+      const m = /<meta name="jarvis-widget-secret" content="([^"]+)"/.exec(await (await fetch("/", { cache: "no-store" })).text());
+      if (m && m[1] !== CTL) { CTL = m[1]; r = await send(); }
+    } catch (e) { /* keep the 403 */ }
+  }
+  return r;
+}
 async function post(url, body) {
-  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const r = await controlPost(url, body);
   return r.json().catch(() => ({ok: false, error: "no answer"}));
 }
 

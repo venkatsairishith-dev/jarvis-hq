@@ -58,6 +58,8 @@ def make(monkeypatch, tmp_path, plan=PLAN, llm_reply=None, entry_result=None, js
 
     async def call_entry(ref, params=None, timeout=10.0):
         calls.append((ref, params))
+        if entry_result is None and ref == "learn_vault:save_note":      # the entry's real result shape (a write must show what it wrote)
+            return Ok({"path": (params or {}).get("path"), "mode": "create", "bytes": 12})
         return entry_result if entry_result is not None else Ok({"summary": "cats are animals"})
 
     async def call_entry_json(ref, params=None, timeout=10.0):
@@ -132,9 +134,11 @@ def test_plan_task_previews_with_side_effect_classes_and_runs_nothing(monkeypatc
 
 def test_stop_task_sets_the_cancel_flag_only_when_something_runs(monkeypatch, tmp_path):
     p = make(monkeypatch, tmp_path)
+    monkeypatch.setattr(ma, "STOP_REPORT_WAIT_S", 0.05)
     assert asyncio.run(p.stop_task()).value["stopped"] is False
     p._active, p._cancel = "r", asyncio.Event()
-    assert asyncio.run(p.stop_task()).value["stopped"] is True and p._cancel.is_set()
+    got = asyncio.run(p.stop_task()).value                         # requested; nothing ends the fake run, so it is not 'stopped'
+    assert got["requested"] is True and got["stopped"] is False and got["still_running"] and p._cancel.is_set()
 
 
 def test_a_refused_plan_gets_one_corrective_retry_and_a_second_refusal_is_final(monkeypatch, tmp_path):

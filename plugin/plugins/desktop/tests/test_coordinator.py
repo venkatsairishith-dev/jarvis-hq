@@ -424,3 +424,15 @@ def test_only_boolean_true_ok_is_success(tmp_path):  # E-049
         assert rec["status"] == "failed" and not C.summary(rec).startswith("Done"), bad
     assert coord(tmp_path, {"check_pc": lambda s: {"ok": True}}).run("x", plan(step))["status"] == "completed"
 
+
+
+def test_open_website_needs_a_chrome_window_that_changed_and_says_when_the_site_is_unconfirmed(tmp_path):  # PC-D7
+    # the node found no Chrome window that changed after the launch: not passed
+    unconfirmed = dict(OK_OPEN, verified="unconfirmed", note="no Chrome window was seen to change within 8 s")
+    rec = coord(tmp_path, {"open_website": lambda s: unconfirmed}).run("x", plan(OPEN))
+    assert rec["status"] == "failed" and not rec["steps"][0]["passed"]
+    # a window changed in the right profile, but its title does not name the site: passed, with that doubt said
+    rec = coord(tmp_path, {"open_website": lambda s: dict(OK_OPEN, site_in_title=False, host="example.com")}).run("x", plan(OPEN))
+    assert rec["status"] == "completed" and "not certain" in C.summary(rec) and "example.com" in C.summary(rec)
+    rec = coord(tmp_path, {"open_website": lambda s: dict(OK_OPEN, site_in_title=True, host="example.com")}).run("x", plan(OPEN))
+    assert rec["status"] == "completed" and "not certain" not in C.summary(rec)

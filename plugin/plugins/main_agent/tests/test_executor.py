@@ -215,3 +215,33 @@ def test_run_state_names():
     assert run_state(p, [R("a", "failure"), R("b", "not_executed")]) == "failed"
     assert run_state(p, [R("a", "unknown", held=True)]) == "held"
     assert run_state(p, [R("a")], cancelled=True) == "cancelled"
+
+
+def test_a_step_that_finishes_right_after_stop_reports_its_real_result_and_a_stuck_one_is_interrupted():
+    """Stop asks the step in progress to stop, but a step that does end within the grace period really happened: it is
+    reported as done, not as 'stopped while running'. A step that keeps running is interrupted and never claims success."""
+    async def main():
+        ev = asyncio.Event()
+
+        async def quick(step, inputs):
+            if step.id == "a":
+                ev.set()
+                await asyncio.sleep(0.05)
+            return "ok"
+        quick_res = by_id(await run_plan(plan(S("a"), S("b", ["a"])), quick, cancel=ev, parallel=1))
+        ev2, interrupted = asyncio.Event(), []
+
+        async def stuck(step, inputs):
+            ev2.set()
+            try:
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                interrupted.append(step.id)
+                raise
+            return "late"
+        t0 = time.monotonic()
+        stuck_res = by_id(await run_plan(plan(S("a", effect="write")), stuck, cancel=ev2, parallel=1))
+        return quick_res, stuck_res, interrupted, time.monotonic() - t0
+    q, s, interrupted, sec = run(main())
+    assert q["a"].outcome == "success" and q["b"].outcome == "not_executed" and "cancelled" in q["b"].error
+    assert s["a"].outcome != "success" and interrupted == ["a"] and sec < 5

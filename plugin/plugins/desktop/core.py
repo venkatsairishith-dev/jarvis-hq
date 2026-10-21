@@ -6,18 +6,24 @@ ones say why. The laptop node runs the job and reports what it actually observed
 
 Privacy: screen text and page text are written by the node to outputs\\neko-local on this laptop; take_local() reads such a
 file once and deletes it. What goes back to the main agent (and so to its model) is a diagnosis written here, not the
-screen text, unless the owner set NEKO_SCREEN_TEXT_TO_MODEL=1.
+screen text. Screen text itself leaves this plugin only when the owner set NEKO_SCREEN_TEXT_TO_MODEL=1 AND the privacy gateway
+confirmed it hid names, places and private details in it (plugin/plugins/_shared/screen_text.py: release()); otherwise it is
+withheld. File and directory names are never returned as names, only as a class ("a .json file").
 """
 from __future__ import annotations
 
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Callable
+
+from plugin.plugins._shared import screen_text
+from plugin.plugins._shared import loopback_http
 
 CONSOLE = os.environ.get("JARVIS_CONSOLE_URL", "http://127.0.0.1:8799").rstrip("/")
 DATA = Path(os.environ.get("NEKO_STORAGE_SELECTED_ROOT", r"D:\jarvis\N.E.K.O-data"))
@@ -32,29 +38,99 @@ class DesktopError(Exception):
     pass
 
 
+class NotSent(Exception):
+    """Pc.submit: no request went out (not a failure of the console): the Pc was stopped, or its fence said the PC lock is no
+    longer this task's. `reason` says which."""
+
+    def __init__(self, reason: str = "stopped"):
+        super().__init__(reason)
+        self.reason = reason
+
+
 def screen_text_allowed() -> bool:
-    return os.environ.get("NEKO_SCREEN_TEXT_TO_MODEL", "").strip().lower() in ("1", "true", "yes")
+    """The owner's switch. On does NOT mean "send the text": it means "the text may be offered to a model after it has been
+    cleared" (see screen_text.release). Off (the default) means no screen text goes to any model."""
+    return screen_text.flag_on()
 
 
 # ---------------------------------------------------------------- the console's owner route
+_META = re.compile(r'<meta\s+name="jarvis-console-secret"\s+content="([^"]+)"')
+_SECRETS: dict[str, str] = {}
+
+
+def _run_dir() -> Path:
+    """The per-user folder where the JARVIS servers publish their 0600 token files (same rule as jarvis/scripts/control_auth.py)."""
+    override = os.environ.get("JARVIS_RUN_DIR")
+    if override:
+        return Path(override)
+    if os.name == "nt":
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "jarvis" / "run"
+    xdg = os.environ.get("XDG_RUNTIME_DIR")
+    return Path(xdg) / "jarvis" if xdg else Path.home() / ".jarvis" / "run"
+
+
+def _console_secret(refresh: bool = False, timeout: float = 10.0) -> str:
+    """The console's MASTER token (re-review M3, 2026-10-19). The console no longer puts any credential in `GET /`: it publishes the
+    token to `console.token`, a 0600 file in the per-user run folder, and every request (reads too) sends it in X-Jarvis-Console.
+    A file that other users could read, or that belongs to someone else, is not used. For a console that still serves its secret in
+    its page (a test server, an older console) the page is read as before. A program of the same OS user can read the file: this
+    blocks other users, other sites and programs that cannot read it, not malware running as the owner (the PIN is the boundary)."""
+    if refresh or CONSOLE not in _SECRETS:
+        token = ""
+        try:
+            f = _run_dir() / "console.token"
+            st = f.stat()
+            if os.name == "nt" or (not st.st_mode & 0o077 and st.st_uid == os.getuid()):
+                token = f.read_text(encoding="ascii").strip()
+        except (OSError, ValueError):
+            token = ""
+        if not token:
+            req = urllib.request.Request(f"{CONSOLE}/", headers={"Accept": "text/html"})
+            try:
+                with loopback_http.urlopen(req, timeout=timeout) as r:
+                    m = _META.search(r.read(200_000).decode("utf-8", "replace")) if r.status == 200 else None
+            except urllib.error.HTTPError:
+                m = None
+            if not m:
+                raise DesktopError("the JARVIS console token is not available: start the console (it writes console.token in the run folder), "
+                                   "or this address is not the JARVIS console")
+            token = m.group(1)
+        _SECRETS[CONSOLE] = token
+    return _SECRETS[CONSOLE]
+
+
 def owner(method: str, name: str, body: dict | None = None, timeout: float = 20.0) -> tuple[int, dict]:
     if not re.match(r"^http://(127\.0\.0\.1|localhost)(:\d+)?$", CONSOLE):
         raise DesktopError("JARVIS_CONSOLE_URL must be plain http on a loopback address")
     data = json.dumps(body).encode() if body is not None else None
-    # X-Jarvis-Console marks a local program (not a web page): the console refuses cross-site POSTs without it
-    req = urllib.request.Request(f"{CONSOLE}/api/owner/{name}", data=data, method=method,
-                                 headers={"X-Jarvis-Console": "1", **({"Content-Type": "application/json"} if data else {})})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            status, text = r.status, r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
+    write = method.upper() in ("POST", "DELETE")
+    for attempt in (0, 1):
+        # X-Jarvis-Console carries the console's master token: it refuses every request without it (writes AND private reads)
         try:
-            reply = json.loads(e.read().decode("utf-8", "replace") or "{}")
-        except ValueError:
-            reply = None
-        return e.code, reply if isinstance(reply, dict) else {"error": f"HTTP {e.code}"}
-    except (urllib.error.URLError, OSError, TimeoutError) as e:
-        raise DesktopError(f"the JARVIS console is not answering ({type(e).__name__}); is it running?") from None
+            secret = _console_secret(refresh=attempt == 1)
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            raise DesktopError(f"the JARVIS console is not answering ({type(e).__name__}); is it running?") from None
+        except DesktopError:
+            if write:
+                raise
+            secret = ""                      # a read without a token still goes out (an older console allows it); a new one answers 401
+        headers = {**({"X-Jarvis-Console": secret} if secret else {}), **({"Content-Type": "application/json"} if data else {})}
+        req = urllib.request.Request(f"{CONSOLE}/api/owner/{name}", data=data, method=method, headers=headers)
+        try:
+            with loopback_http.urlopen(req, timeout=timeout) as r:
+                status, text = r.status, r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            try:
+                reply = json.loads(e.read().decode("utf-8", "replace") or "{}")
+            except ValueError:
+                reply = None
+            if attempt == 0 and ((e.code == 403 and write and isinstance(reply, dict) and reply.get("reload"))
+                                 or (e.code == 401 and isinstance(reply, dict) and reply.get("login"))):
+                continue                     # the console restarted since the token was read: read it again, once
+            return e.code, reply if isinstance(reply, dict) else {"error": f"HTTP {e.code}"}
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            raise DesktopError(f"the JARVIS console is not answering ({type(e).__name__}); is it running?") from None
+        break
     try:                                     # something else on the console's port (a web server, a proxy) answers HTML
         reply = json.loads(text or "{}")
     except ValueError:
@@ -74,10 +150,115 @@ class Pc:
         self.on_state = on_state or (lambda s, d: None)
         self.approval_wait_s = approval_wait_s
         self.current_job: str | None = None
+        # Stop model (2026-10-18, review H3/M14): `stopped` is a flag AND an event, so a wait ends the moment Stop arrives
+        # instead of at the next poll; a cancelled job the node has not confirmed is remembered in `unconfirmed_jobs`; the
+        # approval being waited on is `pending_approval` (Stop denies it). `on_progress` lets the owning operation see that
+        # this worker is alive (progress-based staleness).
+        self._stop_evt = threading.Event()
+        self._native_sleep = sleep is time.sleep
+        self.on_progress: Callable[[str], None] | None = None
+        # Fencing (completion A): called under the send gate before EVERY job request; False = this Pc's operation no longer holds
+        # the PC lock (another task took it over, or the owner's recovery abandoned it), so nothing may be sent. A stale executor
+        # can therefore never start a job for a task that is no longer the PC's one holder. on_job(job id) tells the owner of the
+        # lock which job exists (it is written into the lock's heartbeat file, so a crashed holder's jobs can be cancelled).
+        self.fence: Callable[[], bool] | None = None
+        self.fence_reason = ""
+        self.on_job: Callable[[str], None] | None = None
+        # Fencing token (completion A): the lock holder's identity, sent with EVERY job request as body["holder"] =
+        # {token, task, seq}. `seq` counts this Pc's requests, so a request delivered twice carries the same (token, seq). The
+        # kernel refuses a request whose token is not the one in the PC lock file (when it can read that file) and answers a
+        # repeated (token, seq) with the job it already made. None = no lock (read-only checks, tests): nothing is added.
+        self.holder: Callable[[], "dict | None"] | None = None
+        self._seq = 0
+        self.on_approval: Callable[[str, str], None] | None = None     # ("pending"|"resolved", approval id): the owning operation tracks it
+        self.pending_approval: str | None = None
+        self.submitting = False
+        self._cancel_lock = threading.Lock()
+        self._cancel_sent: set[str] = set()
+        self.unconfirmed_jobs: set[str] = set()
+        self._denied: set[str] = set()
+        self.settle_s = 30.0                  # how long a cancelled job may take to be confirmed ended by the node
+        # The send gate (review M8): "not stopped" + "a request is about to go out" is ONE step under this lock, and recover()
+        # reads `submitting` / `current_job` under the same lock, so a worker is either already sending (its job id is known
+        # before the lock is let go, and must be confirmed) or can never send.
+        self.gate = threading.Lock()
+        # The console not answering while a job is followed (review M7): the job is NOT abandoned. It stays in
+        # `unconfirmed_jobs` (nothing has confirmed it ended), the poll is retried with a growing pause for at most
+        # `outage_wait_s` of pauses, and then the job is reported as unconfirmed (never done, never stopped).
+        self.outage_wait_s, self.outage_poll_s, self.outage_poll_max_s = 60.0, 0.5, 10.0
         self.stopped = False
 
+    @property
+    def stopped(self) -> bool:
+        return self._stop_evt.is_set()
+
+    @stopped.setter
+    def stopped(self, value: bool) -> None:
+        if value:
+            self._stop_evt.set()
+        else:
+            self._stop_evt.clear()
+
+    def stop(self) -> None:
+        self.stopped = True
+
+    def touch(self, note: str = "") -> None:
+        cb = self.on_progress
+        if cb is not None:
+            try:
+                cb(note)
+            except Exception:  # noqa: BLE001 - reporting progress never stops the work
+                pass
+
+    def _pause(self, seconds: float, wake_on_stop: bool = True) -> None:
+        """Wait, but wake at once when Stop arrives (an injected sleep, as in tests, is called as it is). After Stop a poll
+        loop that must go on (waiting for the node to confirm a cancel) uses wake_on_stop=False: a plain sleep."""
+        if self._native_sleep and wake_on_stop and not self.stopped:
+            self._stop_evt.wait(seconds)
+        else:
+            self.sleep(seconds)
+
     def submit(self, body: dict) -> dict:
-        code, r = self.call("POST", "pc", body)
+        """Send one PC job. Raises NotSent when this Pc was stopped (nothing went out). The stop check and `submitting` are one
+        step under `gate`; the job id is recorded as `current_job` before `submitting` is cleared, so there is no instant at
+        which a job exists that neither flag names."""
+        with self.gate:
+            if self.stopped:
+                raise NotSent()
+            fence = self.fence
+            if fence is not None:
+                try:
+                    holds = bool(fence())
+                except Exception:  # noqa: BLE001 - a fence that cannot be asked is a fence that says no
+                    holds = False
+                if not holds:
+                    self.fence_reason = "this task no longer holds the PC lock (another task took it over, or it was recovered)"
+                    raise NotSent(self.fence_reason)
+            self.submitting = True        # while a request is on the wire the kernel may create a job whose id is not yet known
+            hf = self.holder
+            if hf is not None:
+                try:
+                    h = hf()
+                except Exception:  # noqa: BLE001
+                    h = None
+                if h:
+                    # an approved re-send of the same action is a new request (the first one asked for approval)
+                    self._seq += 1
+                    body = dict(body, holder=dict(h, seq=self._seq))
+        try:
+            code, r = self.call("POST", "pc", body)
+            if code < 400 and isinstance(r.get("job"), str) and r["job"]:
+                with self.gate:
+                    self.current_job = r["job"]
+                cb = self.on_job
+                if cb is not None:
+                    try:
+                        cb(r["job"])
+                    except Exception:  # noqa: BLE001 - recording the job for crash recovery never stops the work
+                        pass
+        finally:
+            with self.gate:
+                self.submitting = False
         if code >= 400:
             raise DesktopError(str(r.get("error") or f"refused (HTTP {code})")[:300])
         return r
@@ -87,28 +268,150 @@ class Pc:
         return code < 400 and any(a.get("id") == aid for a in st.get("approvals") or [])
 
     def wait_approval(self, aid: str, what: str) -> bool:
-        """Wait (a few minutes at most) until the owner approved or denied it in the console. True = no longer pending."""
+        """Wait (a few minutes at most) until the owner approved or denied it in the console. True = no longer pending.
+        Stop ends the wait at once (the event wakes the sleep)."""
         self.on_state("waiting_for_permission", f"Approve in the JARVIS console with your PIN: {what}"[:200])
         end = self.clock() + self.approval_wait_s
-        while self.clock() < end and not self.stopped:
-            if not self.approval_pending(aid):
-                return True
-            self.sleep(3.0)
-        return False
+        self.pending_approval = aid
+        try:
+            while self.clock() < end and not self.stopped:
+                if not self.approval_pending(aid):
+                    return True
+                self.touch("waiting for the owner's approval")
+                self._pause(3.0)
+            return False
+        finally:
+            self.pending_approval = None
+
+    def _approval(self, kind: str, aid: str) -> None:
+        cb = self.on_approval
+        if cb is not None:
+            try:
+                cb(kind, aid)
+            except Exception:  # noqa: BLE001 - tracking never stops the work
+                pass
+
+    def deny_result(self, aid: str) -> str:
+        """Deny the owner-route approval so it can never be approved or used (denying is the safe direction, no PIN).
+        "denied" (now or before), "gone" (the kernel knows no pending approval of that id: already approved, used or expired;
+        nothing to deny) or "unreachable" (the console did not answer)."""
+        if aid in self._denied:
+            return "denied"
+        try:
+            code, _ = self.call("POST", "deny", {"id": aid})
+        except Exception:  # noqa: BLE001 - the console may be down: Stop still stops the wait
+            return "unreachable"
+        if code < 400:
+            self._denied.add(aid)
+            return "denied"
+        return "gone" if code in (404, 409) else "unreachable"
+
+    def deny_approval(self, aid: str) -> bool:
+        """Best effort deny. True = it is denied (now or before); False = could not (already approved or used, expired, console
+        down). Whatever the answer, the approval is no longer this Pc's to track unless the console did not answer."""
+        res = self.deny_result(aid)
+        if res != "unreachable":
+            self._approval("resolved", aid)
+        return res == "denied"
+
+    def job_final(self, jid: str) -> bool:
+        """Has the kernel recorded this job as ended (done, failed, cancelled, expired)? False when unknown."""
+        try:
+            code, j = self.call("GET", f"job/{jid}", None)
+        except Exception:  # noqa: BLE001
+            return False
+        return code < 400 and j.get("state") in FINAL
+
+    def cancel_once(self, jid: str) -> None:
+        """Ask the kernel to cancel the job, once however many callers (the worker that noticed Stop, the Stop call itself)
+        ask. A cancel that could not be sent leaves the job in `unconfirmed_jobs` and raises, so the next caller retries."""
+        with self._cancel_lock:
+            if jid in self._cancel_sent:
+                return
+            try:
+                self.cancel(jid)
+            except Exception:
+                self.unconfirmed_jobs.add(jid)     # the cancel may not have reached the kernel
+                raise
+            self._cancel_sent.add(jid)
+
+    _cancel_once = cancel_once
 
     def wait_job(self, jid: str, timeout: float) -> dict:
+        """Follow a job to its end. After Stop or a timeout the job is cancelled ONCE, then followed until the kernel says
+        it ended (up to settle_s): a job whose end is not confirmed is kept in `unconfirmed_jobs`, never reported as
+        stopped, and the operation keeps the PC lock until it is.
+
+        The console not answering (a DesktopError from the poll or from the cancel) does not end the job: nothing has been
+        confirmed, so the job id stays in `unconfirmed_jobs`, the poll is retried with a growing pause, and when the console
+        stays silent for `outage_wait_s` the job is reported as `unconfirmed` (state failed, never done and never stopped).
+        When the console answers again the job is followed on (or, once the worker is gone, confirmed by the reaper)."""
         self.current_job = jid
         end = self.clock() + timeout
+        cancelled = timed_out = False
+        outage = {"waited": 0.0, "n": 0, "marked": False}
+
+        def console_silent():
+            """The console did not answer: remember the job as unconfirmed, pause (bounded), or give the unconfirmed result."""
+            outage["n"] += 1
+            outage["marked"] = True
+            self.unconfirmed_jobs.add(jid)             # nothing confirms that it ended: never forget it
+            self.touch("the JARVIS console did not answer; the PC job is not confirmed")
+            if outage["waited"] >= self.outage_wait_s:
+                return {"id": jid, "state": "failed", "unconfirmed": True, "result": {
+                    "ok": False, "error": "the JARVIS console did not answer while this job ran, so it is not known whether "
+                                          "it ended; it may still be running"}}
+            pause = min(self.outage_poll_s * (2 ** (outage["n"] - 1)), self.outage_poll_max_s)
+            outage["waited"] += pause
+            self._pause(pause, wake_on_stop=False)
+            return None
+
         try:
-            while self.clock() < end:
-                if self.stopped:
-                    self.cancel(jid)
-                code, j = self.call("GET", f"job/{jid}", None)
+            while True:
+                try:
+                    if self.stopped and not cancelled:
+                        self._cancel_once(jid)
+                        cancelled = True
+                        end = self.clock() + self.settle_s
+                    code, j = self.call("GET", f"job/{jid}", None)
+                except DesktopError:
+                    gave_up = console_silent()
+                    if gave_up is not None:
+                        return gave_up
+                    continue
+                outage["n"], outage["waited"] = 0, 0.0              # the console answered: silence is counted from here again
                 if code < 400 and j.get("state") in FINAL:
+                    self.unconfirmed_jobs.discard(jid)
+                    if timed_out and not self.stopped and j.get("state") == "cancelled":
+                        # We cancelled it because it ran out of time (the owner did not stop it): that is a failure with the
+                        # timeout as its reason, as it always was, not a "cancelled by the owner" result.
+                        return {**j, "state": "failed", "result": {**(j.get("result") or {}), "ok": False,
+                                                                   "error": f"no result within {int(timeout)} s; it was cancelled"}}
                     return j
-                self.sleep(0.5)                                # most one-step actions finish within 2-4 s
-            self.cancel(jid)
-            return {"id": jid, "state": "failed", "result": {"ok": False, "error": f"no result within {int(timeout)} s; it was cancelled"}}
+                if outage["marked"] and jid not in self._cancel_sent:
+                    self.unconfirmed_jobs.discard(jid)     # the console is back and the job is known to be running, not cancelled
+                    outage["marked"] = False
+                self.touch("waiting for the PC job")
+                if self.clock() >= end:
+                    if not cancelled:                           # out of time: cancel, then wait for the node to confirm
+                        try:
+                            self._cancel_once(jid)
+                        except DesktopError:                    # the console went away: bounded retries, then unconfirmed
+                            gave_up = console_silent()
+                            if gave_up is not None:
+                                return gave_up
+                            continue
+                        cancelled = timed_out = True
+                        end = self.clock() + self.settle_s
+                    else:                                       # cancel sent, never confirmed ended
+                        self.unconfirmed_jobs.add(jid)
+                        if timed_out and not self.stopped:
+                            return {"id": jid, "state": "failed", "unconfirmed": True, "result": {
+                                "ok": False, "error": f"no result within {int(timeout)} s; it was cancelled "
+                                                      "(the node has not yet confirmed that it stopped)"}}
+                        return {"id": jid, "state": "cancelled", "unconfirmed": True, "result": {
+                            "ok": False, "error": "stopped; the node has not yet confirmed that the job ended"}}
+                self._pause(0.5, wake_on_stop=not cancelled)    # most one-step actions finish within 2-4 s
         finally:
             self.current_job = None
 
@@ -116,24 +419,53 @@ class Pc:
         code, r = self.call("POST", "job/cancel", {"id": jid})
         return r if code < 400 else {"error": r.get("error")}
 
+    def _stopped_result(self, why: str, aid: str | None = None, **extra) -> dict:
+        out = {"state": "cancelled", "result": {"ok": False, "error": why, **extra}}
+        if aid:
+            out["approval_id"] = aid
+        return out
+
     def run(self, body: dict, timeout: float = 90.0, what: str = "") -> dict:
-        """One action end to end. Returns {"state": done|failed|cancelled|waiting_for_permission|denied, "result": {...}}."""
-        r = self.submit(body)
+        """One action end to end. Returns {"state": done|failed|cancelled|waiting_for_permission|denied, "result": {...}}.
+        A Pc that was stopped sends nothing; a stop while an approval is awaited denies the approval and does not run the
+        action."""
+        self.touch("sending the PC job")
+        if self.stopped:
+            return self._stopped_result("stopped by the owner before it was sent; nothing was done")
+        try:
+            r = self.submit(body)
+        except NotSent as e:                           # Stop (or a lost PC lock) arrived between the check above and the send
+            return self._stopped_result(f"not sent: {e.reason}; nothing was done" if self.fence_reason else
+                                        "stopped by the owner before it was sent; nothing was done")
         if r.get("status") == "needs_approval":
             aid = r["approval_id"]
-            if not self.wait_approval(aid, what or r.get("reason", "")):
-                if self.stopped:                       # the owner said stop while it waited: stopped, not "still waiting"
-                    return {"state": "cancelled", "approval_id": aid,
-                            "result": {"ok": False, "error": "stopped by the owner before the approval; nothing was done"}}
+            self._approval("pending", aid)
+            waited = self.wait_approval(aid, what or r.get("reason", ""))
+            if self.stopped:                           # the owner said stop while it waited: stopped, not "still waiting"
+                denied = self.deny_approval(aid)
+                return self._stopped_result("stopped by the owner before the approval; nothing was done" if denied else
+                                            "stopped by the owner before the approval was used; nothing was done (the approval "
+                                            "could not be denied: it was already decided or the console did not answer, "
+                                            "and it expires by itself)", aid, approval_denied=denied)
+            if not waited:
                 return {"state": "waiting_for_permission", "approval_id": aid, "level": r.get("level"), "reason": r.get("reason"),
                         "how": "Approve it in the JARVIS console (http://127.0.0.1:8799) with your PIN, then ask Neko to continue "
                                f"with approval_id {aid}."}
+            self._approval("resolved", aid)            # decided by the owner: nothing left pending to deny
             try:
                 r = self.submit(dict(body, approval_id=aid))
+            except NotSent as e:                       # Stop (or a lost PC lock) arrived after the approval was seen, before the send
+                denied = self.deny_approval(aid)
+                return self._stopped_result(f"not sent: {e.reason}; nothing was done" if self.fence_reason else
+                                            "stopped by the owner before the approved action was sent; nothing was done", aid,
+                                            approval_denied=denied)
             except DesktopError as e:
                 return {"state": "denied", "approval_id": aid, "result": {"ok": False, "error": str(e)}}
         j = self.wait_job(r["job"], timeout)
-        return {"state": j.get("state"), "job": j.get("id"), "result": j.get("result") or {}}
+        out = {"state": j.get("state"), "job": j.get("id"), "result": j.get("result") or {}}
+        if j.get("unconfirmed"):
+            out["unconfirmed"] = True
+        return out
 
 
 # ---------------------------------------------------------------- local results and the icon
@@ -161,7 +493,8 @@ def set_activity(state: str, detail: str = "", path: Path = ACTIVITY):
     """What Neko is doing on the PC right now, for the icon (the widget reads it; old entries are ignored)."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"state": state, "detail": detail[:200], "at": time.time()}), encoding="utf-8")
+        # the widget shows this line and the file is read by other programs: no secret and no file name in it, ever
+        path.write_text(json.dumps({"state": state, "detail": screen_text.clean_message(detail, 200), "at": time.time()}), encoding="utf-8")
     except OSError:
         pass
 
@@ -173,6 +506,89 @@ def profiles(path: Path = PROFILES) -> list[dict]:
         return []
     return [{"profile": p["dir"], "name": p.get("name"), "account": p.get("account"), "default": p.get("default"),
              "say": sorted(a for a in p.get("aliases", []) if not a.startswith("profile"))[:4]} for p in reg.get("profiles", [])]
+
+
+# ---------------------------------------------------------------- OCR / vision rung (audit PRO-D10, 2026-10-18)
+# The node can read one window with Windows' OCR and find a label in it (diag window_ocr / window_locate, kernel policy and
+# audit apply like for every job). OCR is less reliable than the accessibility tree: it misreads digits and letters, so
+# what it reads is always labelled, never used to apply a fix, and its text is scrubbed before it can reach a model.
+OCR_LABEL = "from OCR (less reliable than the accessibility tree)"
+APP_PROCESS = re.compile(r"^[A-Za-z0-9_.\- ]{1,40}$")        # a process name: what the node's window capture accepts
+MAX_LOCATE_TARGET = 80                                       # the console's owner route keeps 80 characters of "app|label"
+
+# The secret-pattern pass lives in the shared screen-text helper (one implementation for every sink); these names stay here
+# because the plugin and its tests have always called core.scrub_text.
+scrub_text = screen_text.scrub_text
+_SECRET_RULES, _PRIVATE_KEY, _CARD, _luhn = screen_text._SECRET_RULES, screen_text._PRIVATE_KEY, screen_text._CARD, screen_text._luhn
+
+
+def ocr_lines(value) -> list[str]:
+    """The lines of a node OCR result read back from its local file ({"observed_lines": [...]}); anything else is no text."""
+    lines = value.get("observed_lines") if isinstance(value, dict) else None
+    return [str(x).strip()[:300] for x in lines if isinstance(x, str) and x.strip()][:300] if isinstance(lines, list) else []
+
+
+# ---------------------------------------------------------------- "a new window showing it appeared"
+# The node lists windows with an opaque id per window (a keyed hash of the window handle and process, valid for the life
+# of the node process, named by id_epoch) and the ids of ALL windows, not only the 40 it describes. A window counts as
+# new only when its id was not in the list taken before the action. Without trustworthy ids (an older node, a window with
+# no id, a list cut short, a node restart in between) nothing is claimed: the step stays unverified (audit PC-D1: the
+# node stripped the handle, so every window looked new and none was ever counted as new).
+NEW_WINDOW_POLL_S = 2.0
+
+
+def window_ids(listing) -> dict | None:
+    """{"epoch", "ids"} of a node window listing, or None when that listing cannot tell windows apart."""
+    if not isinstance(listing, dict) or listing.get("ok") is not True:
+        return None
+    epoch, ids, ws = listing.get("id_epoch"), listing.get("ids"), listing.get("windows")
+    if not isinstance(epoch, str) or not epoch or not isinstance(ids, list) or not isinstance(ws, list):
+        return None
+    if listing.get("ids_complete") is not True or not all(isinstance(i, str) and i for i in ids):
+        return None
+    if not all(isinstance(w, dict) and isinstance(w.get("id"), str) and w["id"] in ids for w in ws):
+        return None
+    return {"epoch": epoch, "ids": frozenset(ids)}
+
+
+def new_window(listing, before: dict | None, stem: str) -> tuple[dict | None, str]:
+    """The ONE window that was not there before and whose title shows `stem` (the file's name): (window, "") or
+    (None, why not). Two such new windows are ambiguous: which one shows the file is unknown, so nothing is claimed."""
+    if before is None:
+        return None, "the window list taken before opening had no usable window ids"
+    now = window_ids(listing)
+    if now is None:
+        return None, "the window list has no usable window ids"
+    if now["epoch"] != before["epoch"]:
+        return None, "the PC node restarted in between, so new and old windows cannot be told apart"
+    stem = (stem or "").strip().lower()[:25]
+    if not stem:
+        return None, "no file name to look for"
+    hits = [w for w in listing["windows"] if w["id"] not in before["ids"] and stem in str(w.get("title") or "").lower()]
+    if len(hits) == 1:
+        return hits[0], ""
+    if hits:
+        return None, f"{len(hits)} new windows show '{stem}': which one shows the file is unclear"
+    return None, f"no new window showing '{stem}' appeared"
+
+
+def wait_new_window(list_fn: Callable[[], dict], before: dict | None, stem: str, tries: int = 10,
+                    sleep: Callable[[float], None] | None = None) -> tuple[str, str]:
+    """Poll the window list for new_window(); ("<process>: window for <stem>", "") or ("", why it was not seen)."""
+    sleep = sleep or time.sleep
+    why = "the window list was not read"
+    for i in range(max(1, tries)):
+        try:
+            w, why = new_window(list_fn(), before, stem)
+        except Exception as e:  # noqa: BLE001 - an unreadable list is no evidence
+            w, why = None, f"the window list could not be read ({type(e).__name__})"
+        if w is not None:
+            return f"{w.get('process')}: window for {stem}", ""
+        if before is None or "restarted" in why:
+            break                                  # no later look can fix this
+        if i + 1 < tries:
+            sleep(NEW_WINDOW_POLL_S)
+    return "", why
 
 
 # ---------------------------------------------------------------- diagnosis (local)
@@ -191,11 +607,24 @@ def _str(value) -> str:
     return value if isinstance(value, str) else ""
 
 
-def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = None) -> dict:
+def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = None, release=None) -> dict:
     """What went wrong, from the error dialog, the event log and crash records, checked against the files it names.
     A cause is 'verified' only when the named file really has the fault; otherwise it is a hypothesis.
-    Wrong-typed input (texts as one string, null items, an object instead of a list) is ignored, not trusted."""
+    Wrong-typed input (texts as one string, null items, an object instead of a list) is ignored, not trusted.
+
+    What the diagnosis SAYS (cause, evidence) goes to a model, so it names no file: a file is "a .json file". Names and text
+    taken from the window (a library, a module, the dialog's own words) appear only through `release`, a function that returns
+    the cleared form of a string or None/"" when it may not leave (screen_text.release via the plugin); without it they
+    are replaced by a class ("a .dll library") or "its text stayed on this laptop". The real file stays in out["file"] and
+    out["fix"]["target"], for the local repair job only; the plugin never puts them in the report."""
     windows, events, crashes = rows(windows), rows(events), rows(crashes)
+
+    def shown(text: str, fallback: str) -> str:
+        try:
+            got = release(text) if release is not None else None
+        except Exception:  # noqa: BLE001 - a failing release means withheld
+            got = None
+        return got if isinstance(got, str) and got.strip() else fallback
     texts = [t for w in windows for t in (w.get("texts") if isinstance(w.get("texts"), list) else []) + [_str(w.get("title"))]
              if isinstance(t, str)]
     dialog = [w for w in windows if w.get("dialog")]
@@ -213,9 +642,9 @@ def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = N
                 out["evidence"].append("the file the dialog names is valid JSON now")
             except json.JSONDecodeError as e:
                 line = raw.splitlines()[e.lineno - 1] if 0 < e.lineno <= len(raw.splitlines()) else ""
-                out.update(verified=True, cause=f"{Path(path).name} is not valid JSON at line {e.lineno}, column {e.colno} ({e.msg})",
+                out.update(verified=True, cause=f"{screen_text.file_class(path)} is not valid JSON at line {e.lineno}, column {e.colno} ({e.msg})",
                            line=e.lineno)
-                out["evidence"].append(f"JSON check of {Path(path).name}: {e.msg} at line {e.lineno}")
+                out["evidence"].append(f"JSON check of {screen_text.file_class(path)}: {e.msg} at line {e.lineno}")
                 fix = _number_typo_fix(line)
                 if fix:
                     at = sum(len(x) for x in raw.splitlines(keepends=True)[:e.lineno - 1]) + line.find(fix[0])
@@ -228,18 +657,17 @@ def diagnose(windows: list, events: list, crashes: list, app_dir: str | None = N
     if not out["cause"] and dll:
         name = dll.group(1) or dll.group(2)
         found = _dll_present(name, out.get("app_dir"))
-        out.update(cause=f"a required library is missing: {name}" + (" (a hypothesis: a copy is present, so the error may be about "
+        out.update(cause=f"a required library is missing: {shown(name, 'a .dll library')}" + (" (a hypothesis: a copy is present, so the error may be about "
                                                                       "a different copy or version)" if found else ""),
                    verified=not found, dependency=name)
-        out["evidence"].append(f"{name} {'is present after all (the error may be about a different copy)' if found else 'is in neither the program folder nor the system path'}")
+        out["evidence"].append(f"{shown(name, 'the library')} {'is present after all (the error may be about a different copy)' if found else 'is in neither the program folder nor the system path'}")
     elif not out["cause"] and mod:
-        out.update(cause=f"a required Python module is missing: {mod.group(1)} (a hypothesis until its environment is checked)",
+        out.update(cause=f"a required Python module is missing: {shown(mod.group(1), 'a module whose name stayed on this laptop')} (a hypothesis until its environment is checked)",
                    dependency=mod.group(1))
     if not out["cause"]:
         _system_causes(joined, out)
     if not out["cause"] and dialog:
-        out["cause"] = "the program showed an error dialog: " + ("; ".join(texts)[:200] if screen_text_allowed() else
-                                                                "its text stayed on this laptop")
+        out["cause"] = "the program showed an error dialog: " + shown("; ".join(texts)[:200], "its text stayed on this laptop")
     if crashes:
         c = crashes[0]
         out["evidence"].append(f"crash record: {c.get('app')} {c.get('kind')} in {c.get('module') or '?'} code {c.get('code') or '?'}")

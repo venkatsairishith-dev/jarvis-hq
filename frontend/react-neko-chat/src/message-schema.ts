@@ -158,6 +158,34 @@ const choicePromptSchema = z.object({
   gameType: z.string().optional(),
 }).nullable();
 
+// JARVIS task question (compact layer / above the full composer): a held task asks the owner for input. The host bridge
+// (static/app/app-react-chat-window/jarvis-task-input.js) fills it from main_agent's pending_inputs; the answer goes back
+// through the same path (answer_input). A request never carries a value, so nothing secret is ever in these props.
+const taskPromptFieldSchema = z.object({
+  name: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/),
+  kind: z.enum(['text', 'secret', 'choice', 'multi', 'bool']),
+  label: z.string().min(1),
+  required: z.boolean().optional(),
+  help: z.string().optional(),
+  maxLen: z.number().int().positive().max(8192).optional(),
+  options: z.array(z.object({ value: z.string().min(1), label: z.string().min(1) })).max(12).optional(),
+});
+
+const taskPromptSchema = z.object({
+  requestId: z.string().min(1),
+  runId: z.string().min(1),
+  title: z.string().optional(),
+  prompt: z.string().min(1),
+  task: z.string().optional(),
+  fields: z.array(taskPromptFieldSchema).min(1).max(6),
+  // open: waiting; submitting: an answer is on its way; error: the last answer was refused (error says why);
+  // offline: the question list could not be refreshed, so this may be stale (submit stays possible: the backend decides)
+  status: z.enum(['open', 'submitting', 'error', 'offline']).optional(),
+  error: z.string().optional(),
+  collapsed: z.boolean().optional(),
+  count: z.number().int().nonnegative().optional(),
+}).nullable();
+
 // 串门工具条（compact 输入框上方）：宿主给状态文字与按钮，点按钮回传 id；不含任何业务逻辑
 const visitBarActionSchema = z.object({
   id: z.string().min(1),
@@ -391,6 +419,19 @@ export const chatWindowPropsSchema = z.object({
     .args(z.string())
     .returns(z.void())
     .optional(),
+  taskPrompt: taskPromptSchema.optional(),
+  onTaskPromptSubmit: z.function()
+    .args(z.string(), z.record(z.string(), z.union([z.string(), z.boolean(), z.array(z.string())])))
+    .returns(z.void())
+    .optional(),
+  onTaskPromptCancel: z.function()
+    .args(z.string())
+    .returns(z.void())
+    .optional(),
+  onTaskPromptCollapse: z.function()
+    .args(z.string(), z.boolean())
+    .returns(z.void())
+    .optional(),
   // Generic ChoicePrompt（mini-game invite 等通用三选项框架）
   choicePrompt: choicePromptSchema.optional(),
   onChoiceSelect: z.function()
@@ -418,6 +459,9 @@ export type ChoiceOption = z.infer<typeof choiceOptionSchema>;
 export type ChoicePrompt = NonNullable<z.infer<typeof choicePromptSchema>>;
 export type ChoicePromptSource = ChoicePrompt['source'];
 export type VisitBar = NonNullable<z.infer<typeof visitBarSchema>>;
+export type TaskPrompt = NonNullable<z.infer<typeof taskPromptSchema>>;
+export type TaskPromptField = z.infer<typeof taskPromptFieldSchema>;
+export type TaskPromptValues = Record<string, string | boolean | string[]>;
 export type VisitBarAction = z.infer<typeof visitBarActionSchema>;
 export type MessageBlock = z.infer<typeof messageBlockSchema>;
 export type MessageReaction = z.infer<typeof messageReactionSchema>;

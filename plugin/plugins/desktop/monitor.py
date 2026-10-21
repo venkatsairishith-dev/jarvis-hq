@@ -7,7 +7,11 @@ What it watches, each with a rule that has to hold on two checks in a row before
   * disk: free space under a floor (C: 12 GB, the owner's rule; D: 3 GB), cleared once 1 GB above the floor.
   * services: a local Neko port that answered before and now refuses twice in a row.
   * stuck tasks: a PC task record with no finish time, older than its time budget plus two minutes.
-Alerts are kept per (kind, subject) with a 30-minute quiet period, so one fault speaks once.
+Alerts are kept per (kind, subject) with a 30-minute quiet period, so one fault speaks once. A program that keeps
+crashing is one fault: it is announced once, and crashes inside the quiet period are counted and said with the next alert
+(a program that stops responding is a different fault from one that crashes, so a hang after a crash is still said).
+Each collector runs on its own: one that fails (an Event Log query error, say) does not stop the other checks, and its
+failure is reported as its own alert ("monitor", collector name), with the same quiet period.
 Reused: pywin32's EvtQuery (Windows Event Log API), psutil; delivery through the plugin SDK's push_message.
 """
 from __future__ import annotations
@@ -24,6 +28,7 @@ DISK_FLOOR_GB = {"C:\\": 12.0, "D:\\": 3.0}
 SERVICES = {"Neko UI": 48911, "Neko memory": 48912, "Neko agent": 48915, "plugin runtime": 48916, "speech server": 48930,
             "wake listener": 48945, "privacy gateway": 48950, "llama-swap": 8080, "JARVIS console": 8799}
 QUIET_S = 30 * 60
+KEEP_HELD_S = 24 * 3600                                  # unsaid repeats of a crash are forgotten after a day
 STUCK_GRACE_S = 120
 
 
@@ -41,6 +46,7 @@ class State:
     pending: dict = field(default_factory=dict)            # "kind|subject" -> consecutive checks the condition held
     last_alert: dict = field(default_factory=dict)         # "kind|subject" -> time of the last alert
     active: dict = field(default_factory=dict)             # "kind|subject" -> True while the condition holds
+    suppressed: dict = field(default_factory=dict)         # "kind|subject" -> repeats held back by the quiet period
 
     @classmethod
     def load(cls, path: Path) -> "State":
@@ -151,23 +157,52 @@ class Monitor:
         self.s.last_alert[key] = now
         out.append(Alert(kind, subject, text))
 
+    def _emit_event(self, out: list, kind: str, subject: str, text: str, again: str, count: int = 1, fault: str = ""):
+        """For faults that arrive as events and never "clear" (a crash, a collector error): at most one alert per quiet
+        period per fault. Repeats inside it are counted, and the next alert says how many there were (`again` takes the
+        count). `fault` tells apart faults of one subject (a program that crashes vs one that stops responding)."""
+        key = f"{kind}|{subject}" + (f"|{fault}" if fault else "")
+        now = self.clock()
+        if key in self.s.last_alert and now - self.s.last_alert[key] < QUIET_S:
+            self.s.suppressed[key] = self.s.suppressed.get(key, 0) + count
+            return
+        held = self.s.suppressed.pop(key, 0)
+        self.s.last_alert[key] = now
+        out.append(Alert(kind, subject, text + (again.format(n=held) if held else "")))
+
+    def _collector_failed(self, out: list, name: str, what: str, exc: Exception):
+        self._emit_event(out, "monitor", name, f"The PC monitor could not check {what} ({type(exc).__name__}); "
+                                               f"the other checks still ran.", " It failed {n} more times since the last alert.")
+
     def check(self) -> list[Alert]:
         out: list[Alert] = []
+        for name, what, run in (("crashes", "for program crashes", self._check_crashes), ("disk", "disk space", self._check_disks),
+                                ("services", "the local services", self._check_services), ("tasks", "for stuck PC tasks", self._check_tasks)):
+            try:
+                run(out)
+            except Exception as exc:  # noqa: BLE001 - one collector's failure must not hide the others' alerts
+                self._collector_failed(out, name, what, exc)
+        self._prune()
+        return out
+
+    def _check_crashes(self, out: list):
         # crashes: a fresh bookmark starts at "now" so history is not re-announced
         if not self.s.bookmark:
             self.s.bookmark = self.newest()
-        else:
-            evs = self.crashes(self.s.bookmark)
-            by_app: dict[str, list] = {}
-            for e in evs:
-                by_app.setdefault(e["app"], []).append(e)
-                self.s.bookmark = max(self.s.bookmark, e["record"])
-            for app, es in by_app.items():
-                what = "stopped responding" if all(e["id"] == 1002 for e in es) else "crashed"
-                n = f" ({len(es)} times)" if len(es) > 1 else ""
-                self.s.active.pop(f"crash|{app}", None)          # every new crash is news (still rate-limited below)
-                self._emit(out, "crash", app, f"{app} {what}{n}. Say 'check {app}' and I'll look at why.")
-        # disk
+            return
+        evs = self.crashes(self.s.bookmark)
+        by_app: dict[str, list] = {}
+        for e in evs:
+            by_app.setdefault(e["app"], []).append(e)
+            self.s.bookmark = max(self.s.bookmark, e["record"])
+        for app, es in by_app.items():
+            what = "stopped responding" if all(e["id"] == 1002 for e in es) else "crashed"
+            n = f" ({len(es)} times)" if len(es) > 1 else ""
+            self._emit_event(out, "crash", app, f"{app} {what}{n}. Say 'check {app}' and I'll look at why.",
+                             f" It had {what} {{n}} more times since the last alert.", len(es),
+                             fault="hang" if what == "stopped responding" else "")
+
+    def _check_disks(self, out: list):
         for d, free in self.disks().items():
             floor = self.floors.get(d)
             if floor is None:
@@ -176,6 +211,8 @@ class Monitor:
             low = free < floor or (self.s.active.get(key) and free < floor + 1.0)
             if self._hold(key, bool(low), 1):
                 self._emit(out, "disk", d, f"{d[:2]} is low on space: {free:.1f} GB free (floor {floor:.0f} GB).")
+
+    def _check_services(self, out: list):
         # services: only ones seen answering before, and down on two checks in a row
         for name, port in self.services.items():
             up = self.port(port)
@@ -183,11 +220,29 @@ class Monitor:
                 self.s.seen_up[name] = True
             if self._hold(f"service|{name}", (not up) and self.s.seen_up.get(name, False), self.confirm):
                 self._emit(out, "service", name, f"The {name} (port {port}) stopped answering.")
-        # stuck tasks
+
+    def _check_tasks(self, out: list):
         now = self.clock()
+        open_ids = set()
         for t in self.tasks():
+            open_ids.add(f"stuck|{t['id']}")
             age = now - float(t.get("started") or now)
             if self._hold(f"stuck|{t['id']}", age > self.budget_s + STUCK_GRACE_S, 1):
                 self._emit(out, "stuck", t["id"], f"The PC task '{t['request']}' has been {t['status'] or 'open'} for "
                                                   f"{age / 60:.0f} minutes. Say 'stop the task' to end it.")
-        return out
+        # a task that finished (or whose record is gone) is not open any more: forget its keys, or they pile up forever.
+        # Only after the task list was read: if reading failed, nothing is known and nothing is dropped.
+        for d in (self.s.pending, self.s.active, self.s.last_alert, self.s.suppressed):
+            for key in [k for k in d if k.startswith("stuck|") and k not in open_ids]:
+                d.pop(key, None)
+
+    def _prune(self):
+        """Event-style keys (crashes, collector errors) matter only during their quiet period; after it they are dropped,
+        so a long list of programs that crashed once does not grow the state file without end. Repeats that were held
+        back and not said yet are kept for a day, so the next alert for that key can still say them."""
+        now = self.clock()
+        for key in [k for k, at in self.s.last_alert.items()
+                    if k.split("|", 1)[0] in ("crash", "monitor") and now - at >= QUIET_S
+                    and (not self.s.suppressed.get(k) or now - at >= KEEP_HELD_S)]:
+            for d in (self.s.last_alert, self.s.active, self.s.suppressed):
+                d.pop(key, None)

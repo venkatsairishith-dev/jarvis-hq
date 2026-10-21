@@ -75,10 +75,24 @@
 
   <footer>
     <a href="http://127.0.0.1:48911/" target="_blank" rel="noopener">Open her</a>
-    <a href="http://127.0.0.1:8799/" target="_blank" rel="noopener">JARVIS console</a>
+    <a href="/open-console" target="_blank" rel="noopener">JARVIS console</a>
   </footer>
 
 <script>
+  // The control secret: this launch's, put into the page by the widget server (audit M15). Re-read it from the page if the widget restarted.
+  let CTL = (document.querySelector('meta[name="jarvis-widget-secret"]') || {}).content || "";
+  async function controlPost(url, body) {
+    const send = () => fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-Jarvis-Control": CTL }, body: JSON.stringify(body) });
+    let r = await send();
+    if (r.status === 403) {
+      try {
+        const m = /<meta name="jarvis-widget-secret" content="([^"]+)"/.exec(await (await fetch("/", { cache: "no-store" })).text());
+        if (m && m[1] !== CTL) { CTL = m[1]; r = await send(); }
+      } catch (e) { /* keep the 403 */ }
+    }
+    return r;
+  }
+
   const $ = (id) => document.getElementById(id);
   const label = { "N.E.K.O": "Her", memory: "Memory", agent: "Agent", plugins: "Plugins", speech: "Voice", console: "Console" };
   function dot(cls) { const d = document.createElement("span"); d.className = "dot " + cls; return d; }
@@ -120,7 +134,7 @@
     if (!task) { msg.className = "err"; msg.textContent = "Type the task first."; return; }
     $("go").disabled = true; msg.className = ""; msg.textContent = "Sending...";
     try {
-      const r = await fetch("/api/task", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task, mode: "work" }) });
+      const r = await controlPost("/api/task", { task, mode: "work" });
       const j = await r.json();
       if (j.ok) { $("task").value = ""; msg.textContent = j.note === "planning" ? "Started (planning)." : "Started."; }
       else { msg.className = "err"; msg.textContent = j.error || "The task was not accepted."; }

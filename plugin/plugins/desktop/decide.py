@@ -17,6 +17,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from plugin.plugins._shared import loopback_http
 
 LOCAL = "http://127.0.0.1:8080/v1/chat/completions"
 DEFAULT_MODEL = "decider"          # a llama-swap alias (see jarvis/local_models/llama-swap.yaml)
@@ -159,11 +160,15 @@ def ask_model(request: str, model: str = DEFAULT_MODEL, url: str = LOCAL, timeou
         return post(body), time.time() - t0
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with loopback_http.urlopen(req, timeout=timeout) as r:
             out = json.loads(r.read().decode("utf-8", "replace"))
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise DecisionError(f"the local decision model did not answer ({type(e).__name__})") from None
-    return str(((out.get("choices") or [{}])[0].get("message") or {}).get("content") or ""), time.time() - t0
+    try:                                                          # a reply of another shape is "no answer", not a crash
+        content = out["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError, AttributeError):
+        raise DecisionError("the local decision model's reply was not in the expected shape") from None
+    return (content if isinstance(content, str) else ""), time.time() - t0
 
 
 def _norm(s) -> str:
@@ -541,7 +546,11 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
     # "... and tell me when it is playing": the coordinator's report is the answer; an answer step after real steps adds nothing
     if any(st["tool"] != "answer" for st in steps):
         steps = [st for st in steps if st["tool"] != "answer"]
+    before = list(steps)
     steps = complete_plan(steps, request, profiles)
+    over = over_cap(before, steps)
+    if over:                                          # audit PC-D8: never more than the cap, never cut silently
+        return Plan(steps, "clarify", question=over, problems=problems + ["the completed plan has more steps than the cap"], raw=raw)
     if any(st["tool"] == "open_website" and not st["url"] for st in steps):
         return Plan(steps, "clarify", question="Which website should I open?", problems=["no site"], raw=raw)
     negs = [p for p in problems if p.startswith("you said not to ")]
@@ -630,7 +639,31 @@ def complete_plan(steps: list[dict], request: str, profiles: list[dict]) -> list
     acted = [st for st in steps if st["tool"] in ("open_website", "play_media")]
     if named and acted and not any(st["tool"] == "browser" and st.get("action") == "whoami" for st in steps):
         steps.insert(steps.index(acted[0]), {"tool": "browser", "action": "whoami", "profile": acted[0]["profile"], "target": "", "text": ""})
-    return steps[:MAX_STEPS + 1]
+    return steps
+
+
+def _says(st: dict) -> str:
+    """A step in a few words, for a question to the owner."""
+    t = st.get("tool", "")
+    what = st.get("app") or st.get("url") or st.get("query") or st.get("name") or st.get("action") or st.get("check") or ""
+    return f"{t.replace('_', ' ')} {what}".strip()[:60]
+
+
+def over_cap(before: list[dict], completed: list[dict]) -> str:
+    """"" when the completed plan fits the cap; otherwise the question to ask the owner (audit PC-D8: complete_plan used
+    to return steps[:MAX_STEPS + 1], so a plan could have 5 steps although the cap and the guide say 4). Only ONE step may
+    go over the cap, and only when it is the verification step the code itself inserted (the whoami check of a named
+    account) and every other step fits. Any other overflow (the code added a typing step to a full plan, or the plan is
+    simply longer) is never cut silently: the owner is asked whether to do the first part."""
+    if len(completed) <= MAX_STEPS:
+        return ""
+    is_who = lambda st: st["tool"] == "browser" and st.get("action") == "whoami"      # noqa: E731
+    added_checks = max(0, sum(map(is_who, completed)) - sum(map(is_who, before)))     # complete_plan adds at most one
+    if added_checks and len(completed) - added_checks <= MAX_STEPS and len(completed) <= MAX_STEPS + 1:
+        return ""                                  # every step but the inserted check fits the cap
+    first, rest = completed[:MAX_STEPS], completed[MAX_STEPS:]
+    return (f"That is {len(completed)} steps and I do at most {MAX_STEPS} at a time. Should I do the first part "
+            f"({'; '.join(_says(st) for st in first)}) and leave the rest ({'; '.join(_says(st) for st in rest)}) for after?")
 
 
 FOLLOW_OPEN = re.compile(r"(?i)^\W*(?:please\s+|now\s+|can you\s+|ok\s+)?(?:open|show|launch|pull up)\s+(?:me\s+)?"

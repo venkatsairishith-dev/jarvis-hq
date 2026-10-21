@@ -1,0 +1,3953 @@
+{
+  "build_env": {
+    "arch": "x86_64",
+    "os": "linux",
+    "python": "3.11"
+  },
+  "entries": [
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.check_pc.description",
+        "default": "Read-only checks of this PC: busiest processes, disk space, network, a service's state, an app's version and whether it responds, recent crash records, or what is playing (media). Changes nothing."
+      },
+      "event_key": "desktop.check_pc",
+      "event_type": "plugin_entry",
+      "id": "check_pc",
+      "input_schema": {
+        "properties": {
+          "check": {
+            "enum": [
+              "processes",
+              "disk",
+              "network",
+              "services",
+              "app_info",
+              "crashes",
+              "media"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "description": "App process name or service name, when the check needs one",
+            "type": "string"
+          }
+        },
+        "required": [
+          "check"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "rows",
+        "sessions",
+        "playing",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "ok": {},
+          "playing": {},
+          "rows": {},
+          "sessions": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "rows",
+          "sessions",
+          "playing",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.check_pc.name",
+        "default": "Check the PC"
+      },
+      "return_message": "",
+      "timeout": 120
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.find_on_screen.description",
+        "default": "Find where a piece of text is in one open window (OCR first; the local vision model only if OCR does not find it) and say where, as a point inside that window. Read-only: it does not click. Says whether the place was OBSERVED (OCR read it) or only INFERRED (the vision model guessed). Refuses password managers, wallets and bank windows. UNVERIFIED on real hardware: written and tested against a fake console only."
+      },
+      "event_key": "desktop.find_on_screen",
+      "event_type": "plugin_entry",
+      "id": "find_on_screen",
+      "input_schema": {
+        "properties": {
+          "app": {
+            "description": "The app's process name, e.g. notepad",
+            "type": "string"
+          },
+          "text": {
+            "description": "The text (a button label, a heading) to find in that window",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app",
+          "text"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "found",
+        "app",
+        "x",
+        "y",
+        "found_by",
+        "basis",
+        "window",
+        "source",
+        "note",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "app": {},
+          "basis": {},
+          "error": {},
+          "found": {},
+          "found_by": {},
+          "note": {},
+          "ok": {},
+          "source": {},
+          "window": {},
+          "x": {},
+          "y": {}
+        },
+        "required": [
+          "ok",
+          "found",
+          "app",
+          "x",
+          "y",
+          "found_by",
+          "basis",
+          "window",
+          "source",
+          "note",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.find_on_screen.name",
+        "default": "Find text in a window"
+      },
+      "return_message": "",
+      "timeout": 180
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_browser_profiles.description",
+        "default": "The owner's Chrome profiles Neko can use, with the names to say for each and a masked account. Ask the owner which one when a name fits more than one."
+      },
+      "event_key": "desktop.list_browser_profiles",
+      "event_type": "plugin_entry",
+      "id": "list_browser_profiles",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "profiles"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "profiles": {}
+        },
+        "required": [
+          "profiles"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_browser_profiles.name",
+        "default": "Chrome profiles"
+      },
+      "return_message": "",
+      "timeout": 10
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.mission_status.description",
+        "default": "How the current or a named mission is going: steps done and checked, what failed, the explanation."
+      },
+      "event_key": "desktop.mission_status",
+      "event_type": "plugin_entry",
+      "id": "mission_status",
+      "input_schema": {
+        "properties": {
+          "mission": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "mission",
+        "goal",
+        "status",
+        "steps",
+        "replans",
+        "error",
+        "question",
+        "approval_id",
+        "how",
+        "explain"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "error": {},
+          "explain": {},
+          "goal": {},
+          "how": {},
+          "mission": {},
+          "question": {},
+          "replans": {},
+          "status": {},
+          "steps": {}
+        },
+        "required": [
+          "mission",
+          "goal",
+          "status",
+          "steps",
+          "replans",
+          "error",
+          "question",
+          "approval_id",
+          "how",
+          "explain"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.mission_status.name",
+        "default": "Mission status"
+      },
+      "return_message": "",
+      "timeout": 15
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.open_website.description",
+        "default": "Open a web address in the owner's own Chrome, in one of the owner's existing profiles (logged in as the owner). Use for 'open YouTube', 'open my VenkatAMV account and go to …'."
+      },
+      "event_key": "desktop.open_website",
+      "event_type": "plugin_entry",
+      "id": "open_website",
+      "input_schema": {
+        "properties": {
+          "profile": {
+            "default": "default",
+            "description": "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles.",
+            "type": "string"
+          },
+          "url": {
+            "description": "Full address starting with https://",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "opened",
+        "profile",
+        "account",
+        "title",
+        "verified",
+        "profile_name_shown",
+        "profile_name_matches",
+        "note",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "account": {},
+          "error": {},
+          "note": {},
+          "ok": {},
+          "opened": {},
+          "profile": {},
+          "profile_name_matches": {},
+          "profile_name_shown": {},
+          "state": {},
+          "title": {},
+          "verified": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "opened",
+          "profile",
+          "account",
+          "title",
+          "verified",
+          "profile_name_shown",
+          "profile_name_matches",
+          "note",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.open_website.name",
+        "default": "Open a website"
+      },
+      "return_message": "",
+      "timeout": 120
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.play_youtube.description",
+        "default": "Find a song or video on YouTube in the owner's Chrome and play it; reports the exact video and whether it is really playing (checked, not assumed). Example: 'play a Kalyani song'."
+      },
+      "event_key": "desktop.play_youtube",
+      "event_type": "plugin_entry",
+      "id": "play_youtube",
+      "input_schema": {
+        "properties": {
+          "profile": {
+            "default": "default",
+            "description": "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles.",
+            "type": "string"
+          },
+          "query": {
+            "description": "What to search for on YouTube",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "chose",
+        "title",
+        "playing",
+        "same_video",
+        "position_s",
+        "verified_by",
+        "windows_media",
+        "error",
+        "needs"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "chose": {},
+          "error": {},
+          "needs": {},
+          "ok": {},
+          "playing": {},
+          "position_s": {},
+          "same_video": {},
+          "state": {},
+          "title": {},
+          "verified_by": {},
+          "windows_media": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "chose",
+          "title",
+          "playing",
+          "same_video",
+          "position_s",
+          "verified_by",
+          "windows_media",
+          "error",
+          "needs"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.play_youtube.name",
+        "default": "Play on YouTube"
+      },
+      "return_message": "",
+      "timeout": 180
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.read_window_text.description",
+        "default": "Read the text of one open window by OCR (Windows' built-in text recognition), for a window whose accessibility tree gives nothing: a game, a remote desktop, a picture of a form. Less reliable than the accessibility tree (OCR misreads digits and letters), so say so when you rely on it. Read-only; refuses password managers, wallets and bank windows. UNVERIFIED on real hardware: written and tested against a fake console only. The text goes to the model only when the owner allowed screen text (NEKO_SCREEN_TEXT_TO_MODEL=1) AND the privacy gateway has hidden names, places and private details in it; secrets are removed first. Otherwise it is withheld."
+      },
+      "event_key": "desktop.read_window_text",
+      "event_type": "plugin_entry",
+      "id": "read_window_text",
+      "input_schema": {
+        "properties": {
+          "app": {
+            "description": "The app's process name, e.g. notepad",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "app",
+        "lines",
+        "text",
+        "text_note",
+        "source",
+        "removed",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "app": {},
+          "error": {},
+          "lines": {},
+          "ok": {},
+          "removed": {},
+          "source": {},
+          "text": {},
+          "text_note": {}
+        },
+        "required": [
+          "ok",
+          "app",
+          "lines",
+          "text",
+          "text_note",
+          "source",
+          "removed",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.read_window_text.name",
+        "default": "Read a window by OCR"
+      },
+      "return_message": "",
+      "timeout": 120
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.recent_pc_alerts.description",
+        "default": "What the PC monitor noticed recently: program crashes, low disk space, a local service that stopped, a stuck PC task. Use for 'is anything wrong with my PC?' or 'what did you notice?'."
+      },
+      "event_key": "desktop.recent_pc_alerts",
+      "event_type": "plugin_entry",
+      "id": "recent_pc_alerts",
+      "input_schema": {
+        "properties": {
+          "hours": {
+            "default": 24,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "alerts",
+        "count"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "alerts": {},
+          "count": {}
+        },
+        "required": [
+          "alerts",
+          "count"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.recent_pc_alerts.name",
+        "default": "Recent PC alerts"
+      },
+      "return_message": "",
+      "timeout": 10
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.recover_pc_lock.description",
+        "default": "ONLY when the owner asks, after Stop reported a PC operation still_running: free the PC lock of an operation that will not end. It succeeds only if that operation was asked to stop and the kernel confirms every PC job it had ended (or its process is gone); otherwise it refuses and says why. It never lets a second task act while the first may still control the desktop."
+      },
+      "event_key": "desktop.recover_pc_lock",
+      "event_type": "plugin_entry",
+      "id": "recover_pc_lock",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "recovered",
+        "ok",
+        "status",
+        "how",
+        "reason",
+        "operation",
+        "alerts"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "alerts": {},
+          "how": {},
+          "ok": {},
+          "operation": {},
+          "reason": {},
+          "recovered": {},
+          "status": {}
+        },
+        "required": [
+          "recovered",
+          "ok",
+          "status",
+          "how",
+          "reason",
+          "operation",
+          "alerts"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.recover_pc_lock.name",
+        "default": "Recover a stuck PC lock"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.resume_mission.description",
+        "default": "Continue a mission that stopped for the owner, with the same mission id: after the owner approved the waiting action in the JARVIS console with the PIN, with the owner's answer to the mission's question, or after an interrupted step (answer 'done' if it already happened, 'redo' if it did not). Steps already done are never repeated. Use this for 'continue the mission', never start_mission again."
+      },
+      "event_key": "desktop.resume_mission",
+      "event_type": "plugin_entry",
+      "id": "resume_mission",
+      "input_schema": {
+        "properties": {
+          "answer": {
+            "default": "",
+            "description": "The owner's answer to the mission's question, or done/redo",
+            "type": "string"
+          },
+          "mission": {
+            "default": "",
+            "description": "The mission id; empty = the latest mission",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "mission",
+        "status",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "mission": {},
+          "ok": {},
+          "status": {}
+        },
+        "required": [
+          "ok",
+          "mission",
+          "status",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.resume_mission.name",
+        "default": "Continue the mission"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_browser_action.description",
+        "default": "Do one thing in the owner's Chrome (needs the Playwright extension in that profile): read the page, find text, click or type into an element (use the element's visible name or a ref from read), press a key, list tabs, check which account is signed in (whoami), or check video playback (media). Paying, sending, deleting, signing out and similar clicks wait for the owner's approval."
+      },
+      "event_key": "desktop.run_browser_action",
+      "event_type": "plugin_entry",
+      "id": "run_browser_action",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "enum": [
+              "read",
+              "find",
+              "click",
+              "type",
+              "press",
+              "tabs",
+              "whoami",
+              "media"
+            ],
+            "type": "string"
+          },
+          "approval_id": {
+            "description": "Only to continue after the owner approved",
+            "type": "string"
+          },
+          "profile": {
+            "default": "default",
+            "description": "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles.",
+            "type": "string"
+          },
+          "target": {
+            "description": "Element name/ref, or the text to find",
+            "type": "string"
+          },
+          "text": {
+            "description": "Text to type, or the key to press",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "title",
+        "url",
+        "chars",
+        "clicked",
+        "typed_chars",
+        "pressed",
+        "seen",
+        "expected",
+        "matches",
+        "first_is_expected",
+        "tabs",
+        "paused",
+        "position_s",
+        "error",
+        "needs",
+        "approval_id",
+        "how",
+        "page",
+        "page_note"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "chars": {},
+          "clicked": {},
+          "error": {},
+          "expected": {},
+          "first_is_expected": {},
+          "how": {},
+          "matches": {},
+          "needs": {},
+          "ok": {},
+          "page": {},
+          "page_note": {},
+          "paused": {},
+          "position_s": {},
+          "pressed": {},
+          "seen": {},
+          "state": {},
+          "tabs": {},
+          "title": {},
+          "typed_chars": {},
+          "url": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "title",
+          "url",
+          "chars",
+          "clicked",
+          "typed_chars",
+          "pressed",
+          "seen",
+          "expected",
+          "matches",
+          "first_is_expected",
+          "tabs",
+          "paused",
+          "position_s",
+          "error",
+          "needs",
+          "approval_id",
+          "how",
+          "page",
+          "page_note"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_browser_action.name",
+        "default": "Browser action"
+      },
+      "return_message": "",
+      "timeout": 360
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_pc_action.description",
+        "default": "Operate a Windows app the owner names: open an app by its Start-menu name (open_app), bring a window to the front (focus), click a button or type into a field by its accessible name (target 'process|element'), press a key such as ctrl+s or playpause, scroll, or as a last resort click at a point ('process|x,y'). Structured accessibility first; risky keys and consequential clicks wait for the owner's approval."
+      },
+      "event_key": "desktop.run_pc_action",
+      "event_type": "plugin_entry",
+      "id": "run_pc_action",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "enum": [
+              "open_app",
+              "focus",
+              "click",
+              "type",
+              "key",
+              "scroll",
+              "click_at",
+              "minimize",
+              "maximize",
+              "restore"
+            ],
+            "type": "string"
+          },
+          "approval_id": {
+            "type": "string"
+          },
+          "target": {
+            "description": "Start-menu app name for open_app; otherwise 'process|element' or 'process|x,y'",
+            "type": "string"
+          },
+          "text": {
+            "description": "Text to type, the key (e.g. ctrl+s, enter, playpause), or up/down",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "target"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "opened",
+        "done",
+        "verified",
+        "window",
+        "error",
+        "approval_id",
+        "how"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "done": {},
+          "error": {},
+          "how": {},
+          "ok": {},
+          "opened": {},
+          "state": {},
+          "verified": {},
+          "window": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "opened",
+          "done",
+          "verified",
+          "window",
+          "error",
+          "approval_id",
+          "how"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_pc_action.name",
+        "default": "PC action"
+      },
+      "return_message": "",
+      "timeout": 360
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_pc_task.description",
+        "default": "Do what the owner asked on this PC in one go: a small local model plans the steps (open sites or apps, play music, use the owner's Chrome accounts, type, press keys, check or troubleshoot the PC, research), each step runs through the JARVIS kernel and is checked afterwards. Reports what was verified and what was not."
+      },
+      "event_key": "desktop.run_pc_task",
+      "event_type": "plugin_entry",
+      "id": "run_pc_task",
+      "input_schema": {
+        "properties": {
+          "request": {
+            "description": "The owner's request, in their words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status",
+        "summary",
+        "question",
+        "steps",
+        "uncertain",
+        "approval_id",
+        "how"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "how": {},
+          "question": {},
+          "status": {},
+          "steps": {},
+          "summary": {},
+          "uncertain": {}
+        },
+        "required": [
+          "status",
+          "summary",
+          "question",
+          "steps",
+          "uncertain",
+          "approval_id",
+          "how"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_pc_task.name",
+        "default": "Do a task on the PC"
+      },
+      "return_message": "",
+      "timeout": 900
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_troubleshooter.description",
+        "default": "Find out why a Windows app shows an error and fix it safely: read its error dialog, event log and crash records (on this laptop), check the cause against the file it names, back up, apply the fix after the owner approves, start the app again and verify the error is gone. Reports a verified cause or says it is only a hypothesis."
+      },
+      "event_key": "desktop.run_troubleshooter",
+      "event_type": "plugin_entry",
+      "id": "run_troubleshooter",
+      "input_schema": {
+        "properties": {
+          "app": {
+            "description": "The app's process name, e.g. NekoSampleApp",
+            "type": "string"
+          },
+          "apply_fix": {
+            "default": true,
+            "type": "boolean"
+          },
+          "start_name": {
+            "description": "Its Start-menu name, to start it again for the check, e.g. Neko Sample App",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "outcome",
+        "cause",
+        "verified",
+        "evidence",
+        "fix",
+        "backup",
+        "undo",
+        "verification",
+        "steps",
+        "approval_id",
+        "how"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "backup": {},
+          "cause": {},
+          "evidence": {},
+          "fix": {},
+          "how": {},
+          "outcome": {},
+          "steps": {},
+          "undo": {},
+          "verification": {},
+          "verified": {}
+        },
+        "required": [
+          "outcome",
+          "cause",
+          "verified",
+          "evidence",
+          "fix",
+          "backup",
+          "undo",
+          "verification",
+          "steps",
+          "approval_id",
+          "how"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_troubleshooter.name",
+        "default": "Troubleshoot an app"
+      },
+      "return_message": "",
+      "timeout": 900
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.start_mission.description",
+        "default": "Start a goal with several phases that may take minutes (for example 'research X, make slides, open them and explain'). It runs in the background, survives a restart, never repeats an action, re-plans when a check fails and stops on a loop or its budget. Use mission_status to follow it and stop_mission to stop it."
+      },
+      "event_key": "desktop.start_mission",
+      "event_type": "plugin_entry",
+      "id": "start_mission",
+      "input_schema": {
+        "properties": {
+          "goal": {
+            "description": "The goal, in the owner's words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "mission",
+        "status",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "mission": {},
+          "status": {}
+        },
+        "required": [
+          "mission",
+          "status",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.start_mission.name",
+        "default": "Start a long mission"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_mission.description",
+        "default": "Stop the current (or a named) mission and the PC job it is running."
+      },
+      "event_key": "desktop.stop_mission",
+      "event_type": "plugin_entry",
+      "id": "stop_mission",
+      "input_schema": {
+        "properties": {
+          "mission": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "mission",
+        "stopped"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "mission": {},
+          "stopped": {}
+        },
+        "required": [
+          "mission",
+          "stopped"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_mission.name",
+        "default": "Stop the mission"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_pc_job.description",
+        "default": "Stop a running PC job by its id; whatever it started is stopped."
+      },
+      "event_key": "desktop.stop_pc_job",
+      "event_type": "plugin_entry",
+      "id": "stop_pc_job",
+      "input_schema": {
+        "properties": {
+          "job": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "state",
+        "note",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "id": {},
+          "note": {},
+          "state": {}
+        },
+        "required": [
+          "id",
+          "state",
+          "note",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_pc_job.name",
+        "default": "Stop a PC job"
+      },
+      "return_message": "",
+      "timeout": 30
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_pc_task.description",
+        "default": "Stop everything that is acting on the PC: a task, a mission, a single action waiting for an approval or running, a troubleshooter. Cancels the node jobs and denies the approvals they wait on, and says honestly which operations really ended (stopped) and which did not yet (still_running)."
+      },
+      "event_key": "desktop.stop_pc_task",
+      "event_type": "plugin_entry",
+      "id": "stop_pc_task",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stopped_jobs",
+        "stopped",
+        "still_running",
+        "requested",
+        "approvals_denied",
+        "message",
+        "alerts",
+        "stop_errors"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "alerts": {},
+          "approvals_denied": {},
+          "message": {},
+          "requested": {},
+          "still_running": {},
+          "stop_errors": {},
+          "stopped": {},
+          "stopped_jobs": {}
+        },
+        "required": [
+          "stopped_jobs",
+          "stopped",
+          "still_running",
+          "requested",
+          "approvals_denied",
+          "message",
+          "alerts",
+          "stop_errors"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_pc_task.name",
+        "default": "Stop the PC task"
+      },
+      "return_message": "",
+      "timeout": 45
+    }
+  ],
+  "entries_config_sha256": "",
+  "entry_methods": {
+    "check_pc": "check_pc",
+    "find_on_screen": "find_on_screen",
+    "list_browser_profiles": "list_browser_profiles",
+    "mission_status": "mission_status",
+    "open_website": "open_website",
+    "play_youtube": "play_youtube",
+    "read_window_text": "read_window_text",
+    "recent_pc_alerts": "recent_pc_alerts",
+    "recover_pc_lock": "recover_pc_lock",
+    "resume_mission": "resume_mission",
+    "run_browser_action": "run_browser_action",
+    "run_pc_action": "run_pc_action",
+    "run_pc_task": "run_pc_task",
+    "run_troubleshooter": "run_troubleshooter",
+    "start_mission": "start_mission",
+    "stop_mission": "stop_mission",
+    "stop_pc_job": "stop_pc_job",
+    "stop_pc_task": "stop_pc_task"
+  },
+  "handlers": {
+    "desktop.check_pc": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.check_pc.description",
+        "default": "Read-only checks of this PC: busiest processes, disk space, network, a service's state, an app's version and whether it responds, recent crash records, or what is playing (media). Changes nothing."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "check_pc",
+      "input_schema": {
+        "properties": {
+          "check": {
+            "enum": [
+              "processes",
+              "disk",
+              "network",
+              "services",
+              "app_info",
+              "crashes",
+              "media"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "description": "App process name or service name, when the check needs one",
+            "type": "string"
+          }
+        },
+        "required": [
+          "check"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "rows",
+        "sessions",
+        "playing",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "ok": {},
+          "playing": {},
+          "rows": {},
+          "sessions": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "rows",
+          "sessions",
+          "playing",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.check_pc.name",
+        "default": "Check the PC"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "desktop.find_on_screen": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.find_on_screen.description",
+        "default": "Find where a piece of text is in one open window (OCR first; the local vision model only if OCR does not find it) and say where, as a point inside that window. Read-only: it does not click. Says whether the place was OBSERVED (OCR read it) or only INFERRED (the vision model guessed). Refuses password managers, wallets and bank windows. UNVERIFIED on real hardware: written and tested against a fake console only."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "find_on_screen",
+      "input_schema": {
+        "properties": {
+          "app": {
+            "description": "The app's process name, e.g. notepad",
+            "type": "string"
+          },
+          "text": {
+            "description": "The text (a button label, a heading) to find in that window",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app",
+          "text"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "found",
+        "app",
+        "x",
+        "y",
+        "found_by",
+        "basis",
+        "window",
+        "source",
+        "note",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "app": {},
+          "basis": {},
+          "error": {},
+          "found": {},
+          "found_by": {},
+          "note": {},
+          "ok": {},
+          "source": {},
+          "window": {},
+          "x": {},
+          "y": {}
+        },
+        "required": [
+          "ok",
+          "found",
+          "app",
+          "x",
+          "y",
+          "found_by",
+          "basis",
+          "window",
+          "source",
+          "note",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.find_on_screen.name",
+        "default": "Find text in a window"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 180
+    },
+    "desktop.list_browser_profiles": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_browser_profiles.description",
+        "default": "The owner's Chrome profiles Neko can use, with the names to say for each and a masked account. Ask the owner which one when a name fits more than one."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "list_browser_profiles",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "profiles"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "profiles": {}
+        },
+        "required": [
+          "profiles"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_browser_profiles.name",
+        "default": "Chrome profiles"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
+    "desktop.mission_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.mission_status.description",
+        "default": "How the current or a named mission is going: steps done and checked, what failed, the explanation."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "mission_status",
+      "input_schema": {
+        "properties": {
+          "mission": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "mission",
+        "goal",
+        "status",
+        "steps",
+        "replans",
+        "error",
+        "question",
+        "approval_id",
+        "how",
+        "explain"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "error": {},
+          "explain": {},
+          "goal": {},
+          "how": {},
+          "mission": {},
+          "question": {},
+          "replans": {},
+          "status": {},
+          "steps": {}
+        },
+        "required": [
+          "mission",
+          "goal",
+          "status",
+          "steps",
+          "replans",
+          "error",
+          "question",
+          "approval_id",
+          "how",
+          "explain"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.mission_status.name",
+        "default": "Mission status"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 15
+    },
+    "desktop.open_website": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.open_website.description",
+        "default": "Open a web address in the owner's own Chrome, in one of the owner's existing profiles (logged in as the owner). Use for 'open YouTube', 'open my VenkatAMV account and go to …'."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "open_website",
+      "input_schema": {
+        "properties": {
+          "profile": {
+            "default": "default",
+            "description": "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles.",
+            "type": "string"
+          },
+          "url": {
+            "description": "Full address starting with https://",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "opened",
+        "profile",
+        "account",
+        "title",
+        "verified",
+        "profile_name_shown",
+        "profile_name_matches",
+        "note",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "account": {},
+          "error": {},
+          "note": {},
+          "ok": {},
+          "opened": {},
+          "profile": {},
+          "profile_name_matches": {},
+          "profile_name_shown": {},
+          "state": {},
+          "title": {},
+          "verified": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "opened",
+          "profile",
+          "account",
+          "title",
+          "verified",
+          "profile_name_shown",
+          "profile_name_matches",
+          "note",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.open_website.name",
+        "default": "Open a website"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "desktop.play_youtube": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.play_youtube.description",
+        "default": "Find a song or video on YouTube in the owner's Chrome and play it; reports the exact video and whether it is really playing (checked, not assumed). Example: 'play a Kalyani song'."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "play_youtube",
+      "input_schema": {
+        "properties": {
+          "profile": {
+            "default": "default",
+            "description": "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles.",
+            "type": "string"
+          },
+          "query": {
+            "description": "What to search for on YouTube",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "chose",
+        "title",
+        "playing",
+        "same_video",
+        "position_s",
+        "verified_by",
+        "windows_media",
+        "error",
+        "needs"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "chose": {},
+          "error": {},
+          "needs": {},
+          "ok": {},
+          "playing": {},
+          "position_s": {},
+          "same_video": {},
+          "state": {},
+          "title": {},
+          "verified_by": {},
+          "windows_media": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "chose",
+          "title",
+          "playing",
+          "same_video",
+          "position_s",
+          "verified_by",
+          "windows_media",
+          "error",
+          "needs"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.play_youtube.name",
+        "default": "Play on YouTube"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 180
+    },
+    "desktop.read_window_text": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.read_window_text.description",
+        "default": "Read the text of one open window by OCR (Windows' built-in text recognition), for a window whose accessibility tree gives nothing: a game, a remote desktop, a picture of a form. Less reliable than the accessibility tree (OCR misreads digits and letters), so say so when you rely on it. Read-only; refuses password managers, wallets and bank windows. UNVERIFIED on real hardware: written and tested against a fake console only. The text goes to the model only when the owner allowed screen text (NEKO_SCREEN_TEXT_TO_MODEL=1) AND the privacy gateway has hidden names, places and private details in it; secrets are removed first. Otherwise it is withheld."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "read_window_text",
+      "input_schema": {
+        "properties": {
+          "app": {
+            "description": "The app's process name, e.g. notepad",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "app",
+        "lines",
+        "text",
+        "text_note",
+        "source",
+        "removed",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "app": {},
+          "error": {},
+          "lines": {},
+          "ok": {},
+          "removed": {},
+          "source": {},
+          "text": {},
+          "text_note": {}
+        },
+        "required": [
+          "ok",
+          "app",
+          "lines",
+          "text",
+          "text_note",
+          "source",
+          "removed",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.read_window_text.name",
+        "default": "Read a window by OCR"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "desktop.recent_pc_alerts": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.recent_pc_alerts.description",
+        "default": "What the PC monitor noticed recently: program crashes, low disk space, a local service that stopped, a stuck PC task. Use for 'is anything wrong with my PC?' or 'what did you notice?'."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "recent_pc_alerts",
+      "input_schema": {
+        "properties": {
+          "hours": {
+            "default": 24,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "alerts",
+        "count"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "alerts": {},
+          "count": {}
+        },
+        "required": [
+          "alerts",
+          "count"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.recent_pc_alerts.name",
+        "default": "Recent PC alerts"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
+    "desktop.recover_pc_lock": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.recover_pc_lock.description",
+        "default": "ONLY when the owner asks, after Stop reported a PC operation still_running: free the PC lock of an operation that will not end. It succeeds only if that operation was asked to stop and the kernel confirms every PC job it had ended (or its process is gone); otherwise it refuses and says why. It never lets a second task act while the first may still control the desktop."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "recover_pc_lock",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "recovered",
+        "ok",
+        "status",
+        "how",
+        "reason",
+        "operation",
+        "alerts"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "alerts": {},
+          "how": {},
+          "ok": {},
+          "operation": {},
+          "reason": {},
+          "recovered": {},
+          "status": {}
+        },
+        "required": [
+          "recovered",
+          "ok",
+          "status",
+          "how",
+          "reason",
+          "operation",
+          "alerts"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.recover_pc_lock.name",
+        "default": "Recover a stuck PC lock"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop.resume_mission": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.resume_mission.description",
+        "default": "Continue a mission that stopped for the owner, with the same mission id: after the owner approved the waiting action in the JARVIS console with the PIN, with the owner's answer to the mission's question, or after an interrupted step (answer 'done' if it already happened, 'redo' if it did not). Steps already done are never repeated. Use this for 'continue the mission', never start_mission again."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "resume_mission",
+      "input_schema": {
+        "properties": {
+          "answer": {
+            "default": "",
+            "description": "The owner's answer to the mission's question, or done/redo",
+            "type": "string"
+          },
+          "mission": {
+            "default": "",
+            "description": "The mission id; empty = the latest mission",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "mission",
+        "status",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "mission": {},
+          "ok": {},
+          "status": {}
+        },
+        "required": [
+          "ok",
+          "mission",
+          "status",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.resume_mission.name",
+        "default": "Continue the mission"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop.run_browser_action": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_browser_action.description",
+        "default": "Do one thing in the owner's Chrome (needs the Playwright extension in that profile): read the page, find text, click or type into an element (use the element's visible name or a ref from read), press a key, list tabs, check which account is signed in (whoami), or check video playback (media). Paying, sending, deleting, signing out and similar clicks wait for the owner's approval."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_browser_action",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "enum": [
+              "read",
+              "find",
+              "click",
+              "type",
+              "press",
+              "tabs",
+              "whoami",
+              "media"
+            ],
+            "type": "string"
+          },
+          "approval_id": {
+            "description": "Only to continue after the owner approved",
+            "type": "string"
+          },
+          "profile": {
+            "default": "default",
+            "description": "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles.",
+            "type": "string"
+          },
+          "target": {
+            "description": "Element name/ref, or the text to find",
+            "type": "string"
+          },
+          "text": {
+            "description": "Text to type, or the key to press",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "title",
+        "url",
+        "chars",
+        "clicked",
+        "typed_chars",
+        "pressed",
+        "seen",
+        "expected",
+        "matches",
+        "first_is_expected",
+        "tabs",
+        "paused",
+        "position_s",
+        "error",
+        "needs",
+        "approval_id",
+        "how",
+        "page",
+        "page_note"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "chars": {},
+          "clicked": {},
+          "error": {},
+          "expected": {},
+          "first_is_expected": {},
+          "how": {},
+          "matches": {},
+          "needs": {},
+          "ok": {},
+          "page": {},
+          "page_note": {},
+          "paused": {},
+          "position_s": {},
+          "pressed": {},
+          "seen": {},
+          "state": {},
+          "tabs": {},
+          "title": {},
+          "typed_chars": {},
+          "url": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "title",
+          "url",
+          "chars",
+          "clicked",
+          "typed_chars",
+          "pressed",
+          "seen",
+          "expected",
+          "matches",
+          "first_is_expected",
+          "tabs",
+          "paused",
+          "position_s",
+          "error",
+          "needs",
+          "approval_id",
+          "how",
+          "page",
+          "page_note"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_browser_action.name",
+        "default": "Browser action"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 360
+    },
+    "desktop.run_pc_action": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_pc_action.description",
+        "default": "Operate a Windows app the owner names: open an app by its Start-menu name (open_app), bring a window to the front (focus), click a button or type into a field by its accessible name (target 'process|element'), press a key such as ctrl+s or playpause, scroll, or as a last resort click at a point ('process|x,y'). Structured accessibility first; risky keys and consequential clicks wait for the owner's approval."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_pc_action",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "enum": [
+              "open_app",
+              "focus",
+              "click",
+              "type",
+              "key",
+              "scroll",
+              "click_at",
+              "minimize",
+              "maximize",
+              "restore"
+            ],
+            "type": "string"
+          },
+          "approval_id": {
+            "type": "string"
+          },
+          "target": {
+            "description": "Start-menu app name for open_app; otherwise 'process|element' or 'process|x,y'",
+            "type": "string"
+          },
+          "text": {
+            "description": "Text to type, the key (e.g. ctrl+s, enter, playpause), or up/down",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "target"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "opened",
+        "done",
+        "verified",
+        "window",
+        "error",
+        "approval_id",
+        "how"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "done": {},
+          "error": {},
+          "how": {},
+          "ok": {},
+          "opened": {},
+          "state": {},
+          "verified": {},
+          "window": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "opened",
+          "done",
+          "verified",
+          "window",
+          "error",
+          "approval_id",
+          "how"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_pc_action.name",
+        "default": "PC action"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 360
+    },
+    "desktop.run_pc_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_pc_task.description",
+        "default": "Do what the owner asked on this PC in one go: a small local model plans the steps (open sites or apps, play music, use the owner's Chrome accounts, type, press keys, check or troubleshoot the PC, research), each step runs through the JARVIS kernel and is checked afterwards. Reports what was verified and what was not."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_pc_task",
+      "input_schema": {
+        "properties": {
+          "request": {
+            "description": "The owner's request, in their words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status",
+        "summary",
+        "question",
+        "steps",
+        "uncertain",
+        "approval_id",
+        "how"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "how": {},
+          "question": {},
+          "status": {},
+          "steps": {},
+          "summary": {},
+          "uncertain": {}
+        },
+        "required": [
+          "status",
+          "summary",
+          "question",
+          "steps",
+          "uncertain",
+          "approval_id",
+          "how"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_pc_task.name",
+        "default": "Do a task on the PC"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 900
+    },
+    "desktop.run_troubleshooter": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_troubleshooter.description",
+        "default": "Find out why a Windows app shows an error and fix it safely: read its error dialog, event log and crash records (on this laptop), check the cause against the file it names, back up, apply the fix after the owner approves, start the app again and verify the error is gone. Reports a verified cause or says it is only a hypothesis."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_troubleshooter",
+      "input_schema": {
+        "properties": {
+          "app": {
+            "description": "The app's process name, e.g. NekoSampleApp",
+            "type": "string"
+          },
+          "apply_fix": {
+            "default": true,
+            "type": "boolean"
+          },
+          "start_name": {
+            "description": "Its Start-menu name, to start it again for the check, e.g. Neko Sample App",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "outcome",
+        "cause",
+        "verified",
+        "evidence",
+        "fix",
+        "backup",
+        "undo",
+        "verification",
+        "steps",
+        "approval_id",
+        "how"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "backup": {},
+          "cause": {},
+          "evidence": {},
+          "fix": {},
+          "how": {},
+          "outcome": {},
+          "steps": {},
+          "undo": {},
+          "verification": {},
+          "verified": {}
+        },
+        "required": [
+          "outcome",
+          "cause",
+          "verified",
+          "evidence",
+          "fix",
+          "backup",
+          "undo",
+          "verification",
+          "steps",
+          "approval_id",
+          "how"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_troubleshooter.name",
+        "default": "Troubleshoot an app"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 900
+    },
+    "desktop.start_mission": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.start_mission.description",
+        "default": "Start a goal with several phases that may take minutes (for example 'research X, make slides, open them and explain'). It runs in the background, survives a restart, never repeats an action, re-plans when a check fails and stops on a loop or its budget. Use mission_status to follow it and stop_mission to stop it."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "start_mission",
+      "input_schema": {
+        "properties": {
+          "goal": {
+            "description": "The goal, in the owner's words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "mission",
+        "status",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "mission": {},
+          "status": {}
+        },
+        "required": [
+          "mission",
+          "status",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.start_mission.name",
+        "default": "Start a long mission"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop.stop_mission": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_mission.description",
+        "default": "Stop the current (or a named) mission and the PC job it is running."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "stop_mission",
+      "input_schema": {
+        "properties": {
+          "mission": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "mission",
+        "stopped"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "mission": {},
+          "stopped": {}
+        },
+        "required": [
+          "mission",
+          "stopped"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_mission.name",
+        "default": "Stop the mission"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop.stop_pc_job": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_pc_job.description",
+        "default": "Stop a running PC job by its id; whatever it started is stopped."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "stop_pc_job",
+      "input_schema": {
+        "properties": {
+          "job": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "state",
+        "note",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "id": {},
+          "note": {},
+          "state": {}
+        },
+        "required": [
+          "id",
+          "state",
+          "note",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_pc_job.name",
+        "default": "Stop a PC job"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop.stop_pc_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_pc_task.description",
+        "default": "Stop everything that is acting on the PC: a task, a mission, a single action waiting for an approval or running, a troubleshooter. Cancels the node jobs and denies the approvals they wait on, and says honestly which operations really ended (stopped) and which did not yet (still_running)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "stop_pc_task",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stopped_jobs",
+        "stopped",
+        "still_running",
+        "requested",
+        "approvals_denied",
+        "message",
+        "alerts",
+        "stop_errors"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "alerts": {},
+          "approvals_denied": {},
+          "message": {},
+          "requested": {},
+          "still_running": {},
+          "stop_errors": {},
+          "stopped": {},
+          "stopped_jobs": {}
+        },
+        "required": [
+          "stopped_jobs",
+          "stopped",
+          "still_running",
+          "requested",
+          "approvals_denied",
+          "message",
+          "alerts",
+          "stop_errors"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_pc_task.name",
+        "default": "Stop the PC task"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 45
+    },
+    "desktop:lifecycle:shutdown": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "shutdown",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "shutdown",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "desktop:lifecycle:startup": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "startup",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "startup",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "desktop:plugin_entry:check_pc": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.check_pc.description",
+        "default": "Read-only checks of this PC: busiest processes, disk space, network, a service's state, an app's version and whether it responds, recent crash records, or what is playing (media). Changes nothing."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "check_pc",
+      "input_schema": {
+        "properties": {
+          "check": {
+            "enum": [
+              "processes",
+              "disk",
+              "network",
+              "services",
+              "app_info",
+              "crashes",
+              "media"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "description": "App process name or service name, when the check needs one",
+            "type": "string"
+          }
+        },
+        "required": [
+          "check"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "rows",
+        "sessions",
+        "playing",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "ok": {},
+          "playing": {},
+          "rows": {},
+          "sessions": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "rows",
+          "sessions",
+          "playing",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.check_pc.name",
+        "default": "Check the PC"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "desktop:plugin_entry:find_on_screen": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.find_on_screen.description",
+        "default": "Find where a piece of text is in one open window (OCR first; the local vision model only if OCR does not find it) and say where, as a point inside that window. Read-only: it does not click. Says whether the place was OBSERVED (OCR read it) or only INFERRED (the vision model guessed). Refuses password managers, wallets and bank windows. UNVERIFIED on real hardware: written and tested against a fake console only."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "find_on_screen",
+      "input_schema": {
+        "properties": {
+          "app": {
+            "description": "The app's process name, e.g. notepad",
+            "type": "string"
+          },
+          "text": {
+            "description": "The text (a button label, a heading) to find in that window",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app",
+          "text"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "found",
+        "app",
+        "x",
+        "y",
+        "found_by",
+        "basis",
+        "window",
+        "source",
+        "note",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "app": {},
+          "basis": {},
+          "error": {},
+          "found": {},
+          "found_by": {},
+          "note": {},
+          "ok": {},
+          "source": {},
+          "window": {},
+          "x": {},
+          "y": {}
+        },
+        "required": [
+          "ok",
+          "found",
+          "app",
+          "x",
+          "y",
+          "found_by",
+          "basis",
+          "window",
+          "source",
+          "note",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.find_on_screen.name",
+        "default": "Find text in a window"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 180
+    },
+    "desktop:plugin_entry:list_browser_profiles": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.list_browser_profiles.description",
+        "default": "The owner's Chrome profiles Neko can use, with the names to say for each and a masked account. Ask the owner which one when a name fits more than one."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "list_browser_profiles",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "profiles"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "profiles": {}
+        },
+        "required": [
+          "profiles"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.list_browser_profiles.name",
+        "default": "Chrome profiles"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
+    "desktop:plugin_entry:mission_status": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.mission_status.description",
+        "default": "How the current or a named mission is going: steps done and checked, what failed, the explanation."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "mission_status",
+      "input_schema": {
+        "properties": {
+          "mission": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "mission",
+        "goal",
+        "status",
+        "steps",
+        "replans",
+        "error",
+        "question",
+        "approval_id",
+        "how",
+        "explain"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "error": {},
+          "explain": {},
+          "goal": {},
+          "how": {},
+          "mission": {},
+          "question": {},
+          "replans": {},
+          "status": {},
+          "steps": {}
+        },
+        "required": [
+          "mission",
+          "goal",
+          "status",
+          "steps",
+          "replans",
+          "error",
+          "question",
+          "approval_id",
+          "how",
+          "explain"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.mission_status.name",
+        "default": "Mission status"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 15
+    },
+    "desktop:plugin_entry:open_website": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.open_website.description",
+        "default": "Open a web address in the owner's own Chrome, in one of the owner's existing profiles (logged in as the owner). Use for 'open YouTube', 'open my VenkatAMV account and go to …'."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "open_website",
+      "input_schema": {
+        "properties": {
+          "profile": {
+            "default": "default",
+            "description": "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles.",
+            "type": "string"
+          },
+          "url": {
+            "description": "Full address starting with https://",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "opened",
+        "profile",
+        "account",
+        "title",
+        "verified",
+        "profile_name_shown",
+        "profile_name_matches",
+        "note",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "account": {},
+          "error": {},
+          "note": {},
+          "ok": {},
+          "opened": {},
+          "profile": {},
+          "profile_name_matches": {},
+          "profile_name_shown": {},
+          "state": {},
+          "title": {},
+          "verified": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "opened",
+          "profile",
+          "account",
+          "title",
+          "verified",
+          "profile_name_shown",
+          "profile_name_matches",
+          "note",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.open_website.name",
+        "default": "Open a website"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "desktop:plugin_entry:play_youtube": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.play_youtube.description",
+        "default": "Find a song or video on YouTube in the owner's Chrome and play it; reports the exact video and whether it is really playing (checked, not assumed). Example: 'play a Kalyani song'."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "play_youtube",
+      "input_schema": {
+        "properties": {
+          "profile": {
+            "default": "default",
+            "description": "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles.",
+            "type": "string"
+          },
+          "query": {
+            "description": "What to search for on YouTube",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "chose",
+        "title",
+        "playing",
+        "same_video",
+        "position_s",
+        "verified_by",
+        "windows_media",
+        "error",
+        "needs"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "chose": {},
+          "error": {},
+          "needs": {},
+          "ok": {},
+          "playing": {},
+          "position_s": {},
+          "same_video": {},
+          "state": {},
+          "title": {},
+          "verified_by": {},
+          "windows_media": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "chose",
+          "title",
+          "playing",
+          "same_video",
+          "position_s",
+          "verified_by",
+          "windows_media",
+          "error",
+          "needs"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.play_youtube.name",
+        "default": "Play on YouTube"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 180
+    },
+    "desktop:plugin_entry:read_window_text": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.read_window_text.description",
+        "default": "Read the text of one open window by OCR (Windows' built-in text recognition), for a window whose accessibility tree gives nothing: a game, a remote desktop, a picture of a form. Less reliable than the accessibility tree (OCR misreads digits and letters), so say so when you rely on it. Read-only; refuses password managers, wallets and bank windows. UNVERIFIED on real hardware: written and tested against a fake console only. The text goes to the model only when the owner allowed screen text (NEKO_SCREEN_TEXT_TO_MODEL=1) AND the privacy gateway has hidden names, places and private details in it; secrets are removed first. Otherwise it is withheld."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "read_window_text",
+      "input_schema": {
+        "properties": {
+          "app": {
+            "description": "The app's process name, e.g. notepad",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "app",
+        "lines",
+        "text",
+        "text_note",
+        "source",
+        "removed",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "app": {},
+          "error": {},
+          "lines": {},
+          "ok": {},
+          "removed": {},
+          "source": {},
+          "text": {},
+          "text_note": {}
+        },
+        "required": [
+          "ok",
+          "app",
+          "lines",
+          "text",
+          "text_note",
+          "source",
+          "removed",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.read_window_text.name",
+        "default": "Read a window by OCR"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120
+    },
+    "desktop:plugin_entry:recent_pc_alerts": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.recent_pc_alerts.description",
+        "default": "What the PC monitor noticed recently: program crashes, low disk space, a local service that stopped, a stuck PC task. Use for 'is anything wrong with my PC?' or 'what did you notice?'."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "recent_pc_alerts",
+      "input_schema": {
+        "properties": {
+          "hours": {
+            "default": 24,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "alerts",
+        "count"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "alerts": {},
+          "count": {}
+        },
+        "required": [
+          "alerts",
+          "count"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.recent_pc_alerts.name",
+        "default": "Recent PC alerts"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
+    "desktop:plugin_entry:recover_pc_lock": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.recover_pc_lock.description",
+        "default": "ONLY when the owner asks, after Stop reported a PC operation still_running: free the PC lock of an operation that will not end. It succeeds only if that operation was asked to stop and the kernel confirms every PC job it had ended (or its process is gone); otherwise it refuses and says why. It never lets a second task act while the first may still control the desktop."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "recover_pc_lock",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "recovered",
+        "ok",
+        "status",
+        "how",
+        "reason",
+        "operation",
+        "alerts"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "alerts": {},
+          "how": {},
+          "ok": {},
+          "operation": {},
+          "reason": {},
+          "recovered": {},
+          "status": {}
+        },
+        "required": [
+          "recovered",
+          "ok",
+          "status",
+          "how",
+          "reason",
+          "operation",
+          "alerts"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.recover_pc_lock.name",
+        "default": "Recover a stuck PC lock"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop:plugin_entry:resume_mission": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.resume_mission.description",
+        "default": "Continue a mission that stopped for the owner, with the same mission id: after the owner approved the waiting action in the JARVIS console with the PIN, with the owner's answer to the mission's question, or after an interrupted step (answer 'done' if it already happened, 'redo' if it did not). Steps already done are never repeated. Use this for 'continue the mission', never start_mission again."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "resume_mission",
+      "input_schema": {
+        "properties": {
+          "answer": {
+            "default": "",
+            "description": "The owner's answer to the mission's question, or done/redo",
+            "type": "string"
+          },
+          "mission": {
+            "default": "",
+            "description": "The mission id; empty = the latest mission",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "ok",
+        "mission",
+        "status",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "mission": {},
+          "ok": {},
+          "status": {}
+        },
+        "required": [
+          "ok",
+          "mission",
+          "status",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.resume_mission.name",
+        "default": "Continue the mission"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop:plugin_entry:run_browser_action": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_browser_action.description",
+        "default": "Do one thing in the owner's Chrome (needs the Playwright extension in that profile): read the page, find text, click or type into an element (use the element's visible name or a ref from read), press a key, list tabs, check which account is signed in (whoami), or check video playback (media). Paying, sending, deleting, signing out and similar clicks wait for the owner's approval."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_browser_action",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "enum": [
+              "read",
+              "find",
+              "click",
+              "type",
+              "press",
+              "tabs",
+              "whoami",
+              "media"
+            ],
+            "type": "string"
+          },
+          "approval_id": {
+            "description": "Only to continue after the owner approved",
+            "type": "string"
+          },
+          "profile": {
+            "default": "default",
+            "description": "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles.",
+            "type": "string"
+          },
+          "target": {
+            "description": "Element name/ref, or the text to find",
+            "type": "string"
+          },
+          "text": {
+            "description": "Text to type, or the key to press",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "title",
+        "url",
+        "chars",
+        "clicked",
+        "typed_chars",
+        "pressed",
+        "seen",
+        "expected",
+        "matches",
+        "first_is_expected",
+        "tabs",
+        "paused",
+        "position_s",
+        "error",
+        "needs",
+        "approval_id",
+        "how",
+        "page",
+        "page_note"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "chars": {},
+          "clicked": {},
+          "error": {},
+          "expected": {},
+          "first_is_expected": {},
+          "how": {},
+          "matches": {},
+          "needs": {},
+          "ok": {},
+          "page": {},
+          "page_note": {},
+          "paused": {},
+          "position_s": {},
+          "pressed": {},
+          "seen": {},
+          "state": {},
+          "tabs": {},
+          "title": {},
+          "typed_chars": {},
+          "url": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "title",
+          "url",
+          "chars",
+          "clicked",
+          "typed_chars",
+          "pressed",
+          "seen",
+          "expected",
+          "matches",
+          "first_is_expected",
+          "tabs",
+          "paused",
+          "position_s",
+          "error",
+          "needs",
+          "approval_id",
+          "how",
+          "page",
+          "page_note"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_browser_action.name",
+        "default": "Browser action"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 360
+    },
+    "desktop:plugin_entry:run_pc_action": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_pc_action.description",
+        "default": "Operate a Windows app the owner names: open an app by its Start-menu name (open_app), bring a window to the front (focus), click a button or type into a field by its accessible name (target 'process|element'), press a key such as ctrl+s or playpause, scroll, or as a last resort click at a point ('process|x,y'). Structured accessibility first; risky keys and consequential clicks wait for the owner's approval."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_pc_action",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "enum": [
+              "open_app",
+              "focus",
+              "click",
+              "type",
+              "key",
+              "scroll",
+              "click_at",
+              "minimize",
+              "maximize",
+              "restore"
+            ],
+            "type": "string"
+          },
+          "approval_id": {
+            "type": "string"
+          },
+          "target": {
+            "description": "Start-menu app name for open_app; otherwise 'process|element' or 'process|x,y'",
+            "type": "string"
+          },
+          "text": {
+            "description": "Text to type, the key (e.g. ctrl+s, enter, playpause), or up/down",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "target"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "ok",
+        "opened",
+        "done",
+        "verified",
+        "window",
+        "error",
+        "approval_id",
+        "how"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "done": {},
+          "error": {},
+          "how": {},
+          "ok": {},
+          "opened": {},
+          "state": {},
+          "verified": {},
+          "window": {}
+        },
+        "required": [
+          "state",
+          "ok",
+          "opened",
+          "done",
+          "verified",
+          "window",
+          "error",
+          "approval_id",
+          "how"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_pc_action.name",
+        "default": "PC action"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 360
+    },
+    "desktop:plugin_entry:run_pc_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_pc_task.description",
+        "default": "Do what the owner asked on this PC in one go: a small local model plans the steps (open sites or apps, play music, use the owner's Chrome accounts, type, press keys, check or troubleshoot the PC, research), each step runs through the JARVIS kernel and is checked afterwards. Reports what was verified and what was not."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_pc_task",
+      "input_schema": {
+        "properties": {
+          "request": {
+            "description": "The owner's request, in their words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "status",
+        "summary",
+        "question",
+        "steps",
+        "uncertain",
+        "approval_id",
+        "how"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "how": {},
+          "question": {},
+          "status": {},
+          "steps": {},
+          "summary": {},
+          "uncertain": {}
+        },
+        "required": [
+          "status",
+          "summary",
+          "question",
+          "steps",
+          "uncertain",
+          "approval_id",
+          "how"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_pc_task.name",
+        "default": "Do a task on the PC"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 900
+    },
+    "desktop:plugin_entry:run_troubleshooter": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.run_troubleshooter.description",
+        "default": "Find out why a Windows app shows an error and fix it safely: read its error dialog, event log and crash records (on this laptop), check the cause against the file it names, back up, apply the fix after the owner approves, start the app again and verify the error is gone. Reports a verified cause or says it is only a hypothesis."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "run_troubleshooter",
+      "input_schema": {
+        "properties": {
+          "app": {
+            "description": "The app's process name, e.g. NekoSampleApp",
+            "type": "string"
+          },
+          "apply_fix": {
+            "default": true,
+            "type": "boolean"
+          },
+          "start_name": {
+            "description": "Its Start-menu name, to start it again for the check, e.g. Neko Sample App",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "outcome",
+        "cause",
+        "verified",
+        "evidence",
+        "fix",
+        "backup",
+        "undo",
+        "verification",
+        "steps",
+        "approval_id",
+        "how"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "approval_id": {},
+          "backup": {},
+          "cause": {},
+          "evidence": {},
+          "fix": {},
+          "how": {},
+          "outcome": {},
+          "steps": {},
+          "undo": {},
+          "verification": {},
+          "verified": {}
+        },
+        "required": [
+          "outcome",
+          "cause",
+          "verified",
+          "evidence",
+          "fix",
+          "backup",
+          "undo",
+          "verification",
+          "steps",
+          "approval_id",
+          "how"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.run_troubleshooter.name",
+        "default": "Troubleshoot an app"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 900
+    },
+    "desktop:plugin_entry:start_mission": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.start_mission.description",
+        "default": "Start a goal with several phases that may take minutes (for example 'research X, make slides, open them and explain'). It runs in the background, survives a restart, never repeats an action, re-plans when a check fails and stops on a loop or its budget. Use mission_status to follow it and stop_mission to stop it."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "start_mission",
+      "input_schema": {
+        "properties": {
+          "goal": {
+            "description": "The goal, in the owner's words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "mission",
+        "status",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "mission": {},
+          "status": {}
+        },
+        "required": [
+          "mission",
+          "status",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.start_mission.name",
+        "default": "Start a long mission"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop:plugin_entry:stop_mission": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_mission.description",
+        "default": "Stop the current (or a named) mission and the PC job it is running."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "stop_mission",
+      "input_schema": {
+        "properties": {
+          "mission": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "mission",
+        "stopped"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "mission": {},
+          "stopped": {}
+        },
+        "required": [
+          "mission",
+          "stopped"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_mission.name",
+        "default": "Stop the mission"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop:plugin_entry:stop_pc_job": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_pc_job.description",
+        "default": "Stop a running PC job by its id; whatever it started is stopped."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "stop_pc_job",
+      "input_schema": {
+        "properties": {
+          "job": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "id",
+        "state",
+        "note",
+        "error"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "error": {},
+          "id": {},
+          "note": {},
+          "state": {}
+        },
+        "required": [
+          "id",
+          "state",
+          "note",
+          "error"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_pc_job.name",
+        "default": "Stop a PC job"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30
+    },
+    "desktop:plugin_entry:stop_pc_task": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.stop_pc_task.description",
+        "default": "Stop everything that is acting on the PC: a task, a mission, a single action waiting for an approval or running, a troubleshooter. Cancels the node jobs and denies the approvals they wait on, and says honestly which operations really ended (stopped) and which did not yet (still_running)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "stop_pc_task",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "stopped_jobs",
+        "stopped",
+        "still_running",
+        "requested",
+        "approvals_denied",
+        "message",
+        "alerts",
+        "stop_errors"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "alerts": {},
+          "approvals_denied": {},
+          "message": {},
+          "requested": {},
+          "still_running": {},
+          "stop_errors": {},
+          "stopped": {},
+          "stopped_jobs": {}
+        },
+        "required": [
+          "stopped_jobs",
+          "stopped",
+          "still_running",
+          "requested",
+          "approvals_denied",
+          "message",
+          "alerts",
+          "stop_errors"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.stop_pc_task.name",
+        "default": "Stop the PC task"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 45
+    },
+    "desktop:timer:pc_monitor": {
+      "auto_start": true,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "timer",
+      "extra": {
+        "mode": "interval",
+        "seconds": 60
+      },
+      "id": "pc_monitor",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "timer",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {
+        "seconds": 60
+      },
+      "model_validate": true,
+      "name": "pc_monitor",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    }
+  },
+  "schema_version": 4,
+  "sdk_version": "0.1.0",
+  "source_bytes": 672157,
+  "source_files": [
+    "README.md",
+    "__init__.py",
+    "config.schema.json",
+    "coordinator.py",
+    "core.py",
+    "decide.py",
+    "missions.py",
+    "monitor.py",
+    "plugin.toml",
+    "pyproject.toml",
+    "skills.py",
+    "tests/__init__.py",
+    "tests/conftest.py",
+    "tests/test_coordinator.py",
+    "tests/test_core.py",
+    "tests/test_decide_outage.py",
+    "tests/test_decide_rules.py",
+    "tests/test_fencing.py",
+    "tests/test_lock_mutation.py",
+    "tests/test_lock_unconfirmed.py",
+    "tests/test_missions.py",
+    "tests/test_monitor.py",
+    "tests/test_new_window.py",
+    "tests/test_ocr_entries.py",
+    "tests/test_open_site_doubt.py",
+    "tests/test_pc_lock.py",
+    "tests/test_pending_approvals.py",
+    "tests/test_plan_cap.py",
+    "tests/test_registry_visibility.py",
+    "tests/test_result_cleaning_desktop.py",
+    "tests/test_result_ids.py",
+    "tests/test_run_pc_task_stop.py",
+    "tests/test_screen_egress.py",
+    "tests/test_single_entry_lock.py",
+    "tests/test_skills.py",
+    "tests/test_stop_ownership.py",
+    "tests/test_verify_observed.py"
+  ],
+  "source_sha256": "0657be9ab9ae545ee104b352ee15e0ce3495b108b67737de29991e9f80e1cbc9"
+}

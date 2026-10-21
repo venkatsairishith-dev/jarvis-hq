@@ -23,6 +23,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
+from plugin.plugins._shared.untrusted import clean_untrusted
+
 from .planner import Plan, Step
 
 RESULT_CHARS = 4000
@@ -39,6 +41,14 @@ class StepResult:
     attempts: int = 1
     held: bool = False          # unknown result of a step with side effects: not retried, later steps held back
     waited: float = 0.0         # seconds spent waiting for the user, not counted against the time limits
+    screen: bool = False        # the text holds screen- or disk-derived text (OCR, a page, a window): every sink re-checks it
+
+    def __post_init__(self) -> None:
+        # What a tool returned is DATA: invisible/bidi characters out and instruction-shaped constructs (a fake {{s1}}, a role marker,
+        # tool-call tags, HTML, markdown images) defused, once, here - so the run file, a dependent step's input, a think step's
+        # prompt, the final answer and the chat push never see them (tool inventory pass, 2026-10-19). Idempotent.
+        self.text = clean_untrusted(self.text)
+        self.error = clean_untrusted(self.error)
 
     @property
     def ok(self) -> bool:
@@ -57,11 +67,43 @@ class StepUnknown(StepFailed):
     """A step may or may not have had its effect (it timed out after being sent, or is still going)."""
 
 
-class StepContext:
-    """Handed to a dispatcher so it can report time spent waiting for the user."""
+class StepNeedsApproval(StepUnknown):
+    """The helper accepted the step but is waiting for the owner (an approval, an answer): it has not run yet. Held like an
+    unknown result of a step with side effects (never retried, nothing new starts after it, so an approval is not asked twice),
+    but said as what it is."""
 
-    def __init__(self) -> None:
+
+NEEDS_YOU = "needs your approval or answer"      # starts the error text of a step waiting for the owner (final_text words it)
+
+STOP_GRACE_S = 1.0      # after Stop, how long a running step may take to report its real outcome
+
+
+class StepCancelled(Exception):
+    """The run was stopped. `started` says whether the step's dispatcher had begun (it may then have had an effect)."""
+
+    def __init__(self, started: bool):
+        super().__init__("stopped while running" if started else "stopped before it started")
+        self.started = started
+
+
+class StepContext:
+    """Handed to a dispatcher so it can report time spent waiting for the user, and see whether the run was stopped.
+
+    `cancel` is the run's stop event (None when the run cannot be stopped). A dispatcher that is cancelled because the run
+    was stopped can ask the helper to stop too, and say what it did in `cancel_note` (shown with the step's outcome).
+    """
+
+    def __init__(self, cancel: asyncio.Event | None = None) -> None:
         self.waited = 0.0
+        self.cancel = cancel
+        self.cancel_note = ""
+        self.timed_out = False          # the executor ran out of the step's time and is cancelling the dispatcher (not the owner's Stop)
+        self.screen = False                    # set by the dispatcher when what it returns holds screen-derived text
+        self.screen_inputs: list[str] = []     # ids of the steps this step depends on whose result holds screen-derived text
+
+    @property
+    def stopped(self) -> bool:
+        return self.cancel is not None and self.cancel.is_set()
 
     def add_waiting(self, seconds: float) -> None:
         self.waited += max(0.0, float(seconds))
@@ -73,20 +115,43 @@ Progress = Callable[[Step, StepResult], None]
 
 async def _call(dispatch: Dispatch, takes_ctx: bool, step: Step, inputs: dict[str, str], ctx: StepContext,
                 step_timeout: float, hard_limit: Callable[[], float]) -> str:
-    task = asyncio.ensure_future(dispatch(step, inputs, ctx) if takes_ctx else dispatch(step, inputs))
+    cancel = ctx.cancel
+    began = [False]
+
+    async def guarded() -> str:
+        # Checked when the dispatcher actually begins, not when it was scheduled: a Stop that lands in between must not
+        # let the step start.
+        if cancel is not None and cancel.is_set():
+            raise StepCancelled(False)
+        began[0] = True
+        return await (dispatch(step, inputs, ctx) if takes_ctx else dispatch(step, inputs))
+
+    task = asyncio.ensure_future(guarded())
+    stop = asyncio.ensure_future(cancel.wait()) if cancel is not None else None
     start = time.monotonic()
     try:
         while True:
             limit = min(start + step_timeout + ctx.waited, hard_limit() + ctx.waited)
             remaining = limit - time.monotonic()
             if remaining <= 0:
+                ctx.timed_out = True              # the dispatcher is cancelled next: it may ask its helper to stop, as on a Stop
                 raise asyncio.TimeoutError
-            done, _ = await asyncio.wait({task}, timeout=min(remaining, 0.5))
-            if done:
+            waiting = {task} if stop is None else {task, stop}
+            done, _ = await asyncio.wait(waiting, timeout=min(remaining, 0.5), return_when=asyncio.FIRST_COMPLETED)
+            if task in done:
                 return task.result()
+            if stop is not None and stop in done:
+                # The run was stopped. A step that ends on its own within a moment reports what really happened (it
+                # did finish); otherwise it is interrupted below, which also asks its helper to stop.
+                late, _ = await asyncio.wait({task}, timeout=STOP_GRACE_S)
+                if task in late:
+                    return task.result()
+                raise StepCancelled(began[0])
     finally:
+        if stop is not None and not stop.done():
+            stop.cancel()
         if not task.done():
-            task.cancel()
+            task.cancel()                         # the dispatcher sees CancelledError and can ask its helper to stop
             try:
                 await task
             except BaseException:     # the cancelled dispatcher's own exception is not interesting
@@ -139,17 +204,35 @@ async def run_plan(plan: Plan, dispatch: Dispatch, *, parallel: int = 3, step_ti
             attempts, began = 0, time.monotonic()
             while True:
                 attempts += 1
-                ctx = StepContext()
+                waiting = False
+                ctx = StepContext(cancel)
+                ctx.screen_inputs = [d for d in step.depends_on if d in results and results[d].screen]
                 t0 = time.monotonic()
                 try:
                     text = await _call(dispatch, takes_ctx, step, inputs, ctx, step_timeout, hard_limit)
                     waited_total[0] += ctx.waited
                     return emit(step, StepResult(step.id, "success", str(text or "")[:RESULT_CHARS],
-                                                 seconds=time.monotonic() - began, attempts=attempts, waited=ctx.waited))
+                                                 seconds=time.monotonic() - began, attempts=attempts, waited=ctx.waited,
+                                                 screen=bool(ctx.screen)))
+                except StepCancelled as exc:
+                    waited_total[0] += ctx.waited
+                    if not exc.started:
+                        return not_executed(step, "cancelled")
+                    # Stopped part-way: a step that may change something may or may not have done it, so it is held
+                    # (never re-run without the owner choosing it); a read or reasoning step simply did not finish.
+                    held = step.effect == "non_idempotent"
+                    note = f"; {ctx.cancel_note}" if ctx.cancel_note else ""
+                    return emit(step, StepResult(step.id, "unknown" if held else "failure",
+                                                 error=(f"stopped while running{note}"
+                                                        + ("; whether it had any effect is not known" if held else ""))[:300],
+                                                 seconds=time.monotonic() - began, attempts=attempts, held=held, waited=ctx.waited))
                 except asyncio.TimeoutError:
                     kind, error = "unknown", "timed out; whether it had any effect is not known"
+                    if ctx.cancel_note:                  # what the helper was asked to do about it (and whether it ended)
+                        error = f"{error}; {ctx.cancel_note}"[:300]
                 except StepUnknown as exc:
                     kind, error = "unknown", str(exc)[:300]
+                    waiting = isinstance(exc, StepNeedsApproval)
                 except StepFailed as exc:
                     kind, error = "failure", str(exc)[:300]
                 except asyncio.CancelledError:
@@ -158,14 +241,15 @@ async def run_plan(plan: Plan, dispatch: Dispatch, *, parallel: int = 3, step_ti
                     kind = "unknown" if step.effect == "non_idempotent" else "failure"
                     error = type(exc).__name__
                 waited_total[0] += ctx.waited
-                retryable = (attempts <= retries and step.effect != "non_idempotent" and not (cancel and cancel.is_set())
+                retryable = (attempts <= retries and step.effect != "non_idempotent" and not waiting and not (cancel and cancel.is_set())
                              and not halt and time.monotonic() + 2.0 < hard_limit())
                 if retryable:
                     await asyncio.sleep(random.uniform(*backoff))
-                    continue
-                held = kind == "unknown" and step.effect == "non_idempotent"
+                    if not (cancel is not None and cancel.is_set()):
+                        continue              # stopped during the pause: report this attempt, start no other
+                held = kind == "unknown" and (step.effect == "non_idempotent" or waiting)
                 if held:
-                    halt.append(f"{step.id} may or may not have happened")
+                    halt.append(f"{step.id} is waiting for you" if waiting else f"{step.id} may or may not have happened")
                 return emit(step, StepResult(step.id, kind, error=error, seconds=time.monotonic() - began,
                                              attempts=attempts, held=held, waited=ctx.waited))
 
@@ -179,7 +263,14 @@ async def run_plan(plan: Plan, dispatch: Dispatch, *, parallel: int = 3, step_ti
             bad = next((r for r in deps if not r.ok), None)
             if bad is not None:
                 pending.remove(step)
-                why = f"held back: {bad.id} may or may not have happened" if bad.held else "a step it needed did not finish"
+                if cancel is not None and cancel.is_set():
+                    why = "cancelled"                  # the run was stopped (its step in flight was interrupted)
+                else:
+                    if bad.held:
+                        waiting = (bad.error or "").startswith(NEEDS_YOU)
+                        why = f"held back: {bad.id} is waiting for you" if waiting else f"held back: {bad.id} may or may not have happened"
+                    else:
+                        why = "a step it needed did not finish"
                 not_executed(step, why)
                 skipped_any = True
                 continue
@@ -222,6 +313,10 @@ def final_text(plan: Plan, results: list[StepResult]) -> str:
     if parts:
         lines.append("\n\n".join(parts))
     for r in held:
+        if (r.error or "").startswith(NEEDS_YOU):
+            lines.append(f"Waiting for you: {goals.get(r.id, r.id)[:140]} ({r.error}). It has not run yet and I did not go on. "
+                         "Give the approval or answer, then tell me to continue.")
+            continue
         lines.append(f"Needs your attention: I could not confirm whether this happened, so I did not retry it or go on: "
                      f"{goals.get(r.id, r.id)[:140]} ({r.error or 'result unknown'}). Please check, then tell me whether to run it again.")
     if others:

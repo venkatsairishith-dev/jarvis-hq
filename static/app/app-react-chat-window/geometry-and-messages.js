@@ -1610,6 +1610,11 @@
             onChoiceSelect: I.handleChoiceSelect,
             visitBar: visitView ? visitView.bar : null,
             onVisitBarAction: I.handleVisitBarAction,
+            // a held JARVIS task's question (jarvis-task-input.js); null when nothing waits
+            taskPrompt: typeof I.getJarvisTaskPrompt === 'function' ? I.getJarvisTaskPrompt() : null,
+            onTaskPromptSubmit: I.handleTaskPromptSubmit,
+            onTaskPromptCancel: I.handleTaskPromptCancel,
+            onTaskPromptCollapse: I.handleTaskPromptCollapse,
             onCompactChatStateChange: I.handleCompactChatStateChange,
             onCompactMinimizeRequest: I.handleCompactMinimizeRequest,
             avatarToolMenuOpenRequest: I.state.viewProps.avatarToolMenuOpenRequest || null,

@@ -17,6 +17,7 @@ import AvatarToolItemManager, {
   type AvatarToolManagerAnchorRect,
 } from './AvatarToolItemManager';
 import AvatarToolQuickbar from './AvatarToolQuickbar';
+import TaskPromptCard from './TaskPromptCard';
 import FullChatSurface from './FullChatSurface';
 import NekoTooltipLayer from './NekoTooltipLayer';
 import AvatarToolVisuals from './avatar-tools/presentation';
@@ -957,6 +958,10 @@ function CompactChatApp({
   onChoiceSelect,
   visitBar = null,
   onVisitBarAction,
+  taskPrompt = null,
+  onTaskPromptSubmit,
+  onTaskPromptCancel,
+  onTaskPromptCollapse,
   avatarToolMenuOpenRequest = null,
   compactToolFanOpenRequest = null,
   compactToolWheelRotateRequest = null,
@@ -1447,7 +1452,9 @@ function CompactChatApp({
     && !theaterActive
     && !!visitBar
     && (!!visitBar.badge || visitBar.actions.length > 0);
-  const compactChoiceLayerOpen = isCompactSurface && (compactSurfaceChoicesVisible || visitBarVisible);
+  // A held JARVIS task's question (TaskPromptCard): shown on both surfaces, never while the cat-local chat owns the window
+  const taskPromptVisible = !!taskPrompt && !catLocalTextOnly;
+  const compactChoiceLayerOpen = isCompactSurface && (compactSurfaceChoicesVisible || visitBarVisible || taskPromptVisible);
   const compactExportSelectedCount = compactExportSelectedIds.size;
   const compactExportSelectableMessages = useMemo(
     () => messages.filter(isCompactExportMessageSelectable),
@@ -5720,6 +5727,14 @@ function CompactChatApp({
     event.currentTarget.style.removeProperty('--composer-option-marquee-duration');
   }
 
+  const taskPromptNode = taskPromptVisible && taskPrompt ? (
+    <TaskPromptCard
+      prompt={taskPrompt}
+      onSubmit={onTaskPromptSubmit}
+      onCancel={onTaskPromptCancel}
+      onCollapse={onTaskPromptCollapse}
+    />
+  ) : null;
   const choiceLayerNode = (
     <div
       className={`composer-choice-layer${isCompactSurface ? ' compact-chat-choice-anchor' : ''}`}
@@ -5731,6 +5746,7 @@ function CompactChatApp({
       data-chat-surface-mode={chatSurfaceMode}
       data-compact-choice-placement={isCompactSurface ? compactChoiceLayerPlacement : undefined}
     >
+      {isCompactSurface ? taskPromptNode : null}
       {visitBarVisible && visitBar ? (
         <div
           className={`composer-visit-bar is-${visitBar.tone ?? 'idle'}`}

@@ -1,10 +1,147 @@
 {
   "build_env": {
-    "arch": "AMD64",
-    "os": "win32",
+    "arch": "x86_64",
+    "os": "linux",
     "python": "3.11"
   },
   "entries": [
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.answer_input.description",
+        "default": "The owner's answer to the question a held task asked (from the chat box). Validated against the question; the task then resumes from its checkpoint. Owner only."
+      },
+      "event_key": "main_agent.answer_input",
+      "event_type": "plugin_entry",
+      "id": "answer_input",
+      "input_schema": {
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "run_id",
+          "request_id",
+          "values"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.answer_input.name",
+        "default": "Answer a waiting question"
+      },
+      "return_message": "",
+      "timeout": 60
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.cancel_input.description",
+        "default": "Drop the question a held task asked; that task ends as cancelled. Owner only."
+      },
+      "event_key": "main_agent.cancel_input",
+      "event_type": "plugin_entry",
+      "id": "cancel_input",
+      "input_schema": {
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.cancel_input.name",
+        "default": "Cancel a waiting question"
+      },
+      "return_message": "",
+      "timeout": 20
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.pending_inputs.description",
+        "default": "The questions held tasks are waiting on: the question and its fields (never any answer or secret)."
+      },
+      "event_key": "main_agent.pending_inputs",
+      "event_type": "plugin_entry",
+      "id": "pending_inputs",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "count"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "count": {}
+        },
+        "required": [
+          "count"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.pending_inputs.name",
+        "default": "Questions waiting for the owner"
+      },
+      "return_message": "",
+      "timeout": 10
+    },
     {
       "auto_start": false,
       "description": {
@@ -183,6 +320,14 @@
             ],
             "type": "string"
           },
+          "source": {
+            "description": "Leave empty. 'widget' is set by the desktop widget, which does not wait for the plan.",
+            "enum": [
+              "chat",
+              "widget"
+            ],
+            "type": "string"
+          },
           "task": {
             "description": "The task, in the user's own words with their details.",
             "type": "string"
@@ -198,20 +343,23 @@
         "run_id",
         "message",
         "steps",
-        "mode"
+        "mode",
+        "state"
       ],
       "llm_result_schema": {
         "properties": {
           "message": {},
           "mode": {},
           "run_id": {},
+          "state": {},
           "steps": {}
         },
         "required": [
           "run_id",
           "message",
           "steps",
-          "mode"
+          "mode",
+          "state"
         ],
         "type": "object"
       },
@@ -228,7 +376,7 @@
       "auto_start": false,
       "description": {
         "$i18n": "entry.stop_task.description",
-        "default": "Stop the task the main agent is running. Steps already finished stay finished."
+        "default": "Stop the task the main agent is planning or running: no further step starts, and the step in progress is asked to stop. Steps already finished stay finished. This stops this one task only; it is not JARVIS's Stop all or kill switch."
       },
       "event_key": "main_agent.stop_task",
       "event_type": "plugin_entry",
@@ -239,14 +387,23 @@
       },
       "kind": "action",
       "llm_result_fields": [
-        "stopped"
+        "requested",
+        "stopped",
+        "still_running",
+        "message"
       ],
       "llm_result_schema": {
         "properties": {
+          "message": {},
+          "requested": {},
+          "still_running": {},
           "stopped": {}
         },
         "required": [
-          "stopped"
+          "requested",
+          "stopped",
+          "still_running",
+          "message"
         ],
         "type": "object"
       },
@@ -257,11 +414,14 @@
         "default": "Stop the current task"
       },
       "return_message": "",
-      "timeout": 10
+      "timeout": 20
     }
   ],
   "entries_config_sha256": "",
   "entry_methods": {
+    "answer_input": "answer_input",
+    "cancel_input": "cancel_input",
+    "pending_inputs": "pending_inputs",
     "plan_task": "plan_task",
     "resume_run": "resume_run",
     "run_status": "run_status",
@@ -269,6 +429,164 @@
     "stop_task": "stop_task"
   },
   "handlers": {
+    "main_agent.answer_input": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.answer_input.description",
+        "default": "The owner's answer to the question a held task asked (from the chat box). Validated against the question; the task then resumes from its checkpoint. Owner only."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "answer_input",
+      "input_schema": {
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "run_id",
+          "request_id",
+          "values"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.answer_input.name",
+        "default": "Answer a waiting question"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "main_agent.cancel_input": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.cancel_input.description",
+        "default": "Drop the question a held task asked; that task ends as cancelled. Owner only."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "cancel_input",
+      "input_schema": {
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.cancel_input.name",
+        "default": "Cancel a waiting question"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "main_agent.pending_inputs": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.pending_inputs.description",
+        "default": "The questions held tasks are waiting on: the question and its fields (never any answer or secret)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "pending_inputs",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "count"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "count": {}
+        },
+        "required": [
+          "count"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.pending_inputs.name",
+        "default": "Questions waiting for the owner"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
     "main_agent.plan_task": {
       "auto_start": false,
       "description": {
@@ -470,6 +788,14 @@
             ],
             "type": "string"
           },
+          "source": {
+            "description": "Leave empty. 'widget' is set by the desktop widget, which does not wait for the plan.",
+            "enum": [
+              "chat",
+              "widget"
+            ],
+            "type": "string"
+          },
           "task": {
             "description": "The task, in the user's own words with their details.",
             "type": "string"
@@ -485,20 +811,23 @@
         "run_id",
         "message",
         "steps",
-        "mode"
+        "mode",
+        "state"
       ],
       "llm_result_schema": {
         "properties": {
           "message": {},
           "mode": {},
           "run_id": {},
+          "state": {},
           "steps": {}
         },
         "required": [
           "run_id",
           "message",
           "steps",
-          "mode"
+          "mode",
+          "state"
         ],
         "type": "object"
       },
@@ -520,7 +849,7 @@
       "auto_start": false,
       "description": {
         "$i18n": "entry.stop_task.description",
-        "default": "Stop the task the main agent is running. Steps already finished stay finished."
+        "default": "Stop the task the main agent is planning or running: no further step starts, and the step in progress is asked to stop. Steps already finished stay finished. This stops this one task only; it is not JARVIS's Stop all or kill switch."
       },
       "dynamic": false,
       "enabled": true,
@@ -533,14 +862,23 @@
       },
       "kind": "action",
       "llm_result_fields": [
-        "stopped"
+        "requested",
+        "stopped",
+        "still_running",
+        "message"
       ],
       "llm_result_schema": {
         "properties": {
+          "message": {},
+          "requested": {},
+          "still_running": {},
           "stopped": {}
         },
         "required": [
-          "stopped"
+          "requested",
+          "stopped",
+          "still_running",
+          "message"
         ],
         "type": "object"
       },
@@ -556,7 +894,7 @@
         "icon": null,
         "priority": 0
       },
-      "timeout": 10
+      "timeout": 20
     },
     "main_agent:lifecycle:shutdown": {
       "auto_start": false,
@@ -609,6 +947,164 @@
         "priority": 0
       },
       "timeout": null
+    },
+    "main_agent:plugin_entry:answer_input": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.answer_input.description",
+        "default": "The owner's answer to the question a held task asked (from the chat box). Validated against the question; the task then resumes from its checkpoint. Owner only."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "answer_input",
+      "input_schema": {
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "run_id",
+          "request_id",
+          "values"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.answer_input.name",
+        "default": "Answer a waiting question"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60
+    },
+    "main_agent:plugin_entry:cancel_input": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.cancel_input.description",
+        "default": "Drop the question a held task asked; that task ends as cancelled. Owner only."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "cancel_input",
+      "input_schema": {
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "message"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "message": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "message"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.cancel_input.name",
+        "default": "Cancel a waiting question"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20
+    },
+    "main_agent:plugin_entry:pending_inputs": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.pending_inputs.description",
+        "default": "The questions held tasks are waiting on: the question and its fields (never any answer or secret)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "pending_inputs",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "count"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "count": {}
+        },
+        "required": [
+          "count"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.pending_inputs.name",
+        "default": "Questions waiting for the owner"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
     },
     "main_agent:plugin_entry:plan_task": {
       "auto_start": false,
@@ -811,6 +1307,14 @@
             ],
             "type": "string"
           },
+          "source": {
+            "description": "Leave empty. 'widget' is set by the desktop widget, which does not wait for the plan.",
+            "enum": [
+              "chat",
+              "widget"
+            ],
+            "type": "string"
+          },
           "task": {
             "description": "The task, in the user's own words with their details.",
             "type": "string"
@@ -826,20 +1330,23 @@
         "run_id",
         "message",
         "steps",
-        "mode"
+        "mode",
+        "state"
       ],
       "llm_result_schema": {
         "properties": {
           "message": {},
           "mode": {},
           "run_id": {},
+          "state": {},
           "steps": {}
         },
         "required": [
           "run_id",
           "message",
           "steps",
-          "mode"
+          "mode",
+          "state"
         ],
         "type": "object"
       },
@@ -861,7 +1368,7 @@
       "auto_start": false,
       "description": {
         "$i18n": "entry.stop_task.description",
-        "default": "Stop the task the main agent is running. Steps already finished stay finished."
+        "default": "Stop the task the main agent is planning or running: no further step starts, and the step in progress is asked to stop. Steps already finished stay finished. This stops this one task only; it is not JARVIS's Stop all or kill switch."
       },
       "dynamic": false,
       "enabled": true,
@@ -874,14 +1381,23 @@
       },
       "kind": "action",
       "llm_result_fields": [
-        "stopped"
+        "requested",
+        "stopped",
+        "still_running",
+        "message"
       ],
       "llm_result_schema": {
         "properties": {
+          "message": {},
+          "requested": {},
+          "still_running": {},
           "stopped": {}
         },
         "required": [
-          "stopped"
+          "requested",
+          "stopped",
+          "still_running",
+          "message"
         ],
         "type": "object"
       },
@@ -897,33 +1413,49 @@
         "icon": null,
         "priority": 0
       },
-      "timeout": 10
+      "timeout": 20
     }
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 114607,
+  "source_bytes": 462145,
   "source_files": [
     ".gitignore",
-    ".vscode/settings.json",
-    ".vscode/tasks.json",
     "README.md",
+    "TOOL_INVENTORY.md",
     "__init__.py",
     "config.example.toml",
     "config.schema.json",
     "executor.py",
+    "input_request.py",
+    "memory_context.py",
+    "outcome.py",
     "planner.py",
     "plugin.toml",
     "pyproject.toml",
     "ruff.toml",
     "store.py",
+    "tests/test_claim_races.py",
+    "tests/test_computer_step.py",
     "tests/test_dashboard.py",
     "tests/test_executor.py",
+    "tests/test_helper_error_cleaning.py",
+    "tests/test_hostile_results.py",
+    "tests/test_input_request.py",
+    "tests/test_memory_context.py",
+    "tests/test_outcome_mutation.py",
+    "tests/test_outcome_registry.py",
+    "tests/test_outcome_values.py",
+    "tests/test_payload_outcome.py",
     "tests/test_planner.py",
     "tests/test_plugin.py",
+    "tests/test_run_control.py",
+    "tests/test_screen_egress.py",
+    "tests/test_side_effect_matrix.py",
     "tests/test_smoke.py",
+    "tests/test_stop_report.py",
     "tests/test_store.py",
     "ui/panel.tsx"
   ],
-  "source_sha256": "8169caf5504ce15a918ca256b333360665eee77c50c13b6ea2ebeb021032863b"
+  "source_sha256": "f8cbc4b7fdebbf9ff92e1eba0c91cfce20075699208c40d6da838a83ea0ba6b0"
 }

@@ -2,6 +2,11 @@
 
 One small JSON file per run, written atomically after every step. On startup, a run that was still "running" is marked
 interrupted and the step that was in flight becomes `unknown` (it may or may not have happened); nothing is re-run on its own.
+
+A run that is being planned has no plan and no step yet, so it gets no run file. Instead one small marker file
+(ACTIVE_MARKER, not *.json, so it is never listed as a run) says "a task is being planned" and, if it never starts, how it
+ended (stopped, or the plan failed and why). The widget, the Neko icon and "Hey Neko, stop" read it; it is removed when the
+run starts and its run file takes over.
 Step results are what the model-facing steps returned (capped), so the folder sits with N.E.K.O's own data, not in the repo.
 """
 
@@ -18,6 +23,7 @@ from .executor import StepResult
 from .planner import Plan, Step
 
 KEEP_RUNS = 20
+ACTIVE_MARKER = "active_run.state"
 
 
 def default_dir() -> Path:
@@ -37,18 +43,26 @@ def plan_from_dict(d: dict[str, Any]) -> Plan:
     for s in d.get("steps", []):
         steps.append(Step(id=str(s["id"]), kind=str(s["kind"]), goal=str(s["goal"]), ref=str(s.get("ref", "")),
                           args=dict(s.get("args") or {}), depends_on=[str(x) for x in s.get("depends_on", [])],
-                          effect=str(s.get("effect", "none"))))
+                          effect=str(s.get("effect", "none")), memory_influenced=bool(s.get("memory_influenced", False))))
     return Plan(str(d.get("summary", "")), steps)
 
 
+SCREEN_NOT_KEPT = "[screen text is not kept on disk; read it again if it is needed]"
+
+
 def result_to_dict(r: StepResult) -> dict[str, Any]:
-    return asdict(r)
+    """A result as it is written to the run file. Screen- or disk-derived text (StepResult.screen) is NOT written: the desktop
+    plugin deletes the node's local copy as soon as it has read it, and a run file must not become the place it is kept."""
+    d = asdict(r)
+    if r.screen and d.get("text"):
+        d["text"] = SCREEN_NOT_KEPT
+    return d
 
 
 def result_from_dict(d: dict[str, Any]) -> StepResult:
     return StepResult(id=str(d["id"]), outcome=str(d.get("outcome", "failure")), text=str(d.get("text", "")),
                       error=str(d.get("error", "")), seconds=float(d.get("seconds", 0.0)), attempts=int(d.get("attempts", 1)),
-                      held=bool(d.get("held", False)), waited=float(d.get("waited", 0.0)))
+                      held=bool(d.get("held", False)), waited=float(d.get("waited", 0.0)), screen=bool(d.get("screen", False)))
 
 
 class RunStore:
@@ -89,6 +103,29 @@ class RunStore:
             except OSError:
                 pass
 
+    def mark(self, record: dict[str, Any]) -> None:
+        """Write the planning marker atomically (run id, state, summary, error; never the task text)."""
+        self.dir.mkdir(parents=True, exist_ok=True)
+        keep = {k: record.get(k) for k in ("run_id", "state", "mode", "source", "started", "error") if record.get(k) is not None}
+        keep["updated"] = time.time()
+        path = self.dir / ACTIVE_MARKER
+        tmp = path.with_name(ACTIVE_MARKER + ".tmp")
+        tmp.write_text(json.dumps(keep, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+
+    def read_mark(self) -> dict[str, Any] | None:
+        try:
+            data = json.loads((self.dir / ACTIVE_MARKER).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def clear_mark(self) -> None:
+        try:
+            (self.dir / ACTIVE_MARKER).unlink()
+        except OSError:
+            pass
+
     def recover(self) -> list[str]:
         """Mark runs that were running when the process stopped as interrupted. Returns their ids."""
         interrupted = []
@@ -109,4 +146,8 @@ class RunStore:
             rec["state"] = "interrupted"
             self.save(rec)
             interrupted.append(rid)
+        mark = self.read_mark()
+        if mark and mark.get("state") == "planning":       # stopped while planning: nothing ran, nothing to resume
+            mark.update(state="failed", error="the app stopped while this task was being planned; nothing was run")
+            self.mark(mark)
         return interrupted

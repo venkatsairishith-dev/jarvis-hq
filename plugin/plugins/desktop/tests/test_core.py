@@ -342,3 +342,145 @@ def test_an_error_after_the_fix_still_reports_the_backup_and_undo(tmp_path, monk
     h = Gone(local, [first], {"ok": True, "backup": "b-1", "undo": "repair restore b-1"})
     rep = asyncio.run(DesktopPlugin.run_troubleshooter(h, app="NekoSampleApp")).value
     assert rep["backup"] == "b-1" and rep["undo"] == "repair restore b-1" and "could not run" in rep["outcome"]
+
+
+def test_owner_posts_carry_this_launchs_console_secret_and_follow_a_console_restart(monkeypatch, tmp_path):
+    """Audit SEC-D9: the console accepts a POST only with its per-launch secret (read from its page). Without this the desktop
+    plugin could not reach the owner plane at all; it must also survive the console restarting (new secret)."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import threading
+    monkeypatch.setenv("JARVIS_RUN_DIR", str(tmp_path / "no-token-here"))      # a console that still serves its secret in its page (legacy path)
+    state = {"secret": "LAUNCH-A", "posts": [], "gets": 0}
+
+    class H(BaseHTTPRequestHandler):
+        def _send(self, code, body, ctype="application/json"):
+            data = body if isinstance(body, bytes) else json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            if self.path == "/":
+                state["gets"] += 1
+                return self._send(200, f'<html><meta name="jarvis-console-secret" content="{state["secret"]}"></html>'.encode(), "text/html")
+            self._send(200, {"ok": True})
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            given = self.headers.get("X-Jarvis-Console")
+            state["posts"].append(given)
+            if given != state["secret"]:
+                return self._send(403, {"error": "refused", "reload": True})
+            self._send(200, {"state": "done"})
+
+        def log_message(self, *a):
+            pass
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(core, "CONSOLE", f"http://127.0.0.1:{srv.server_address[1]}")
+        core._SECRETS.clear()
+        assert core.owner("POST", "pc", {"op": "diag"}) == (200, {"state": "done"})
+        assert state["posts"] == ["LAUNCH-A"]                      # never the old constant "1"
+        state["secret"] = "LAUNCH-B"                               # the console restarted: the cached secret is stale
+        assert core.owner("POST", "pc", {"op": "diag"})[0] == 200
+        assert state["posts"][-2:] == ["LAUNCH-A", "LAUNCH-B"]     # one refused try, then the fresh secret
+        gets_before = state["gets"]
+        assert core.owner("GET", "state")[0] == 200 and state["gets"] == gets_before   # a read needs no secret
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_owner_refuses_an_address_whose_page_carries_no_console_secret(monkeypatch, tmp_path):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import threading
+    monkeypatch.setenv("JARVIS_RUN_DIR", str(tmp_path / "no-token-here"))
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            data = b"<html>some other web server</html>"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(core, "CONSOLE", f"http://127.0.0.1:{srv.server_address[1]}")
+        core._SECRETS.clear()
+        with pytest.raises(core.DesktopError, match="console token is not available"):
+            core.owner("POST", "pc", {"op": "diag"})
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_owner_reads_and_writes_send_the_master_token_from_its_0600_file_and_follow_a_restart(monkeypatch, tmp_path):
+    """Re-review M3 (2026-10-19): the console puts no credential in `GET /` any more. The plugin reads console.token from the run
+    folder (refusing a file other users can read) and sends it on EVERY request; a 401 "login" or 403 "reload" re-reads it once."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import threading
+    state = {"token": "MASTER-A", "seen": [], "page_gets": 0}
+
+    class H(BaseHTTPRequestHandler):
+        def _send(self, code, body):
+            data = json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            if self.path == "/":
+                state["page_gets"] += 1
+                return self._send(401, {"error": "login page"})                    # the real console: no secret in the page
+            given = self.headers.get("X-Jarvis-Console")
+            state["seen"].append(("GET", given))
+            return self._send(200, {"ok": True}) if given == state["token"] else self._send(401, {"error": "not signed in", "login": True})
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            given = self.headers.get("X-Jarvis-Console")
+            state["seen"].append(("POST", given))
+            return self._send(200, {"state": "done"}) if given == state["token"] else self._send(403, {"error": "refused", "reload": True})
+
+        def log_message(self, *a):
+            pass
+    run = tmp_path / "run"
+    run.mkdir(mode=0o700)
+    monkeypatch.setenv("JARVIS_RUN_DIR", str(run))
+
+    def publish(token, mode=0o600):
+        f = run / "console.token"
+        f.write_text(token)
+        f.chmod(mode)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(core, "CONSOLE", f"http://127.0.0.1:{srv.server_address[1]}")
+        core._SECRETS.clear()
+        publish("MASTER-A")
+        assert core.owner("GET", "state") == (200, {"ok": True})
+        assert core.owner("POST", "pc", {"op": "diag"}) == (200, {"state": "done"})
+        assert state["seen"] == [("GET", "MASTER-A"), ("POST", "MASTER-A")] and state["page_gets"] == 0
+        state["token"] = "MASTER-B"                                                # the console restarted: new token in the file
+        publish("MASTER-B")
+        assert core.owner("GET", "state") == (200, {"ok": True})                   # a 401 login re-reads the file once
+        assert core.owner("POST", "pc", {"op": "diag"})[0] == 200
+        # a token file that other users can read is not trusted (and the page has no secret to fall back on)
+        core._SECRETS.clear()
+        publish("MASTER-B", mode=0o644)
+        with pytest.raises(core.DesktopError, match="console token is not available"):
+            core.owner("POST", "pc", {"op": "diag"})                               # a write never goes out without a token
+        code, reply = core.owner("GET", "state")                                    # a read goes out bare; the console answers 401
+        assert code == 401 and reply.get("login") is True
+    finally:
+        srv.shutdown()
+        srv.server_close()

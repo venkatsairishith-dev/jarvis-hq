@@ -2626,5 +2626,34 @@
   "evidence": [
    "jarvis/docs/research/03-computer-control.md:201"
   ]
+ },
+ {
+  "name": "models.dev (open model catalog, used by OpenCode)",
+  "category": "data",
+  "upstream_url": "https://github.com/anomalyco/models.dev",
+  "licence": "MIT",
+  "pinned_version": "snapshot of https://models.dev/api.json, source sha256 recorded in jarvis/config/model_catalog.json",
+  "pin_location": [
+   "jarvis/config/model_catalog.json"
+  ],
+  "integration": "vendored data subset (declared capabilities of the models our providers serve)",
+  "machine": "all (read by the kernel)",
+  "jarvis_files": [
+   "jarvis/scripts/refresh_model_catalog.py",
+   "jarvis/kernel/jarvis_kernel/model_select.py"
+  ],
+  "features_used": [
+   "tool_call, attachment, modalities, context/output limits, list prices per model and provider"
+  ],
+  "unused_features": [
+   "the other ~229 providers",
+   "logos and docs links"
+  ],
+  "size_class": "small (22 KB subset of a 5.9 MB catalog)",
+  "packaging_recommendation": "vendor the filtered snapshot",
+  "packaging_reason": "Declared capabilities for the model selector instead of writing our own; refreshed by a script, never fetched at run time.",
+  "evidence": [
+   "jarvis/docs/neko/MODEL_SELECTOR_2026-10-20.md"
+  ]
  }
 ]
