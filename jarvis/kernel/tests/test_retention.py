@@ -440,7 +440,8 @@ class MoreStores(unittest.TestCase):
         self.assertRegex(row[0], r"id [0-9a-f]{12}\]$")                       # long text keeps a prefix
         self.assertNotIn(" id ", row[1])                                       # short text keeps none
         key = os.path.join(self.dir, R.KEY_FILE)
-        self.assertEqual(oct(os.stat(key).st_mode & 0o777), "0o600")
+        if os.name == "posix":     # Windows has no file mode bits (os.stat reports 0o666): the ACL question is tracked separately
+            self.assertEqual(oct(os.stat(key).st_mode & 0o777), "0o600")
         # the prefix is not the old salted sha256 of the text, and is not computable from state.db alone
         import hashlib
         salt = r._salt()

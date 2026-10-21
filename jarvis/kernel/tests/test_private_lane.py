@@ -131,6 +131,7 @@ class PrivateLane(unittest.TestCase):
 
 
 class FilesAtRest(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "POSIX file modes (0700/0600, umask) do not exist on Windows; see the ACL question")
     def test_the_data_folder_and_database_are_owner_only_even_under_a_loose_umask(self):
         old = os.umask(0o002)
         try:

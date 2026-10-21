@@ -372,6 +372,7 @@ class Using(Rig):
             time.time = real
         self.assertEqual(self.ui("clock", target="notepad|E3", aid=aid3)[1]["status"], "queued")
 
+    @unittest.skipUnless(os.name == "posix", "needs SIGKILL, which Windows does not have")
     def test_a_kill_minus_9_between_approve_and_use_keeps_the_binding(self):
         """A real kernel process is killed with SIGKILL right after the approval is granted. The restarted kernel honours the approval
         for exactly that action and for nothing else."""
