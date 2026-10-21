@@ -71,11 +71,14 @@ def main():
     sys.path.insert(0, os.path.join(ROOT, "kernel"))
     from jarvis_kernel.store import Kernel
     k = Kernel()
-    record(k, flags, len(results))
-    from jarvis_kernel import telegram as _tg
-    if "--no-telegram" not in sys.argv and not _tg.disabled():   # config/telegram.off switches the message off, never the audit
-        from jarvis_kernel import gateway, telegram
-        telegram.from_files(k, gateway.load(os.path.join(ROOT, "config", "providers.json"))).say(summary)
+    try:
+        record(k, flags, len(results))
+        from jarvis_kernel import telegram as _tg
+        if "--no-telegram" not in sys.argv and not _tg.disabled():   # config/telegram.off switches the message off, never the audit
+            from jarvis_kernel import gateway, telegram
+            telegram.from_files(k, gateway.load(os.path.join(ROOT, "config", "providers.json"))).say(summary)
+    finally:
+        k.db.close()                                                 # an in-process caller (tests) must not keep state.db open
 
 
 def record(k, flags, sets):

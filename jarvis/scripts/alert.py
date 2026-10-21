@@ -32,7 +32,14 @@ def main():
     head = "RECOVERED" if kind == "ok" else "ALERT"
     text = f"{head}: {svc} - {event}. {desc}".strip()
     k = Kernel()
-    k.audit.append("monit_alert", {"service": svc, "event": event, "kind": kind})
+    try:
+        return _send(k, svc, event, kind, text)
+    finally:
+        k.db.close()                              # an in-process caller (tests) must not keep state.db open
+
+
+def _send(k, svc, event, kind, text):
+    k.audit.append("monit_alert",{"service": svc, "event": event, "kind": kind})
     if telegram.disabled():                       # Telegram switched off: the alert stays on the server
         try:
             with open(alerts_log(k), "a", encoding="utf-8") as fh:
