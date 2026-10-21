@@ -8,6 +8,7 @@ if (-not (Test-Path $py)) { throw "console Python not found: $py" }
 if (-not (Test-Path "$hq\ui\dist\index.html")) { Write-Warning "The UI is not built: run 'npm install; npm run build' in $hq\ui" }
 $env:PYTHONPATH = "$hq\console"
 $env:HF_HUB_OFFLINE = '1'
+. (Join-Path $PSScriptRoot "d-env.ps1")
 Start-Process -FilePath $py -ArgumentList '-m', 'jarvis_console' -WorkingDirectory "$hq\console" -WindowStyle Hidden `
   -RedirectStandardOutput 'D:\jarvis\cache\console.out.log' -RedirectStandardError 'D:\jarvis\cache\console.err.log'
 Start-Sleep 3

@@ -10,6 +10,7 @@
 # run it again after a hardware change, or set NEKO_MODEL_PROFILE). vram4 (this laptop) uses llama-swap.yaml; the other
 # profiles use local_models\profiles\<profile>.yaml. remote_only starts no local models.
 param([switch]$Stop, [string]$Profile = "")
+. (Join-Path $PSScriptRoot "d-env.ps1")
 $exe = "D:\jarvis\tools\llama-swap\v261\llama-swap.exe"
 $logs = "D:\jarvis\N.E.K.O-data\logs"
 $hwFile = "D:\jarvis\N.E.K.O-data\neko\hardware.json"
