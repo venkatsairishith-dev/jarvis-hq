@@ -84,7 +84,12 @@ class ScriptedLab:
         if not job:
             return None
         jid, p = job["id"], job["params"]
-        clone = re.search(r"(?m)^clone: (\S+)$", p["instructions"]).group(1)
+        shown = re.search(r"(?m)^clone: (.+)$", p["instructions"]).group(1)
+        if os.name == "nt":      # the product shows the lab no owner path: a Windows drive path is masked
+            t.assertEqual(shown, "<path on the laptop>")
+            clone = t.root       # the scripted stand-in knows where its clone is
+        else:
+            clone = shown
         base = re.search(r"(?m)^commit: ([0-9a-f]{40})$", p["instructions"]).group(1)
 
         def report(body):
