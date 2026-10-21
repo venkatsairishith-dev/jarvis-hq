@@ -204,3 +204,16 @@ class TestRealGateway:
         finally:
             srv.shutdown()
             srv.server_close()
+
+
+def test_the_question_card_text_is_kept_but_cleaned():
+    """2026-10-21: a task's clarifying question (input_request.prompt) was replaced by the 'text stayed on this PC' note, so the owner
+    saw an empty card. It is a sentence the plugin wrote for the owner: kept, with paths and keys removed like `question`."""
+    bs = chr(92)
+    path = "C:" + bs + "Users" + bs + "x" + bs + "Secret Plans.docx"
+    out = st.clean_result({"input_request": {"title": "Clarification", "prompt": "Which report do you mean? I found " + path,
+                                              "fields": [{"name": "clarification", "label": "Your answer"}]}})
+    prompt = out["input_request"]["prompt"]
+    assert prompt.startswith("Which report do you mean?")
+    assert "Secret Plans" not in prompt and "Users" not in prompt
+    assert st.OFF_NOTE not in prompt

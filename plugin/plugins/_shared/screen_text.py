@@ -302,7 +302,7 @@ SAFE_RAW_KEYS = frozenset({
     "interrupted_runs", "resumable", "rerun", "role", "type", "event_type", "owner", "owner_task", "lock", "stale", "age_s", "idle_s",
     "waited_s", "hours", "worker", "current"})
 NEUTRAL_KEYS = frozenset({
-    "summary", "message", "messages", "error", "errors", "reason", "how", "question", "note", "notes", "goal", "cause", "outcome",
+    "summary", "message", "messages", "error", "errors", "reason", "how", "question", "prompt", "note", "notes", "goal", "cause", "outcome",
     "evidence", "title", "titles", "label", "labels", "buttons", "window", "windows", "window_title", "name", "description", "page_note",
     "text_note", "hint", "warning", "warnings", "undo", "fix", "why", "source_label",
     # JARVIS bridge: the approval card's own line, its target, and the reply the owner chose to hand back (JARVIS_BRIDGE_SPEAK_REPLY)

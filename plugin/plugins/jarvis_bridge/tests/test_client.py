@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import asyncio
 import json
 import threading
@@ -273,6 +274,8 @@ def test_the_master_token_file_is_used_for_reads_and_writes_and_re_read_after_a_
     token.write_text(console.secret)
     out = run(JarvisClient(console.url).delegate("second"))
     assert out["id"] and [s["header"] for s in console.seen if s["method"] == "POST"][-1] == console.secret
+    if os.name != "posix":                                                                     # Windows has no 0600/0644 file modes
+        return
     token.chmod(0o644)                                                                         # readable by others: not trusted
     client_mod._SECRETS.pop(console.url, None)
     with pytest.raises(BridgeError) as e:
