@@ -119,13 +119,15 @@ def test_loop_is_detected(eng):
 def test_cancel_stops_before_the_next_step_and_stops_the_running_job(eng):
     stopped = []
     eng.on_cancel = lambda: stopped.append(True)
+    in_step = threading.Event()
     def slow(step):
+        in_step.set()
         time.sleep(0.6)
         return {"ok": True}
     eng.agents = {"check_pc": slow}
     eng.plan_fn = lambda goal, ctx: [{"tool": "check_pc", "check": c} for c in ("disk", "network", "memory", "cpu")]
     mid = M.start("check everything slowly")
-    time.sleep(0.3)
+    assert in_step.wait(5)                                         # the first step is really running (not a fixed 0.3 s)
     assert M.cancel(mid) and stopped == [True]
     deadline = time.time() + 10
     while M.load(mid)["status"] in ("queued", "running") and time.time() < deadline:
@@ -348,7 +350,9 @@ def test_a_cancelled_mission_frees_the_pc_lock(eng):
     eng.agents = {"check_pc": lambda s: (time.sleep(0.4), {"ok": True})[1]}
     eng.plan_fn = lambda goal, ctx: [{"tool": "check_pc", "check": c} for c in ("disk", "network", "memory", "cpu")]
     mid = M.start("check everything slowly")
-    time.sleep(0.2)
+    deadline = time.time() + 5                                     # wait for the real condition (the worker took the lock), not a fixed 0.2 s
+    while not eng.lock_path.exists() and time.time() < deadline:
+        time.sleep(0.02)
     assert eng.lock_path.exists()
     assert M.cancel(mid)
     assert _wait_status(mid)["status"] == "cancelled"
