@@ -3,6 +3,9 @@
   "cooldown_seconds": 60,
   "providers": [
     {"name": "dahl", "base_url": "https://inference.dahl.global/v1", "enabled": true, "key": "from_request"},
+    {"name": "claude", "api": "anthropic", "preferred": true, "enabled": true, "base_url": "https://api.anthropic.com", "key_file": "claude.key",
+     "model": "claude-sonnet-5-5", "effort": "medium", "max_tokens_cap": 4096, "expires": "2026-10-31", "workspace_id": "wrkspc_016a2Nvdk5SmQsdF8qYKvTtR",
+     "_note": "Owner exception (2026-10-22): the Anthropic API credit is used for the planner until 2026-10-31, after which this entry is dropped by load_providers and Dahl answers alone. Plain chat calls only (no streaming, tools, images or response_format: those go to Dahl). Asked first; the redaction runs before it and placeholders are restored after. Token cap per request: max_tokens_cap. Billing past the credit goes to the owner's card, so the owner's stop is $90 of org spend."},
     {"name": "groq", "base_url": "https://api.groq.com/openai/v1", "enabled": true, "key_file": "providers/groq.key", "model": "openai/gpt-oss-120b",
      "_note": "Owner's first fallback (2026-10-16). Inactive until D:\\jarvis-secrets\\providers\\groq.key exists (skipped as 'no key file'). Base-plan limits on Groq's docs (2026-10-16): 30 requests/min, 1,000/day, 8K tokens/min for this model; over the limit Groq answers 429 (the gateway then moves on), it does not bill."},
     {"name": "openrouter", "base_url": "https://openrouter.ai/api/v1", "enabled": false, "key_file": "providers/openrouter.key", "model": ""},
