@@ -19,7 +19,7 @@ Note for deployment: the SAFETY_COMPONENTS change is in the repo only. The kerne
 ## Not done in P1
 
 - Step 1: registry fields are defined by the gate but not populated for any entry.
-- Step 4: the rest of the supervisor (manifest, health, Windows Job Object, systemd rendering). Acceptance "starting the app launches one process tree; killing the shell leaves zero orphans" is untested.
+- Step 4 is now done except wiring the real JARVIS/N.E.K.O components into a manifest (see the update below).
 - Step 6: audit record with component version and sha256 (touches the live kernel audit chain; needs care and a deploy).
 - Step 7: converting the neko-tauri submodule to a subtree.
 
@@ -31,3 +31,7 @@ Note for deployment: the SAFETY_COMPONENTS change is in the repo only. The kerne
 ## Credit
 
 SDK builder spend recorded: $0.15 of the 2026-10-31 exception (cap on this tool $75; owner stop at $90 org spend including other usage).
+
+## Update 2026-10-22 (later): supervisor built
+
+`jarvis/supervisor/` now has manifest.py (validated: loopback/allowed binds only, no secret-looking env, dependency order, cycle check), health.py (tcp/http against the component's own bind, no proxy, no redirects), jobobject.py (Windows Job Object with KILL_ON_JOB_CLOSE; POSIX uses a session per child), core.py (start in order, wait healthy, per-boot token file path passed as env, never the token), systemd.py (hardened unit text only; nothing installed). 29 supervisor tests pass, including the acceptance checks: a 0.0.0.0 bind is refused, and hard-killing the supervisor process leaves zero surviving children (checked by process listing). Not yet done: a real manifest for the actual stack (neko-start.ps1 still launches it), and the POSIX fallback only stops children on a clean stop (no kernel-level guarantee like the Job Object).
