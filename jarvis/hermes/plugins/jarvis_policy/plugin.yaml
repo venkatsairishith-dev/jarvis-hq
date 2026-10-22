@@ -1,0 +1,5 @@
+name: jarvis_policy
+version: 0.1.0
+description: "JARVIS policy: every Hermes tool call is classified by the JARVIS kernel before it runs (block, ask the owner, or allow). Fails closed."
+provides_hooks:
+  - pre_tool_call
