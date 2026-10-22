@@ -1105,6 +1105,23 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 except Killed:
                     code, reply = 503, {"status": "refused", "reason": "kill switch is on"}
                 return self._json(code, reply)
+            if self.path.rstrip("/") == "/v1/jarvis/policy":
+                # Classify only (plan P2 step 4, the Hermes jarvis_policy plugin): the kernel's own decision for one action, with the
+                # lane and the requester taken from the token, never from the body. Nothing is run, no approval and no job is created.
+                try:
+                    n = int(self.headers.get("Content-Length", "0"))
+                    if n <= 0 or n > MAX_BODY:
+                        return self._json(413, {"status": "refused", "reason": "bad size"})
+                    body = json.loads(self.rfile.read(n))
+                    if not isinstance(body, dict):
+                        raise ValueError
+                except (ValueError, OSError):
+                    return self._json(400, {"status": "refused", "reason": "bad request"})
+                from . import policy as _policy
+                p = body.get("params") if isinstance(body.get("params"), dict) else {}
+                d = _policy.decide(_policy.Action(str(body.get("tool", ""))[:40], str(body.get("op", ""))[:40], str(body.get("target", ""))[:400],
+                                                  p, lane, bool(body.get("untrusted")), requester=agent))
+                return self._json(200, {"status": "ok", "level": d.name, "reason": d.reason[:200]})
             if self.path.rstrip("/") == "/v1/jarvis/actions":
                 try:
                     n = int(self.headers.get("Content-Length", "0"))
