@@ -31,7 +31,7 @@
      "priority": 15, "timeout_s": 180, "default_model": "gpt-5.4-nano", "model_pattern": "^(gpt-5\\.4-nano|gemini-3\\.5-flash-lite)$",
      "_note": "Owner decision 2026-10-09: Puter for the lab lane (Kaggle parked). Cloud models (Puter, then OpenAI or Google): public lane only, never private data. The key is the owner's Puter account token (whole-account scope): keep it in secrets only. Free allowance is undocumented; cheap models only. Measured 2026-10-09: every model returns HTTP 402 subscription_required (the free credits cover Puter apps in the browser, not the API), so it stays off: no paid plans."},
     {"name": "openrouter-public", "lane": "public", "base_url": "https://openrouter.ai/api/v1", "key_file": "providers/openrouter.key", "models": ["research"], "paid": false, "enabled": false,
-     "default_model": "apodex/apodex-1.1-mini:free", "model_pattern": ":free$"}
+     "default_model": "default", "model_pattern": ":free$"}
   ]
 }
 

@@ -1,5 +1,7 @@
 # 05 Operations: Oracle, cost, storage, secrets, hand-over
 
+> **Stale-section notice (2026-10-22):** sections written on 2026-10-07 to 2026-10-09 (Oracle state, storage, router and provider notes) predate the 2026-10-18 remediation and the 2026-10-22 P0 checks. Re-verify against `D:\jarvis\outputs\P0b_9ROUTER_VM_2026-10-22.md` before relying on them: for example, the VM is 2 CPU / ~11 GiB, OmniRoute 3.8.51 serves port 20128, and no 9router is installed on hermes-agent-vm.
+
 ## Oracle
 - Region ap-hyderabad-1, one compartment (name in keys.json), Pay As You Go account used only inside Always Free.
 - Free allowance (Oracle docs and community thread, 2026-10-07): 3,000 OCPU-hours and 18,000 GB-hours of Ampere A1 per month on a paid tenancy (4 OCPU / 24 GB), 200 GB block plus boot storage in total, 5 volume backups, 2 VCNs on Always Free tenancies, 10 TB outbound per month. Not confirmed in the console for this tenancy.
