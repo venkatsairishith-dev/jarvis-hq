@@ -1,7 +1,7 @@
 # The owner's 21 handwritten items: where each one stands
 
-Updated 2026-10-23 (cloud session) from branch `claude/implementation-plan-designs-00v4r6` at the integration build's second
-batch. The full design for every item is in `research-2026-10-22/JARVIS_FULL_INTEGRATION_PLAN.md`; every file is explained in
+Updated 2026-10-23 (cloud session) from branch `claude/implementation-plan-designs-00v4r6` after the second kernel deploy
+(audit fields and the Hermes policy endpoint are live on the VM). The full design for every item is in `research-2026-10-22/JARVIS_FULL_INTEGRATION_PLAN.md`; every file is explained in
 `FILE_MAP.md`. Update this page when an item moves.
 
 | Status | Meaning |
@@ -18,7 +18,7 @@ batch. The full design for every item is in `research-2026-10-22/JARVIS_FULL_INT
 | 2 | Can go through any pages | PARTIAL | Sandboxed browser and signed-in Chrome lanes; banks and wallets always refused. Python egress proxy **BUILT** (`jarvis/egress/proxy.py`), Smokescreen still live | Switch `config/egress.json` to the Python proxy; CDP relay; taint flag (P4) |
 | 3 | Human-like, interactive, explaining | PARTIAL | N.E.K.O companion, question cards for unclear requests | Narration from real run events, explanatory mode, barge-in (P8) |
 | 4 | Windows widget and tray icon | PARTIAL | Neko icon widget with states; Tauri shell imported as a subtree (`jarvis/desktop/shell/`) | Tray, global push-to-talk, single instance (P8) |
-| 5 | "Find folder X"; learn a new task and keep it as a skill | PARTIAL | File search and undoable file operations **BUILT** (`jarvis/node/jarvis_node/filesearch.py`, `fileops.py`); routine recipes **BUILT** (`jarvis/routines/recipe.py`); learning-loop layers 1-3 and the skill gate exist | Decider tools for find/create/organise (P4 step 2); skill curator and trace recorder (P5, builder batch 3) |
+| 5 | "Find folder X"; learn a new task and keep it as a skill | PARTIAL | File search and undoable file operations **BUILT** (`jarvis/node/jarvis_node/filesearch.py`, `fileops.py`); routine recipes **BUILT** (`jarvis/routines/recipe.py`); Hermes's skill safety scanner vendored (`skills_guard.py`, MIT); learning-loop layers 1-3 and the skill gate exist; skill curator (owner promotion checked against the audit log) merged on the laptop | Decider tools for find/create/organise (P4 step 2); trace recorder (P5) |
 | 6 | Research a project, plan it, hand it to a coding agent | PARTIAL | Research plugin with checked citations, main_agent planner, kernel lab dispatch | Rebuild the lab host (P2); OpenCode coding agent and worktree manager (P6) |
 | 7 | Test by spawning multiple agents | TODO | Benchmark areas cover races and restarts | Worktree-per-worker, read-only tests, reviewer agent (P6) |
 | 8 | What Clawdbot (OpenClaw) / Grokbot (xAI Grok Bot) do | PARTIAL | Kernel safety (tiers, PIN, audit, kill switch) is ahead of both; routines and Gmail/Calendar drafts **BUILT** | Phone channel and approvals, morning brief, chief-of-staff coordinator (P9) |
@@ -31,14 +31,14 @@ batch. The full design for every item is in `research-2026-10-22/JARVIS_FULL_INT
 | 16 | Explain how it works, each model, each file | DONE | `FILE_MAP.md` (436 files, all described), `MODELS.md`, `HOW_IT_WORKS.md`; `make_docs.py --check` keeps them current | Keep regenerating |
 | 17 | Step-by-step guide on how to use it | DONE | `HOW_TO_USE.md` | Update as features switch on |
 | 18 | Coordinate with a coding CLI | PARTIAL | Byte-for-byte Claude Code passthrough **BUILT** (`router/passthrough.py`); the Agent SDK builder is running on the API credit | OpenCode driven over ACP with kernel approvals (P6) |
-| 19 | Switch API providers by itself and in the CLI | BUILT | Combos, key pools, quotas, circuit breaker and $0 budgets in `jarvis_kernel/router/` | Owner "switch to X" command and CLI endpoints (P3) |
+| 19 | Switch API providers by itself and in the CLI | BUILT | Combos, key pools, quotas, circuit breaker, $0 budgets and a lane-safe response cache in `jarvis_kernel/router/` (on the VM, not wired in yet) | Owner "switch to X" command and CLI endpoints (P3) |
 | 20 | Its own VM doing browser research like openmuse | TODO / OWNER | Kernel and Hermes run on the Oracle VM (2 CPU / 11 GiB, within Always Free); the WSL agent computer was lost | Agent desktop on the VM (P2), after the owner checks both instances' shapes against the 2 OCPU / 12 GB free limit |
 | 21 | Everything openmuse can do | BUILT | Page watches, finance CSV, durable task state, PDF forms, Gmail/Calendar drafts (no send path) **BUILT** in `jarvis/muse/` | Scheduler, inbox and UI wiring; browser profiles with takeover; no-network computer (P7) |
 
 ## Waiting on the owner
 
-- Answer the laptop session's three questions: second kernel deploy, vendoring Hermes's `skills_guard.py`, and the Claude planner's
-  expiry date (the Console showed the $100 credit expiring 2026-10-31).
+- The Claude planner stays until 2026-10-31 (the promo credit's end on the Console); the Agent SDK builder is set to 2026-11-05.
+  Check the Console before 31 Oct: spend after the credit ends is billed to the card (within the $50 monthly limit).
 - The live microphone test and "Hey Neko" recordings (`05_OPERATIONS.md`, "Hey Neko" section).
 - Oracle console: the shapes of both instances against the free 2 OCPU / 12 GB total (never touch `hermes-agent-vm-2`).
 - Merging the work into `main` when the phases are done.
