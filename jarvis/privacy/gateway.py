@@ -41,6 +41,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from redactor import Mapping, Redactor, StreamRestorer, restore  # noqa: E402
+import claude_adapter  # noqa: E402  (Claude planner provider; owner exception that expires 2026-10-31)
 
 DEFAULT_UPSTREAM = os.environ.get("JARVIS_PRIVACY_UPSTREAM", "https://inference.dahl.global/v1")
 PASS_HEADERS = ("authorization", "content-type", "accept", "user-agent", "openai-organization", "openai-project")
@@ -346,7 +347,30 @@ def load_providers(path: str = PROVIDERS_FILE, upstream: str | None = None) -> t
     if upstream:
         provs[0] = {**provs[0], "base_url": upstream}
     usable = [provs[0]] + [p for p in provs[1:] if p.get("key_file") and p.get("model")]
+    # An "anthropic" provider marked "preferred" is asked first; the caller's-key provider stays in the chain right behind it as the
+    # fallback. An expired owner exception ("expires") is dropped here, so nothing reaches it after the date.
+    usable = [p for p in usable if p.get("api") != "anthropic" or not claude_adapter.expired(p)]
+    usable.sort(key=lambda p: 0 if (p.get("api") == "anthropic" and p.get("preferred")) else 1)
     return [{**p, "base_url": p["base_url"].rstrip("/")} for p in usable], cool
+
+
+class _Synthetic:
+    """A finished JSON answer shaped like an HTTP response, so the normal answer path restores placeholders in it."""
+
+    status = 200
+
+    def __init__(self, obj: dict) -> None:
+        self._data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.headers = {"Content-Type": "application/json"}
+
+    def read(self) -> bytes:
+        return self._data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc) -> None:
+        return None
 
 
 def read_key(p: dict) -> str:
@@ -390,7 +414,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
     unless the owner sets JARVIS_PRIVACY_REQUIRE_DEEP=0; it is off here only so a test or a bench can drive the handler
     with a stand-in detector that has no model."""
     providers = upstream if isinstance(upstream, list) else [{"name": "upstream", "base_url": upstream.rstrip("/"), "key": "from_request"}]
-    upstream = providers[0]["base_url"]
+    upstream = next((p for p in providers if p.get("api") != "anthropic"), providers[0])["base_url"]   # the caller's-key provider, not Claude
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -503,14 +527,30 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             if raw is not None:
                 headers["Content-Type"] = "application/json"
             # Fallback only for model calls; the first provider always gets the caller's own key and model.
-            chain = providers if (raw is not None and self._path() in ("/chat/completions", "/completions")) else providers[:1]
+            # "first_own" is the provider that gets the caller's own key and model (Dahl); a preferred Claude provider may sit before it.
+            first_own = next((p for p in providers if p.get("api") != "anthropic"), providers[0])
+            chain = providers if (raw is not None and self._path() in ("/chat/completions", "/completions")) else [first_own]
             now = time.time()
-            chain = [chain[0]] + [p for p in chain[1:] if _cooldown.get(p["name"], 0) <= now]
+            chain = [p for p in chain if p is first_own or _cooldown.get(p["name"], 0) <= now]
             tried = []
             for i, prov in enumerate(chain):
                 last = i == len(chain) - 1
                 hdrs, data = dict(headers), raw
-                if i > 0:
+                if prov.get("api") == "anthropic":
+                    key = read_key(prov)
+                    if not key or body is None:
+                        tried.append(f"{prov['name']}: " + ("no key file" if not key else "no chat body"))
+                        continue
+                    try:
+                        answer = claude_adapter.call(prov, key, body, timeout=min(timeout, 120.0))
+                    except claude_adapter.ClaudeUnavailable as e:
+                        _cooldown[prov["name"]] = time.time() + 5.0      # a short pause, so a broken key is not hammered
+                        tried.append(f"{prov['name']}: {e}")
+                        continue
+                    with _lock:
+                        STATS.setdefault("by_provider", {})[prov["name"]] = STATS.setdefault("by_provider", {}).get(prov["name"], 0) + 1
+                    return self._answer(_Synthetic(answer), False, m, prov["name"])
+                if prov is not first_own:
                     key = read_key(prov)
                     if not key:
                         tried.append(f"{prov['name']}: no key file")
@@ -531,7 +571,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                         tried.append(f"{prov['name']}: HTTP {e.code}")
                         e.close()
                         continue
-                    used = [read_key(q) for q in chain[1:i + 1] if q.get("key_file")]   # every fallback key read so far
+                    used = [read_key(q) for q in chain[:i + 1] if q is not first_own and q.get("key_file")]   # every fallback key read so far
                     payload = scrub_keys(e.read(), used)
                     self.send_response(e.code)
                     self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
