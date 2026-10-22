@@ -34,3 +34,13 @@ git subtree pull --prefix=jarvis/desktop/shell --squash https://github.com/Proje
 After an update, check that `LICENSE` is still Apache-2.0 and write the new commit in the table above.
 `jarvis/tools/test_python_deps.py` fails if the two differ. Re-apply the patches in `PATCHES.md` (still in jarvis/third_party/; they apply to jarvis/desktop/shell), and offer them
 upstream as pull requests rather than keeping a fork.
+
+## Hermes Agent (pinned, NOT vendored: a deliberate deviation from the plan, 2026-10-22)
+
+The integration plan (P2 step 4) says to carry Hermes as a pristine subtree. Measured on 2026-10-22: tag `v0.22.2`
+(commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8`, MIT, "Copyright (c) 2025 Nous Research") is **204 MB in 18,605 files**.
+A subtree would add all of that to this repository's history (and to every clone and push), so the pin is recorded here
+instead and Hermes is installed from the tag into its own Python 3.14 venv on the VM or laptop (all 45 runtime
+dependencies carry `python_version >= '3.14'` markers, so it cannot share the 3.11 environment). JARVIS code stays outside
+Hermes, as Hermes plugins under `jarvis/hermes/plugins/` (`jarvis_memory`, `jarvis_policy`), which is what the plan wanted anyway.
+Revisit if the owner prefers the subtree: `git subtree add --prefix=jarvis/third_party/hermes-agent --squash <url> v0.22.2`.
