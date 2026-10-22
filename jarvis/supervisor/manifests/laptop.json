@@ -1,0 +1,16 @@
+{
+  "_note": "Laptop stack as neko-start.ps1 starts it (privacy gateway, local speech, widget, N.E.K.O launcher). Not used yet: neko-start.ps1 remains the launcher until this is run side by side on a quiet machine. Not included: llama-swap, the Jev verdict model, wake word, JARVIS console (started by their own scripts), and the plugin start calls neko-start.ps1 makes after boot.",
+  "components": [
+    {"name": "privacy-gateway", "argv": ["D:/jarvis/tools/privacy-venv/Scripts/python.exe", "jarvis/privacy/gateway.py", "--port", "48950"],
+     "cwd": "D:/jarvis/hq-neko", "bind": {"host": "127.0.0.1", "port": 48950}, "health": {"kind": "tcp", "timeout_s": 60}, "restart": "on-failure"},
+    {"name": "local-speech", "argv": ["D:/jarvis/tools/jarvis-venv/Scripts/python.exe", "jarvis/scripts/local_speech_server.py", "--port", "48930"],
+     "cwd": "D:/jarvis/hq-neko", "bind": {"host": "127.0.0.1", "port": 48930}, "health": {"kind": "tcp", "timeout_s": 60}, "restart": "on-failure"},
+    {"name": "widget", "argv": ["D:/jarvis/tools/neko-venv/Scripts/python.exe", "jarvis/widget/widget_server.py", "--port", "48940"],
+     "cwd": "D:/jarvis/hq-neko", "bind": {"host": "127.0.0.1", "port": 48940}, "health": {"kind": "tcp", "timeout_s": 30}, "restart": "on-failure"},
+    {"name": "neko", "argv": ["D:/jarvis/tools/neko-venv/Scripts/python.exe", "launcher.py"], "cwd": "D:/jarvis/hq-neko",
+     "depends_on": ["privacy-gateway", "local-speech"],
+     "env": {"NEKO_WHISPER_ENDPOINT": "http://127.0.0.1:48930/v1/audio/transcriptions", "NEKO_MONITOR_HOST": "127.0.0.1",
+             "NEKO_AUX_LLM_TIMEOUT_SCALE": "3", "NEKO_AUX_LLM_TOKEN_SCALE": "4", "NEKO_MEMORY_FETCH_TIMEOUT_S": "150", "HF_HUB_DISABLE_TELEMETRY": "1"},
+     "bind": {"host": "127.0.0.1", "port": 48911}, "health": {"kind": "http", "path": "/", "timeout_s": 240}, "restart": "never"}
+  ]
+}
