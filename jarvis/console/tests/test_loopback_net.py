@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import threading
+import types
 import unittest
 import urllib.error
 import urllib.request
@@ -218,3 +219,26 @@ class Callers(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KernelTokenHost(unittest.TestCase):
+    """The kernel client's bearer token only goes to this machine, a Tailscale address or an https host."""
+
+    def test_which_hosts_may_receive_the_token(self):
+        from jarvis_console import kernel_client as K
+        for scheme, host in (("http", "127.0.0.1"), ("http", "localhost"), ("http", "100.125.91.51"), ("http", "100.64.0.1"),
+                             ("http", "100.127.255.254"), ("https", "kernel.example.com"), ("https", "8.8.8.8")):
+            self.assertTrue(K._token_safe(scheme, host), (scheme, host))
+        for scheme, host in (("http", "8.8.8.8"), ("http", "kernel.example.com"), ("http", "100.128.0.1"), ("http", "100.63.255.255"),
+                             ("http", "192.168.1.5"), ("http", "10.0.0.2")):
+            self.assertFalse(K._token_safe(scheme, host), (scheme, host))
+
+    def test_a_plain_http_public_kernel_address_is_refused_before_any_socket(self):
+        from unittest import mock
+
+        from jarvis_console import kernel_client as K
+        cfg = types.SimpleNamespace(kernel_url="http://203.0.113.9:8790", token_file="x")
+        with mock.patch("socket.create_connection", side_effect=AssertionError("socket opened")):
+            with self.assertRaises(K.KernelError) as e:
+                K.Kernel(cfg)._open(urllib.request.Request("http://203.0.113.9:8790/x"), 5)
+        self.assertIn("token was not sent", str(e.exception))

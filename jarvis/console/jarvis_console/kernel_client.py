@@ -3,6 +3,7 @@
 The token is never returned to the browser, logged or put in an error message. A missing token, an unreachable server
 or a refused request each become a clear, typed error the UI can show.
 """
+import ipaddress
 import json
 import os
 import time
@@ -17,6 +18,20 @@ import loopback_net  # noqa: E402  loopback only, no proxy, no redirect (complet
 PREFIX = "/v1/jarvis/owner/"
 
 
+
+_TAILSCALE = ipaddress.ip_network("100.64.0.0/10")
+
+
+def _token_safe(scheme: str, host: str) -> bool:
+    """May a bearer token go to this host? Loopback, a Tailscale address, or any host over https."""
+    if scheme == "https" or host in loopback_net.LOOPBACK_HOSTS:
+        return True
+    try:
+        return ipaddress.ip_address(host) in _TAILSCALE
+    except ValueError:
+        return False
+
+
 class KernelError(Exception):
     def __init__(self, msg, code=502, body=None):
         super().__init__(msg)
@@ -28,8 +43,13 @@ class Kernel:
         self.cfg = cfg
 
     def _open(self, req, timeout):
-        """Loopback rules (no proxy, no redirect, no credentials in the address) plus exactly the configured kernel host, nothing else."""
-        host = (urllib.parse.urlsplit(self.cfg.kernel_url).hostname or "").lower()
+        """Loopback rules (no proxy, no redirect, no credentials in the address) plus exactly the configured kernel host, nothing else.
+        The bearer token travels in this request, so that host must be this machine, a Tailscale address (100.64.0.0/10, an encrypted
+        tunnel) or reached over https; any other plain-http host is refused before a socket is opened."""
+        parts = urllib.parse.urlsplit(self.cfg.kernel_url)
+        host = (parts.hostname or "").lower()
+        if host and not _token_safe(parts.scheme, host):
+            raise KernelError("the kernel address is not on this machine, not a Tailscale address and not https: the token was not sent", 502)
         return loopback_net.urlopen(req, timeout=timeout, allow_hosts=(host,) if host else ())
 
     def _token(self):
