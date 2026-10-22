@@ -15,8 +15,8 @@ WT = Path(r"D:\jarvis\hq-neko-sdk")
 
 
 def test_refused_after_expiry_and_for_other_models_and_over_cap():
-    assert rb.check_allowed(dt.date(2026, 10, 31), "claude-sonnet-5-5", 0, 5) is None
-    assert "expired" in rb.check_allowed(dt.date(2026, 11, 1), "claude-sonnet-5-5", 0, 5)
+    assert rb.check_allowed(dt.date(2026, 11, 5), "claude-sonnet-5-5", 0, 5) is None
+    assert "expired" in rb.check_allowed(dt.date(2026, 11, 6), "claude-sonnet-5-5", 0, 5)
     assert "not allowed" in rb.check_allowed(dt.date(2026, 10, 25), "claude-opus-5-5", 0, 5)
     assert rb.check_allowed(dt.date(2026, 10, 25), "claude-haiku-5-5", 0, 5) is None
     assert "cap" in rb.check_allowed(dt.date(2026, 10, 25), "claude-sonnet-5-5", 72.0, 5)
@@ -44,3 +44,17 @@ def test_dangerous_bash_is_denied_and_tests_are_allowed():
 def test_web_tools_denied_and_key_scrubbed():
     assert rb.deny_reason("WebFetch", {"url": "http://x"}, WT)
     assert "sk-ant-SECRET" not in rb.scrub("token sk-ant-SECRET here", "sk-ant-SECRET")
+
+
+def test_parallel_runs_reserve_and_sum_without_overwriting(tmp_path, monkeypatch):
+    monkeypatch.setattr(rb, "LEDGER", tmp_path / "old.json")
+    monkeypatch.setattr(rb, "LEDGER_DIR", tmp_path / "spend")
+    (tmp_path / "old.json").write_text('[{"cost_usd": 0.15}]', encoding="utf-8")
+    a = rb.reserve("a.md", "claude-sonnet-5-5", 3.0)
+    b = rb.reserve("b.md", "claude-sonnet-5-5", 4.0)
+    assert a != b
+    assert abs(rb.read_spent() - 7.15) < 1e-9                    # running builders count their reserved budget
+    rb.record_spend(a, 0.5, 9)
+    assert abs(rb.read_spent() - 4.65) < 1e-9                    # a finished one counts its real cost
+    (tmp_path / "spend" / "broken.json").write_text("{not json", encoding="utf-8")
+    assert abs(rb.read_spent() - 9.65) < 1e-9                    # an unreadable row counts as 5.0, never zero
