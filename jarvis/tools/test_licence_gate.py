@@ -49,3 +49,13 @@ def test_main_exit_codes(tmp_path):
     reg.write_text(json.dumps([GOOD, dict(GOOD, name="x", licence_spdx="AGPL-3.0-only")]), encoding="utf-8")
     assert gate.main(["--registry", str(reg), "--profile", "shared"]) == 1
     assert gate.main(["--registry", str(reg), "--profile", "personal"]) == 0
+
+
+def test_populated_spdx_ids_are_well_formed_and_agree_with_the_free_text_licence():
+    entries = json.loads((HERE / "registry.json").read_text(encoding="utf-8"))
+    populated = [e for e in entries if e.get("licence_spdx")]
+    assert len(populated) >= 30
+    for e in populated:
+        ids = gate._spdx_ids(e["licence_spdx"])
+        assert ids and all(gate.SPDX_TOKEN.match(i) for i in ids), e["name"]
+        assert e["licence_spdx"].lower() == str(e["licence"]).strip().lower(), e["name"]    # only copied from an already-clean value
