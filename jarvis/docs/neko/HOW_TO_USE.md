@@ -1,7 +1,8 @@
 # How to use JARVIS, step by step
 
-For the owner, on the Windows laptop. Everything here is what the repo does **today** (2026-10-22); items marked *not yet* are in
-the build plan (`research-2026-10-22/JARVIS_FULL_INTEGRATION_PLAN.md`). Technical detail lives in `05_OPERATIONS.md`, every file is
+For the owner, on the Windows laptop. Everything here is what the repo does **today** (2026-10-23); items marked *not yet* are in
+the build plan (`research-2026-10-22/JARVIS_FULL_INTEGRATION_PLAN.md`). How the parts fit together: `HOW_IT_WORKS.md`. Where each
+of your 21 handwritten items stands: `OWNER_NOTES_STATUS.md`. Technical detail lives in `05_OPERATIONS.md`, every file is
 explained in `FILE_MAP.md`, every model in `MODELS.md`.
 
 ## 1. What runs where
@@ -76,7 +77,8 @@ the address that becomes a sign-in cookie. Typing http://127.0.0.1:8799 by hand 
 
 - Decks, reports and agent outputs: `D:\jarvis\outputs\` (never overwritten).
 - Repairs keep a backup in `<data>\repair-backups\<id>`; `repair restore <id>` undoes one.
-- *Arriving now:* find, create, move and organise files with an undo journal (plan P4; merged on the laptop, not yet released).
+- *Built, not switched on yet:* find, create, move and organise files with an undo journal (`jarvis/node/jarvis_node/fileops.py`,
+  `filesearch.py`). They become voice/typed commands when the decider gets its find/create/organise tools (plan P4 step 2).
 
 ## 9. Is everything healthy?
 
@@ -96,7 +98,14 @@ the address that becomes a sign-in cookie. Typing http://127.0.0.1:8799 by hand 
 | Something changed that should not have | The audit trail in the console shows every action and approval; repairs can be restored (section 8) |
 | The kernel on the VM misbehaves after an update | Its previous copy is kept as `~/jarvis/kernel.old.<ts>`; the rollback steps are in `05_OPERATIONS.md` |
 
-## 11. What is being built next
+## 11. Built but not switched on yet
+
+These are merged with passing tests and become usable as the plan wires them in (status per item: `OWNER_NOTES_STATUS.md`):
+page watches ("tell me when this page changes"), finance CSV summaries, PDF form filling after your approval, Gmail and Calendar
+drafts (never sent by JARVIS), routine recipes, the router with automatic provider fallback, the Python egress proxy, and the
+supervisor that will start and stop everything as one.
+
+## 12. What is being built next
 
 See the plan's phases P1 to P10: one supervisor for all processes, the Hermes safety hook, the router inside JARVIS, PC power with
 undo and a PIN-gated admin broker, learned skills, coding agents with tested pushes, the openmuse features (watches, PDF forms,
