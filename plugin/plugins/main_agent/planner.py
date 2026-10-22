@@ -208,7 +208,7 @@ def now_line() -> str:
 
 
 def planner_messages(task: str, caps: list[Capability], max_steps: int, mode: str = DEFAULT_MODE,
-                     memory: str = "") -> list[dict[str, str]]:
+                     memory: str = "", hints: str = "") -> list[dict[str, str]]:
     """The planning prompt. `memory` is an optional block from memory_context.planner_memory (only ever built for a verified
     local planner model): background data between MEMORY-DATA markers that goes in the user turn, never in the system turn,
     and it cannot widen the catalogue: parse_plan still accepts only what is listed below."""
@@ -232,6 +232,8 @@ def planner_messages(task: str, caps: list[Capability], max_steps: int, mode: st
         '{"summary": "cannot", "steps": []}.\n\n' + MODE_GUIDANCE[normalize_mode(mode)] + "\n\n" + now_line() +
         " A \"think\" step is told this too, so a question about the date or the time is one think step.\n\nCatalogue:\n" + "\n".join(lines)
     )
+    if hints:                                          # from the owner's own earlier runs: plan shapes only (episodes.Episodes.hints)
+        system += "\n\n" + hints
     request = strip_invisible(str(task))[:2000]        # bidi / zero-width / tag characters carry no request, only hidden instructions
     if memory:
         system += ("\n\nThe user turn may start with background from the owner's memory, between two MEMORY-DATA markers. It is "

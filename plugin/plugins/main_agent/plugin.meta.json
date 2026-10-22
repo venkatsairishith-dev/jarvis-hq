@@ -110,6 +110,85 @@
     {
       "auto_start": false,
       "description": {
+        "$i18n": "entry.forget_learning.description",
+        "default": "Erase the episode log and its salt. Owner only (a panel button with a confirmation)."
+      },
+      "event_key": "main_agent.forget_learning",
+      "event_type": "plugin_entry",
+      "id": "forget_learning",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "forgotten"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "forgotten": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "forgotten"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.forget_learning.name",
+        "default": "Forget everything learned from use"
+      },
+      "return_message": "",
+      "timeout": 10
+    },
+    {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.learning_stats.description",
+        "default": "Success rate overall and per plan shape and helper, the commonest error classes, whether the latest tasks do better than the ones before, and the helpers that fail more than they work. Counts and classes only: no task text is ever stored."
+      },
+      "event_key": "main_agent.learning_stats",
+      "event_type": "plugin_entry",
+      "id": "learning_stats",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "episodes",
+        "success_rate",
+        "trend"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "episodes": {},
+          "success_rate": {},
+          "trend": {}
+        },
+        "required": [
+          "episodes",
+          "success_rate",
+          "trend"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.learning_stats.name",
+        "default": "What the main agent has learned from use"
+      },
+      "return_message": "",
+      "timeout": 10
+    },
+    {
+      "auto_start": false,
+      "description": {
         "$i18n": "entry.pending_inputs.description",
         "default": "The questions held tasks are waiting on: the question and its fields (never any answer or secret)."
       },
@@ -421,6 +500,8 @@
   "entry_methods": {
     "answer_input": "answer_input",
     "cancel_input": "cancel_input",
+    "forget_learning": "forget_learning",
+    "learning_stats": "learning_stats",
     "pending_inputs": "pending_inputs",
     "plan_task": "plan_task",
     "resume_run": "resume_run",
@@ -544,6 +625,99 @@
         "priority": 0
       },
       "timeout": 20
+    },
+    "main_agent.forget_learning": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.forget_learning.description",
+        "default": "Erase the episode log and its salt. Owner only (a panel button with a confirmation)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "forget_learning",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "forgotten"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "forgotten": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "forgotten"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.forget_learning.name",
+        "default": "Forget everything learned from use"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
+    "main_agent.learning_stats": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.learning_stats.description",
+        "default": "Success rate overall and per plan shape and helper, the commonest error classes, whether the latest tasks do better than the ones before, and the helpers that fail more than they work. Counts and classes only: no task text is ever stored."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "learning_stats",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "episodes",
+        "success_rate",
+        "trend"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "episodes": {},
+          "success_rate": {},
+          "trend": {}
+        },
+        "required": [
+          "episodes",
+          "success_rate",
+          "trend"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.learning_stats.name",
+        "default": "What the main agent has learned from use"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
     },
     "main_agent.pending_inputs": {
       "auto_start": false,
@@ -1064,6 +1238,99 @@
       },
       "timeout": 20
     },
+    "main_agent:plugin_entry:forget_learning": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.forget_learning.description",
+        "default": "Erase the episode log and its salt. Owner only (a panel button with a confirmation)."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "forget_learning",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "state",
+        "forgotten"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "forgotten": {},
+          "state": {}
+        },
+        "required": [
+          "state",
+          "forgotten"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.forget_learning.name",
+        "default": "Forget everything learned from use"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
+    "main_agent:plugin_entry:learning_stats": {
+      "auto_start": false,
+      "description": {
+        "$i18n": "entry.learning_stats.description",
+        "default": "Success rate overall and per plan shape and helper, the commonest error classes, whether the latest tasks do better than the ones before, and the helpers that fail more than they work. Counts and classes only: no task text is ever stored."
+      },
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "learning_stats",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "episodes",
+        "success_rate",
+        "trend"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "episodes": {},
+          "success_rate": {},
+          "trend": {}
+        },
+        "required": [
+          "episodes",
+          "success_rate",
+          "trend"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": {
+        "$i18n": "entry.learning_stats.name",
+        "default": "What the main agent has learned from use"
+      },
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 10
+    },
     "main_agent:plugin_entry:pending_inputs": {
       "auto_start": false,
       "description": {
@@ -1418,7 +1685,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 485758,
+  "source_bytes": 514083,
   "source_files": [
     ".gitignore",
     "README.md",
@@ -1426,6 +1693,7 @@
     "__init__.py",
     "config.example.toml",
     "config.schema.json",
+    "episodes.py",
     "executor.py",
     "input_request.py",
     "memory_context.py",
@@ -1438,6 +1706,7 @@
     "tests/test_claim_races.py",
     "tests/test_computer_step.py",
     "tests/test_dashboard.py",
+    "tests/test_episodes.py",
     "tests/test_executor.py",
     "tests/test_helper_error_cleaning.py",
     "tests/test_hostile_results.py",
@@ -1458,5 +1727,5 @@
     "tests/test_untrusted_content.py",
     "ui/panel.tsx"
   ],
-  "source_sha256": "0ba999104e03ac1fa61569892811d2aef287af71d0603c2146906731e284172c"
+  "source_sha256": "6dba36c0060f806bbc09bad2465d08d49df76e3edb23daf17c4706bac61fe487"
 }

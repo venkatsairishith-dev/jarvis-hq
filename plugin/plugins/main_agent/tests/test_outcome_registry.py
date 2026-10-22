@@ -154,6 +154,8 @@ EXAMPLES.update({
 
 EXAMPLES.update({
     "main_agent:pending_inputs": ([{"count": 0, "requests": []}], [{"error": "x"}]),
+    "main_agent:learning_stats": ([{"episodes": 0, "success_rate": None}], [{"error": "x"}]),
+    "main_agent:forget_learning": ([{"state": "forgotten", "forgotten": 3}], [{"error": "x"}, {}]),
     "main_agent:answer_input": ([{"state": "answered", "run_id": "r1", "request_id": "q-1", "message": "m"}],
                                 [{"state": "needs_input", "run_id": "r1", "message": "busy"}, {"error": "expired"}, {}]),
     "main_agent:cancel_input": ([{"state": "cancelled", "run_id": "r1", "request_id": "q-1"}], [{"error": "not waiting"}, {}]),

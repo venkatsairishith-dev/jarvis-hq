@@ -122,6 +122,8 @@ _reg("main_agent", "run_status plan_task", kind="read", free_status=True)       
 _reg("main_agent", "run_task", kind="start", shape=("run_id",), words=(("answered", "success"),))   # a widget/voice answer resumes a held run
 _reg("main_agent", "resume_run", kind="start", shape=("run_id",))
 _reg("main_agent", "pending_inputs", kind="read")
+_reg("main_agent", "learning_stats", kind="read")
+_reg("main_agent", "forget_learning", kind="stop", words=(("forgotten", "success"),))
 _reg("main_agent", "answer_input", kind="start", shape=("run_id",), words=(("answered", "success"),))
 _reg("main_agent", "cancel_input", kind="stop", shape=("run_id",), words=(("cancelled", "success"),))
 _reg("main_agent", "stop_task", kind="stop", shape=("message", "requested"))

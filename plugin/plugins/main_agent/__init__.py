@@ -37,6 +37,7 @@ from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko
 
 from . import input_request as ir
 from . import outcome
+from .episodes import Episodes, error_class, shape_of
 from .executor import (
     NEEDS_YOU,
     StepCancelled,
@@ -481,7 +482,12 @@ class MainAgentPlugin(NekoPluginBase):
     async def _make_plan(self, task: str, caps: list[Capability], mode: str = DEFAULT_MODE, memory: str = "") -> Plan:
         max_steps = _int_env("MAIN_AGENT_MAX_STEPS", 6, 1, 10)
         caps = filter_for_task(caps, task)        # no browser helper unless the request points at the web (also validated below)
-        messages = planner_messages(task, caps, max_steps, mode, memory)
+        allowed = {(f"plugin:{c.ref}" if c.kind == "plugin" else c.kind) for c in caps}
+        try:
+            hints = self._ep().hints(task, allowed)
+        except Exception:                                 # learning is a help, never a dependency of planning
+            hints = ""
+        messages = planner_messages(task, caps, max_steps, mode, memory, hints)
         text = await self._llm(messages, max_tokens=1500, timeout=120.0, local_only=bool(memory))
         try:
             return self._tag_memory(parse_plan(text, caps, max_steps), memory)
@@ -932,10 +938,39 @@ class MainAgentPlugin(NekoPluginBase):
         except Exception as exc:           # the marker only informs the widget; losing it must never stop the work
             self.logger.warning("main_agent could not write its planning marker: {}", type(exc).__name__)
 
+    def _ep(self) -> Episodes:
+        """The episode log, in a learning folder next to the run files (owner-only; see episodes.py for what is and is not kept)."""
+        ep = self.__dict__.get("_episodes")
+        if ep is None:
+            ep = self.__dict__["_episodes"] = Episodes(self._store.dir.parent / "main_agent_learning")
+        return ep
+
+    def _record_episode(self, run: dict[str, Any], plan: Plan | None, planning_error: str = "") -> None:
+        """One line per finished task. A held task is recorded when it finishes, not while it waits. Never raises."""
+        try:
+            state = str(run.get("state") or "")
+            if state in ("held", "planning", "running", ""):
+                return
+            results = run.get("results") or {}
+            steps = []
+            for st in (plan.steps if plan else []):
+                r = results.get(st.id) or {}
+                out = str(r.get("outcome") or "not_executed")
+                steps.append({"ref": shape_of(st), "out": out, "err": "" if out == "success" else error_class(r.get("error"))})
+            started, finished = float(run.get("started") or 0), float(run.get("finished") or time.time())
+            self._ep().record(run_id=run.get("run_id", ""), task=str(run.get("task") or ""), source=str(run.get("source") or ""),
+                              mode=str(run.get("mode") or ""), state=state, shape=[x["ref"] for x in steps], steps=steps,
+                              seconds=max(0.0, finished - started) if started else 0.0, asked=bool(run.get("pending_input")),
+                              held_untrusted=bool(run.get("untrusted_hold")), planning_error=planning_error)
+        except Exception as exc:
+            self.logger.warning("main_agent could not record an episode: {}", type(exc).__name__)
+
     def _end_unstarted(self, run: dict[str, Any], state: str, message: str, speak: bool) -> None:
         """A run that never started a step ends: the marker says how (the widget and the icon read it), no run file is
         kept (there is nothing to resume), and the claim is freed."""
         run.update(state=state, error=str(message)[:300], running=[], finished=time.time())
+        if state == "failed":                              # a plan that never came: the planner's reliability is part of what is learned
+            self._record_episode(run, None, planning_error=str(message))
         self._mark(run)
         self._runs.pop(run["run_id"], None)
         self._release(run["run_id"])
@@ -1151,6 +1186,7 @@ class MainAgentPlugin(NekoPluginBase):
             run["running"] = []
             run["finished"] = time.time()
             self._persist(run)
+            self._record_episode(run, plan)
             self._release(rid)                 # only this run's own claim
         self._say(body, run)
 
@@ -1364,6 +1400,33 @@ class MainAgentPlugin(NekoPluginBase):
         for rid, run in self._open_requests():
             rows.append({"run_id": rid, "task": clean_untrusted(run.get("task", ""), 200), "request": ir.public_view(run["pending_input"])})
         return Ok({"count": len(rows), "requests": rows})
+
+    @ui.action(id="learning_stats", label=tr("actions.learning_stats.label", default="What it has learned"), refresh_context=False)
+    @plugin_entry(
+        id="learning_stats",
+        name=tr("entry.learning_stats.name", default="What the main agent has learned from use"),
+        description=tr("entry.learning_stats.description", default=(
+            "Success rate overall and per plan shape and helper, the commonest error classes, whether the latest tasks do better than the "
+            "ones before, and the helpers that fail more than they work. Counts and classes only: no task text is ever stored.")),
+        input_schema={"type": "object", "properties": {}},
+        timeout=10,
+        llm_result_fields=["episodes", "success_rate", "trend"],
+    )
+    async def learning_stats(self, **_):
+        return Ok(self._ep().stats())
+
+    @ui.action(id="forget_learning", label=tr("actions.forget_learning.label", default="Forget what it learned"), tone="danger",
+               refresh_context=True, confirm=tr("actions.forget_learning.confirm", default="Erase the whole episode log? The agent keeps working but starts learning again from nothing."))
+    @plugin_entry(
+        id="forget_learning",
+        name=tr("entry.forget_learning.name", default="Forget everything learned from use"),
+        description=tr("entry.forget_learning.description", default="Erase the episode log and its salt. Owner only (a panel button with a confirmation)."),
+        input_schema={"type": "object", "properties": {}},
+        timeout=10,
+        llm_result_fields=["state", "forgotten"],
+    )
+    async def forget_learning(self, **_):
+        return Ok({"state": "forgotten", "forgotten": self._ep().forget(), "message": "The episode log is erased."})
 
     @ui.action(id="answer_input", label=tr("actions.answer_input.label", default="Answer"), refresh_context=True)
     @plugin_entry(

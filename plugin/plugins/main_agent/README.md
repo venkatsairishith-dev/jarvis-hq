@@ -25,6 +25,8 @@ voice -> N.E.K.O -> run_task(task)
 | `pending_inputs()` | Questions held tasks are waiting on (newest first): run id, task and the question's public form (field names, labels, options; never a value). The chat polls this. |
 | `answer_input(run_id, request_id, values)` | Answer one question. Checked against that question (required fields, choices, lengths); stale, expired, repeated or wrong-run answers are refused; then the held step reruns from its checkpoint with the answers. Secret fields stay in memory only, are handed to that one step and dropped. A spoken "the answer is …" from the widget takes the same path (never for secret questions). |
 | `cancel_input(run_id, request_id)` | Decline a question; the run is cancelled. |
+| `learning_stats()` | What the agent has learned from its own runs: success rate overall, per plan shape and per helper, the commonest error classes, whether the latest tasks beat the ones before, and helpers that fail more than they work. Counts and classes only. |
+| `forget_learning()` | Erase the episode log and its salt (owner-only button with a confirmation). |
 
 `mode` is `work` (default, tools), `chat` (no tools), `code` (JARVIS lab agents in the bound project) or `learn` (study
 vault and documents).
@@ -88,3 +90,12 @@ JARVIS steps.
 
 ## Tests
 `uv run pytest plugin/plugins/main_agent/tests` (no model, no network).
+
+
+## Learning from use (2026-10-22)
+Every finished task adds one line to a private episode log (`main_agent_learning/episodes.jsonl`, next to the run files): the plan SHAPE (agent kinds and
+plugin entries), each step's outcome with an error CLASS (rate_limit, no_match, timeout ...), seconds, and whether it asked a question or was held. It stores
+**no request text, no goals, no arguments, no results and no error text**: the request is kept only as salted word hashes (digits and e-mail-like words dropped), so it can
+say "this looks like that earlier request" but cannot be read back. Before planning, `Episodes.hints()` gives the planner one line with the shapes that worked or failed
+for similar requests (shapes of helpers that exist right now, never words), as a preference: `parse_plan` still checks everything against the live catalogue.
+Entries older than 180 days or beyond 2,000 are dropped on every write. Design and next stages: `jarvis/docs/neko/SELF_IMPROVEMENT_2026-10-22.md`. Tests: `tests/test_episodes.py`.

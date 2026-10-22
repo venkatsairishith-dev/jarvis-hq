@@ -119,6 +119,8 @@ Linux server-synthetic only: nothing here was run against the real desktop, the 
 | main_agent:pending_inputs | ours | none | `read` | {count: 1, requests: [...]} | {count: 0, requests: []} | read only; safe to repeat |
 | main_agent:answer_input | ours | non_idempotent | `start` key run_id | {state: "answered"} | {error: "That question expired…"} | one answer per question id; repeats refused; never retried |
 | main_agent:cancel_input | ours | non_idempotent | `stop` key run_id | {state: "cancelled"} | {error: "no such question"} | cancelling twice is refused, not repeated |
+| main_agent:learning_stats | ours | none | `read` | {episodes: 12, success_rate: 0.75} | {error: "..."} | read only; safe to repeat |
+| main_agent:forget_learning | ours | non_idempotent | `stop` | {state: "forgotten", forgotten: 12} | {error: "..."} | owner-only; erasing twice erases nothing the second time |
 | main_agent:run_status | ours | non_idempotent | `read` | {run_id: "ab12cd34ef", state: "held", steps: {}} | {error: "no such run"} | never retried; unknown => held; owner resumes/reruns |
 | main_agent:run_task | ours | non_idempotent | `start` key run_id | {run_id: "ab12cd34ef", mode: "work", state: "planning", steps: []} | {state: "failed", error: "no plan"} | never retried; unknown => held; owner resumes/reruns |
 | main_agent:stop_task | ours | non_idempotent | `stop` key message/requested | {requested: true, stopped: true, still_running: [], message: "Stopped" | {requested: true, stopped: false, still_running: [{"id": "r"}], messag | never retried; unknown => held; owner resumes/reruns |
