@@ -1,4 +1,7 @@
-﻿import json,subprocess,os,datetime
+"""Oracle cost check: prints this month's Oracle Cloud cost per service with the OCI CLI (must stay $0 on Always Free).
+Windows. The OCI config and keys are used as file paths only and never printed.
+"""
+import json,subprocess,os,datetime
 os.environ['OCI_CLI_CONFIG_FILE']=r'D:\jarvis-secrets\oci\config'
 os.environ['OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING']='True'
 k=json.load(open(r'D:\jarvis-secrets\keys.json',encoding='utf-8-sig'))['oci']

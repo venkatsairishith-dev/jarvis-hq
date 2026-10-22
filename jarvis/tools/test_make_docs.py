@@ -80,3 +80,25 @@ def test_models_page_lists_every_model_file_in_the_lock(tmp_path):
 def test_real_lock_builds():
     text = md.build_models()
     assert "## Models" in text and "decider" in text
+
+
+@pytest.mark.parametrize("path,text,want", [
+    ("plugin/plugins/research/plugin.toml", '[plugin]\nid = "research"\nshort_description = "Cited web research."\n', "Cited web research."),
+    ("plugin/plugins/research/pyproject.toml", '[project]\nname = "research"\n', "Python package metadata for `research`."),
+    ("plugin/plugins/research/plugin.meta.json", "{}", "Metadata snapshot of the `research` plugin made by `neko-plugin build`; "
+                                                      "regenerate, never edit by hand."),
+    ("plugin/plugins/main_agent/ui/panel.tsx", "export default 1;\n", "Panel of the `main_agent` plugin shown inside N.E.K.O's plugin manager."),
+    ("jarvis/hermes/plugins/x/plugin.yaml", 'name: x\ndescription: "Blocks risky calls."\n', "Blocks risky calls."),
+    ("jarvis/ui/playwright.live.config.ts", "export default {};\n", "Playwright test settings (live run) for the console UI."),
+    ("jarvis/ui/src/screens/CommandCenter.tsx", "export function CommandCenter() {}\n", "Console UI screen: Command Center."),
+    ("jarvis/ui/src/lib/useJob.ts", 'import { a } from "./api";\n\n/** Follows one job until it ends. */\nexport const x = 1;\n',
+     "Follows one job until it ends."),
+    ("jarvis/ui/src/x.tsx", 'import { Component } from "react";\n\n// One screen failing never blanks the page.\nexport class X {}\n',
+     "One screen failing never blanks the page."),
+])
+def test_conventional_and_post_import_descriptions(path, text, want):
+    assert md.describe(path, text) == want
+
+
+def test_a_files_own_words_win_over_convention():
+    assert md.describe("jarvis/ui/src/screens/Tasks.tsx", "// Every task and its steps.\nexport const T = 1;\n") == "Every task and its steps."
