@@ -22,6 +22,7 @@ from pathlib import Path
 
 KEY_FILE = Path(r"D:\jarvis-secrets\claude.key")
 LEDGER = Path(r"D:\jarvis\outputs\builder-spend.json")
+WORKSPACE_ID = "wrkspc_016a2Nvdk5SmQsdF8qYKvTtR"   # not a secret; the key is not workspace-scoped, so every request names it
 EXPIRES = dt.date(2026, 10, 31)
 LEDGER_CAP_USD = 75.0   # this tool's own recorded spend; the owner's org-wide stop is $90 including spend made elsewhere
 ALLOWED_MODELS = {"claude-sonnet-5-5", "claude-haiku-5-5"}   # owner: no Opus
@@ -112,7 +113,7 @@ async def run(args: argparse.Namespace) -> int:
         model=args.model, cwd=str(worktree), max_turns=args.max_turns, max_budget_usd=args.max_budget_usd,
         permission_mode="acceptEdits", allowed_tools=["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
         disallowed_tools=["WebFetch", "WebSearch"], setting_sources=[],
-        env={"ANTHROPIC_API_KEY": key}, hooks={"PreToolUse": [HookMatcher(hooks=[pre_tool])]},
+        env={"ANTHROPIC_API_KEY": key, "ANTHROPIC_CUSTOM_HEADERS": f"anthropic-workspace-id: {WORKSPACE_ID}"}, hooks={"PreToolUse": [HookMatcher(hooks=[pre_tool])]},
         system_prompt=("You are a builder working in a git worktree. Make only the change the task describes, keep the repository's style, "
                        "run the stated tests, and finish with a short summary of files changed and test results. Never commit, push or "
                        "touch anything outside the worktree."))
