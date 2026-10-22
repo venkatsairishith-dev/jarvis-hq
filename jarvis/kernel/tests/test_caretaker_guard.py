@@ -178,6 +178,12 @@ class SafetyComponents(unittest.TestCase):
             self.assertNotEqual(self.level("fs", "write", f"/srv/work/shop/app/{name}"), "RED", name)      # another project's tasks.py
             self.assertEqual(self.level("fs", "read", f"/opt/jarvis/hq/kernel/jarvis_kernel/{name}") == "RED", False)
 
+    def test_p1_step9_router_egress_supervisor_and_cdp_relay_are_red(self):
+        self.assertEqual(self.level("fs", "write", "/srv/anywhere/cdp_relay.py"), "RED")
+        for pkg in ("router", "egress", "supervisor"):
+            self.assertEqual(self.level("fs", "write", f"/opt/jarvis/hq/kernel/jarvis_kernel/{pkg}/combos.py"), "RED", pkg)
+            self.assertNotEqual(self.level("fs", "write", f"/srv/work/shop/app/{pkg}/combos.py"), "RED", pkg)   # another project's router/
+
     def test_project_patches_to_these_files_are_red_in_the_jarvis_project_only(self):
         red = decide(Action("project", "apply_patch", "project jarvis-hq", {"project": "jarvis-hq", "files": ["jarvis/kernel/jarvis_kernel/tasks.py"]}, "private", False))
         self.assertEqual(red.name, "RED")
