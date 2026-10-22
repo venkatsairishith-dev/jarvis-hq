@@ -368,3 +368,18 @@ def test_a_plan_failure_message_keeps_its_opening_and_adds_one_plain_hint():
     assert "say it again" in hint("None of the available helpers can do that request.")
     assert "wrong format" in hint("The planner's plan was not valid JSON.")
     assert hint("some other reason") == "" and hint("") == ""
+
+
+def test_a_reasoning_step_gets_the_clock_so_it_can_answer_what_time_it_is(monkeypatch):
+    from plugin.plugins.main_agent.executor import StepContext
+    from plugin.plugins.main_agent.planner import Step as PStep
+    seen = []
+    p = object.__new__(ma.MainAgentPlugin)
+    p._runs, p._active = {}, None
+
+    async def llm(messages, **kw):
+        seen.append(messages)
+        return "It is 14:05."
+    p._llm = llm
+    out = asyncio.run(p._dispatch(PStep("s1", "think", "say what time it is"), {}, StepContext()))
+    assert out == "It is 14:05." and "Current local date and time:" in seen[0][0]["content"]

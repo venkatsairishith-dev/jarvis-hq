@@ -263,3 +263,12 @@ def test_a_trailing_comma_is_forgiven_but_other_broken_json_is_not():
     for bad in (text.replace('"id": "s1"', '"id" "s1"', 1), text[:40], "not json at all"):
         with pytest.raises(PlanError):
             parse_plan(bad, caps(), 6)
+
+
+def test_the_planner_and_every_reasoning_step_are_told_the_time():
+    import re as _re
+    from plugin.plugins.main_agent.planner import now_line
+    line = now_line()
+    assert _re.fullmatch(r"Current local date and time: \w+ \d{2} \w+ \d{4}, \d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\.", line), line
+    m = planner_messages("what time is it", caps(), 4)
+    assert "Current local date and time:" in m[0]["content"] and "what time is it" == m[1]["content"]
