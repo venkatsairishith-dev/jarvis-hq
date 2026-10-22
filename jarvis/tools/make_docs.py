@@ -70,7 +70,59 @@ def _leading_hash_comment(lines: list[str]) -> str:
 
 
 def describe(path: str, text: str) -> str:
-    """One line saying what the file does, taken from the file itself ("" when it has none)."""
+    """One line saying what the file does: from the file itself, else from what the file is by convention ("" when neither)."""
+    return _from_file(path, text) or _by_convention(path, text)
+
+
+# Files whose job follows from their name and place (manifests, build configs, generated snapshots). The plugin files are
+# described by N.E.K.O's plugin contract (CONTEXT.md, "Manifest Contract").
+def _by_convention(path: str, text: str) -> str:
+    folder, _, name = path.rpartition("/")
+    owner = folder.rsplit("/", 1)[-1]
+    try:
+        if name == "plugin.toml":
+            import tomllib
+            d = tomllib.loads(text).get("plugin", {})
+            return first_sentence(d.get("short_description") or d.get("description") or "") or f"Plugin manifest of `{owner}`."
+        if name == "pyproject.toml":
+            import tomllib
+            d = tomllib.loads(text).get("project", {})
+            return first_sentence(d.get("description", "")) or f"Python package metadata for `{d.get('name', owner)}`."
+    except Exception:
+        pass
+    plugin = path.startswith("plugin/plugins/")
+    table = {
+        "config.schema.json": f"Settings form schema of the `{owner}` plugin (shown in N.E.K.O's plugin manager, 8 languages).",
+        "config.example.toml": f"Example settings for the `{owner}` plugin (copy to config.toml and edit).",
+        "plugin.meta.json": f"Metadata snapshot of the `{owner}` plugin made by `neko-plugin build`; regenerate, never edit by hand.",
+        "tsconfig.json": "TypeScript compiler settings for this folder.",
+        "vite.config.ts": "Vite build and dev-server settings for the console UI.",
+        "kernel-metadata.json": "Kaggle notebook settings (name, code file, GPU, private) for `kaggle kernels push`.",
+        "main.tsx": "Console UI entry point: mounts the app inside the error boundary.",
+        "App.tsx": "Console UI shell: navigation, keyboard shortcuts and the screens.",
+        "ui.tsx": "Shared console UI widgets (badges, buttons, dialogs, keys).",
+        "format.ts": "Formatting helpers for the console UI (relative times, sizes).",
+        "panel.tsx": f"Panel of the `{path.split('/')[2] if plugin else owner}` plugin shown inside N.E.K.O's plugin manager.",
+        "plugin.yaml": "Hermes plugin manifest.",
+        "sparkline.js": "Third-party sparkline chart library (minified) used by the hub page.",
+        "active.json": "Lab skills currently active in Hermes, each with its sha256, commit, risk, activation time and backup.",
+        "registry.json": "Inventory of every external project JARVIS uses: licence, pin, integration, features used and unused.",
+    }
+    if name in table:
+        if name == "plugin.yaml":
+            m = re.search(r"^description:\s*\"?(.+?)\"?\s*$", text, re.M)
+            if m:
+                return first_sentence(m.group(1))
+        return table[name]
+    if re.fullmatch(r"playwright(\.[a-z]+)?\.config\.ts", name):
+        kind = name.split(".")[1] if name.count(".") > 2 else "default"
+        return f"Playwright test settings ({kind} run) for the console UI."
+    if folder.endswith("ui/src/screens") and name.endswith(".tsx"):
+        return f"Console UI screen: {re.sub(r'(?<!^)(?=[A-Z])', ' ', name[:-4])}."
+    return ""
+
+
+def _from_file(path: str, text: str) -> str:
     name = path.rsplit("/", 1)[-1]
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else name
     lines = text.splitlines()
@@ -104,12 +156,18 @@ def describe(path: str, text: str) -> str:
             if m:
                 return first_sentence(re.sub(r"^\s*\*\s?", "", m.group(1), flags=re.M))
             buf = []
-            for ln in lines:
+            for ln in lines[:40]:                       # the first comment block, also when it follows the imports
                 t = ln.strip()
-                if t.startswith("//"):
+                if t.startswith("//") and not t.startswith("//#"):
                     buf.append(t.lstrip("/").strip())
-                elif buf or t:
+                elif buf:
                     break
+                elif t and not t.startswith(("import ", "export {", "}", "'use", '"use')) and not t.endswith(";") and "from " not in t:
+                    break
+            if not buf:
+                m = re.search(r"^\s*/\*\*(.*?)\*/", "\n".join(lines[:40]), re.S | re.M)
+                if m:
+                    return first_sentence(re.sub(r"^\s*\*\s?", "", m.group(1), flags=re.M))
             return first_sentence(" ".join(buf))
         if ext in ("vbs",):
             buf = [ln.strip().lstrip("'").strip() for ln in lines[:12] if ln.strip().startswith("'")]

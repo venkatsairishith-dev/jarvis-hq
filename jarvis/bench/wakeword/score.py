@@ -1,3 +1,6 @@
+"""Wake-word benchmark scorer: runs openWakeWord's "hey jarvis" model over the recorded clips in D:\\jarvis\\cache\\wakeword\\audio and
+reports detections, load time and memory. Windows; measurement only (results in bench/wakeword/).
+"""
 import glob, json, os, time, wave
 import numpy as np, psutil
 from scipy.signal import resample_poly

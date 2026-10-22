@@ -1,0 +1,103 @@
+# How to use JARVIS, step by step
+
+For the owner, on the Windows laptop. Everything here is what the repo does **today** (2026-10-22); items marked *not yet* are in
+the build plan (`research-2026-10-22/JARVIS_FULL_INTEGRATION_PLAN.md`). Technical detail lives in `05_OPERATIONS.md`, every file is
+explained in `FILE_MAP.md`, every model in `MODELS.md`.
+
+## 1. What runs where
+
+| Where | What | Address |
+|---|---|---|
+| Laptop | N.E.K.O, the character you talk to (chat, voice, memory, plugins) | http://127.0.0.1:48911 |
+| Laptop | JARVIS console: approvals (PIN), audit, connectors, models, kill switch | http://127.0.0.1:8799 (open it with the launcher, step 4) |
+| Laptop | Neko icon widget (always on top, bottom right) | `open-widget.ps1` |
+| Laptop | Local models (llama-swap), local speech, privacy gateway, wake listener | loopback only |
+| Oracle VM `hermes-agent-vm` | The kernel (the only authority: policy, approvals, audit, kill switch), Hermes, model proxy | over Tailscale only |
+
+Rules that never change: secrets stay as files in `D:\jarvis-secrets` (never typed into chat); the Oracle account stays on Always
+Free ($0); `hermes-agent-vm-2` is never touched.
+
+## 2. Start and stop
+
+1. **Start everything:** `powershell -File D:\jarvis\hq-neko\jarvis\scripts\neko-start.ps1`.
+   It starts N.E.K.O, the local speech server, the wake listener, Verdict, the JARVIS console and the plugins, and prints what is up.
+   Running it again is safe. Add `-NoWake` to leave the microphone listener off.
+2. **Start at login (once):** `jarvis\scripts\install-autostart.ps1` (task `JarvisNekoStack`; `-Status`, `-Remove`).
+3. **Stop:** `jarvis\scripts\neko-stop.ps1` (stops N.E.K.O, speech and wake; the console and the laptop node keep running).
+4. **One-screen health:** `jarvis\scripts\dev-status.ps1` (git, ports, scheduled tasks, disk; read only).
+
+## 3. Open it
+
+- **Desktop window:** `jarvis\scripts\open-desktop-app.ps1` (N.E.K.O in its own window) or `-Target jarvis` (the console).
+- **Neko icon:** `jarvis\scripts\open-widget.ps1`. Click it to give a task; it shows sleeping, listening, thinking, working, needs
+  permission, done (with Open file / Show in folder) and error. `install-widget.ps1 -Autostart` opens it at every login.
+- *Not yet:* a tray icon and true push-to-talk (plan P8, the Tauri shell).
+
+## 4. Sign in to the console
+
+Open the console with `python jarvis\scripts\open_console.py` (or the widget's "open console" link). It puts a one-time code in
+the address that becomes a sign-in cookie. Typing http://127.0.0.1:8799 by hand shows the login page on purpose.
+
+## 5. Talk to JARVIS
+
+- **Type or speak** in the N.E.K.O window, like to a person. Small talk stays with her; a real task goes to the Main Agent
+  (several steps) or to JARVIS (PC work). Switch the **Agent** master switch on in her settings first.
+- **Voice:** say **"Hey Neko"**, wait for the chime, then the command. "Cancel" or "never mind" cancels; "Hey Neko, stop" stops a
+  running task. The live microphone path has **not been tested on this laptop yet** (do the spoken test in `05_OPERATIONS.md`,
+  "Hey Neko" section). *Not yet:* "Hey Jarvis" as the wake word.
+- **Examples that work today:**
+  - "Open YouTube and play \<song\>": opens the site in your checked profile and verifies it is playing.
+  - "Research \<topic\> and make me a deck" / "... a PDF report": researches with checked citations, builds the file in
+    `D:\jarvis\outputs\<date>\`, inspects it, and offers to open it.
+  - "Why is \<app\> not starting?": the troubleshooter checks ports, disk and services and says what it found.
+  - "Open \<app\> and write \<text\>" (asks you first before typing).
+- **Unclear requests become questions:** "open the other one", "notepad or wordpad", "don't open YouTube" make it ask instead
+  of guessing.
+
+## 6. Approvals, the PIN and the kill switch
+
+- Anything risky (typing, clicking, installing, sending) waits for your approval. The card shows exactly what will run.
+- **Approve** in the JARVIS console with your PIN. N.E.K.O, the widget and agents cannot approve anything.
+- **Set or change the PIN** (only you, at the kernel console): see "Approval PIN" in `05_OPERATIONS.md`. Never write the PIN in a
+  chat, file or log.
+- **Stop everything:** the console's Kill button. Lifting it is only possible at the kernel console (`python3 -m jarvis_kernel resume`).
+- Banks, payment sites, wallets and password managers are always refused, even with your approval.
+
+## 7. Models and providers
+
+- Local models answer most requests (decider Qwen3-4B-2507, Ling for planning, coder, maths, Verdict for routing); they load on
+  demand and unload when idle.
+- **Planning model:** Claude (through the privacy gateway's planner instance, until 2026-10-31, the end of the API credit), then
+  Dahl as the fallback. Private data is replaced with placeholders before anything leaves the laptop.
+- The console's **Models** screen shows which provider answered, what is resting after a free-tier limit, and token use.
+- *Not yet:* "switch to \<provider\>" by voice and one router for every coding CLI (plan P3).
+
+## 8. Files JARVIS makes
+
+- Decks, reports and agent outputs: `D:\jarvis\outputs\` (never overwritten).
+- Repairs keep a backup in `<data>\repair-backups\<id>`; `repair restore <id>` undoes one.
+- *Arriving now:* find, create, move and organise files with an undo journal (plan P4; merged on the laptop, not yet released).
+
+## 9. Is everything healthy?
+
+1. `D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\scripts\live_check.py`: servers, plugins, speech, kernel, audit chain,
+   node and UI; exit code 0 means all passed (`--no-model` skips the paid model call).
+2. `jarvis\scripts\daily_report.py`: one-page daily health report, no model calls.
+3. Tests: `jarvis\scripts\dev-test.ps1 quick` (about 6 minutes) or `full` (about 40 minutes).
+4. The vault (`D:\jarvis\vault`, `daily\<date>.md`) records what was done each day and where work stopped.
+
+## 10. When something goes wrong
+
+| Symptom | Do this |
+|---|---|
+| A page or the console does not load | `dev-status.ps1`, then `neko-start.ps1` again (safe to repeat) |
+| "Busy" or "rate limited" | A free provider is resting; the console says when to retry. Nothing is broken |
+| A task seems stuck | Say "Hey Neko, stop", press Stop in the panel, or the console's Kill button |
+| Something changed that should not have | The audit trail in the console shows every action and approval; repairs can be restored (section 8) |
+| The kernel on the VM misbehaves after an update | Its previous copy is kept as `~/jarvis/kernel.old.<ts>`; the rollback steps are in `05_OPERATIONS.md` |
+
+## 11. What is being built next
+
+See the plan's phases P1 to P10: one supervisor for all processes, the Hermes safety hook, the router inside JARVIS, PC power with
+undo and a PIN-gated admin broker, learned skills, coding agents with tested pushes, the openmuse features (watches, PDF forms,
+Gmail/Calendar with review, finance), the tray app, "Hey Jarvis" and a JARVIS personality, phone approvals, and one installer.
