@@ -135,7 +135,9 @@ export function Settings() {
             {row("JARVIS's agent link (Hermes)", health?.kernel.voice_command_ready, health?.kernel.voice_command_ready ? "commands can be sent" : "no Hermes key on the server")}
             {row("Approval PIN", health?.kernel.pin_set, health?.kernel.pin_set ? "set (browser approvals enabled for YELLOW)" : "not set: approve at the kernel console")}
             {row("Local language model", health?.local_llm.ok, health ? `${health.local_llm.url} · ${health.local_llm.ms} ms` : "")}
-            {row("Hub / Agent PC control", health?.hub.ok, health ? `${health.hub.url} · ${health.hub.ms} ms` : "")}
+            {health && !health.hub.ok && health.hub.configured === false
+              ? <li className="flex items-center gap-3 py-2 text-sm"><Badge tone="idle">Not set up</Badge><span className="font-medium">Hub / Agent PC control</span><span className="ml-auto truncate text-xs text-fg3">optional: it needs the lab, which is not installed on this PC</span></li>
+              : row("Hub / Agent PC control", health?.hub.ok, health ? `${health.hub.url} · ${health.hub.ms} ms` : "")}
             {row("Disk (D:)", health?.disk ? health.disk.free_gb > 5 : null, health?.disk ? `${health.disk.free_gb} GB free of ${health.disk.total_gb}` : "unknown")}
           </ul>
           {conn !== "live" && <div className="mt-3"><ErrorNote>The console cannot reach the kernel right now ({conn.replace("-", " ")}). Voice and file features still work locally.</ErrorNote></div>}

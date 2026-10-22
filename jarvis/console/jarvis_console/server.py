@@ -498,7 +498,9 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
         p = probe(cfg.local_llm_url + "/health", timeout=OPTIONAL_PROBE_TIMEOUT)    # optional; a closed port takes ~2 s to refuse on this OS
         out["local_llm"] = {"ok": p["ok"], "ms": p["ms"], "url": cfg.local_llm_url, "error": p.get("error")}
         p = probe(hub_local + "/control/state", {"X-Jarvis-Hub": "1", "Host": hub_host})
-        out["hub"] = {"ok": p["ok"], "ms": p["ms"], "url": hub, "error": p.get("error")}
+        # configured: the owner (or the launcher) named a hub on purpose. The built-in default address only exists in the lab, so an
+        # unreachable DEFAULT hub is "not set up", not a fault (the UI says so); an unreachable configured one stays "Down".
+        out["hub"] = {"ok": p["ok"], "ms": p["ms"], "url": hub, "error": p.get("error"), "configured": bool(getattr(cfg, "hub_configured", False))}
         try:
             du = shutil.disk_usage(os.path.splitdrive(cfg.outputs_dir)[0] + "\\" if os.name == "nt" else "/")
             out["disk"] = {"free_gb": round(du.free / 1e9, 1), "total_gb": round(du.total / 1e9, 1)}

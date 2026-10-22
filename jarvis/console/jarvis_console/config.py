@@ -25,6 +25,8 @@ class Config:
         self.intent_model = _env("JARVIS_INTENT_MODEL", "qwen3")
         self.voice_threads = int(_env("JARVIS_VOICE_THREADS", "4"))
         self.voice_idle_unload_s = int(_env("JARVIS_VOICE_IDLE_S", "300"))
+        # a hub the owner (environment) or the caller (tests, launcher) named on purpose; the built-in default only exists in the lab
+        self.hub_configured = bool(os.environ.get("JARVIS_HUB_URL", "").strip()) or "hub_url" in kw
         for k, v in kw.items():
             setattr(self, k, v)
 

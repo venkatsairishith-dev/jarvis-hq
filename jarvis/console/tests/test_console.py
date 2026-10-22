@@ -322,6 +322,29 @@ class HealthIsQuick(Base):
         self.assertLess(h["local_llm"]["ms"], 900, f"local_llm probe took {h['local_llm']['ms']} ms")
 
 
+class HubIsHonest(Base):
+    def test_only_a_hub_named_on_purpose_counts_as_configured(self):
+        """An unreachable DEFAULT hub (it only exists in the lab) is 'not set up' in the UI; an unreachable CONFIGURED one stays 'Down'."""
+        from jarvis_console.config import Config
+        import os
+        old = os.environ.pop("JARVIS_HUB_URL", None)
+        try:
+            self.assertFalse(Config().hub_configured)
+            self.assertTrue(Config(hub_url="http://127.0.0.1:9").hub_configured)
+            os.environ["JARVIS_HUB_URL"] = "http://127.0.0.1:9"
+            self.assertTrue(Config().hub_configured)
+        finally:
+            os.environ.pop("JARVIS_HUB_URL", None)
+            if old is not None:
+                os.environ["JARVIS_HUB_URL"] = old
+        code, h, _ = self.call("GET", "/api/health")                         # this test's console was built with hub_url=...: configured, down
+        self.assertEqual(code, 200)
+        self.assertIs(h["hub"]["configured"], True); self.assertFalse(h["hub"]["ok"])
+        self.cfg.hub_configured = False
+        code, h, _ = self.call("GET", "/api/health")
+        self.assertIs(h["hub"]["configured"], False); self.assertFalse(h["hub"]["ok"])      # unconfigured and down: the UI says "Not set up"
+
+
 @unittest.skipUnless(np, "numpy not installed")
 class WavAndRealVoice(unittest.TestCase):
     def test_wav_roundtrip_and_resample(self):

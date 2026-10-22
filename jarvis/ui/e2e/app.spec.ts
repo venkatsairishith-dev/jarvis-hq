@@ -270,6 +270,21 @@ test.describe("models and settings", () => {
     await expect(page.getByText("parakeet-tdt-0.6b-v3-int8")).toBeVisible();
   });
 
+  test("a hub that was never set up says so calmly; one that was configured and is unreachable stays Down", async ({ page }) => {
+    await page.route("**/api/health*", async (route) => {                      // same real answer, with the hub marked as not configured
+      const res = await route.fetch();
+      const body = await res.json();
+      body.hub = { ...body.hub, configured: false };
+      await route.fulfill({ response: res, json: body });
+    });
+    await page.goto("/#/settings");
+    const row = page.locator("li", { hasText: "Hub / Agent PC control" });
+    await expect(row.getByText("Not set up")).toBeVisible();
+    await expect(row).toContainText("not installed on this PC");
+    await expect(row.getByText("Down")).toHaveCount(0);
+    await expect(page.locator("li", { hasText: "Local language model" }).getByText("Down")).toBeVisible();   // a real fault is still red
+  });
+
   test("settings health rows show actual state and the audit chain verifies", async ({ page }) => {
     await page.goto("/#/settings");
     await expect(page.locator("li", { hasText: "Kernel owner plane" }).getByText("OK")).toBeVisible();

@@ -47,7 +47,7 @@ export interface Health {
   kernel: { reachable: boolean; authorized: boolean; status?: number; ms?: number | null; killed?: boolean | null; pin_set?: boolean | null; voice_command_ready?: boolean | null; error: string | null };
   voice: VoiceStatus;
   local_llm: { ok: boolean; ms: number; url: string; error?: string };
-  hub: { ok: boolean; ms: number; url: string; error?: string };
+  hub: { ok: boolean; ms: number; url: string; error?: string; configured?: boolean };
   disk: { free_gb: number; total_gb: number } | null;
 }
 
