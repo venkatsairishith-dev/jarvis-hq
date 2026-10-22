@@ -35,3 +35,12 @@ SDK builder spend recorded: $0.15 of the 2026-10-31 exception (cap on this tool 
 ## Update 2026-10-22 (later): supervisor built
 
 `jarvis/supervisor/` now has manifest.py (validated: loopback/allowed binds only, no secret-looking env, dependency order, cycle check), health.py (tcp/http against the component's own bind, no proxy, no redirects), jobobject.py (Windows Job Object with KILL_ON_JOB_CLOSE; POSIX uses a session per child), core.py (start in order, wait healthy, per-boot token file path passed as env, never the token), systemd.py (hardened unit text only; nothing installed). 29 supervisor tests pass, including the acceptance checks: a 0.0.0.0 bind is refused, and hard-killing the supervisor process leaves zero surviving children (checked by process listing). Not yet done: a real manifest for the actual stack (neko-start.ps1 still launches it), and the POSIX fallback only stops children on a clean stop (no kernel-level guarantee like the Job Object).
+
+## Update 2026-10-22 (night): P1 closing
+
+- Step 7 done: neko-tauri submodule removed; N.E.K.O.-Tauri imported as a squashed git subtree at `jarvis/desktop/shell` (pinned b7b4fd70, 1.2 MB; LICENSE Apache-2.0 and NOTICE kept). `git subtree pull` is the update path. `jarvis/third_party/README.md` and the pin tests in `jarvis/tools/test_python_deps.py` now check the subtree (squash marker equals the README pin). `PATCHES.md` stays in jarvis/third_party. 67 tools tests pass.
+- Step 1 (part): `licence_spdx` filled for the 40 registry entries whose licence text was already a clean SPDX id; the other 49 (21 "unknown", mixed or free-text) are deliberately left for a human decision. Nothing is marked `shipped` (personal-only profile).
+- Supervisor: laptop manifest written (`jarvis/supervisor/manifests/laptop.json`), consistent with neko-start.ps1 by test; not yet the launcher.
+- Claude planner: adapter + planner-only gateway on 48952 (Claude then Dahl), default gateway 48950 unchanged. Waiting for the owner to point the N.E.K.O agent slot at 48952 with the Dahl key.
+- Step 6 (audit record with component version and sha256) NOT done: it changes the live kernel's audit chain, so it needs a kernel deploy (owner's go). The SAFETY_COMPONENTS change (step 9) is waiting for the same deploy.
+- Credit used: about $0.15 (builder) plus a 61-token smoke test.
