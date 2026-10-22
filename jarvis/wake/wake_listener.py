@@ -374,6 +374,7 @@ class WakeLoop:
     """
     WAIT_SPEECH_S = 5.0
     END_SILENCE_S = 1.0
+    MIN_COMMAND_SPEECH_S = 0.4        # less voiced audio than this is a click, a breath or the tail of the wake word, not a command
     MAX_COMMAND_S = 12.0
     BARGE_WAIT_SPEECH_S = 2.0         # a barge-in is one short word: give up sooner ...
     BARGE_MAX_COMMAND_S = 4.0         # ... and never record a long sentence while Neko speaks
@@ -402,13 +403,16 @@ class WakeLoop:
         self.state, self.since, self.detail = "starting", clock(), ""
         self.counts = {"detections": 0, "ignored_while_speaking": 0, "commands": 0, "cancelled": 0, "no_speech": 0,
                        "tasks_started": 0, "tasks_planning": 0, "stops": 0, "errors": 0, "mic_errors": 0,
-                       "barge_in_heard": 0, "barge_in_stops": 0, "barge_in_ignored": 0, "passed_while_running": 0}
+                       "barge_in_heard": 0, "barge_in_stops": 0, "barge_in_ignored": 0, "passed_while_running": 0,
+                       "too_short": 0}
         self.last = None              # the last outcome: {"what", "at", ...} (never the words)
         self.seq = self.pos = self.epoch = 0
         self.ring: list[tuple[int, bytes]] = []
         self.cmd: list[bytes] = []
         self.vad = None
         self.heard_at = self.speech_started = self.silence_since = None
+        self.voiced_s = None          # seconds of speech in the command being handled (set when the recording ends)
+        self.pre_voiced_s = 0.0       # the part of it that was already in the buffer when the wake word was reported
         self.cancel_flag = threading.Event()
         self.paused = False
         self._speaking_checked, self._speaking = 0.0, False
@@ -611,8 +615,7 @@ class WakeLoop:
         self.cmd = [self._amp(p[max(0, det.sample_end - s) * 2:]) for s, p in self.ring if s + len(p) // 2 > det.sample_end]
         self.vad = self.vad_factory()
         self.heard_at, self.speech_started, self.silence_since = self.audio_time(), None, None
-        for p in self.cmd:
-            self._vad_step(p)
+        self.pre_voiced_s = sum(len(p) / 2 / RATE for p in self.cmd if self._vad_step(p))   # speech already said before the detector fired
         self.set("recording", "Listening for a stop word" if barge else "Listening")
 
     def _gain_from(self, start: int, end: int) -> float:
@@ -649,13 +652,15 @@ class WakeLoop:
         """Seconds of audio heard so far: command timing follows the audio, so a file and the microphone behave alike."""
         return self.pos / RATE
 
-    def _vad_step(self, pcm: bytes):
+    def _vad_step(self, pcm: bytes) -> bool:
         now = self.audio_time()
         if self.vad.speech(pcm):
             self.speech_started = self.speech_started or now
             self.silence_since = None
-        elif self.speech_started and self.silence_since is None:
+            return True
+        if self.speech_started and self.silence_since is None:
             self.silence_since = now
+        return False
 
     def _record(self, pcm: bytes):
         pcm = self._amp(pcm)
@@ -670,6 +675,8 @@ class WakeLoop:
             self._back()
         elif (self.silence_since is not None and now - self.silence_since >= self.END_SILENCE_S) or now - self.heard_at >= max_s:
             audio, self.cmd = b"".join(self.cmd), []
+            if self.speech_started is not None:
+                self.voiced_s = (self.silence_since if self.silence_since is not None else now) - self.speech_started + self.pre_voiced_s
             self.set("transcribing", "Understanding")
             self.worker = asyncio.ensure_future(self._handle(audio))
 
@@ -709,6 +716,12 @@ class WakeLoop:
             # agent answers it (a second request while one runs gets its honest "busy"), and this says so in the log and status.
             self.counts["passed_while_running"] += 1
             self.outcome("not a stop phrase: sent as a new command; the running task is NOT stopped", chars=len(text))
+        if not self.barge and self.voiced_s is not None and self.voiced_s < self.MIN_COMMAND_SPEECH_S:
+            # A blip too short to be a sentence (the transcriber then invents words, e.g. "Tico, pénico" after a bare "Hey Neko"):
+            # never a task. A stop or cancel word is handled above, so a short "stop" still works.
+            self.counts["too_short"] += 1
+            self.outcome("too little speech to be a command: ignored", seconds=round(self.voiced_s, 2), chars=len(text))
+            return self._back()
         self.set("submitting", "Starting the task")
         if self.dry_run:
             self.outcome("command heard (dry run, not sent)", chars=len(text), words=len(text.split()))

@@ -1172,3 +1172,26 @@ def test_the_listener_state_stays_consistent_when_the_detector_dies_and_when_pau
         w.paused = False
         assert w.status()["state"] != "paused"
     asyncio.run(go())
+
+
+def test_a_blip_too_short_to_be_a_command_is_ignored_even_if_the_transcriber_invents_words():
+    async def go():
+        w, calls, _ = make(text="Tico, penico")
+        await w.start()
+        await feed(w, [QUIET] * 5 + seconds(0.15, SPEECH) + seconds(1.2, QUIET))
+        assert calls["submit"] == [] and w.counts["too_short"] == 1 and w.counts["tasks_started"] == 0
+        assert w.last["what"].startswith("too little speech") and "text" not in w.last and w.state == "wake_listening"
+    asyncio.run(go())
+
+
+def test_a_real_short_command_and_a_short_stop_word_still_work():
+    async def go():
+        w, calls, _ = make(text="weather")
+        await w.start()
+        await feed(w, [QUIET] * 5 + seconds(0.6, SPEECH) + seconds(1.2, QUIET))
+        assert calls["submit"] == ["weather"] and w.counts["too_short"] == 0
+        w2, calls2, _ = make(text="stop", running=True)
+        await w2.start()
+        await feed(w2, [QUIET] * 5 + seconds(0.15, SPEECH) + seconds(1.2, QUIET))
+        assert calls2["stop"] == 1 and calls2["submit"] == [] and w2.counts["too_short"] == 0          # a stop word is never "too short"
+    asyncio.run(go())
