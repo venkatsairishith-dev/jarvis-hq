@@ -104,6 +104,12 @@ tool-call probe 3/3; the wake word fired but only some of the time (67% of repo 
 
 Always on: every change runs the regression gate; the caretaker stays off until a safe credential exists; the planner prompt stays small (the local decider has 2048 tokens).
 
+### Tools ready for phase 0 (built 2026-10-22, tested on the server with fakes; the real runs need the laptop)
+- **Desktop baseline:** `python jarvis\evals\neko95\task_baseline.py` (10 plain requests through the same call the voice path makes, judged by what is really on the screen; closes only the windows it opened;
+  refuses to start while your own Notepad/Calculator windows are open; result in `jarvis/evals/neko95/results/baseline-<time>.json`). `--list` shows the tasks, `--only T01,T05` runs some.
+- **Wake word on your voice:** `jarvis\tests\neko_voice_owner_record.py` records you, `jarvis\wake\eval_owner.py` replays the recordings through the listener's detector for a grid of thresholds and gains (hits vs false alarms).
+- **Untrusted-content hold** in main_agent (section 3.7) and the **wake guard** (commands under 0.4 s of speech are ignored) are already in the code.
+
 ## 5. Owner decisions that unblock the most
 
 1. Deploy the kernel to Oracle now? (checklist: `KERNEL_DEPLOY_2026-10-22.md`; first start purges old private text: decide retention first.)
