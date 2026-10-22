@@ -163,3 +163,13 @@ def test_planner_messages_carry_hints_only_when_given():
     caps = [Capability("think", "think", "t")]
     assert "Experience" not in planner_messages("x", caps, 3)[0]["content"]
     assert planner_messages("x", caps, 3, hints="Experience: a")[0]["content"].endswith("Experience: a")
+
+
+def test_stats_count_how_often_self_correction_was_tried_and_rescued(tmp_path):
+    e = ep(tmp_path)
+    rec(e, task="open report one", state="failed", err="no_match", run="a", attempt=1)
+    rec(e, task="open report one", state="done", shape=("think",), run="a", attempt=2)
+    rec(e, task="open report two", state="failed", err="no_match", run="b", attempt=1)
+    rec(e, task="open report two", state="failed", err="no_match", shape=("think",), run="b", attempt=2)
+    assert e.stats()["self_correction"] == {"tried": 2, "rescued": 1}
+    assert E.Episodes(tmp_path / "none").stats()["self_correction"] == {"tried": 0, "rescued": 0}

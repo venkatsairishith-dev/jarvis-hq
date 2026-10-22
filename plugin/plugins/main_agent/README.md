@@ -99,3 +99,11 @@ plugin entries), each step's outcome with an error CLASS (rate_limit, no_match, 
 say "this looks like that earlier request" but cannot be read back. Before planning, `Episodes.hints()` gives the planner one line with the shapes that worked or failed
 for similar requests (shapes of helpers that exist right now, never words), as a preference: `parse_plan` still checks everything against the live catalogue.
 Entries older than 180 days or beyond 2,000 are dropped on every write. Design and next stages: `jarvis/docs/neko/SELF_IMPROVEMENT_2026-10-22.md`. Tests: `tests/test_episodes.py`.
+
+## Self-correction (2026-10-22)
+After a **definite** failure (the step said it failed; not "unknown", not held, not waiting for you) the agent asks the planner **once** for a different plan, telling it only the failed
+plan shape and the error class (never text), and runs that plan. It never does this when: the run was stopped; any step is unknown, held or waiting (it may have happened); a step that
+changes something already succeeded (a new plan could do it twice); the failure is one a new plan cannot fix (rate limit, wrong key, a capability that does not exist, the owner);
+the new plan has the same shape as the failed one; it already happened for this run (also after a resume); or `MAIN_AGENT_REPLAN=0`. Every step of the new plan passes the same checks as any
+other (kernel approvals, the untrusted-content hold, the closed catalogue). The chat says "The first way did not work, so I tried another way." (or "...neither worked."); both attempts are
+recorded as episodes, and `learning_stats` counts how often it was tried and rescued. Tests: `tests/test_self_correction.py` (10, each guard checked by mutation).

@@ -123,14 +123,14 @@ class Episodes:
         return rows
 
     def record(self, *, run_id: str, task: str, source: str, mode: str, state: str, shape: list[str], steps: list[dict[str, str]],
-               seconds: float, asked: bool = False, held_untrusted: bool = False, planning_error: str = "") -> dict[str, Any]:
+               seconds: float, asked: bool = False, held_untrusted: bool = False, planning_error: str = "", attempt: int = 1) -> dict[str, Any]:
         tok = self.tokens(task)
         row = {"t": round(self.clock(), 1), "run": str(run_id)[:20], "src": str(source or "")[:12], "mode": str(mode or "")[:8],
                "tok": tok, "words": len(tok), "shape": [str(s)[:80] for s in shape][:12], "state": str(state)[:12],
                "steps": [{"ref": str(s.get("ref", ""))[:80], "out": str(s.get("out", ""))[:14], "err": str(s.get("err", ""))[:16]}
                          for s in steps][:12],
                "sec": round(float(seconds or 0.0), 1), "asked": bool(asked), "held_untrusted": bool(held_untrusted),
-               "plan_err": error_class(planning_error)}
+               "plan_err": error_class(planning_error), "attempt": int(attempt)}
         with self._lock:
             self.dir.mkdir(parents=True, exist_ok=True)
             fd = os.open(self._path(), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
@@ -210,7 +210,8 @@ class Episodes:
         now = now or self.clock()
         out: dict[str, Any] = {"episodes": len(rows)}
         if not rows:
-            return out | {"success_rate": None, "by_shape": [], "by_helper": [], "errors": [], "trend": None, "weak": []}
+            return out | {"success_rate": None, "by_shape": [], "by_helper": [], "errors": [], "trend": None, "weak": [],
+                          "self_correction": {"tried": 0, "rescued": 0}}
         done = [r for r in rows if r.get("state") == "done"]
         out["success_rate"] = round(len(done) / len(rows), 3)
         out["median_seconds"] = sorted(r.get("sec", 0.0) for r in rows)[len(rows) // 2]
@@ -239,4 +240,6 @@ class Episodes:
             return round(sum(r.get("state") == "done" for r in rs) / len(rs), 2) if rs else None
         out["trend"] = {"last20": rate(last), "previous20": rate(before)} if before else None
         out["last_7_days"] = sum(1 for r in rows if now - float(r.get("t", 0)) <= 7 * DAY)
+        second = [r for r in rows if r.get("attempt") == 2]            # tasks that got the one different plan after a definite failure
+        out["self_correction"] = {"tried": len(second), "rescued": sum(1 for r in second if r.get("state") == "done")}
         return out

@@ -32,11 +32,11 @@ times; that one failed with no_match"), shapes only, so nothing private reaches 
 commonest error classes, whether the last 20 tasks beat the 20 before, helpers failing more than half the time. `forget_learning` erases everything. 180 days / 2,000 lines.
 Tests: `tests/test_episodes.py` (12). The 10-task baseline (`jarvis/evals/neko95/task_baseline.py`) and your daily use both feed it, so there is one number going up or down.
 
-### Layer 2: correct yourself within a run (NEXT, small, bounded)
+### Layer 2: correct yourself within a run (BUILT 2026-10-22, bounded)
 When a task ends with a **definite** failure (the step reports failed; not "unknown", not held, not waiting for you), the agent may re-plan **once**: it asks the planner again with
 the failure class (no text) and the helpers still available, and runs only the remaining work. Guards: one replan per run; never after an unknown or held step (it may have happened);
 every step of the new plan goes through the same checks (approvals, untrusted-content hold, kernel policy); a replan that repeats the failed shape is refused; the episode records
-that a replan happened and whether it rescued the task. This is the "self-correcting" part: it turns "no single file matches" into "ask which file" or "search by name" without any new permission.
+that a replan happened and whether it rescued the task. Built in `main_agent._replan_once` with ten tests, each guard checked by mutation (disabling any one makes a test fail); `learning_stats.self_correction` shows tried vs rescued. This is the "self-correcting" part: it turns "no single file matches" into "ask which file" or "search by name" without any new permission.
 
 ### Layer 3: turn what works into skills (NEXT, uses the existing gate)
 The desktop plugin already has a Voyager-style gate (`desktop/skills.py`): a proposal may only add **examples** (a request with the plan the decider should produce) and **sites**;

@@ -479,7 +479,7 @@ class MainAgentPlugin(NekoPluginBase):
             out.append(r)
         return out
 
-    async def _make_plan(self, task: str, caps: list[Capability], mode: str = DEFAULT_MODE, memory: str = "") -> Plan:
+    async def _make_plan(self, task: str, caps: list[Capability], mode: str = DEFAULT_MODE, memory: str = "", avoid: str = "") -> Plan:
         max_steps = _int_env("MAIN_AGENT_MAX_STEPS", 6, 1, 10)
         caps = filter_for_task(caps, task)        # no browser helper unless the request points at the web (also validated below)
         allowed = {(f"plugin:{c.ref}" if c.kind == "plugin" else c.kind) for c in caps}
@@ -488,6 +488,8 @@ class MainAgentPlugin(NekoPluginBase):
         except Exception:                                 # learning is a help, never a dependency of planning
             hints = ""
         messages = planner_messages(task, caps, max_steps, mode, memory, hints)
+        if avoid:                                         # a re-plan: what failed, as shapes and classes only (never text)
+            messages[-1]["content"] += "\n\n" + avoid
         text = await self._llm(messages, max_tokens=1500, timeout=120.0, local_only=bool(memory))
         try:
             return self._tag_memory(parse_plan(text, caps, max_steps), memory)
@@ -938,6 +940,47 @@ class MainAgentPlugin(NekoPluginBase):
         except Exception as exc:           # the marker only informs the widget; losing it must never stop the work
             self.logger.warning("main_agent could not write its planning marker: {}", type(exc).__name__)
 
+    # classes of failure a different plan cannot fix: the owner, the configuration, or a capability that does not exist
+    REPLAN_NEVER = frozenset({"cancelled", "needs_owner", "key", "cannot_do", "rate_limit"})
+
+    async def _replan_once(self, run: dict[str, Any], plan: Plan, results: list[StepResult], cancel: asyncio.Event | None) -> Plan | None:
+        """Self-correction, bounded: after a DEFINITE failure the planner is asked once more, with the failed shape and its error class
+        (no text), for a different plan; the caller runs it. Never when: it already happened for this run, the run was stopped,
+        anything is unknown, held or waiting (it may have happened), a step that changes something already succeeded (a re-plan could
+        do it twice), the failure is one a different plan cannot fix (rate limit, key, missing capability, the owner), the new plan has
+        the same shape as the failed one, or MAIN_AGENT_REPLAN=0. Every step of the new plan passes the same checks as any other."""
+        try:
+            if os.environ.get("MAIN_AGENT_REPLAN", "1") == "0" or run.get("replan") or (cancel is not None and cancel.is_set()):
+                return None
+            failed = [r for r in results if r.outcome == "failure" and not r.held]
+            if not failed or any(r.held or r.outcome == "unknown" for r in results) or run.get("pending_input"):
+                return None
+            effects = {s.id: s.effect for s in plan.steps}
+            if any(r.ok and effects.get(r.id, "none") != "none" for r in results):
+                return None
+            classes = sorted({error_class(r.error) or "other" for r in failed})
+            if set(classes) <= self.REPLAN_NEVER or set(classes) & {"cancelled", "needs_owner"}:
+                return None
+            first = [shape_of(s) for s in plan.steps]
+            by_id = {s.id: s for s in plan.steps}
+            bad = sorted({shape_of(by_id[r.id]) for r in failed if r.id in by_id})
+            avoid = ("A first attempt at this request already failed. It used the plan shape " + " > ".join(first) + "; the step(s) that failed: "
+                     + ", ".join(bad) + " (reason: " + ", ".join(classes) + "). Make a DIFFERENT plan: another helper, or look things up first, "
+                     "or use a step that asks the owner; do not repeat that shape.")
+            mode = str(run.get("mode") or DEFAULT_MODE)
+            caps = await self._catalogue(mode)
+            second = await asyncio.wait_for(self._make_plan(str(run.get("task") or ""), caps, mode, "", avoid=avoid), 150.0)
+            if [shape_of(s) for s in second.steps] == first:
+                return None
+            self._record_episode({**run, "state": "failed"}, plan, attempt=1)          # the failed first attempt is learned from too
+            run["replan"] = {"from": first, "classes": classes}
+            run["plan"], run["results"], run["running"] = plan_to_dict(second), {}, []
+            self._persist(run)
+            return second
+        except Exception as exc:                          # a failed re-plan only means the original failure stands
+            self.logger.warning("main_agent re-plan not possible: {}", type(exc).__name__)
+            return None
+
     def _ep(self) -> Episodes:
         """The episode log, in a learning folder next to the run files (owner-only; see episodes.py for what is and is not kept)."""
         ep = self.__dict__.get("_episodes")
@@ -945,7 +988,7 @@ class MainAgentPlugin(NekoPluginBase):
             ep = self.__dict__["_episodes"] = Episodes(self._store.dir.parent / "main_agent_learning")
         return ep
 
-    def _record_episode(self, run: dict[str, Any], plan: Plan | None, planning_error: str = "") -> None:
+    def _record_episode(self, run: dict[str, Any], plan: Plan | None, planning_error: str = "", attempt: int = 1) -> None:
         """One line per finished task. A held task is recorded when it finishes, not while it waits. Never raises."""
         try:
             state = str(run.get("state") or "")
@@ -961,7 +1004,7 @@ class MainAgentPlugin(NekoPluginBase):
             self._ep().record(run_id=run.get("run_id", ""), task=str(run.get("task") or ""), source=str(run.get("source") or ""),
                               mode=str(run.get("mode") or ""), state=state, shape=[x["ref"] for x in steps], steps=steps,
                               seconds=max(0.0, finished - started) if started else 0.0, asked=bool(run.get("pending_input")),
-                              held_untrusted=bool(run.get("untrusted_hold")), planning_error=planning_error)
+                              held_untrusted=bool(run.get("untrusted_hold")), planning_error=planning_error, attempt=attempt)
         except Exception as exc:
             self.logger.warning("main_agent could not record an episode: {}", type(exc).__name__)
 
@@ -1166,18 +1209,32 @@ class MainAgentPlugin(NekoPluginBase):
                 run["running"].remove(step.id)
             self._persist(run)
 
+        async def go(pl: Plan, pri: dict[str, StepResult] | None) -> list[StepResult]:
+            return await run_plan(
+                pl, self._dispatch, parallel=_int_env("MAIN_AGENT_PARALLEL", 3, 1, 6),
+                step_timeout=float(_int_env("MAIN_AGENT_STEP_TIMEOUT", 240, 10, 1800)),
+                total_timeout=float(_int_env("MAIN_AGENT_TOTAL_TIMEOUT", 600, 30, 3600)),
+                cancel=cancel, on_progress=on_progress, on_start=on_start, prior=pri)
+
         results: list[StepResult] = []
         cancelled = False
         try:
-            results = await run_plan(
-                plan, self._dispatch, parallel=_int_env("MAIN_AGENT_PARALLEL", 3, 1, 6),
-                step_timeout=float(_int_env("MAIN_AGENT_STEP_TIMEOUT", 240, 10, 1800)),
-                total_timeout=float(_int_env("MAIN_AGENT_TOTAL_TIMEOUT", 600, 30, 3600)),
-                cancel=cancel, on_progress=on_progress, on_start=on_start, prior=prior)
+            results = await go(plan, prior)
             cancelled = bool(cancel and cancel.is_set())
+            retried = False
+            if not cancelled and not prior:
+                again = await self._replan_once(run, plan, results, cancel)      # self-correction: one different plan after a definite failure
+                if again is not None:
+                    plan, retried = again, True
+                    results = await go(plan, None)
+                    cancelled = bool(cancel and cancel.is_set())
             run["state"] = run_state(plan, results, cancelled)
             # the owner hears it through N.E.K.O's chat model: a result with screen-derived text goes as the gateway cleared it
             body = _stopped_text(plan, results) if cancelled else final_text(plan, await self._screen_safe(results))
+            if retried and not cancelled:
+                run["replan"]["rescued"] = run["state"] == "done"
+                body = ("The first way did not work, so I tried another way. " if run["state"] == "done"
+                        else "I tried two different ways and neither worked. ") + body
         except Exception as exc:               # never leave the run "running" or the lock held
             run["state"] = "failed"
             body = f"The main agent hit a problem and stopped ({type(exc).__name__})."
@@ -1186,7 +1243,7 @@ class MainAgentPlugin(NekoPluginBase):
             run["running"] = []
             run["finished"] = time.time()
             self._persist(run)
-            self._record_episode(run, plan)
+            self._record_episode(run, plan, attempt=2 if run.get("replan") else 1)
             self._release(rid)                 # only this run's own claim
         self._say(body, run)
 
