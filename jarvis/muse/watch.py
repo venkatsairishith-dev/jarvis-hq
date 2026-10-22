@@ -1,4 +1,7 @@
-"""Durable page-watch logic (plan P7 step 2): conditions, backoff, diffs, atomic persistence and a small scheduler. Pure, no network."""
+"""Durable page-watch logic (plan P7 step 2): conditions, backoff, diffs, atomic persistence and a small scheduler. Pure, no network.
+
+Provenance: behaviour ported from openmuse (github.com/CopilotKit/openmuse, MIT, Copyright (c) 2026 OpenMuse contributors), commit 1ac68f3, apps/server/src/engine/service.ts (monitors) and apps/server/src/engine/page-diff.ts; reimplemented in Python.
+"""
 from __future__ import annotations
 
 import difflib

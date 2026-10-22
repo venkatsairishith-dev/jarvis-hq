@@ -4,6 +4,8 @@ Sign convention (ported from the source product): a POSITIVE amount is an
 EXPENSE and a NEGATIVE amount is INCOME. Currencies are never converted;
 all totals are reported per currency. Raw descriptions are never logged and
 errors never echo file contents.
+
+Provenance: behaviour ported from openmuse (github.com/CopilotKit/openmuse, MIT, Copyright (c) 2026 OpenMuse contributors), commit 1ac68f3, apps/server/src/engine/finance.ts; reimplemented in Python.
 """
 from __future__ import annotations
 

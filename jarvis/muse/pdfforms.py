@@ -3,6 +3,8 @@
 inspect() lists AcroForm fields, plan_fill() validates values without touching
 any file, and fill() writes a filled copy only when explicitly approved.
 Receipts and error messages never contain field values or file text.
+
+Provenance: behaviour ported from openmuse (github.com/CopilotKit/openmuse, MIT, Copyright (c) 2026 OpenMuse contributors), commit 1ac68f3, packages/integrations/src/pdf.ts; reimplemented in Python.
 """
 from __future__ import annotations
 

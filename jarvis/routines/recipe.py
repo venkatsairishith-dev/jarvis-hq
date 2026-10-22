@@ -6,6 +6,8 @@ exact recipe version; ``replay`` renders a list of recorded runs independently.
 
 Pure Python, no network.  YAML is parsed with ``yaml.safe_load`` only.
 Error messages never contain recipe text (only field names / indices).
+
+Provenance: recipe idea from goose (github.com/aaif-goose/goose, Apache-2.0), commit 6835dd4, crates/goose-cli/src/recipes/; reimplemented in Python, no goose code.
 """
 
 from __future__ import annotations

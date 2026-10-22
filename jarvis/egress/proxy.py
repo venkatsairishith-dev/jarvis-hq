@@ -7,6 +7,8 @@ lookup. The proxy binds only through binds.assert_bind (loopback or an explicitl
 log(); bodies, headers, query strings and credentials are never logged.
 
 Run: python jarvis/egress/proxy.py --host 127.0.0.1 --port 4750 [--allow-host IP]... [--domain-allow PATTERN]...
+
+Provenance: behaviour of Stripe Smokescreen (github.com/stripe/smokescreen, MIT): resolve, refuse non-public, connect to the vetted address; reimplemented in Python. The Smokescreen binary stays the fallback (jarvis/tools/jarvis.lock.json).
 """
 from __future__ import annotations
 

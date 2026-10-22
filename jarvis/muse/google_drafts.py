@@ -8,6 +8,8 @@ touches the network itself.
 
 Write helpers return receipt-like dicts holding ids and counts only, never
 bodies, subjects or addresses, so they are safe for an audit log.
+
+Provenance: behaviour ported from openmuse (github.com/CopilotKit/openmuse, MIT, Copyright (c) 2026 OpenMuse contributors), commit 1ac68f3, packages/integrations/src/google.ts (reviewed writes); reimplemented in Python, with no send path.
 """
 
 from __future__ import annotations

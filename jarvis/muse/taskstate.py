@@ -8,6 +8,8 @@ Worker protocol:
   mark_effect_done] -> complete | fail | request_approval.
 A task whose lease lapses while an irreversible effect was in flight
 (outcome_uncertain=1) is failed by recover() and never requeued automatically.
+
+Provenance: behaviour ported from openmuse (github.com/CopilotKit/openmuse, MIT, Copyright (c) 2026 OpenMuse contributors), commit 1ac68f3, apps/server/src/engine/worker.ts and service.ts (task leases, approval waits); reimplemented in Python.
 """
 from __future__ import annotations
 

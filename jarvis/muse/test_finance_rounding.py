@@ -9,6 +9,9 @@ def rows(n):
 
 def test_ten_rows_of_ten_paise_total_exactly_one_rupee():
     r = rows(10)
-    assert sum([0.1] * 10) != 1.0                                # plain float addition drifts (0.9999999999999999); the report must not
+    drift = 0.0
+    for _ in range(10):                                          # plain float addition drifts (0.9999999999999999); the report must not.
+        drift += 0.1                                             # (a loop, not sum(): Python 3.12+ sum() compensates and returns 1.0)
+    assert drift != 1.0
     assert summarize(r)["INR"]["Food"]["expense"] == 1.0
     assert spent_on(r, ["swiggy"], "2026-09") == {"INR": 1.0}

@@ -2,6 +2,8 @@
 
 Hard rules: a provider is in exactly one lane; a public-lane token never reaches a private-lane provider or combo;
 a paid provider is never used; every budget defaults to $0; key material never appears in errors, reprs or snapshots.
+
+Provenance: features modelled on OmniRoute (github.com/diegosouzapw/OmniRoute, MIT) and 9router (github.com/decolua/9router, MIT): combos, key pools, quotas, circuit breaker, budgets; reimplemented in Python, no code copied.
 """
 from .anthropic_client import AnthropicClient, ClientError, UpstreamHTTP
 from .breaker import CircuitBreaker
