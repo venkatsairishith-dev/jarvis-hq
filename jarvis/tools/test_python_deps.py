@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-SUBMODULE_PATH = "jarvis/third_party/neko-tauri"
+SUBTREE_PATH = "jarvis/desktop/shell"   # was a submodule at jarvis/third_party/neko-tauri until plan P1 step 7
 OFFICIAL_URL = "https://github.com/Project-N-E-K-O/N.E.K.O.-Tauri"
 GROUPS = ("jarvis", "jarvis-dev")
 # Import name -> distribution name, for every package in the jarvis groups that JARVIS code imports.
@@ -137,42 +137,33 @@ def test_requirement_files_pin_exactly_and_say_where_pins_come_from(filename):
         assert from_docs or measured, f"pin without its source: {line!r}"
 
 
-# ---------- N.E.K.O.-Tauri submodule ----------
+# ---------- N.E.K.O.-Tauri subtree ----------
 
-def test_gitmodules_points_at_the_official_url():
-    text = (REPO / ".gitmodules").read_text(encoding="utf-8")
-    sections = re.split(r"(?m)^\[submodule ", text)
-    entry = [s for s in sections if re.search(rf"(?m)^\s*path\s*=\s*{re.escape(SUBMODULE_PATH)}\s*$", s)]
-    assert len(entry) == 1, f"{SUBMODULE_PATH} not in .gitmodules"
-    url = re.search(r"(?m)^\s*url\s*=\s*(\S+)\s*$", entry[0]).group(1)
-    assert url.removesuffix(".git") == OFFICIAL_URL
+def test_the_submodule_is_gone():
+    assert not (REPO / ".gitmodules").exists() or "neko-tauri" not in (REPO / ".gitmodules").read_text(encoding="utf-8")
 
 
 def _readme_pin() -> str:
     readme = (REPO / "jarvis/third_party/README.md").read_text(encoding="utf-8")
-    row = [line for line in readme.splitlines() if line.startswith("|") and f"`{SUBMODULE_PATH}`" in line]
-    assert len(row) == 1, "README has no table row for the submodule"
+    row = [line for line in readme.splitlines() if line.startswith("|") and f"`{SUBTREE_PATH}`" in line]
+    assert len(row) == 1, "README has no table row for the subtree"
+    assert OFFICIAL_URL in row[0]
     pins = re.findall(r"`([0-9a-f]{40})`", row[0])
     assert len(pins) == 1, "README row has no 40-character commit pin"
     return pins[0]
 
 
-def test_submodule_commit_equals_the_readme_pin():
-    out = subprocess.run(
-        ["git", "ls-files", "--stage", "--", SUBMODULE_PATH],
-        cwd=REPO, capture_output=True, text=True, check=True,
-    ).stdout.split()
-    assert out and out[0] == "160000", f"{SUBMODULE_PATH} is not a submodule (gitlink) in the index"
-    assert out[1] == _readme_pin()
+def test_subtree_split_commit_equals_the_readme_pin():
+    """git subtree add --squash records the upstream commit in the squash commit message (git-subtree-split)."""
+    log = subprocess.run(["git", "log", "--format=%B", "--grep", f"git-subtree-dir: {SUBTREE_PATH}", "-n", "1"],
+                         cwd=REPO, capture_output=True, text=True, check=True).stdout
+    if not log.strip():
+        pytest.skip("subtree history not available (shallow clone)")
+    split = re.search(r"git-subtree-split: ([0-9a-f]{40})", log)
+    assert split and split.group(1) == _readme_pin()
 
 
-def test_checked_out_submodule_is_at_the_pin_and_apache_2():
-    checkout = REPO / SUBMODULE_PATH
-    if not (checkout / ".git").exists():
-        pytest.skip("submodule not initialised (git submodule update --init)")
-    head = subprocess.run(
-        ["git", "-C", str(checkout), "rev-parse", "HEAD"], capture_output=True, text=True, check=True,
-    ).stdout.strip()
-    assert head == _readme_pin()
-    licence = (checkout / "LICENSE").read_text(encoding="utf-8")
+def test_subtree_is_present_and_apache_2():
+    licence = (REPO / SUBTREE_PATH / "LICENSE").read_text(encoding="utf-8")
     assert "Apache License" in licence and "Version 2.0, January 2004" in licence
+    assert (REPO / SUBTREE_PATH / "NOTICE").is_file()
