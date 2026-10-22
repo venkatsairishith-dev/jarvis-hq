@@ -145,3 +145,16 @@ def test_killing_the_supervisor_leaves_no_orphans(tmp_path):
         assert survivors == []
     finally:
         p.kill()
+
+
+def test_laptop_manifest_parses_is_loopback_only_and_matches_neko_start():
+    comps = manifest.load(HERE / "manifests" / "laptop.json")
+    assert [c.name for c in manifest.order(comps)] == ["privacy-gateway", "local-speech", "widget", "neko"] or \
+        [c.name for c in manifest.order(comps)][-1] == "neko"
+    assert all(c.host == "127.0.0.1" for c in comps)
+    start = (HERE.parent / "scripts" / "neko-start.ps1").read_text(encoding="utf-8")
+    for c in comps:
+        assert str(c.port) in start, f"{c.name}: port {c.port} not in neko-start.ps1"
+    env = next(c for c in comps if c.name == "neko").env
+    for k in env:
+        assert k in start, f"{k} is not set by neko-start.ps1"
