@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/remote-schema.json",
+  "identifier": "local-backend",
+  "description": "Allow the embedded N.E.K.O backend UI to receive cursor radar events and control its own desktop window.",
+  "windows": ["main"],
+  "local": false,
+  "remote": {
+    "urls": ["http://127.0.0.1:48911/*"]
+  },
+  "platforms": ["linux", "macOS", "windows"],
+  "permissions": [
+    "core:event:default",
+    "allow-set-click-through",
+    "allow-open-new-window",
+    "allow-get-screen-capture-capabilities",
+    "allow-get-screen-capture-sources",
+    "allow-capture-screen-source"
+  ]
+}
