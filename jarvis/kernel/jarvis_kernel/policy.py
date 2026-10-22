@@ -370,10 +370,14 @@ SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".clau
                      "sensitive_sites.json",
                      # Audit M10 (2026-10-18): the files that decide what leaves, what is checked and who may close a task. Names that
                      # only JARVIS has are RED wherever they are; the generic names are in JARVIS_SAFETY_FILES below.
-                     "gitleaks_gate.py", "llm_proxy.py", "projectfix.py", "lab_runner.py", "control_auth.py"}
+                     "gitleaks_gate.py", "llm_proxy.py", "projectfix.py", "lab_runner.py", "control_auth.py",
+                     # Plan P1 step 9 (2026-10-22): the browser relay that decides which tabs an agent can drive.
+                     "cdp_relay.py"}
 # Generic file names (a Django project has its own tasks.py and owner.py): RED only when the path is inside JARVIS's own
 # packages (a JARVIS_DIRS piece such as jarvis, jarvis_kernel, jarvis_node), so another project's files are not caught.
-JARVIS_SAFETY_FILES = {"scrub.py", "owner.py", "tasks.py", "jobs.py"}
+JARVIS_SAFETY_FILES = {"scrub.py", "owner.py", "tasks.py", "jobs.py",
+                       # Plan P1 step 9: whole packages (router, egress proxy, supervisor); a generic directory name, so inside JARVIS only.
+                       "router", "egress", "supervisor"}
 # project.apply_patch (projectfix): in ANY project the files that set how coding agents run there stay RED (console only);
 # the rest of SAFETY_COMPONENTS is RED only when the project is JARVIS itself (its name, or a path inside JARVIS's own
 # packages), because in another project a store.py or settings.json is just that project's code.
