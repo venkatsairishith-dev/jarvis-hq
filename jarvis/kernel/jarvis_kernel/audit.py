@@ -24,6 +24,28 @@ def _h(prev: str, ts: float, kind: str, payload: str) -> str:
     return hashlib.sha256(f"{prev}|{ts!r}|{kind}|{payload}".encode()).hexdigest()
 
 
+def component_info(name: str, version: str, path) -> dict:
+    """{"name", "version", "sha256"} for the file at `path`; sha256 is "missing" when it cannot be read."""
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        digest = h.hexdigest()
+    except OSError:
+        digest = "missing"
+    return {"name": name, "version": version, "sha256": digest}
+
+
+def _valid_component(c) -> bool:
+    if not isinstance(c, dict) or set(c) != {"name", "version", "sha256"}:
+        return False
+    if not isinstance(c["name"], str) or not isinstance(c["version"], str) or not isinstance(c["sha256"], str):
+        return False
+    s = c["sha256"]
+    return s == "missing" or (len(s) == 64 and all(ch in "0123456789abcdef" for ch in s))
+
+
 class AuditLog:
     def __init__(self, db: sqlite3.Connection):
         self.db = db
@@ -38,7 +60,11 @@ class AuditLog:
         r = self.db.execute("SELECT seq, hash FROM audit ORDER BY seq DESC LIMIT 1").fetchone()
         return r if r else (0, GENESIS)
 
-    def append(self, kind: str, payload: dict) -> int:
+    def append(self, kind: str, payload: dict, component: dict = None) -> int:
+        if component is not None:
+            if not _valid_component(component):
+                raise ValueError("malformed component")
+            payload = {**payload, "component": component}   # inside the payload, so the existing hash covers it
         body = json.dumps(payload, sort_keys=True, default=str)
         if hasattr(self.db, "tx"):
             # SafeDB: its connection lock is the only lock (a second, module-level one would invert the lock order
@@ -79,6 +105,13 @@ class AuditLog:
                 return False, f"gap or reorder at seq {seq}"
             if p != prev or _h(prev, ts, kind, payload) != h:
                 return False, f"chain broken at seq {seq}"
+            if '"component"' in payload:         # cheap test first: most events have none, and verify() walks the whole chain
+                try:
+                    data = json.loads(payload)
+                except ValueError:
+                    data = None
+                if isinstance(data, dict) and "component" in data and not _valid_component(data["component"]):
+                    return False, f"malformed component at seq {seq}"
             prev = h
         if anchor is not None:
             if count < anchor["seq"]:
