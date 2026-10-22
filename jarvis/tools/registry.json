@@ -2695,5 +2695,30 @@
    "jarvis/docs/neko/MODEL_SELECTOR_2026-10-20.md"
   ],
   "licence_spdx": "MIT"
+ },
+ {
+  "name": "Hermes Agent skills_guard.py (vendored scanner)",
+  "category": "skills",
+  "upstream_url": "https://github.com/NousResearch/hermes-agent",
+  "licence": "MIT",
+  "licence_spdx": "MIT",
+  "pinned_version": "tag v0.22.2, commit d923a5eb487a17c0a68801bba9ef0f56c81040a8, file sha256 2b39ae73585709c51af62cbf8c3f23c5330ca1e297ac01453e9328996e281562",
+  "pin_location": [
+   "jarvis/skills/vendor/hermes/README.md"
+  ],
+  "integration": "vendored source",
+  "machine": "laptop (Windows) and VM; standard library only",
+  "jarvis_files": [
+   "jarvis/skills/vendor/hermes/skills_guard.py",
+   "jarvis/skills/tests/test_hermes_skills_guard.py",
+   "jarvis/skills/tests/test_vendored_guard_acceptance.py"
+  ],
+  "features_used": [
+   "scan_skill",
+   "should_allow_install",
+   "format_scan_report",
+   "content_hash"
+  ],
+  "evidence": "Reviewed 2026-10-22 before vendoring: no eval/exec/open/subprocess/network calls; only write is the optional scan cache (callers pass cache_dir). Copied verbatim; MIT LICENSE kept beside it."
  }
 ]
