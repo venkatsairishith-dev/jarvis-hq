@@ -28,7 +28,7 @@ class Fake:
 
     def __init__(self, windows_before="", windows_after="", run=None, accept=True, folder=False):
         self.before, self.after, self.run, self.accept, self.folder = windows_before, windows_after, run, accept, folder
-        self.ps_calls, self.posts, self.phase, self.t = [], [], 0, 0.0
+        self.ps_calls, self.posts, self.phase, self.t, self.said = [], [], 0, 0.0, []
 
     def ps(self, command, timeout=20.0):
         self.ps_calls.append(command)
@@ -47,7 +47,7 @@ class Fake:
 
     def env(self):
         env = TB.Env(post=self.post, read_run=lambda rid: self.run, ps=self.ps, sleep=self._sleep, now=self._now,
-                     folder_exists=lambda p: self.folder)
+                     folder_exists=lambda p: self.folder, say=self.said.append)
         return env
 
     def _sleep(self, s):
@@ -160,3 +160,25 @@ def test_closing_commands_are_built_safely():
         pass
     else:
         raise AssertionError("a pid with text in it must be refused")
+
+
+def test_the_person_watching_sees_each_task_announced_and_the_result_stays_on_screen_before_it_is_closed():
+    f = Fake(windows_after=NOTEPAD, run=run_record())
+    env = f.env()
+    env.linger = 6.0
+    t_before = f.t
+    TB.run_task(TB.BY_ID["T01"], env)
+    text = "\n".join(f.said)
+    assert '>>> T01: saying "open Notepad"' in text and "PASS" in text and "leaving it on screen for 6 s" in text
+    assert f.t - t_before >= 6.0                                                                  # the sleep happened before the close
+    assert text.index("PASS") < text.index("leaving it")
+    assert any("Stop-Process" in c for c in f.ps_calls)
+
+
+def test_a_failed_task_is_not_lingered_and_the_banner_says_what_to_expect():
+    f = Fake(windows_after="", run=run_record(state="failed", error="timed out"))
+    env = f.env()
+    report = TB.run_all(env, only={"T01"})
+    said = "\n".join(f.said)
+    assert "Watch the screen" in said and "FAIL" in said and "leaving it on screen" not in said
+    assert report["passed"] == 0

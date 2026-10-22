@@ -220,6 +220,22 @@ def _stopped_text(plan: Plan, results: list[StepResult]) -> str:
     return " ".join(lines)
 
 
+def plan_failure_hint(message: str) -> str:
+    """One plain sentence on what the owner can do about a planning failure (appended to the chat message; never replaces it)."""
+    low = str(message or "").lower()
+    if "ratelimit" in low or "rate limit" in low or "429" in low:
+        return " The planning service is busy right now; I already asked three times. Try again in a minute."
+    if "api key" in low or "unauthorized" in low:
+        return " The planner's key is missing or wrong: it is set in N.E.K.O's settings."
+    if "none of the available helpers" in low:
+        return " If you spoke, I may not have caught a task: say it again in one sentence right after \"Hey Neko\"."
+    if "did not return a plan" in low or "not valid json" in low or "wrong shape" in low:
+        return " The planner model answered in the wrong format; asking again usually works, and a stronger planner model fixes it for good."
+    if "did not answer" in low or "not set up" in low:
+        return " The planner model could not be reached: check its address and key in N.E.K.O's settings."
+    return ""
+
+
 LLM_RETRIES = 2                                   # extra tries after a transient provider error (3 calls at most)
 
 
@@ -923,7 +939,7 @@ class MainAgentPlugin(NekoPluginBase):
         self._runs.pop(run["run_id"], None)
         self._release(run["run_id"])
         if speak:
-            self._say(message if state == "cancelled" else f"I could not plan that task: {message}", run)
+            self._say(message if state == "cancelled" else f"I could not plan that task: {message}{plan_failure_hint(message)}", run)
 
     async def _plan_unless_stopped(self, task: str, mode: str, cancel: asyncio.Event, run: dict[str, Any], ctx_obj: Any) -> Plan:
         """Plan, unless Stop arrives first: then planning is cancelled and _StoppedWhilePlanning is raised."""

@@ -176,6 +176,9 @@ class Env:
     runs_dir: Path = field(default_factory=lambda: Path(os.environ.get("MAIN_AGENT_STATE_DIR") or
                                                           Path(os.environ.get("NEKO_STORAGE_SELECTED_ROOT") or r"D:\jarvis\N.E.K.O-data") / "main_agent_runs"))
     folder_exists: object = lambda p: os.path.isdir(p)
+    say: object = staticmethod(lambda text: print(text, flush=True))     # live progress, so a person watching the console sees each step
+    linger: float = 5.0              # seconds the result stays on screen before the baseline closes the window it opened
+    pause: float = 2.0               # seconds between two tasks
 
 
 def default_env() -> Env:
@@ -224,6 +227,7 @@ def wait_for(env: Env, rid: str, timeout: float, poll: float = 2.0):
 
 def run_task(task: Task, env: Env, timeout: float = 300.0) -> dict:
     before = windows(env.ps) if task.expect == "effect" else []
+    env.say(f"\n>>> {task.id}: saying \"{task.say}\"  (watch the screen)")
     t0 = env.now()
     answer = env.post("/api/task", {"task": task.say, "mode": "work"})
     started = bool(answer.get("ok")) and bool(answer.get("run_id"))
@@ -242,7 +246,11 @@ def run_task(task: Task, env: Env, timeout: float = 300.0) -> dict:
     if task.expect == "honest_refusal":
         extra["created"] = env.folder_exists("D:\\test-live")
     verdict, why = judge(task, run, rows_after, started, extra)
+    env.say(f"    {verdict.upper()} after {seconds} s: {why}")
     if task.expect == "effect":                                      # close only what this task opened
+        if verdict == "pass" and env.linger > 0:
+            env.say(f"    (leaving it on screen for {env.linger:.0f} s so you can see it)")
+            env.sleep(env.linger)
         for proc, pid, title in new_windows(before, rows_after):
             if task.title.lower() in title.lower():
                 env.ps(close_command(proc, pid, title))
@@ -254,7 +262,10 @@ def run_all(env: Env, only=None, timeout: float = 300.0) -> dict:
     tasks = [t for t in TASKS if not only or t.id in only]
     blocked = blocked_start(windows(env.ps)) if any(t.expect == "effect" or t.expect == "stop" for t in tasks) else ""
     rows = []
-    for t in tasks:
+    env.say("=== JARVIS desktop baseline: %d tasks. Watch the screen; windows will open and close by themselves. Do not click while a task runs. ===" % len(tasks))
+    for i, t in enumerate(tasks):
+        if i and env.pause > 0:
+            env.sleep(env.pause)
         if blocked and t.expect in ("effect", "stop"):
             rows.append({"id": t.id, "said": t.say, "result": "blocked", "reason": blocked, "seconds": 0.0, "run_id": "", "state": None, "asked": False})
             continue
@@ -271,13 +282,17 @@ def main(argv=None) -> int:
     ap.add_argument("--only", help="comma separated task ids, e.g. T01,T03")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--timeout", type=float, default=300.0)
+    ap.add_argument("--linger", type=float, default=5.0, help="seconds each opened window stays on screen after the check (default 5)")
+    ap.add_argument("--pause", type=float, default=2.0, help="seconds between tasks (default 2)")
     a = ap.parse_args(argv)
     if a.list:
         for t in TASKS:
             print(f"{t.id}  {t.say}   [{t.expect}] {t.note}")
         return 0
     only = {x.strip() for x in a.only.split(",")} if a.only else None
-    report = run_all(default_env(), only, a.timeout)
+    env = default_env()
+    env.linger, env.pause = a.linger, a.pause
+    report = run_all(env, only, a.timeout)
     RESULTS.mkdir(parents=True, exist_ok=True)
     out = RESULTS / time.strftime("baseline-%Y%m%d-%H%M%S.json")
     out.write_text(json.dumps(report, indent=1), encoding="utf-8")

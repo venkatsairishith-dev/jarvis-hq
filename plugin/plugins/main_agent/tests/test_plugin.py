@@ -359,3 +359,12 @@ def test_a_wrong_key_or_a_bad_request_is_never_asked_again(monkeypatch):
         with pytest.raises(StepFailed):
             asyncio.run(object.__new__(ma.MainAgentPlugin)._llm([{"role": "user", "content": "hi"}]))
         assert (len(calls), waits) == (1, [])
+
+
+def test_a_plan_failure_message_keeps_its_opening_and_adds_one_plain_hint():
+    hint = ma.plan_failure_hint
+    assert "busy" in hint("The agent model did not answer (RateLimitError).")
+    assert "key" in hint("The agent model refused the request: its API key is missing or wrong.")
+    assert "say it again" in hint("None of the available helpers can do that request.")
+    assert "wrong format" in hint("The planner's plan was not valid JSON.")
+    assert hint("some other reason") == "" and hint("") == ""
