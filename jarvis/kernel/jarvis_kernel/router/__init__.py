@@ -10,5 +10,7 @@ from .keypool import KeyPool, NoKey
 from .quota import Quota
 from .router import NoRoute, Pick, Router
 
-__all__ = ["CircuitBreaker", "Budget", "Combo", "ComboError", "RouteDenied", "Target", "load_combos", "resolve",
+from .anthropic_client import AnthropicClient, ClientError, UpstreamHTTP
+
+__all__ = ["AnthropicClient", "ClientError", "UpstreamHTTP","CircuitBreaker", "Budget", "Combo", "ComboError", "RouteDenied", "Target", "load_combos", "resolve",
            "KeyPool", "NoKey", "Quota", "NoRoute", "Pick", "Router"]
