@@ -1398,8 +1398,8 @@
  {
   "name": "OmniRoute (model gateway, trial)",
   "category": "infra",
-  "upstream_url": "unknown",
-  "licence": "unknown",
+  "upstream_url": "https://github.com/diegosouzapw/OmniRoute",
+  "licence": "MIT",
   "pinned_version": "3.8.51",
   "pin_location": [
    "jarvis/deploy/jarvis-omniroute.service:2"
@@ -1407,18 +1407,130 @@
   "integration": "npm",
   "machine": "Oracle VM",
   "jarvis_files": [
-   "jarvis/deploy/jarvis-omniroute.service"
+   "jarvis/deploy/jarvis-omniroute.service",
+   "jarvis/kernel/jarvis_kernel/router/ (features ported, 2026-10-22)"
   ],
   "features_used": [
-   "installed but routes nothing (trial)"
+   "installed on the VM but routes nothing (trial)",
+   "features ported into jarvis_kernel/router: combos, key pools, quotas, circuit breaker, budgets, response cache"
   ],
   "unused_features": [],
   "size_class": "unknown",
-  "packaging_recommendation": "stay external",
-  "packaging_reason": "Trial status; holds provider keys.",
+  "packaging_recommendation": "port features; retire the service once the router is wired in (plan P3)",
+  "packaging_reason": "Node app with 2026 RCE advisories; lanes must be enforced inside the kernel. Holds provider keys until retired.",
   "evidence": [
-   "jarvis/docs/01_RESEARCH_AUDIT.md:12"
-  ]
+   "jarvis/docs/01_RESEARCH_AUDIT.md:12",
+   "jarvis/docs/01_RESEARCH_AUDIT.md (integration build table, 2026-10-22/23)"
+  ],
+  "licence_spdx": "MIT"
+ },
+ {
+  "name": "openmuse (features ported)",
+  "category": "agents",
+  "upstream_url": "https://github.com/CopilotKit/openmuse",
+  "licence": "MIT",
+  "pinned_version": "commit 1ac68f3 (behaviour reference only; no openmuse code or process ships)",
+  "pin_location": [
+   "jarvis/muse/*.py (Provenance lines name 'Copyright (c) 2026 OpenMuse contributors')"
+  ],
+  "integration": "ported (reimplemented in Python)",
+  "machine": "laptop (built; not yet wired in)",
+  "jarvis_files": [
+   "jarvis/muse/watch.py",
+   "jarvis/muse/finance.py",
+   "jarvis/muse/taskstate.py",
+   "jarvis/muse/pdfforms.py",
+   "jarvis/muse/google_drafts.py"
+  ],
+  "features_used": [
+   "page watches with backoff and diffs",
+   "finance CSV summary",
+   "durable task state with leases and approval waits",
+   "PDF form inspect and approved fill",
+   "Gmail/Calendar drafts with reviewed writes (no send path)"
+  ],
+  "unused_features": [
+   {
+    "feature": "CopilotKit Intelligence chat threads (cloud)",
+    "evidence": "jarvis/docs/neko/research-2026-10-22/notes-integration/agent_runtimes_integration.md"
+   },
+   {
+    "feature": "Expo mobile app",
+    "evidence": "jarvis/docs/neko/research-2026-10-22/notes-integration/agent_runtimes_integration.md"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "ported, no upstream code",
+  "packaging_reason": "Owner asked for openmuse's features inside JARVIS; running openmuse needs a CopilotKit cloud key and sends chats there.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md (integration build table, 2026-10-22/23)"
+  ],
+  "licence_spdx": "MIT"
+ },
+ {
+  "name": "9router (features ported)",
+  "category": "infra",
+  "upstream_url": "https://github.com/decolua/9router",
+  "licence": "MIT",
+  "pinned_version": "none (behaviour reference only; not installed anywhere)",
+  "pin_location": [
+   "jarvis/kernel/jarvis_kernel/router/__init__.py (Provenance line)"
+  ],
+  "integration": "ported (reimplemented in Python)",
+  "machine": "laptop and Oracle VM (as part of the kernel)",
+  "jarvis_files": [
+   "jarvis/kernel/jarvis_kernel/router/"
+  ],
+  "features_used": [
+   "combos (ordered fallback)",
+   "multi-key rotation",
+   "quota tracking"
+  ],
+  "unused_features": [
+   {
+    "feature": "subscription OAuth account pooling (provider terms risk)",
+    "evidence": "jarvis/docs/neko/research-2026-10-22/notes-build-plan/routers_and_providers.md"
+   },
+   {
+    "feature": "RTK token saver (rewrites text after redaction)",
+    "evidence": "jarvis/docs/neko/research-2026-10-22/notes-build-plan/routers_and_providers.md"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "never install; features ported",
+  "packaging_reason": "2026 CVEs including CVE-2026-108593 (writes into Hermes config); default password and cloud sync on by default.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md (integration build table, 2026-10-22/23)"
+  ],
+  "licence_spdx": "MIT"
+ },
+ {
+  "name": "goose recipes (concept ported)",
+  "category": "agents",
+  "upstream_url": "https://github.com/aaif-goose/goose",
+  "licence": "Apache-2.0",
+  "pinned_version": "commit 6835dd4 (behaviour reference only)",
+  "pin_location": [
+   "jarvis/routines/recipe.py (Provenance line)"
+  ],
+  "integration": "ported (reimplemented in Python, no goose code)",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/routines/recipe.py"
+  ],
+  "features_used": [
+   "parameterised recipes",
+   "tool allow-list",
+   "replay"
+  ],
+  "unused_features": [],
+  "size_class": "small",
+  "packaging_recommendation": "ported, no upstream code",
+  "packaging_reason": "Only the recipe idea is needed; the goose runtime is dropped (plan).",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md (integration build table, 2026-10-22/23)"
+  ],
+  "licence_spdx": "Apache-2.0"
  },
  {
   "name": "Stripe Smokescreen (egress proxy)",
@@ -1434,14 +1546,17 @@
   "jarvis_files": [
    "jarvis/config/egress.json",
    "jarvis/deploy/jarvis-smokescreen.service",
-   "VM path tools/smokescreen/bin/smokescreen_v0.1.0_linux_arm64 (jarvis-smokescreen.service:8)"
+   "VM path tools/smokescreen/bin/smokescreen_v0.1.0_linux_arm64 (jarvis-smokescreen.service:8)",
+   "jarvis/egress/proxy.py",
+   "jarvis/egress/ssrf_guard.py"
   ],
   "features_used": [
-   "deny private ranges for browser traffic"
+   "deny private ranges for browser traffic (live)",
+   "behaviour ported to jarvis/egress (Python), not yet switched on in config/egress.json"
   ],
   "unused_features": [],
   "size_class": "small",
-  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_recommendation": "ported; binary kept as the fallback until config/egress.json points at jarvis/egress/proxy.py",
   "packaging_reason": "No Windows build (compile fails on SIGUSR2).",
   "evidence": [
    "jarvis/docs/01_RESEARCH_AUDIT.md:59",
