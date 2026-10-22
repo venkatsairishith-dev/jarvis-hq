@@ -1,11 +1,11 @@
-"""Second builder: one bounded Claude Agent SDK run in its own git worktree (owner exception, expires 2026-10-31).
+"""Second builder: one bounded Claude Agent SDK run in its own git worktree (owner exception, expires 2026-11-05).
 
     D:\\jarvis\\tools\\sdk-venv\\Scripts\\python.exe jarvis\\builder\\run_builder.py --worktree D:\\jarvis\\hq-neko-sdk --task-file TASK.md [--model claude-sonnet-5-5] [--max-budget-usd 5] [--max-turns 40]
 
 Rules enforced here, not left to the model:
 - The API key is read from a file under D:\\jarvis-secrets by this process, handed only to the SDK process environment, and scrubbed from
   every line this script prints. It is never put in a prompt.
-- Refuses to run after 2026-10-31 (UTC), or when this machine's own recorded spend would pass the ledger cap.
+- Refuses to run after 2026-11-05 (UTC), or when this machine's own recorded spend would pass the ledger cap.
 - Only inside the given worktree: file tools outside it, any mention of jarvis-secrets, git push/remote changes, and other-process
   commands (rm -rf, shutdown, ssh, curl to hosts) are denied by a PreToolUse hook.
 - Nothing is merged or pushed: the run ends with its edits (and tests it ran) left in the worktree for the reviewer.
@@ -16,14 +16,17 @@ import argparse
 import asyncio
 import datetime as dt
 import json
+import os
 import re
+import uuid
 import sys
 from pathlib import Path
 
 KEY_FILE = Path(r"D:\jarvis-secrets\claude.key")
-LEDGER = Path(r"D:\jarvis\outputs\builder-spend.json")
+LEDGER = Path(r"D:\jarvis\outputs\builder-spend.json")      # old single-file ledger, still counted
+LEDGER_DIR = Path(r"D:\jarvis\outputs\builder-spend")      # one file per run, so parallel runs never overwrite each other
 WORKSPACE_ID = "wrkspc_016a2Nvdk5SmQsdF8qYKvTtR"   # not a secret; the key is not workspace-scoped, so every request names it
-EXPIRES = dt.date(2026, 10, 31)
+EXPIRES = dt.date(2026, 11, 5)     # the credit expires 2026-11-05 (owner, 2026-10-22)
 LEDGER_CAP_USD = 75.0   # this tool's own recorded spend; the owner's org-wide stop is $90 including spend made elsewhere
 ALLOWED_MODELS = {"claude-sonnet-5-5", "claude-haiku-5-5"}   # owner: no Opus
 DENY_BASH = re.compile(r"(jarvis-secrets|git\s+(push|remote|config)|\bssh\b|\bscp\b|\bcurl\b|\bwget\b|Invoke-WebRequest|\brm\s+-rf\b|"
@@ -46,21 +49,33 @@ def check_allowed(today: dt.date, model: str, spent: float, budget: float) -> st
 
 
 def read_spent() -> float:
+    """Recorded spend plus what running builders have reserved (a finished run counts its real cost, a running one its budget)."""
+    total = 0.0
     try:
-        return float(sum(r.get("cost_usd", 0.0) for r in json.loads(LEDGER.read_text(encoding="utf-8"))))
+        total += float(sum(r.get("cost_usd", 0.0) for r in json.loads(LEDGER.read_text(encoding="utf-8"))))
     except (OSError, ValueError):
-        return 0.0
+        pass
+    if LEDGER_DIR.is_dir():
+        for f in LEDGER_DIR.glob("*.json"):
+            try:
+                row = json.loads(f.read_text(encoding="utf-8"))
+                total += float(row["cost_usd"] if row.get("cost_usd") is not None else row.get("reserved", 0.0))
+            except (OSError, ValueError, KeyError):
+                total += 5.0                    # an unreadable row is counted as a typical budget, never as zero
+    return total
 
 
-def record_spend(task: str, model: str, cost: float, turns: int) -> None:
-    try:
-        rows = json.loads(LEDGER.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        rows = []
-    rows.append({"when": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "task": task, "model": model,
-                 "cost_usd": round(cost, 4), "turns": turns})
-    LEDGER.parent.mkdir(parents=True, exist_ok=True)
-    LEDGER.write_text(json.dumps(rows, indent=1), encoding="utf-8")
+def reserve(task: str, model: str, budget: float) -> Path:
+    LEDGER_DIR.mkdir(parents=True, exist_ok=True)
+    path = LEDGER_DIR / f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S')}-{os.getpid()}-{uuid.uuid4().hex[:8]}.json"
+    path.write_text(json.dumps({"task": task, "model": model, "reserved": budget, "cost_usd": None}), encoding="utf-8")
+    return path
+
+
+def record_spend(path: Path, cost: float, turns: int) -> None:
+    row = json.loads(path.read_text(encoding="utf-8"))
+    row.update({"cost_usd": round(cost, 4), "turns": turns, "finished": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")})
+    path.write_text(json.dumps(row), encoding="utf-8")
 
 
 def deny_reason(tool: str, tool_input: dict, worktree: Path) -> str | None:
@@ -102,6 +117,7 @@ async def run(args: argparse.Namespace) -> int:
     if not key:
         print("REFUSED: empty key file")
         return 3
+    ledger_row = reserve(Path(args.task_file).name, args.model, args.max_budget_usd)
 
     async def pre_tool(input_data, tool_use_id, context):   # noqa: ARG001
         reason = deny_reason(input_data.get("tool_name", ""), input_data.get("tool_input") or {}, worktree)
@@ -127,7 +143,7 @@ async def run(args: argparse.Namespace) -> int:
         elif isinstance(msg, ResultMessage):
             cost, turns = msg.total_cost_usd or 0.0, msg.num_turns
             print(f"--- result: {msg.subtype}, error={msg.is_error}, turns={turns}, cost=${cost:.4f}")
-    record_spend(Path(args.task_file).name, args.model, cost, turns)
+    record_spend(ledger_row, cost, turns)
     print(f"ledger total now ${read_spent():.2f} of ${LEDGER_CAP_USD:.2f}")
     return 0
 
