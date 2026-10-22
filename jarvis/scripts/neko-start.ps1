@@ -58,6 +58,13 @@ if (-not (Listening 48950) -and (Test-Path $privPy) -and (Test-Path $privScript)
     -RedirectStandardOutput "$logs\privacy.out.log" -RedirectStandardError "$logs\privacy.err.log" | Out-Null
   foreach ($i in 1..30) { if (Listening 48950) { break }; Start-Sleep 1 }
 }
+# Planner gateway (127.0.0.1:48952): the same redaction, but Claude is asked first (owner exception until 2026-10-31) and Dahl answers if Claude
+# cannot. Only the N.E.K.O agent (planner) slot points here; the default gateway above never asks Claude. Skips itself after the date.
+if ((Get-Date).ToUniversalTime().Date -le [datetime]"2026-10-31" -and -not (Listening 48952) -and (Test-Path $privPy) -and (Test-Path $privScript)) {
+  Start-Process $privPy -ArgumentList (Resolve-Path $privScript).Path, "--port", "48952", "--providers", (Resolve-Path (Join-Path $PSScriptRoot "..\privacy\providers.planner.json")).Path -WindowStyle Hidden `
+    -RedirectStandardOutput "$logs\privacy-planner.out.log" -RedirectStandardError "$logs\privacy-planner.err.log" | Out-Null
+  foreach ($i in 1..30) { if (Listening 48952) { break }; Start-Sleep 1 }
+}
 # Local specialist models (llama-swap on 127.0.0.1:8080): nothing is loaded until a model is asked for. Never piped (it starts a server).
 $localModels = Join-Path $PSScriptRoot "local-models.ps1"
 if (-not (Listening 8080) -and (Test-Path "D:\jarvis\tools\llama-swap\v261\llama-swap.exe")) {

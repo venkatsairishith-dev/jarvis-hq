@@ -194,13 +194,16 @@ def test_load_providers_drops_an_expired_claude_entry_and_orders_it_first(tmp_pa
     assert [x["name"] for x in provs] == ["dahl"]
 
 
-def test_real_providers_file_keeps_dahl_and_asks_claude_first(monkeypatch):
-    """Regression: an anthropic entry placed before the caller's-key provider in the file once dropped Dahl from the chain."""
+def test_planner_file_keeps_dahl_and_asks_claude_first_and_default_file_never_asks_claude(monkeypatch):
+    """Regression: an anthropic entry placed before the caller's-key provider once dropped Dahl from the chain. The default
+    gateway (48950) must never ask Claude; only the planner file (48952) does."""
     monkeypatch.setattr(ca, "today_utc", lambda: dt.date(2026, 10, 22))
-    provs, _ = gateway.load_providers(os.path.join(HERE, "providers.json"))
+    provs, _ = gateway.load_providers(os.path.join(HERE, "providers.planner.json"))
     names = [p["name"] for p in provs]
-    assert names[:2] == ["claude", "dahl"], names
+    assert names == ["claude", "dahl"], names
     assert next(p for p in provs if p["name"] == "dahl").get("key") == "from_request"
+    default, _ = gateway.load_providers(os.path.join(HERE, "providers.json"))
+    assert "claude" not in [p["name"] for p in default] and default[0]["name"] == "dahl"
     monkeypatch.setattr(ca, "today_utc", lambda: dt.date(2026, 11, 1))
-    provs, _ = gateway.load_providers(os.path.join(HERE, "providers.json"))
-    assert "claude" not in [p["name"] for p in provs] and provs[0]["name"] == "dahl"
+    provs, _ = gateway.load_providers(os.path.join(HERE, "providers.planner.json"))
+    assert [p["name"] for p in provs] == ["dahl"]
