@@ -8,6 +8,7 @@ Provenance: features modelled on OmniRoute (github.com/diegosouzapw/OmniRoute, M
 from .anthropic_client import AnthropicClient, ClientError, UpstreamHTTP
 from .breaker import CircuitBreaker
 from .budget import Budget
+from .cache import ResponseCache, cached_call
 from .combos import Combo, ComboError, RouteDenied, Target, load_combos, resolve
 from .keypool import KeyPool, NoKey
 from .passthrough import Passthrough, PassthroughError, forward_count_tokens, forward_messages
@@ -16,4 +17,4 @@ from .router import NoRoute, Pick, Router
 
 __all__ = ["AnthropicClient", "ClientError", "UpstreamHTTP", "CircuitBreaker", "Budget", "Combo", "ComboError", "RouteDenied", "Target",
            "load_combos", "resolve", "KeyPool", "NoKey", "Passthrough", "PassthroughError", "forward_count_tokens", "forward_messages",
-           "Quota", "NoRoute", "Pick", "Router"]
+           "Quota", "NoRoute", "Pick", "Router", "ResponseCache", "cached_call"]
