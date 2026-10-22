@@ -7,8 +7,9 @@ from .breaker import CircuitBreaker
 from .budget import Budget
 from .combos import Combo, ComboError, RouteDenied, Target, load_combos, resolve
 from .keypool import KeyPool, NoKey
+from .passthrough import Passthrough, PassthroughError, forward_count_tokens, forward_messages
 from .quota import Quota
 from .router import NoRoute, Pick, Router
 
 __all__ = ["CircuitBreaker", "Budget", "Combo", "ComboError", "RouteDenied", "Target", "load_combos", "resolve",
-           "KeyPool", "NoKey", "Quota", "NoRoute", "Pick", "Router"]
+           "KeyPool", "NoKey", "Passthrough", "PassthroughError", "forward_count_tokens", "forward_messages", "Quota", "NoRoute", "Pick", "Router"]
