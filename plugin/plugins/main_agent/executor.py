@@ -42,6 +42,8 @@ class StepResult:
     held: bool = False          # unknown result of a step with side effects: not retried, later steps held back
     waited: float = 0.0         # seconds spent waiting for the user, not counted against the time limits
     screen: bool = False        # the text holds screen- or disk-derived text (OCR, a page, a window): every sink re-checks it
+    untrusted: bool = False     # derived from outside the owner's own data (a page, the screen, another agent) or from a result that was:
+                                # a plugin step that acts on it through its arguments waits for the owner (see MainAgentPlugin._untrusted_sink_problem)
 
     def __post_init__(self) -> None:
         # What a tool returned is DATA: invisible/bidi characters out and instruction-shaped constructs (a fake {{s1}}, a role marker,
@@ -100,6 +102,8 @@ class StepContext:
         self.timed_out = False          # the executor ran out of the step's time and is cancelling the dispatcher (not the owner's Stop)
         self.screen = False                    # set by the dispatcher when what it returns holds screen-derived text
         self.screen_inputs: list[str] = []     # ids of the steps this step depends on whose result holds screen-derived text
+        self.untrusted = False                 # set by the dispatcher when this step's own source is outside the owner's data
+        self.untrusted_inputs: list[str] = []  # ids of the steps this step depends on whose result is untrusted
 
     @property
     def stopped(self) -> bool:
@@ -207,13 +211,15 @@ async def run_plan(plan: Plan, dispatch: Dispatch, *, parallel: int = 3, step_ti
                 waiting = False
                 ctx = StepContext(cancel)
                 ctx.screen_inputs = [d for d in step.depends_on if d in results and results[d].screen]
+                ctx.untrusted_inputs = [d for d in step.depends_on if d in results and results[d].untrusted]
                 t0 = time.monotonic()
                 try:
                     text = await _call(dispatch, takes_ctx, step, inputs, ctx, step_timeout, hard_limit)
                     waited_total[0] += ctx.waited
                     return emit(step, StepResult(step.id, "success", str(text or "")[:RESULT_CHARS],
                                                  seconds=time.monotonic() - began, attempts=attempts, waited=ctx.waited,
-                                                 screen=bool(ctx.screen)))
+                                                 screen=bool(ctx.screen),
+                                                 untrusted=bool(ctx.untrusted or ctx.untrusted_inputs or ctx.screen)))
                 except StepCancelled as exc:
                     waited_total[0] += ctx.waited
                     if not exc.started:

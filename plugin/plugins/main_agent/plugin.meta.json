@@ -1418,7 +1418,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 468735,
+  "source_bytes": 482445,
   "source_files": [
     ".gitignore",
     "README.md",
@@ -1455,7 +1455,8 @@
     "tests/test_smoke.py",
     "tests/test_stop_report.py",
     "tests/test_store.py",
+    "tests/test_untrusted_content.py",
     "ui/panel.tsx"
   ],
-  "source_sha256": "4cf7061efd65701b2d9d8ef6f1c692c3e6caa7191dc145a3146fe3c45e911a16"
+  "source_sha256": "236c789eab4635669a68eccdf32d2378db7e041193f6931f7fce59459d536709"
 }

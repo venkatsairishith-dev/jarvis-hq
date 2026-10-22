@@ -62,7 +62,8 @@ def result_to_dict(r: StepResult) -> dict[str, Any]:
 def result_from_dict(d: dict[str, Any]) -> StepResult:
     return StepResult(id=str(d["id"]), outcome=str(d.get("outcome", "failure")), text=str(d.get("text", "")),
                       error=str(d.get("error", "")), seconds=float(d.get("seconds", 0.0)), attempts=int(d.get("attempts", 1)),
-                      held=bool(d.get("held", False)), waited=float(d.get("waited", 0.0)), screen=bool(d.get("screen", False)))
+                      held=bool(d.get("held", False)), waited=float(d.get("waited", 0.0)), screen=bool(d.get("screen", False)),
+                      untrusted=bool(d.get("untrusted", False)))
 
 
 class RunStore:

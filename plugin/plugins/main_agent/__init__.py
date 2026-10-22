@@ -21,6 +21,7 @@ kill switch and the console's Stop all are separate and untouched by this plugin
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import threading
@@ -101,6 +102,14 @@ MEMORY_LOCAL_ENTRIES: dict[str, frozenset[str]] = {
 # (StepResult.screen). A plugin step that takes such a result into one of its arguments gets it raw only when the plugin acts on
 # this PC and sends the text nowhere (these ids); any other plugin gets it only as the privacy gateway cleared it, else a note.
 SCREEN_LOCAL_PLUGINS = {"desktop", "learn_vault", "doc_tools", "deliverables"}      # memo_reminder is NOT here: it pushes its text into the chat later
+# Untrusted content (2026-10-22, from the research in JARVIS_ROADMAP): a result is UNTRUSTED when its source is outside the owner's own data
+# (a browser or desktop-control step, a JARVIS/lab hand-over, any plugin not listed here, or screen/disk text) or when it was built from an
+# untrusted result. The plan itself is closed, so such text cannot add steps; what it CAN do is flow into the arguments of a later plugin step
+# through {{sN}}. A step that may change something (effect non_idempotent) and takes untrusted text into its arguments waits for the owner
+# unless the plugin only writes the owner's own documents (UNTRUSTED_SAFE_SINKS). MAIN_AGENT_UNTRUSTED_TO_ACTIONS=1 turns the hold off.
+UNTRUSTED_TRUSTED_SOURCES = frozenset({"learn_vault", "doc_tools", "deliverables", "local_team", "workbench", "main_agent", "desktop"})
+UNTRUSTED_SAFE_SINKS = frozenset({"learn_vault", "doc_tools", "deliverables"})
+UNTRUSTED_HOLD = "would act on content from the web, the screen or another agent"
 SCREEN_TOKEN = "\u27e6SCREEN-{}\u27e7"           # stands for a marked result inside a model prompt until the call is made
 # The computer-use step: N.E.K.O's agent server queues the task and answers at once with its id; the step follows that one
 # task (GET /tasks/<id>) and stops that one task (POST /tasks/<id>/cancel). The agent server's end_all would stop everything
@@ -602,11 +611,30 @@ class MainAgentPlugin(NekoPluginBase):
                 "known to keep it on this PC (it could reach a cloud provider, a public service, a chat or another agent). Nothing "
                 "was sent. Ask again without the memory, or turn on MAIN_AGENT_MEMORY_TO_EXTERNAL_STEPS if you accept that.")
 
+    def _untrusted_sink_problem(self, step: Step, plugin_id: str, risky: list[str], args: dict[str, Any]) -> str:
+        """"" when the step may run; else why it waits for the owner. The owner approves by resuming the run with this step in
+        `rerun`; the approval is for exactly these arguments (their digest), so a changed result holds the step again."""
+        if plugin_id in UNTRUSTED_SAFE_SINKS or step.effect != "non_idempotent" or _flag_env("MAIN_AGENT_UNTRUSTED_TO_ACTIONS"):
+            return ""
+        digest = hashlib.sha256(json.dumps(args, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
+        rid = self._active
+        run = self._runs.get(rid) if rid else None
+        if run is not None:
+            if (run.get("untrusted_ok") or {}).get(step.id) == digest:
+                return ""                                       # the owner saw this step and these arguments and said run it
+            run.setdefault("untrusted_hold", {})[step.id] = digest
+            self._persist(run)
+        shown = ", ".join(f"{k}={clean_untrusted(str(v))[:100]!r}" for k, v in list(args.items())[:3])
+        return (f"{NEEDS_YOU}: {step.ref} {UNTRUSTED_HOLD} ({', '.join(risky)}). Nothing ran. It would use: {shown}. "
+                f"If you trust it, resume this task with {step.id} in rerun.")
+
     async def _dispatch(self, step: Step, inputs: dict[str, str], ctx: StepContext | None = None) -> str:
         ctx = ctx or StepContext()
         problem = self._memory_sink_problem(step)
         if problem:
             raise StepFailed(problem)
+        if step.kind in ("browser", "computer", "jarvis"):
+            ctx.untrusted = True                                # what these bring back comes from outside the owner's data
         timeout = float(_int_env("MAIN_AGENT_STEP_TIMEOUT", 240, 10, 1800))
         if step.kind == "think":
             parts, screen = [], {}
@@ -633,6 +661,13 @@ class MainAgentPlugin(NekoPluginBase):
             plugin_id = str(step.ref).split(":", 1)[0]
             used = {m.group(1) for v in step.args.values() if isinstance(v, str) for m in PLACEHOLDER.finditer(v)}
             tainted = sorted(used & set(ctx.screen_inputs))
+            if plugin_id not in UNTRUSTED_TRUSTED_SOURCES:
+                ctx.untrusted = True
+            risky = sorted(used & set(ctx.untrusted_inputs))
+            if risky:
+                problem = self._untrusted_sink_problem(step, plugin_id, risky, fill_args(step.args, inputs))
+                if problem:
+                    raise StepNeedsApproval(problem)
             given = inputs
             if tainted:
                 ctx.screen = True                               # what the plugin returns may repeat the text it was given
@@ -1049,6 +1084,10 @@ class MainAgentPlugin(NekoPluginBase):
         if self._claim(rid) is None:
             return Err(SdkError("The main agent is still working on another task."))
         try:
+            holds = run.get("untrusted_hold") or {}
+            for sid in wanted:                               # the owner chose to run a step that was held for untrusted content
+                if sid in holds:
+                    run.setdefault("untrusted_ok", {})[sid] = holds[sid]
             for sid in wanted:
                 (run.get("results") or {}).pop(sid, None)
             for sid in [k for k, v in (run.get("results") or {}).items() if v.get("outcome") == "not_executed"]:

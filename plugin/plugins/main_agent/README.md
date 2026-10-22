@@ -30,6 +30,8 @@ voice -> N.E.K.O -> run_task(task)
 vault and documents).
 
 ## Safety design
+
+**Untrusted content (2026-10-22).** A result is marked untrusted when its source is outside the owner's own data (a browser or desktop-control step, a JARVIS/lab hand-over, any plugin that is not one of the owner's local ones, screen or disk text) or when it was built from an untrusted result (a reasoning step that summarised it). The plan is closed, so such text cannot add steps, and the planner lets an earlier result into only a few arguments (`body`, `content`, `message`, `note`, `summary`, `text`). A plugin step that may change something and takes untrusted text into one of those arguments is **held** ("needs your approval or answer ... would act on content from the web, the screen or another agent ... It would use: ..."). Nothing runs. You approve by resuming the run with that step in `rerun`; the approval is for exactly those arguments, so a changed result holds the step again. Not held: reads, reasoning, and the plugins that only write your own documents (`learn_vault`, `doc_tools`, `deliverables`). `MAIN_AGENT_UNTRUSTED_TO_ACTIONS=1` turns the hold off. Tests: `tests/test_untrusted_content.py`.
 - **Plan first, then run.** The plan is made from the user's request only, before any tool output is seen. A web page or a file
   cannot add, change or redirect steps.
 - **Closed catalogue.** Only sub-agents that are available right now can appear, with arguments checked against each entry's
