@@ -3909,7 +3909,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 672157,
+  "source_bytes": 675104,
   "source_files": [
     "README.md",
     "__init__.py",
@@ -3949,5 +3949,5 @@
     "tests/test_stop_ownership.py",
     "tests/test_verify_observed.py"
   ],
-  "source_sha256": "0657be9ab9ae545ee104b352ee15e0ce3495b108b67737de29991e9f80e1cbc9"
+  "source_sha256": "a1efb4847222fdf49b4f9f7722615501459730ac16480e09609a7c5288cebbf4"
 }
