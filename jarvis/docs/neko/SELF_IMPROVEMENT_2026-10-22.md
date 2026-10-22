@@ -38,11 +38,11 @@ the failure class (no text) and the helpers still available, and runs only the r
 every step of the new plan goes through the same checks (approvals, untrusted-content hold, kernel policy); a replan that repeats the failed shape is refused; the episode records
 that a replan happened and whether it rescued the task. Built in `main_agent._replan_once` with ten tests, each guard checked by mutation (disabling any one makes a test fail); `learning_stats.self_correction` shows tried vs rescued. This is the "self-correcting" part: it turns "no single file matches" into "ask which file" or "search by name" without any new permission.
 
-### Layer 3: turn what works into skills (NEXT, uses the existing gate)
+### Layer 3: turn what works into skills (BUILT 2026-10-22, uses the existing gate)
 The desktop plugin already has a Voyager-style gate (`desktop/skills.py`): a proposal may only add **examples** (a request with the plan the decider should produce) and **sites**;
 it runs the regression suite (dev + holdout + plan cases) and passes only if nothing that worked now fails; **only the owner promotes**, from the command line; versions are immutable.
 Layer 3 mines the desktop plugin's own task records for requests that were executed and verified on screen at least 3 times with the same plan and no failure, and *proposes* them as
-examples. It never promotes and cannot express a tool, permission or safety change. These records stay on the laptop (local decider only; nothing goes to a cloud model).
+examples. It never promotes and cannot express a tool, permission or safety change. These records stay on the laptop (local decider only; nothing goes to a cloud model). Built in `plugin/plugins/desktop/learn.py` (`candidates`, `propose-mined` commands; 23 tests, every rule checked by mutation): only plans the model made, completed, with every step observed on screen, three or more times, safe-to-teach tools only, no private-looking requests, 3 per proposal, one proposal a day. **Owner flow:** `candidates` -> `propose-mined` -> run the regression gate on the staged version -> `promote vN` (or ignore it) -> `rollback` if it ever hurts.
 
 ### Layer 4: lessons you can read and delete (NEEDS the kernel deploy)
 Typed memories in the kernel with a source and a time: "preference", "lesson" (e.g. "report requests: ask which report"), with provenance (the episode ids), a validity date and

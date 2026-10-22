@@ -3909,7 +3909,7 @@
   },
   "schema_version": 4,
   "sdk_version": "0.1.0",
-  "source_bytes": 675104,
+  "source_bytes": 691602,
   "source_files": [
     "README.md",
     "__init__.py",
@@ -3917,6 +3917,7 @@
     "coordinator.py",
     "core.py",
     "decide.py",
+    "learn.py",
     "missions.py",
     "monitor.py",
     "plugin.toml",
@@ -3929,6 +3930,7 @@
     "tests/test_decide_outage.py",
     "tests/test_decide_rules.py",
     "tests/test_fencing.py",
+    "tests/test_learn.py",
     "tests/test_lock_mutation.py",
     "tests/test_lock_unconfirmed.py",
     "tests/test_missions.py",
@@ -3949,5 +3951,5 @@
     "tests/test_stop_ownership.py",
     "tests/test_verify_observed.py"
   ],
-  "source_sha256": "a1efb4847222fdf49b4f9f7722615501459730ac16480e09609a7c5288cebbf4"
+  "source_sha256": "428b68e3260cfac166dd7653b315994cc7588fa5475bc8a594bd723845db9bc7"
 }

@@ -9,6 +9,7 @@ Neko may PROPOSE small additions to what the decider knows; it can never promote
     only if no case that passes on the active version fails, and the total is not lower. The report is saved.
   * promote() / rollback(): OWNER ONLY, from the command line (no plugin entry exists for them):
         D:\\jarvis\\tools\\neko-venv\\Scripts\\python.exe -m plugin.plugins.desktop.skills status|promote v3|rollback
+    candidates / propose-mined (learn.py): list or STAGE examples mined from PC tasks that worked three times with every step observed; staging never activates anything.
     promote needs a passed gate for that exact file hash. Each change is appended to audit.log.
 Reused idea: Voyager-style skill admission (a skill is admitted only with a passing test); the store is plain files.
 """
@@ -265,6 +266,13 @@ def _cli(argv):
             print("active:", promote(argv[2]))
         elif cmd == "rollback":
             print("active:", rollback())
+        elif cmd in ("candidates", "propose-mined"):                # learning layer 3 (learn.py): what worked often, staged as examples
+            from . import learn
+            if cmd == "candidates":
+                print(json.dumps([{"request": c["request"], "runs": c["runs"], "tools": [x["tool"] for x in c["plan"]["steps"]]}
+                                  for c in learn.candidates(coord.TASKS)], indent=1))
+            else:
+                print(json.dumps(learn.propose_mined(coord.TASKS), indent=1))
         else:
             reg = _reg(ROOT)
             print(json.dumps({"active": reg.get("active"), "versions": {k: v["status"] for k, v in reg["versions"].items()}}, indent=1))

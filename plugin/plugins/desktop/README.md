@@ -123,3 +123,11 @@ in the neko-test container:
 ```
 podman run --rm --userns=keep-id -e HOME=/tmp -v ~/hq-neko:/src:O neko-test sh -c "cd /src && python -m pytest plugin/plugins/desktop/tests -q -p no:cacheprovider"
 ```
+
+
+## Learning from what worked (2026-10-22)
+`learn.py` finds PC tasks that the model planned, that completed, where **every step passed and was observed on screen** (no "reported ok, not observed"), seen **three times** with the same plan and
+only safe-to-teach tools (open app/site/file, play media, window, press key, read-only checks; no typed text, no clicks, no repairs, no research), and **stages** them as examples through the existing skill
+gate. Requests that look private (an address, a long number, password/token/key/pin/otp/card ...) or contain a line break are never taught. At most 3 examples per proposal, one proposal a day, never one
+already taught or already proposed. It cannot promote: only you do, after the regression gate passed for that exact file.
+`python -m plugin.plugins.desktop.skills candidates` lists them; `... propose-mined` stages one version. Tests: `tests/test_learn.py` (23, each rule checked by mutation).
