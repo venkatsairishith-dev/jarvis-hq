@@ -42,5 +42,5 @@ SDK builder spend recorded: $0.15 of the 2026-10-31 exception (cap on this tool 
 - Step 1 (part): `licence_spdx` filled for the 40 registry entries whose licence text was already a clean SPDX id; the other 49 (21 "unknown", mixed or free-text) are deliberately left for a human decision. Nothing is marked `shipped` (personal-only profile).
 - Supervisor: laptop manifest written (`jarvis/supervisor/manifests/laptop.json`), consistent with neko-start.ps1 by test; not yet the launcher.
 - Claude planner: adapter + planner-only gateway on 48952 (Claude then Dahl), default gateway 48950 unchanged. Waiting for the owner to point the N.E.K.O agent slot at 48952 with the Dahl key.
-- Step 6 (audit record with component version and sha256) NOT done: it changes the live kernel's audit chain, so it needs a kernel deploy (owner's go). The SAFETY_COMPONENTS change (step 9) is waiting for the same deploy.
+- Step 6 (audit record with component version and sha256) NOT done. The kernel+node deploy happened on 2026-10-22 (backups kernel.old.1792688226, node.old.1792688226), so the new SAFETY_COMPONENTS (step 9) is live.
 - Credit used: about $0.15 (builder) plus a 61-token smoke test.
