@@ -208,7 +208,7 @@ def start_console(case):
                      "/api/health?full=1", "/api/health/", "/auth/session", "/auth/code"]
     sf.routes_write = ["/api/owner/command", "/api/owner/kill", "/api/owner/stop_all", "/api/owner/approve", "/api/owner/task",
                        "/api/voice/warm", "/api/voice/check/save", "/api/voice/check/score", "/api/voice/transcribe", "/api/voice/speak",
-                       "/api/classify", "/api/connectors/local", "/api/connectors/local/remove", "/api/connectors/add", "/api/connectors/remove",
+                       "/api/classify", "/api/providers/command", "/api/connectors/local", "/api/connectors/local/remove", "/api/connectors/add", "/api/connectors/remove",
                        "/api/bench/run", "/api/bench/rerun-failed", "/api/bench/jobs/j1/cancel", "/api/bench/challenge", "/api/bench/models/run",
                        "/api/desktop/take", "/api/desktop/continue", "/api/bench/challenge/ch-20261017-000000-abcdef", "/auth/session", "/auth/code"]
     sf.has_pages, sf.page_targets = True, ("/", "/index.html", "/tasks/abc", "/some/screen", "/INDEX.HTML")

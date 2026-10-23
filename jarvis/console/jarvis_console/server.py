@@ -44,7 +44,7 @@ import control_auth                     # noqa: E402  sessions, one-time codes a
 from . import bench as benchmod
 from . import files as filesmod
 from .config import Config
-from . import intent, scoring
+from . import intent, provider_command, scoring
 from .kernel_client import Kernel, KernelError
 from .speech_text import speakable
 from .voice import Voice, VoiceError
@@ -328,6 +328,8 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
             if name == "classify" and method == "POST":
                 text = str(self._jbody().get("text", ""))
                 return self._json(200, intent.classify(text, cfg.intent_llm_url, cfg.intent_model))
+            if name == "providers/command" and method == "POST":
+                return self._provider_command()
             if name.startswith("connectors/"):
                 return self._connectors(method, name[11:])
             if name == "skills":
@@ -383,6 +385,36 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
             except cc.ConfigError as e:
                 return self._json(400, {"error": str(e)})
             return self._json(404, {"error": "not found"})
+
+        def _provider_command(self):
+            """Typed or spoken "switch to <provider>" / "back to automatic" / "which provider am I on" (plan item 19). The words are mapped by
+            provider_command.parse; EVERYTHING that changes anything is the kernel's owner plane (lane check, authorization, audit)."""
+            text = str(self._jbody().get("text", ""))
+            code, state = kernel.request("GET", "models/lanes")
+            if code != 200 or not isinstance(state, dict):
+                return self._json(code if code >= 400 else 502, {"handled": False, "error": "the kernel did not answer"})
+            lanes = state.get("lanes") or {}
+            known = {lane: list(row.get("chain") or []) for lane, row in lanes.items()}
+            cmd = provider_command.parse(text, known)
+            if cmd is None:
+                return self._json(200, {"handled": False})
+
+            def where(lane):
+                row = lanes.get(lane) or {}
+                return f"{lane}: {row.get('preferred') or 'automatic'} (order: {', '.join(row.get('chain') or []) or 'none'})"
+            if cmd["action"] == "status":
+                return self._json(200, {"handled": True, "command": cmd, "say": "Providers now. " + "; ".join(where(ln) for ln in provider_command.LANES) + "."})
+            if cmd["action"] == "unknown":
+                options = sorted({n for names in known.values() for n in names})
+                return self._json(200, {"handled": True, "command": cmd, "say": f"I do not know a provider called {cmd['word'] or 'that'}. "
+                                        f"The ones I can use: {', '.join(options) or 'none'}."})
+            results, said = [], []
+            for lane in (cmd["lanes"] if cmd["action"] == "auto" else [cmd["lane"]]):
+                c, reply = kernel.request("POST", "models/switch", {"lane": lane, "provider": "auto" if cmd["action"] == "auto" else cmd["provider"]})
+                reply = reply if isinstance(reply, dict) else {}
+                results.append({"lane": lane, "code": c})
+                said.append(provider_command.describe(reply if c == 200 else {"error": reply.get("error") or "refused"}))
+            return self._json(200, {"handled": True, "command": cmd, "results": results, "say": " ".join(said)})
 
         def _owner(self, method, name, q):
             body = self._jbody() if method == "POST" else None
