@@ -101,7 +101,8 @@ the address that becomes a sign-in cookie. Typing http://127.0.0.1:8799 by hand 
 ## 11. Built but not switched on yet
 
 These are merged with passing tests and become usable as the plan wires them in (status per item: `OWNER_NOTES_STATUS.md`):
-page watches ("tell me when this page changes"), finance CSV summaries, PDF form filling after your approval, Gmail and Calendar
+page watches ("tell me when this page changes") with a background runner, a notice inbox and phone pings that say only "JARVIS: 2 new
+notices" (never the page, price or link; open JARVIS to read them), finance CSV summaries, PDF form filling after your approval, Gmail and Calendar
 drafts (never sent by JARVIS), routine recipes, the router with automatic provider fallback, the Python egress proxy, and the
 supervisor that will start and stop everything as one.
 

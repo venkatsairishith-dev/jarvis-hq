@@ -28,12 +28,12 @@ Updated 2026-10-23 (cloud session) from branch `claude/implementation-plan-desig
 | 13 | 10-20 local models, one at a time or combined | PARTIAL | 15 models pinned (`MODELS.md`), loaded on demand by llama-swap | Deep offline model (gpt-oss-20b) and the role roster (P3); D: has 31 GB free |
 | 14 | Its own personality | TODO | N.E.K.O character system | JARVIS character card and voice (P8) |
 | 15 | On-screen tests on the server, fix errors, push to git | PARTIAL | 860-case benchmark and test image on the Linux server; caretaker opens PRs | Xvfb + noVNC runs, fix loop, kernel-gated push to main (P6) |
-| 16 | Explain how it works, each model, each file | DONE | `FILE_MAP.md` (436 files, all described), `MODELS.md`, `HOW_IT_WORKS.md`; `make_docs.py --check` keeps them current | Keep regenerating |
+| 16 | Explain how it works, each model, each file | DONE | `FILE_MAP.md` (463 files, all described), `MODELS.md`, `HOW_IT_WORKS.md`; `make_docs.py --check` keeps them current | Keep regenerating |
 | 17 | Step-by-step guide on how to use it | DONE | `HOW_TO_USE.md` | Update as features switch on |
 | 18 | Coordinate with a coding CLI | PARTIAL | Byte-for-byte Claude Code passthrough **BUILT** (`router/passthrough.py`); the Agent SDK builder is running on the API credit | OpenCode driven over ACP with kernel approvals (P6) |
 | 19 | Switch API providers by itself and in the CLI | BUILT | Combos, key pools, quotas, circuit breaker, $0 budgets and a lane-safe response cache in `jarvis_kernel/router/` (on the VM, not wired in yet) | Owner "switch to X" command and CLI endpoints (P3) |
 | 20 | Its own VM doing browser research like openmuse | TODO / OWNER | Kernel and Hermes run on the Oracle VM (2 CPU / 11 GiB, within Always Free); the WSL agent computer was lost | Agent desktop on the VM (P2), after the owner checks both instances' shapes against the 2 OCPU / 12 GB free limit |
-| 21 | Everything openmuse can do | BUILT | Page watches, finance CSV, durable task state, PDF forms, Gmail/Calendar drafts (no send path) **BUILT** in `jarvis/muse/` | Scheduler, inbox and UI wiring; browser profiles with takeover; no-network computer (P7) |
+| 21 | Everything openmuse can do | BUILT | Page watches, finance CSV, durable task state, PDF forms, Gmail/Calendar drafts (no send path) **BUILT** in `jarvis/muse/`; the watch runner (checks on schedule, survives restarts, fetches only through the egress guard) and notifications (local inbox plus content-free phone pings over ntfy) **BUILT** (`runner.py`, `notify.py`) | Start the runner from the supervisor, show the inbox in the console, owner creates an ntfy topic; browser profiles with takeover; no-network computer (P7) |
 
 ## Waiting on the owner
 

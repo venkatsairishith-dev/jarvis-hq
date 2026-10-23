@@ -1533,6 +1533,43 @@
   "licence_spdx": "Apache-2.0"
  },
  {
+  "name": "ntfy (phone push, HTTP API only)",
+  "category": "infra",
+  "upstream_url": "https://github.com/binwiederhier/ntfy",
+  "licence": "Apache-2.0",
+  "pinned_version": "none (plain HTTP POST to a topic; no ntfy code or client library)",
+  "pin_location": [
+   "jarvis/muse/notify.py (NtfyPush)"
+  ],
+  "integration": "HTTP API (no code used)",
+  "machine": "laptop (sends); ntfy.sh or a self-hosted server (receives)",
+  "jarvis_files": [
+   "jarvis/muse/notify.py",
+   "jarvis/muse/runner.py"
+  ],
+  "features_used": [
+   "publish a message to a topic",
+   "Title/Tags/Priority headers"
+  ],
+  "unused_features": [
+   {
+    "feature": "Click and Actions headers",
+    "evidence": "jarvis/muse/notify.py: a ping must never open a link or approve anything"
+   },
+   {
+    "feature": "message text with the notice content",
+    "evidence": "jarvis/muse/notify.py: push services are not end-to-end encrypted, so pings carry a count only"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "stay external",
+  "packaging_reason": "Only its HTTP API is called; the server is dual-licensed Apache-2.0 OR GPL-2.0 and Apache-2.0 is the one elected. The topic URL is a secret kept as a file in the secrets folder.",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md (integration build table, 2026-10-23)"
+  ],
+  "licence_spdx": "Apache-2.0"
+ },
+ {
   "name": "Stripe Smokescreen (egress proxy)",
   "category": "infra",
   "upstream_url": "https://github.com/stripe/smokescreen",

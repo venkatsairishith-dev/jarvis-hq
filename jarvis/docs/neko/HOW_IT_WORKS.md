@@ -73,7 +73,8 @@ folders; most of it is built and tested but not switched on yet (see `OWNER_NOTE
   keys per provider, quotas, a circuit breaker, $0 budgets by default, format translation, and a byte-for-byte path for Claude Code.
 - `jarvis/egress/`: the Smokescreen behaviour in Python. Every web request is resolved once, refused if it points at a private,
   Tailscale or cloud-metadata address, and connected to the address that was checked.
-- `jarvis/muse/`: openmuse's features without its cloud: page watches, finance CSV, a durable task state machine that never repeats
+- `jarvis/muse/`: openmuse's features without its cloud: page watches with a background runner and a local notice inbox (the phone
+  only gets a content-free "new notices" ping), finance CSV, a durable task state machine that never repeats
   an action whose outcome is uncertain, PDF forms filled only after approval, and Gmail/Calendar drafts with no way to send.
 - `jarvis/node/jarvis_node/fileops.py`, `filesearch.py`: find, create, move and organise your files with an undo journal; deletes go
   to a JARVIS trash folder, never straight to gone.
