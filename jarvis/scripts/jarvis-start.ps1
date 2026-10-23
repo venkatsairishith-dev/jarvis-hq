@@ -90,8 +90,9 @@ $jarvis = "console not started"
 if (-not (Listening 8799)) {
   $consoleScript = Join-Path $PSScriptRoot 'start-console.ps1'
   if (Test-Path $consoleScript) {
-    # Start-Process -Wait, not a pipe: the console inherits a pipe's handle and the pipe would stay open for as long as it runs (found on the laptop)
-    try { Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$consoleScript`"" -WindowStyle Hidden -Wait | Out-Null } catch { }
+    # Neither piped nor -Wait: the console it starts inherits a pipe's handle, and -Wait also waits for the whole process tree, so both
+    # block for as long as the console runs (found on the laptop, 2026-10-23). The loop below waits for the port instead.
+    try { Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$consoleScript`"" -WindowStyle Hidden | Out-Null } catch { }
     foreach ($i in 1..15) { if (Listening 8799) { break }; Start-Sleep 1 }
   }
 }

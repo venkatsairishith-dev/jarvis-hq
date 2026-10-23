@@ -302,7 +302,7 @@ def advise(task: str, base_url: str, model: str, api_key: str, stream: Callable 
         raise TeamError("The public adviser is reached only through the privacy gateway (127.0.0.1:48950); "
                         "the JARVIS agent model points elsewhere, so nothing was sent.")
     text = stream(f"{base_url.rstrip('/')}/chat/completions", {
-        "model": model, "max_tokens": 2000, "temperature": 0.3,
+        "model": model, "max_tokens": int(os.environ.get("LOCAL_TEAM_ADVISER_MAX_TOKENS", "5000") or 5000), "temperature": 0.3,   # 2000 was spent on reasoning alone in the full live check (2026-10-23)
         "messages": [{"role": "system", "content": ADVISER_SYSTEM}, {"role": "user", "content": task}]},
         headers={"Authorization": f"Bearer {api_key}"} if api_key else None, timeout=300)
     plan = strip_reasoning(str(text or ""))
