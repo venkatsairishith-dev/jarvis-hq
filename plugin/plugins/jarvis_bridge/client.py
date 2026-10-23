@@ -139,13 +139,14 @@ class JarvisClient:
             raise BridgeError(message[:400], resp.status_code)
         return data
 
-    async def delegate(self, task: str) -> dict[str, Any]:
+    async def delegate(self, task: str, source: str = SOURCE) -> dict[str, Any]:
+        """`source` names the caller in the console's command list: "neko" for this plugin, "face" for jarvis/bridge/face_tools.py."""
         text = str(task or "").strip()
         if not text:
             raise BridgeError("There is no task to hand over.", 400)
         if len(text) > MAX_TASK_CHARS:
             raise BridgeError(f"The task is too long ({len(text)} characters; at most {MAX_TASK_CHARS}). Say it in fewer words.", 413)
-        data = await self._request("POST", "/api/owner/command", {"text": text, "source": SOURCE})
+        data = await self._request("POST", "/api/owner/command", {"text": text, "source": source})
         if not isinstance(data, dict) or not data.get("id"):
             raise BridgeError("JARVIS accepted the task but returned no id.", 502)
         return {"id": str(data["id"]), "state": str(data.get("state", "running"))}

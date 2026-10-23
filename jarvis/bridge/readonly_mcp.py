@@ -198,9 +198,16 @@ READ_ONLY_TOOLS = ("jarvis_status", "jarvis_tasks", "jarvis_notices", "jarvis_wa
 
 def build_server(views: Views):
     from mcp.server.mcpserver import MCPServer
-    from mcp_types import ToolAnnotations
 
     server = MCPServer("jarvis-readonly", instructions=INSTRUCTIONS)
+    add_read_tools(server, views)
+    return server
+
+
+def add_read_tools(server, views: Views) -> None:
+    """Registers the read-only tools on `server` (also used by the face's tool server, jarvis/bridge/face_tools.py)."""
+    from mcp_types import ToolAnnotations
+
     ro = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 
     @server.tool(name="jarvis_status", description="Counts: tasks by state, unread notices, watches, new ideas, items waiting for the owner.", annotations=ro)
@@ -230,8 +237,6 @@ def build_server(views: Views):
     @server.tool(name="jarvis_posture", description="Warnings and failures from JARVIS's safety self-check.", annotations=ro)
     def jarvis_posture() -> list[dict]:
         return views.posture()
-
-    return server
 
 
 def main(argv=None) -> int:
