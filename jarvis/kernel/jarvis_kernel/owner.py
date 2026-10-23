@@ -73,6 +73,7 @@ class Owner:
         self._pin_lock = threading.Lock()   # guards bad_pins and _pin_checking (PIN checks in flight)
         self._pin_checking = 0
         self.node = "laptop"     # the node PC jobs are queued for (set from the kernel's output node)
+        self.router_snapshot = None   # () -> the router shadow-mode record (set by the gateway)
         self.lane_wait = None     # lane -> seconds until a model provider may be asked again (set by the gateway)
         self._pc_seen = {}        # (holder token, seq) -> the PC job reply it got (duplicate delivery)
         self.routes = {}          # (method, name) -> fn(body, query) -> (code, reply); other modules register theirs here
@@ -834,6 +835,9 @@ class Owner:
                 self.k.db.execute("INSERT OR REPLACE INTO lane_prefs VALUES (?,?,?,?)", (lane, target, self.clock(), "owner"))
                 self.k.audit.append("lane_preference_set", {"lane": lane, "provider": target, "agent": "owner"})
                 return 200, {"status": "done", "lane": lane, "preferred": target}
+            def router_state(b, q):        # shadow mode: what the router would have picked against the live chain (read only)
+                return 200, (self.router_snapshot() if self.router_snapshot else {"mode": "off"})
+            R[("GET", "models/router")] = guard(router_state)
             R[("GET", "models/lanes")] = guard(lanes_state)
             R[("POST", "models/switch")] = guard(lane_switch)
         if self.memories is not None:

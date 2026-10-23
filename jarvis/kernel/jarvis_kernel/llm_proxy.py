@@ -22,6 +22,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import gateway, idempotency, sizing
+from .router import shadow as router_shadow
 from .scrub import scrub
 
 MAX_BODY = 2 * 1024 * 1024
@@ -357,7 +358,7 @@ def _recent(times: list, now: float, window: float) -> list:
     return [t for t in times if now - t < window]
 
 
-def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
+def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router_mode=None):
     from .jobs import PC_OPS, UI_OPS, Jobs, JobError, action_for
     from .policy import Action
     from .store import Killed
@@ -426,6 +427,16 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
     def preferred(lane):
         r = kernel.db.execute("SELECT provider FROM lane_prefs WHERE lane=?", (lane,)).fetchone()
         return r[0] if r else None
+
+    # Router shadow mode (plan item 19): off unless JARVIS_ROUTER_MODE=shadow (or router_mode="shadow"). It only watches and records.
+    shadow = None
+    if router_shadow.normalize_mode(os.environ.get("JARVIS_ROUTER_MODE") if router_mode is None else router_mode) == "shadow":
+        shadow = router_shadow.Shadow(providers, lambda ln: gateway.plan(providers, ln), audit=kernel.audit.append, clock=clock)
+    owner_plane.router_snapshot = (shadow.snapshot if shadow else (lambda: {"mode": "off"}))
+
+    def shadow_outcome(name, status):
+        if shadow is not None:
+            shadow.outcome(name, status)
 
     def agent_action(agent, lane, body):
         """One agent action: (http status, reply). Lane comes from the token, never from the request."""
@@ -1215,6 +1226,8 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 if down_only:                            # resting after an outage: a short, plain "unavailable" (not 429:
                     return self._unavailable(agent, lane, wait)   # agents back off for minutes on a rate limit)
                 return self._rate_limited(agent, lane, wait)
+            if shadow is not None:
+                shadow.observe(lane, [p.name for p in chain], est, pref)
             last, outcomes = "none", []
             for p in chain:
                 if kernel.killed():                    # re-checked before EVERY provider (audit M9: store.check_alive says callers must
@@ -1250,6 +1263,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                         break
                     except urllib.error.HTTPError as e:
                         last = f"HTTP {e.code}"
+                        shadow_outcome(p.name, e.code)
                         try:
                             text = e.read(4000).decode(errors="replace")      # classified, never logged
                         except Exception:
@@ -1269,6 +1283,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                             break
                     except Exception as e:
                         last, why = type(e).__name__, "other"
+                        shadow_outcome(p.name, 503)
                         kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "attempt": attempt})
                         with lock:                               # unreachable: rest it briefly as well
                             outage[p.name] = clock() + OUTAGE_REST_S
@@ -1276,6 +1291,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto"):
                 if resp is None:
                     outcomes.append(why)
                     continue
+                shadow_outcome(p.name, 200)
                 if kernel.killed():                        # the switch went on while the provider was answering: nothing is passed on
                     resp.close()
                     return self._stopped_by_kill(agent, "before the answer was passed on")
