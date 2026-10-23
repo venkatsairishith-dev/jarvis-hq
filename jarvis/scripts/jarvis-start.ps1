@@ -46,8 +46,13 @@ if ($plannerOn -and -not (Listening 48952) -and (Test-Path $privPy) -and (Test-P
   foreach ($i in 1..30) { if (Listening 48952) { break }; Start-Sleep 1 }
 }
 if ($plannerOn -and (Listening 48952)) { $env:JARVIS_AGENT_BASE_URL = "http://127.0.0.1:48952/v1" }
-$agentKey = "D:\jarvis-secrets\agent.key"       # the key the gateway passes on as the caller's own (never the key itself here)
-if (Test-Path $agentKey) { $env:JARVIS_AGENT_KEY_FILE = $agentKey }
+# The planner's model and its key. JARVIS_AGENT_MODEL is the model name sent to the provider (Dahl's MiniMax by default, as the
+# N.E.K.O era used). JARVIS_AGENT_KEY_FILE is the PATH of a file holding the provider key, never the key itself; the gateway passes it
+# on as the caller's own key. Set either variable before running this script to use something else.
+if (-not $env:JARVIS_AGENT_MODEL) { $env:JARVIS_AGENT_MODEL = "MiniMaxAI/MiniMax-M2.7" }
+if (-not $env:JARVIS_AGENT_KEY_FILE) {
+  foreach ($k in "D:\jarvis-secrets\providers\dahl.key", "D:\jarvis-secrets\agent.key") { if (Test-Path $k) { $env:JARVIS_AGENT_KEY_FILE = $k; break } }
+}
 # Second-opinion gateway (127.0.0.1:48954, plan item 9): the same redaction, but its only provider is the reviewer (Groq, free tier).
 if (-not (Listening 48954) -and (Test-Path $privPy) -and (Test-Path $privScript)) {
   Start-Process $privPy -ArgumentList (Resolve-Path $privScript).Path, "--port", "48954", "--providers", (Resolve-Path (Join-Path $PSScriptRoot "..\privacy\providers.second.json")).Path -WindowStyle Hidden `
