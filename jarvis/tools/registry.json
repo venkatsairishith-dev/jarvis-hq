@@ -1755,6 +1755,46 @@
   ]
  },
  {
+  "name": "Cua Spaces plugin for Hermes (candidate, not installed)",
+  "category": "agents",
+  "upstream_url": "https://github.com/trycua/hermes-cua-spaces",
+  "licence": "MIT",
+  "pinned_version": "plugin 0.4.0, commit 82bb8d3 (Hermes catalog, Verified); cua SDK >=0.5.0,<0.8",
+  "pin_location": [
+   "jarvis/docs/neko/OWNER_NOTES_STATUS.md (item 20)"
+  ],
+  "integration": "planned: Hermes plugin (terminal backend cua)",
+  "machine": "Oracle VM or laptop (local Spaces only)",
+  "jarvis_files": [],
+  "features_used": [
+   "fresh Space per Hermes session, deleted on exit",
+   "terminal, file and execute_code tools run in the Space",
+   "live view and takeover"
+  ],
+  "unused_features": [
+   {
+    "feature": "cua.ai cloud Spaces (Pro/Teams, paid)",
+    "evidence": "owner rule: $0 unless approved"
+   },
+   {
+    "feature": "host:<machine> placement on the owner's laptop",
+    "evidence": "the agent computer must not be the owner's PC"
+   },
+   {
+    "feature": "curl | sh installer",
+    "evidence": "pinned package install instead"
+   }
+  ],
+  "size_class": "small",
+  "packaging_recommendation": "stay external (Hermes plugin), pinned",
+  "packaging_reason": "Answers item 20 (its own throwaway computer). Released 2026-10-20: pin the commit, review it, keep the kernel's pre_tool_call hook, cua telemetry off (CUA_TELEMETRY=0), Space egress through the JARVIS proxy. Needs Hermes newer than v0.22.2 for desktop tools and a check that local Spaces run on the VM's arm64 CPU.",
+  "evidence": [
+   "https://hermes-agent.nousresearch.com/docs/plugins/cua-spaces",
+   "https://github.com/trycua/hermes-cua-spaces"
+  ],
+  "licence_spdx": "MIT"
+ },
+ {
   "name": "MCP servers via JARVIS connectors (mcp-server-time, github-mcp-server, notion-mcp-server, google_workspace_mcp)",
   "category": "mcp",
   "upstream_url": "https://github.com/modelcontextprotocol/servers",
