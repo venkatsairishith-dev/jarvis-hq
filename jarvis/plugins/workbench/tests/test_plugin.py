@@ -124,8 +124,7 @@ def test_planner_never_offers_execution_entries():
     listing = [{"id": "workbench", "status": "running", "entries": [
         {"id": e, "description": "d"} for e in ("generate_prompt", "execute_prompt", "run_learned_workflow",
                                                  "set_provider_policy", "analyze_project")]}]
-    caps = planner.build_catalogue(listing, browser_ready=False, jarvis_ready=False, computer_ready=False,
-                                   allow_computer=False, mode="work")
+    caps = planner.build_catalogue(listing, jarvis_ready=False, mode="work")
     refs = {c.ref for c in caps}
     assert "workbench:generate_prompt" in refs and "workbench:analyze_project" in refs
     assert not refs & {"workbench:execute_prompt", "workbench:run_learned_workflow", "workbench:set_provider_policy"}

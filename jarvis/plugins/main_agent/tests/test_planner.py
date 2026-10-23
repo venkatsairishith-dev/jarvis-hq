@@ -18,7 +18,7 @@ def plugins():
 
 
 def caps(**kw):
-    base = dict(browser_ready=True, jarvis_ready=True, computer_ready=True, allow_computer=False)
+    base = dict(jarvis_ready=True)
     base.update(kw)
     return build_catalogue(plugins(), **base)
 
@@ -29,15 +29,12 @@ def refs(cs):
 
 def test_catalogue_offers_only_what_is_usable():
     r = refs(caps())
-    assert r == {"think", "browser", "jarvis", "web_search:search"}          # not stopped plugins, not itself, not the bridge, no desktop
+    assert r == {"think", "jarvis", "web_search:search"}          # not stopped plugins, not itself, not the bridge, no desktop
 
 
-def test_catalogue_respects_readiness_and_the_desktop_opt_in():
-    assert "browser" not in refs(caps(browser_ready=False))
+def test_catalogue_respects_readiness_and_has_no_browser_or_computer_helper():
     assert "jarvis" not in refs(caps(jarvis_ready=False))
-    assert "computer" not in refs(caps(computer_ready=True, allow_computer=False))
-    assert "computer" not in refs(caps(computer_ready=False, allow_computer=True))
-    assert "computer" in refs(caps(computer_ready=True, allow_computer=True))
+    assert not refs(caps()) & {"browser", "computer"}
 
 
 def test_prompt_lists_the_catalogue_and_warns_about_untrusted_output():
@@ -48,7 +45,7 @@ def test_prompt_lists_the_catalogue_and_warns_about_untrusted_output():
 
 GOOD = {"summary": "Look it up and summarise", "steps": [
     {"id": "s1", "agent": "plugin", "plugin": "web_search:search", "goal": "find it", "args": {"query": "cats", "evil": 1}, "depends_on": []},
-    {"id": "s2", "agent": "browser", "goal": "open the top page", "depends_on": []},
+    {"id": "s2", "agent": "jarvis", "goal": "open the top page", "depends_on": []},
     {"id": "s3", "agent": "think", "goal": "summarise", "depends_on": ["s1", "s2"]}]}
 
 
@@ -68,7 +65,7 @@ def test_json_in_a_code_fence_or_surrounded_by_prose_is_accepted():
     (lambda d: d.update(steps=[]), "None of the available helpers"),
     (lambda d: d.update(steps="nope"), "no steps list"),
     (lambda d: d["steps"].extend([{"id": f"x{i}", "agent": "think", "goal": "g"} for i in range(5)]), "at most"),
-    (lambda d: d["steps"][1].update(agent="computer"), "not available"),
+    (lambda d: d["steps"][1].update(agent="computer"), "not available"),     # the old computer helper is gone
     (lambda d: d["steps"][0].update(plugin="music_pusher:play"), "not available"),
     (lambda d: d["steps"][0].update(args={}), "missing required"),
     (lambda d: d["steps"][0].update(depends_on=["s3"]), "does not come before"),
@@ -102,7 +99,7 @@ def mode_plugins():
 
 
 def caps_for(mode, **kw):
-    base = dict(browser_ready=True, jarvis_ready=True, computer_ready=True, allow_computer=True)
+    base = dict(jarvis_ready=True)
     base.update(kw)
     return build_catalogue(mode_plugins(), mode=mode, **base)
 
@@ -113,7 +110,7 @@ def test_chat_mode_exposes_no_tools():
 
 def test_work_mode_has_the_tools_but_not_the_study_vault():
     r = refs(caps_for("work"))
-    assert {"think", "browser", "jarvis", "computer", "web_search:search", "doc_tools:read_document"} <= r
+    assert {"think", "jarvis", "web_search:search", "doc_tools:read_document"} <= r
     assert not any(x.startswith("learn_vault:") for x in r)
 
 
@@ -128,12 +125,12 @@ def test_learn_mode_is_the_vault_and_documents_only():
 
 def test_a_mode_never_adds_what_is_not_running_or_ready():
     p = [dict(x, status="stopped") if x["id"] == "learn_vault" else x for x in mode_plugins()]
-    assert "learn_vault:save_note" not in refs(build_catalogue(p, browser_ready=False, jarvis_ready=False, computer_ready=False,
-                                                              allow_computer=False, mode="learn"))
+    assert "learn_vault:save_note" not in refs(build_catalogue(p, jarvis_ready=False, mode="learn"))
 
 
 def test_plans_cannot_use_a_helper_the_mode_removed():
-    work_plan = {"summary": "s", "steps": [{"id": "s1", "agent": "browser", "goal": "look it up"}]}
+    work_plan = {"summary": "s", "steps": [{"id": "s1", "agent": "plugin", "plugin": "web_search:search", "goal": "look it up",
+                                            "args": {"query": "cats"}}]}
     parse_plan(json.dumps(work_plan), caps_for("work"), 6)                  # fine in work mode
     with pytest.raises(PlanError):
         parse_plan(json.dumps(work_plan), caps_for("code"), 6)              # the same plan is refused in code mode
@@ -207,26 +204,11 @@ def test_fill_args_substitutes_truncates_and_leaves_other_values_alone():
     assert "{{" not in out["content"]
 
 
-def test_work_mode_tells_the_planner_not_to_use_the_browser_for_general_knowledge():
+def test_work_mode_tells_the_planner_to_use_think_for_general_knowledge():
     system = planner_messages("what is the capital of Italy", caps(), 4, "work")[0]["content"]
     assert "Use think for anything the model can answer from general knowledge" in system
-    assert "Use the browser ONLY when" in system and "never for general knowledge" in system
-    browser_line = next(l for l in system.splitlines() if l.startswith('- agent "browser"'))
-    assert "Not for general knowledge".lower() in browser_line.lower()
-
-
-def test_the_browser_helper_is_offered_only_when_the_request_points_at_the_web():
-    from jarvis.plugins.main_agent.planner import filter_for_task, needs_web
-    full = caps()
-    assert any(c.kind == "browser" for c in full)
-    for plain in ("find the capital of Italy and save it to a document", "write a poem about cats", "summarise my notes"):
-        assert not needs_web(plain), plain
-        assert all(c.kind != "browser" for c in filter_for_task(full, plain)), plain
-    for web in ("open https://example.com and read the title", "what is the latest news about electric cars",
-                "check the weather today in Hyderabad", "fill in the form on that site", "search the web for flight prices"):
-        assert needs_web(web), web
-        assert any(c.kind == "browser" for c in filter_for_task(full, web)), web
-    assert [c.kind for c in filter_for_task(full, "plain task")] == [c.kind for c in full if c.kind != "browser"]
+    assert "never use them for general knowledge" in system
+    assert "browser" not in system.lower().replace("browsing", "")
 
 
 def test_side_effects_of_real_entries_fail_closed():

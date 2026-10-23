@@ -231,6 +231,5 @@ def test_a_malformed_question_fails_the_step_instead_of_waiting(monkeypatch, tmp
 def test_the_planner_can_never_answer_or_cancel_a_question():
     listing = [{"id": "main_agent", "status": "running", "entries": [{"id": e, "description": "d"} for e in
                                                                      ("answer_input", "cancel_input", "pending_inputs")]}]
-    caps = planner.build_catalogue(listing, browser_ready=False, jarvis_ready=False, computer_ready=False,
-                                   allow_computer=False, mode="work")
+    caps = planner.build_catalogue(listing, jarvis_ready=False, mode="work")
     assert not [c for c in caps if c.ref.startswith("main_agent:")]

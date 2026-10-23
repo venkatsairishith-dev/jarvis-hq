@@ -65,14 +65,14 @@ def test_hints_name_the_shape_that_worked_and_the_one_that_failed_and_never_any_
     e = ep(tmp_path)
     for i in range(3):
         rec(e, task="summarise the latest news about solar panels", shape=("plugin:web_search:search", "think"), run=f"g{i}")
-    rec(e, task="summarise latest solar panels news", shape=("browser",), state="failed", err="timeout", run="b1")
-    allowed = {"think", "browser", "plugin:web_search:search"}
+    rec(e, task="summarise latest solar panels news", shape=("jarvis",), state="failed", err="timeout", run="b1")
+    allowed = {"think", "jarvis", "plugin:web_search:search"}
     line = e.hints("summarise the news about solar panels", allowed)
     assert "succeeded 3 of 4" in line and "plugin:web_search:search > think" in line
-    assert "failed 1 times" in line and "(timeout)" in line and "browser" in line
+    assert "failed 1 times" in line and "(timeout)" in line and "jarvis" in line
     assert "solar" not in line.lower() and "news" not in line.lower()
     # a shape made of helpers that do not exist now is never suggested
-    assert "web_search" not in e.hints("summarise the news about solar panels", {"think", "browser"})
+    assert "web_search" not in e.hints("summarise the news about solar panels", {"think", "jarvis"})
     assert e.hints("completely different request words", allowed) == ""
 
 

@@ -1,8 +1,7 @@
 """Main Agent: takes one spoken or typed task, plans it, and runs it through the sub-agents that fit.
 
-the face routes a request to a single channel. This plugin adds the layer above that: a planner picks the right
-sub-agents for the task (a reasoning step, an installed plugin, the browser, JARVIS and its lab agents, optionally the
-desktop), independent steps run in parallel, and one combined answer is spoken back.
+A chat front end routes a request to a single channel. This plugin adds the layer above that: a planner picks the right
+sub-agents for the task (a reasoning step, an installed plugin or JARVIS and its lab agents), independent steps run in parallel, and one combined answer is spoken back.
 
 Everything it can do is something the face or JARVIS already exposes; it holds no credentials of its own and cannot reach
 anything that is not in the live catalogue. Planner, executor and run store are in planner.py / executor.py / store.py (tested
@@ -13,8 +12,7 @@ One run at a time. A run is claimed (its id becomes the active run and its recor
 planning starts, in one step with no await in between, so two requests that arrive together cannot both start: the second
 gets the honest "busy" answer. Stop always targets the claimed run, including one that is still planning, and a run only
 ever releases its own claim. Stopping a run cancels its planning, starts no further step, and asks the helper of a step in
-flight to stop where the helper allows it (desktop PC tasks, JARVIS commands, and the one computer-use task through the
-agent server's per-task cancel; never its end_all). Stop is not the kill switch: the kernel's
+flight to stop where the helper allows it (desktop PC tasks and JARVIS commands). Stop is not the kill switch: the kernel's
 kill switch and the console's Stop all are separate and untouched by this plugin.
 """
 
@@ -61,7 +59,6 @@ from .planner import (
     Step,
     build_catalogue,
     fill_args,
-    filter_for_task,
     normalize_mode,
     now_line,
     parse_plan,
@@ -137,7 +134,7 @@ def _text_of(value: Any, limit: int = 4000) -> str:
 
 def _safe_text(value: Any, limit: int = 200) -> str:
     """A helper's error or message on its way into a step error, the run file, the chat push and the logs (re-review M12): secrets,
-    paths, file names and e-mail addresses out, cut short. The browser, computer and JARVIS helpers echo what they saw."""
+    paths, file names and e-mail addresses out, cut short. The JARVIS helper echoes what it saw."""
     return screen_text.clean_message(_text_of(value, limit * 4), limit)
 
 
@@ -328,8 +325,8 @@ class MainAgentPlugin(PluginBase):
         return bool(isinstance(data, dict) and data.get("ready"))
 
     async def _catalogue(self, mode: str = DEFAULT_MODE) -> list[Capability]:
-        """What the planner may use now: thinking, JARVIS (when it is ready), and the entries of the running plugins. The old
-        browser-use and computer-use helpers belonged to the face and are gone; browsing and desktop work go through JARVIS."""
+        """What the planner may use now: thinking, JARVIS (when it is ready), and the entries of the running plugins. Browsing and desktop work go through
+        the plugins and JARVIS."""
         mode = normalize_mode(mode)
         kinds = set(MODE_RULES[mode]["kinds"])
         plugins: list[Any] = []
@@ -339,8 +336,7 @@ class MainAgentPlugin(PluginBase):
             except Exception:  # noqa: BLE001 - no listing means no plugin steps; the plan can still think and use JARVIS
                 plugins = []
         jarvis = await self._jarvis_ready() if "jarvis" in kinds else False
-        return build_catalogue(plugins, browser_ready=False, jarvis_ready=jarvis, computer_ready=False,
-                               allow_computer=False, mode=mode)
+        return build_catalogue(plugins, jarvis_ready=jarvis, mode=mode)
 
     # ---------- the model (JARVIS's "agent" model, as the other plugins use it: jarvis/pluginapi/models.py) ----------
     def _agent_base_url(self) -> str:
@@ -445,7 +441,6 @@ class MainAgentPlugin(PluginBase):
 
     async def _make_plan(self, task: str, caps: list[Capability], mode: str = DEFAULT_MODE, memory: str = "", avoid: str = "") -> Plan:
         max_steps = _int_env("MAIN_AGENT_MAX_STEPS", 6, 1, 10)
-        caps = filter_for_task(caps, task)        # no browser helper unless the request points at the web (also validated below)
         allowed = {(f"plugin:{c.ref}" if c.kind == "plugin" else c.kind) for c in caps}
         try:
             hints = self._ep().hints(task, allowed)
@@ -569,8 +564,6 @@ class MainAgentPlugin(PluginBase):
         (audit H2, re-review M10): its goal or arguments may carry a memory, so it goes only where the memory may go, and
         anything not named here is refused (fail closed):
           * think: a local-only model call (checked in _llm);
-          * browser / computer: the agent server runs them on the same "agent" model slot as the planner, so they
-            need that slot to be a verified local model, checked again now;
           * plugin: only the entries in MEMORY_LOCAL_ENTRIES (they act on this PC and send nothing on);
           * jarvis, every other plugin or entry, and any step kind this code does not know: the text could leave for a cloud
             lane, a public service, a chat push or another agent, so the step needs MAIN_AGENT_MEMORY_TO_EXTERNAL_STEPS=1.
@@ -578,11 +571,6 @@ class MainAgentPlugin(PluginBase):
         if not getattr(step, "memory_influenced", False):
             return ""
         if step.kind == "think":
-            return ""
-        if step.kind in ("browser", "computer"):
-            allowed, why = memory_allowed(self._agent_base_url())
-            if not allowed:
-                return f"Needs the owner: this step was planned with the owner's memory and {why}."
             return ""
         ref = str(step.ref or "")
         plugin_id, _, entry_id = ref.partition(":")
@@ -622,7 +610,7 @@ class MainAgentPlugin(PluginBase):
         problem = self._memory_sink_problem(step)
         if problem:
             raise StepFailed(problem)
-        if step.kind in ("browser", "computer", "jarvis"):
+        if step.kind == "jarvis":
             ctx.untrusted = True                                # what these bring back comes from outside the owner's data
         timeout = float(_int_env("MAIN_AGENT_STEP_TIMEOUT", 240, 10, 1800))
         if step.kind == "think":
@@ -924,7 +912,7 @@ class MainAgentPlugin(PluginBase):
             default=(
                 "Do a real task that needs several steps or different kinds of help: research then write something up, look "
                 "something up on the web and act on it, work with files or code on the PC, or combine tools. The main agent plans "
-                "it, picks the helpers that fit (reasoning, installed plugins, the web browser, JARVIS and its sub-agents), runs "
+                "it, picks the helpers that fit (reasoning, installed plugins, JARVIS and its sub-agents), runs "
                 "independent steps in parallel and reports back. Use this instead of a single tool when more than one step or tool "
                 "is involved. Not for chit-chat or one quick question."
             ),

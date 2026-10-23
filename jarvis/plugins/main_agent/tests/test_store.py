@@ -53,7 +53,7 @@ def test_a_corrupt_file_is_ignored(tmp_path):
 
 def test_effects_are_decided_by_what_the_step_is():
     assert effect_of("think") == "none"
-    for kind in ("browser", "computer", "jarvis"):
+    for kind in ("jarvis",):
         assert effect_of(kind) == "non_idempotent"
     for ref in ("doc_tools:write_document", "learn_vault:save_note", "app_launcher:launch_app", "memo_reminder:add_reminder",
                 "web_search:search_and_send", "x:delete_item"):

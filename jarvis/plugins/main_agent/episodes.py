@@ -65,7 +65,7 @@ def error_class(text: Any) -> str:
 
 
 def shape_of(step: Any) -> str:
-    """One plan step as a coarse label: 'think', 'browser', 'computer', 'jarvis' or 'plugin:<plugin>:<entry>'. No goal, no arguments."""
+    """One plan step as a coarse label: 'think', 'jarvis' or 'plugin:<plugin>:<entry>'. No goal, no arguments."""
     get = step.get if isinstance(step, dict) else (lambda k, d="": getattr(step, k, d))
     kind, ref = str(get("kind", "") or ""), str(get("ref", "") or "")
     return f"plugin:{ref}" if kind == "plugin" and ref else kind

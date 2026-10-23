@@ -17,7 +17,7 @@ from typing import Any, Iterable
 
 from jarvis.plugins._shared.untrusted import strip_invisible
 
-KINDS = ("think", "plugin", "browser", "jarvis", "computer")
+KINDS = ("think", "plugin", "jarvis")
 SELF_PLUGINS = ("main_agent", "jarvis_bridge")      # never offered as plain plugin sub-agents (no recursion)
 # Entries only the owner may trigger (a panel button with confirm=true): running a saved prompt or a learned workflow hands work
 # to main_agent / JARVIS (recursion, and a model-written plan must never decide to run something), and a project's AI provider
@@ -33,7 +33,7 @@ MODE_RULES: dict[str, dict[str, Any]] = {
     # Chat: conversation only, no tools exposed.
     "chat": {"kinds": ("think",), "plugins": ()},
     # Work: everything that is running, except the study vault.
-    "work": {"kinds": ("think", "plugin", "browser", "jarvis", "computer"), "plugins": None, "exclude": ("learn_vault",)},
+    "work": {"kinds": ("think", "plugin", "jarvis"), "plugins": None, "exclude": ("learn_vault",)},
     # Code: software work goes only to JARVIS's lab agents (OpenCode with language-server queries, goose, Hermes) in the
     # bound project, with the kernel's approvals deciding every risky action.
     "code": {"kinds": ("think", "jarvis"), "plugins": ()},
@@ -42,7 +42,7 @@ MODE_RULES: dict[str, dict[str, Any]] = {
 }
 MODE_GUIDANCE = {
     "chat": "Mode: chat. No tools are available; answer conversationally with one think step.",
-    "work": "Mode: work. Chain the available tools to get the task done; prefer the fewest steps. Use think for anything the model can answer from general knowledge (facts, explanations, writing, summaries). Use the browser ONLY when the task needs live information or a specific website that the model cannot know (current news, prices, a given page) or must operate a website; never for general knowledge.",
+    "work": "Mode: work. Chain the available tools to get the task done; prefer the fewest steps. Use think for anything the model can answer from general knowledge (facts, explanations, writing, summaries). Browsing a website and working on the PC are done by plugins (web search, research, desktop) or by jarvis; never use them for general knowledge.",
     "code": "Mode: code. Software work is done by JARVIS in the bound project (its lab agents have language-server queries); "
             "describe the engineering task precisely, one jarvis step per coherent change, then think to summarise.",
     "learn": "Mode: learn. Work with the study vault and documents only: read, explain, organise notes, make exercises, "
@@ -51,23 +51,6 @@ MODE_GUIDANCE = {
 }
 MAX_GOAL = 600
 
-# The web browser helper is slow and, with a small planner model, gets picked for plain questions ("find the capital of Italy").
-# It is only offered when the request itself points at the web: a link, a site, live information, or filling in a form.
-_WEB_CUES = re.compile(
-    r"https?://|\bwww\.|\.(?:com|org|net|io|in|gov|edu)\b|\bweb ?(?:site|page)\b|\bbrowse\b|\bbrowser\b|\bonline\b|\binternet\b"
-    r"|\bgoogle\b|\bsearch (?:the )?(?:web|internet|online)\b|\blatest\b|\bcurrent(?:ly)?\b|\btoday\b|\bnews\b|\bweather\b|\bforecast\b"
-    r"|\bprices?\b|\bstocks?\b|\bscores?\b|\bdownload\b|\blog ?in\b|\bsign ?in\b|\bfill (?:in|out)\b|\bform\b|\bbook(?:ing)?\b",
-    re.I,
-)
-
-
-def needs_web(task: str) -> bool:
-    return bool(_WEB_CUES.search(str(task or "")))
-
-
-def filter_for_task(caps, task: str):
-    """The catalogue for THIS request: the browser helper only when the request points at the web."""
-    return [c for c in caps if c.kind != "browser" or needs_web(task)]
 # An earlier result may be passed into a later plugin step as {{s1}}, but only into content-type arguments and only from a step the
 # plan says it depends on. The data fills a value; it can never add, remove or redirect a step.
 PLACEHOLDER = re.compile(r"\{\{\s*([a-z0-9_]{1,20})\s*\}\}")
@@ -85,7 +68,7 @@ class PlanError(ValueError):
 @dataclass
 class Capability:
     kind: str                      # one of KINDS
-    ref: str                       # "think", "browser", "jarvis", "computer" or "plugin_id:entry_id"
+    ref: str                       # "think", "jarvis" or "plugin_id:entry_id"
     description: str
     schema: dict[str, Any] | None = None
 
@@ -129,7 +112,7 @@ def effect_of(kind: str, ref: str = "") -> str:
     """Whether running a step twice could do something twice. Decided from what the step is, never from the model."""
     if kind == "think":
         return "none"
-    if kind in ("browser", "computer", "jarvis"):
+    if kind == "jarvis":
         return "non_idempotent"
     entry = str(ref).split(":", 1)[-1].lower()
     if entry in _FILE_WRITERS or _WRITE_VERB.search(entry):
@@ -148,8 +131,7 @@ def normalize_mode(value: Any) -> str:
     return mode
 
 
-def build_catalogue(plugins: Iterable[dict[str, Any]], *, browser_ready: bool, jarvis_ready: bool, computer_ready: bool,
-                    allow_computer: bool, mode: str = DEFAULT_MODE) -> list[Capability]:
+def build_catalogue(plugins: Iterable[dict[str, Any]], *, jarvis_ready: bool, mode: str = DEFAULT_MODE) -> list[Capability]:
     """The sub-agents the planner may use right now. Only running plugins are offered; nothing is started for a plan.
 
     `mode` narrows the result (see MODE_RULES); it never adds anything that is not running or not ready.
@@ -158,14 +140,10 @@ def build_catalogue(plugins: Iterable[dict[str, Any]], *, browser_ready: bool, j
     kinds = set(rules["kinds"])
     caps = [Capability("think", "think",
                        "Reason, summarise, compare or write using only the results of earlier steps (no outside access).")]
-    if browser_ready and "browser" in kinds:
-        caps.append(Capability("browser", "browser", "Operate a real web browser: read a specific page, get live information (current news, prices) or fill in a form on the web. Slow; not for general knowledge."))
     if jarvis_ready and "jarvis" in kinds:
         caps.append(Capability("jarvis", "jarvis",
                                "JARVIS, the owner's main agent with its own sub-agents: code, files on this PC, long multi-step "
                                "work. It asks the owner for approval itself. Its detailed results are NOT readable by later steps."))
-    if computer_ready and allow_computer and "computer" in kinds:
-        caps.append(Capability("computer", "computer", "Control the desktop with mouse and keyboard (slow; last resort)."))
     if "plugin" not in kinds:
         return caps
     only = rules.get("plugins")
@@ -221,7 +199,7 @@ def planner_messages(task: str, caps: list[Capability], max_steps: int, mode: st
     system = (
         "You are the planner of a personal assistant's main agent. Break the user's request into the FEWEST steps, each done by "
         "one sub-agent chosen from the catalogue below, and answer with ONLY a JSON object, no prose:\n"
-        '{"summary": "<one short sentence>", "steps": [{"id": "s1", "agent": "think|plugin|browser|jarvis|computer", '
+        '{"summary": "<one short sentence>", "steps": [{"id": "s1", "agent": "think|plugin|jarvis", '
         '"plugin": "<plugin_id:entry_id, only when agent is plugin>", "goal": "<what this step must achieve>", '
         '"args": {<only for plugin steps, matching its args>}, "depends_on": ["<earlier step ids>"]}]}\n'
         f"Rules: at most {max_steps} steps; one step is best when one sub-agent can do it; steps may depend only on EARLIER steps; "

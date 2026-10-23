@@ -2510,7 +2510,7 @@
  {
   "id": "A-063",
   "area": "A",
-  "title": "Planner: the browser is not offered for general knowledge",
+  "title": "Planner: no browser helper is offered, and main_agent is never offered to itself",
   "scenario": "Task 'what is the capital of Italy' in work mode; the catalogue is built from running plugins; a plan that uses the browser is parsed against it.",
   "expected": "Browser absent from the offered helpers, main_agent never offered to itself, and the browser plan is refused.",
   "risk": "medium",

@@ -313,12 +313,11 @@ def planner_effects(a):
 
 
 def planner_catalogue(a):
-    from jarvis.plugins.main_agent.planner import PlanError, build_catalogue, filter_for_task, parse_plan
+    from jarvis.plugins.main_agent.planner import PlanError, build_catalogue, parse_plan
     plugins = [{"id": "web_search", "status": "running", "entries": [{"id": "search"}]},
                {"id": "learn_vault", "status": "running", "entries": [{"id": "save_note"}]},
                {"id": "main_agent", "status": "running", "entries": [{"id": "run_task"}]}]
-    caps = build_catalogue(plugins, browser_ready=True, jarvis_ready=True, computer_ready=True, allow_computer=False, mode=a.get("mode", "work"))
-    caps = filter_for_task(caps, a["task"])
+    caps = build_catalogue(plugins, jarvis_ready=True, mode=a.get("mode", "work"))
     refs = sorted(c.ref for c in caps)
     bad = [r for r in a.get("absent", []) if r in refs] + [f"missing {r}" for r in a.get("present", []) if r not in refs]
     if a.get("plan"):
