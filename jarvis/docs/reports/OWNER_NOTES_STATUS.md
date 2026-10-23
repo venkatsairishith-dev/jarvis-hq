@@ -69,7 +69,7 @@ pin the behaviour; a row is only DONE when it is also switched on.
 
 ## Waiting on the owner
 
-- The Claude planner stays until 2026-10-31 (the promo credit's end on the Console); the Agent SDK builder is set to 2026-11-05.
+- JARVIS never calls Claude at run time (D35, 2026-10-23): the planner gateway and Claude adapter are removed. Claude only builds JARVIS (the Agent SDK builder, until 2026-11-05).
   Check the Console before 31 Oct: spend after the credit ends is billed to the card (within the $50 monthly limit).
 - The live microphone test and "Hey Neko" recordings (`05_OPERATIONS.md`, "Hey Neko" section).
 - Oracle console: the shapes of both instances against the free 2 OCPU / 12 GB total (never touch `hermes-agent-vm-2`).

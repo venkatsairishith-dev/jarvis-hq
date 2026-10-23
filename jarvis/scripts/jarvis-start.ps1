@@ -37,15 +37,8 @@ if (-not (Listening 48950) -and (Test-Path $privPy) -and (Test-Path $privScript)
     -RedirectStandardOutput "$logs\privacy.out.log" -RedirectStandardError "$logs\privacy.err.log" | Out-Null
   foreach ($i in 1..30) { if (Listening 48950) { break }; Start-Sleep 1 }
 }
-# Planner gateway (127.0.0.1:48952): the same redaction, but Claude is asked first (owner exception until 2026-10-31) and Dahl answers if
-# Claude cannot. Only the plugins' agent model (JARVIS_AGENT_BASE_URL, set below) points here; the default gateway never asks Claude.
-$plannerOn = ((Get-Date).ToUniversalTime().Date -le [datetime]"2026-10-31")
-if ($plannerOn -and -not (Listening 48952) -and (Test-Path $privPy) -and (Test-Path $privScript)) {
-  Start-Process $privPy -ArgumentList (Resolve-Path $privScript).Path, "--port", "48952", "--providers", (Resolve-Path (Join-Path $PSScriptRoot "..\privacy\providers.planner.json")).Path -WindowStyle Hidden `
-    -RedirectStandardOutput "$logs\privacy-planner.out.log" -RedirectStandardError "$logs\privacy-planner.err.log" | Out-Null
-  foreach ($i in 1..30) { if (Listening 48952) { break }; Start-Sleep 1 }
-}
-if ($plannerOn -and (Listening 48952)) { $env:JARVIS_AGENT_BASE_URL = "http://127.0.0.1:48952/v1" }
+# No Claude at run time (owner, 2026-10-23): the plugins' agent model (JARVIS_AGENT_BASE_URL) is the privacy gateway on 48950, whose only
+# provider is Dahl. Claude is used to build JARVIS, never called by it.
 # The planner's model and its key. JARVIS_AGENT_MODEL is the model name sent to the provider (Dahl's MiniMax by default, as the
 # N.E.K.O era used). JARVIS_AGENT_KEY_FILE is the PATH of a file holding the provider key, never the key itself; the gateway passes it
 # on as the caller's own key. Set either variable before running this script to use something else.
@@ -120,7 +113,6 @@ $faceState = if ($NoFace) { "not started (-NoFace)" } elseif (-not (Test-Path $F
 "tools  48970: " + (Listening 48970) + "   (the face's tool server: JARVIS tasks and the plugins)"
 "speech 48930: " + (Listening 48930) + "   (local speech to text and text to speech)"
 "privacy 48950: " + (Listening 48950) + "   (redacts private values before the public model)"
-"planner 48952: " + (Listening 48952) + "   (Claude first, owner exception until 2026-10-31)"
 "local  8080 : " + (Listening 8080) + "   (local specialist models; load on first use)"
 "jarvis : $jarvis | laptop node task: $node"
 "face   : $faceState"

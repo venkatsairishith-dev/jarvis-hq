@@ -595,12 +595,10 @@ Three jobs in one plugin, built on the existing JARVIS parts (doc_tools, researc
 
 | File | What it does |
 |---|---|
-| `claude_adapter.py` | Claude as a planner provider behind the privacy gateway (owner exception, expires 2026-10-31). |
 | `demo_live.py` | One live call to show the privacy gateway working end to end (costs one small provider request). |
 | `eval_pii.py` | Measure how well the redactor hides secrets that have no cue word, and how often it flags ordinary messages. |
 | `gateway.py` | Privacy gateway: a local OpenAI-compatible proxy that sits in front of a public model service (Dahl). |
 | `providers.json` | Public model providers the privacy gateway may use, in order. |
-| `providers.planner.json` | Planner-only gateway instance (port 48952): Claude first, Dahl as the fallback with the caller's own key. |
 | `providers.second.json` | Second-opinion gateway instance (port 48954, plan item 9): the same redaction as the default gateway, but its first and only provider is the reviewer model, so a second opinion never silently comes from the planner's… |
 | `redactor.py` | Find private values in text, swap them for placeholders such as [PASSWORD_1], and put them back later. |
 

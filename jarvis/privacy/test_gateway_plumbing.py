@@ -348,5 +348,37 @@ class MissingPiiModelFailsClosed(unittest.TestCase):
         self.assertIn("ModuleNotFoundError", proc.stderr)
 
 
+class ClaudeIsNeverAProvider(unittest.TestCase):
+    """Owner, 2026-10-23 (D35): JARVIS never calls Claude. An 'anthropic' entry in a providers file is dropped, even a preferred one."""
+
+    def test_anthropic_entries_are_dropped_and_dahl_is_first(self):
+        import tempfile
+        cfg = {"providers": [
+            {"name": "claude", "api": "anthropic", "preferred": True, "enabled": True, "base_url": "https://api.anthropic.com",
+             "key_file": "claude.key", "model": "claude-sonnet-5-5"},
+            {"name": "dahl", "base_url": "https://inference.dahl.global/v1", "enabled": True, "key": "from_request"}]}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(cfg, f)
+        try:
+            provs, _ = gateway.load_providers(f.name)
+        finally:
+            os.unlink(f.name)
+        self.assertEqual([p["name"] for p in provs], ["dahl"])
+        self.assertFalse(any(p.get("api") == "anthropic" or "anthropic" in p["base_url"] for p in provs))
+
+    def test_a_claude_only_file_falls_back_to_the_default_upstream(self):
+        import tempfile
+        cfg = {"providers": [{"name": "claude", "api": "anthropic", "enabled": True, "base_url": "https://api.anthropic.com",
+                              "key_file": "claude.key", "model": "m"}]}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(cfg, f)
+        try:
+            provs, _ = gateway.load_providers(f.name)
+        finally:
+            os.unlink(f.name)
+        self.assertEqual(len(provs), 1)
+        self.assertNotIn("anthropic", provs[0]["base_url"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -342,14 +342,14 @@ External services and MCP servers are reached only through the kernel. Full desi
 Until 2026-10-23 the repository root was the open-source companion app N.E.K.O and JARVIS lived under `jarvis/`. N.E.K.O is gone:
 the face is now Project AIRI's desktop app, imported as JARVIS's own code (`jarvis/face`), the plugins run on JARVIS's own plugin
 API (`jarvis/pluginapi`), and the whole repository is JARVIS. The backup of the last N.E.K.O tree is the branch
-`backup/neko-final-2026-10-23`. Decisions: D31 to D34 in `03_DECISIONS.md`.
+`backup/neko-final-2026-10-23`. Decisions: D31 to D35 in `03_DECISIONS.md`.
 ```
 jarvis/face         the avatar, chat and voice window (Electron + Vue, Live2D/VRM/MMD); decides nothing
 jarvis/pluginapi    the plugin API and host: loads jarvis/plugins/*/plugin.toml, runs lifecycle and timers, routes calls between
                     plugins, offers every entry as an MCP tool with its real JSON schema
 jarvis/plugins      main_agent, jarvis_bridge, desktop, research, deliverables, local_team, doc_tools, learn_vault, workbench, web_search
 jarvis/bridge       face_tools.py: the tool server the face connects to (MCP over loopback HTTP, 127.0.0.1:48970)
-jarvis/privacy      privacy gateway 127.0.0.1:48950 (planner gateway 48952, second opinion 48954)
+jarvis/privacy      privacy gateway 127.0.0.1:48950 (second opinion 48954)
 jarvis/console      owner console 127.0.0.1:8799: approvals, audit, connectors, and the Bench screen
 jarvis/kernel, node, lab, hermes, hub, deploy, ui ...   the JARVIS subsystem
 ```
