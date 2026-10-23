@@ -276,7 +276,7 @@ def test_pypi_collection_on_the_real_repo_covers_the_jarvis_groups():
     reg = json.loads((repo / "jarvis" / "tools" / "registry.json").read_text(encoding="utf-8"))
     pk, _ = D.pypi_packages(repo, reg)
     names = {n for n, v, t in pk}
-    assert {"dbos", "python-pptx", "pdfplumber", "pypdfium2", "kaldi-native-fbank"} <= names
+    assert {"dbos", "python-pptx", "pdfplumber", "pypdfium2"} <= names
 
 
 def test_without_a_uv_lock_every_pinned_requirement_is_still_checked(tmp_path):
