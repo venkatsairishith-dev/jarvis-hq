@@ -129,7 +129,7 @@ def _writer(notes: list):
         if team.adviser_allowed(base) and model:
             try:
                 return team.post_stream(f"{base.rstrip('/')}/chat/completions", {
-                    "model": model, "max_tokens": 3500, "temperature": 0.3,
+                    "model": model, "max_tokens": int(os.environ.get("RESEARCH_WRITER_MAX_TOKENS", "9000") or 9000), "temperature": 0.3,   # 3500 was all spent on MiniMax's reasoning (2026-10-23)
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]},
                     headers={"Authorization": f"Bearer {key}"} if key else None, timeout=420)
             except team.TeamError as e:
