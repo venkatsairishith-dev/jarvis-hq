@@ -110,7 +110,16 @@ drafts (never sent by JARVIS), a morning brief in the vault (`daily\<date>-brief
 changes, safety check; `python -m jarvis.muse.brief --vault D:\jarvis\vault --inbox <inbox> --print` makes one now), routine recipes, the router with automatic provider fallback, the Python egress proxy, and the
 supervisor that will start and stop everything as one.
 
-## 12. What is being built next
+## 12. JARVIS's own personality
+
+1. Stop N.E.K.O (`neko-stop.ps1`), then `python jarvis\persona\install_card.py` shows what will change; add `--apply` to
+   install the JARVIS card (characters.json is backed up first) and `--activate` to make it the current character.
+2. Start N.E.K.O again. JARVIS is calm and direct: it disagrees when something is unsafe, never flatters, never approves for you,
+   and says "I haven't checked" instead of guessing.
+3. Check it still behaves after any model change: `python jarvis\persona\run_cases.py --model <model>` (add `--judge-model` for a
+   stricter second opinion). Every case must pass.
+
+## 13. What is being built next
 
 See the plan's phases P1 to P10: one supervisor for all processes, the Hermes safety hook, the router inside JARVIS, PC power with
 undo and a PIN-gated admin broker, learned skills, coding agents with tested pushes, the openmuse features (watches, PDF forms,

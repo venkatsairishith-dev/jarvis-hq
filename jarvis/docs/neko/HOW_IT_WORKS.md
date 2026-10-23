@@ -61,6 +61,9 @@ Example: "Hey Neko, find the folder with my resume and open it."
 | Approvals screen, models, connectors | JARVIS console | `jarvis/console/`, `jarvis/ui/` |
 | Voice | wake listener, local speech server | `jarvis/wake/`, `jarvis/scripts/local_speech_server.py` |
 | Hermes agents on the VM, checked by the kernel | `jarvis_policy` Hermes plugin | `jarvis/hermes/plugins/` |
+| JARVIS's personality (card, installer, persona cases) | N.E.K.O character card | `jarvis/persona/` |
+| Morning brief, page-watch runner, notifications | openmuse features | `jarvis/muse/` |
+| Safety posture check | `jarvis doctor` | `jarvis/tools/doctor.py` |
 
 ## 4. The integration build (what is being added)
 
