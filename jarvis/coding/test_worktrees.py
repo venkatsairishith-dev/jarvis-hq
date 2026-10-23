@@ -37,12 +37,12 @@ def make(repo: Path, tmp_path: Path, **kw) -> tuple[WorkerSpace, Space]:
 
 
 def kinds(ws: WorkerSpace, sp: Space) -> set[str]:
-    return {v.kind for v in ws.verify(sp).violations}
+    return {v.kind for v in ws.verify(sp, worker_stopped=True).violations}
 
 
 def test_clean_passes(repo, tmp_path):
     ws, sp = make(repo, tmp_path)
-    assert ws.verify(sp).ok
+    assert ws.verify(sp, worker_stopped=True).ok
     assert len(sp.base_commit) == 40
 
 
@@ -64,7 +64,7 @@ def test_rename(repo, tmp_path):
 def test_new_protected_file(repo, tmp_path):
     ws, sp = make(repo, tmp_path)
     (Path(sp.path) / "tests" / "test_x.py").write_text("x\n")
-    v = ws.verify(sp)
+    v = ws.verify(sp, worker_stopped=True)
     assert not v.ok and ("new_protected", "tests/test_x.py") in [(x.kind, x.path) for x in v.violations]
 
 
@@ -125,7 +125,7 @@ def test_read_only_blocks_write(repo, tmp_path):
     with pytest.raises(PermissionError):
         with open(target, "a") as f:
             f.write("x")
-    assert ws.verify(sp).ok
+    assert ws.verify(sp, worker_stopped=True).ok
     ws.remove(sp)
     assert not Path(sp.path).exists()
 
@@ -135,7 +135,7 @@ def test_collect_patch(repo, tmp_path):
     ws.make_read_only(sp)
     (Path(sp.path) / "src" / "app.py").write_text("x = 2\n")
     (Path(sp.path) / "src" / "new.py").write_text("y = 1\n")
-    patch = ws.collect_patch(sp)
+    patch = ws.collect_patch(sp, worker_stopped=True)
     assert isinstance(patch, bytes) and b"+x = 2" in patch and b"src/new.py" in patch
     assert b"test_a.py" not in patch and b"conftest" not in patch
     status = subprocess.run(["git", "status", "--porcelain"], cwd=sp.path, capture_output=True, text=True).stdout
@@ -146,7 +146,7 @@ def test_collect_patch_refused_when_violating(repo, tmp_path):
     ws, sp = make(repo, tmp_path)
     (Path(sp.path) / "tests" / "test_a.py").write_text("")
     with pytest.raises(WorktreeError):
-        ws.collect_patch(sp)
+        ws.collect_patch(sp, worker_stopped=True)
 
 
 def test_hooks_do_not_run(repo, tmp_path):
@@ -157,8 +157,8 @@ def test_hooks_do_not_run(repo, tmp_path):
         h.chmod(0o755)
     ws, sp = make(repo, tmp_path)
     (Path(sp.path) / "src" / "n.py").write_text("n\n")
-    ws.verify(sp)
-    ws.collect_patch(sp)
+    ws.verify(sp, worker_stopped=True)
+    ws.collect_patch(sp, worker_stopped=True)
     assert not marker.exists()
 
 

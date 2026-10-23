@@ -2,9 +2,13 @@
 
     ws = WorkerSpace(repo, base_dir, protected_globs=("tests/**",), state_dir=<a folder only the kernel can write>)
     space = ws.create("worker-1"); ws.make_read_only(space)
-    ... the worker edits files under space.path ...
-    verdict = ws.verify(space)            # the guard; read-only bits are only a speed bump
-    patch = ws.collect_patch(space)       # bytes; refuses unless verdict.ok
+    ... the worker edits files under space.path; then EVERY process of the worker is stopped (kill its process group) ...
+    verdict = ws.verify(space, worker_stopped=True)         # the guard; read-only bits are only a speed bump
+    patch = ws.collect_patch(space, worker_stopped=True)    # bytes; refuses unless verdict.ok
+
+verify() and collect_patch() REFUSE to run unless the caller asserts the worker has exited (worker_stopped=True, or a callable that returns
+True once the worker's process group is gone): git configuration is checked in Python and git is run afterwards, and a still-running worker
+could change that configuration in between. The stronger layer stays the kernel's own fixed test run on the patch in a fresh clone.
 
 Rules enforced here:
 - Protected files are hashed at create() into a manifest stored in `state_dir`, which must NOT be inside base_dir (the worker may write
@@ -36,6 +40,7 @@ import stat
 import subprocess
 import tempfile
 import weakref
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 WORKER_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,40}")
@@ -287,7 +292,17 @@ class WorkerSpace:
             out.append((n, path))
         return out
 
-    def verify(self, space: Space) -> Verdict:
+    def verify(self, space: Space, *, worker_stopped: "bool | Callable[[], bool]" = False) -> Verdict:
+        """Check the worker's change against the manifest.
+
+        CALL ONLY AFTER EVERY PROCESS OF THIS WORKER HAS EXITED (the lab runner kills the worker's process group first). The git files are
+        checked in Python and git is run afterwards; a worker process that is still alive could rewrite `.git/config` between those two steps
+        (the same attack, just timed). So the caller must assert that the worker is gone: pass worker_stopped=True, or a callable that returns True
+        only once the worker's process group has exited. Without that assertion verify() raises and checks nothing."""
+        stopped = worker_stopped() if callable(worker_stopped) else worker_stopped
+        if stopped is not True:
+            raise WorktreeError("verify() needs worker_stopped=True (or a callable confirming it): the worker must have exited, or it could change "
+                                "the git configuration between the check and the git command")
         root = self._checked_path(space)
         v: list[Violation] = []
         try:
@@ -335,9 +350,10 @@ class WorkerSpace:
             v.append(Violation("too_many_files", ""))
         return Verdict(not v, v, {"changed_lines": lines, "changed_files": len(changes)})
 
-    def collect_patch(self, space: Space) -> bytes:
-        """The worker's change as a git binary patch, in BYTES (a diff can hold non-UTF-8 text and must not be altered). Refuses unless verify() is ok."""
-        verdict = self.verify(space)
+    def collect_patch(self, space: Space, *, worker_stopped: "bool | Callable[[], bool]" = False) -> bytes:
+        """The worker's change as a git binary patch, in BYTES (a diff can hold non-UTF-8 text and must not be altered). Refuses unless verify() is ok.
+        Same rule as verify(): only after every process of the worker has exited, asserted with worker_stopped."""
+        verdict = self.verify(space, worker_stopped=worker_stopped)
         if not verdict.ok:
             raise WorktreeError("refusing to collect patch: " + ", ".join(sorted({x.kind for x in verdict.violations})))
         index = os.path.join(self._scratch, f"{space.worker_id}.patch-index")
