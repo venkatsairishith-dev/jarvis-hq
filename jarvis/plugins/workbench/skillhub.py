@@ -235,7 +235,7 @@ def import_skill_md(path_str: str) -> dict[str, Any]:
     text = raw.decode("utf-8", "replace")
     sha = hashlib.sha256(raw).hexdigest()
     fm = {}
-    m = re.match(r"(?s)^---\n(.*?)\n---\n", text)
+    m = re.match(r"(?s)^---\r?\n(.*?)\r?\n---\r?\n", text)   # a SKILL.md saved by a Windows editor has CRLF line ends
     if m:
         for line in m.group(1).splitlines():
             k, _, v = line.partition(":")

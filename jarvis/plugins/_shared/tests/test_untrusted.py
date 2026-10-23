@@ -48,7 +48,7 @@ LEGIT = [
 ]
 
 
-@pytest.mark.parametrize("text", LEGIT)
+@pytest.mark.parametrize("text", LEGIT, ids=[f"legit-{i}" for i in range(len(LEGIT))])   # a 100,000-character case id overflows Windows' 32,767-character environment variable limit (pytest puts the id in PYTEST_CURRENT_TEST)
 def test_legitimate_text_is_not_corrupted(text):
     out = clean_untrusted(text)
     assert out == text, (text[:40], out[:40])

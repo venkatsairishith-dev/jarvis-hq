@@ -14,6 +14,14 @@ from jarvis.plugins.workbench import deliver, ingest, requirements, service, tra
 from jarvis.plugins.workbench.projects import Project, ProjectError, read_json
 
 
+def _symlink(link: Path, target: Path) -> None:
+    """Make a symlink, or skip the test: Windows allows it only with Developer Mode or an elevated user (WinError 1314)."""
+    try:
+        link.symlink_to(target)
+    except OSError as e:
+        pytest.skip(f"cannot create symlinks here ({e.__class__.__name__}); this check runs on Linux/with Developer Mode")
+
+
 def _segments_text(pid):
     return {s["id"]: s for s in ingest.segments(Project(pid))}
 
@@ -51,7 +59,7 @@ def test_files_outside_allowed_folders_and_credentials_are_refused(tmp_path, alp
     outside = tmp_path / "elsewhere.txt"
     outside.write_text("x")
     link = tmp_path / "readable" / "link.txt"
-    link.symlink_to(Path(alpha[0]))
+    _symlink(link, Path(alpha[0]))
     got = service.add_files(pid, [str(secret), str(outside), str(link), "relative.txt", alpha[0]])
     assert [a["kind"] for a in got["added"]] == ["chat"]
     whys = " ".join(r["why"] for r in got["refused"])
@@ -239,12 +247,13 @@ def test_projects_are_isolated(alpha, beta):
     a_prompt = service.status(a)["prompts"][0]["id"]
     with pytest.raises(Exception):
         service.get_prompt(a_prompt, project_id=b)                   # a project's prompt is not found through another project
-    (pa.dir / "sources" / "evil").symlink_to(pb.dir)
+    _symlink(pa.dir / "sources" / "evil", pb.dir)
     with pytest.raises(ProjectError):
         pa.path("sources", "evil", "requirements.json")
 
 
-def test_audio_transcription_through_a_transcriber_and_blocked_without_one(tmp_path):
+def test_audio_transcription_through_a_transcriber_and_blocked_without_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("WORKBENCH_STT_URL", "http://127.0.0.1:9")    # no speech server, even where the real one is running (the laptop)
     wav = tmp_path / "readable" / "call.wav"
     with wave.open(str(wav), "wb") as w:
         w.setnchannels(1)
