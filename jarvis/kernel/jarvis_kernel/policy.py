@@ -373,7 +373,9 @@ SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".clau
                      # only JARVIS has are RED wherever they are; the generic names are in JARVIS_SAFETY_FILES below.
                      "gitleaks_gate.py", "llm_proxy.py", "projectfix.py", "lab_runner.py", "control_auth.py",
                      # Plan P1 step 9 (2026-10-22): the browser relay that decides which tabs an agent can drive.
-                     "cdp_relay.py"}
+                     "cdp_relay.py",
+                     # Plan P4 step 5 (2026-10-24): the admin broker and the verbs the owner approved for it.
+                     "adminctl.py", "admin_verbs.json"}
 # Generic file names (a Django project has its own tasks.py and owner.py): RED only when the path is inside JARVIS's own
 # packages (a JARVIS_DIRS piece such as jarvis, jarvis_kernel, jarvis_node), so another project's files are not caught.
 JARVIS_SAFETY_FILES = {"scrub.py", "owner.py", "tasks.py", "jobs.py",

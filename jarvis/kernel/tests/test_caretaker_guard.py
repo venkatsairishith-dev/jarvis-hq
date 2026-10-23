@@ -184,6 +184,13 @@ class SafetyComponents(unittest.TestCase):
             self.assertEqual(self.level("fs", "write", f"/opt/jarvis/hq/kernel/jarvis_kernel/{pkg}/combos.py"), "RED", pkg)
             self.assertNotEqual(self.level("fs", "write", f"/srv/work/shop/app/{pkg}/combos.py"), "RED", pkg)   # another project's router/
 
+    def test_p4_step5_admin_broker_and_its_verb_catalogue_are_red(self):
+        for path in ("/srv/anywhere/adminctl.py", "D:/jarvis/hq-neko/jarvis/config/admin_verbs.json"):
+            self.assertEqual(self.level("fs", "write", path), "RED", path)
+            self.assertEqual(self.level("config", "set", path), "RED", path)
+        for verb in ("winget_install", "service_restart", "reboot"):        # an admin verb is never below RED (no rule: fail closed)
+            self.assertEqual(self.level("admin", verb, "VideoLAN.VLC"), "RED", verb)
+
     def test_project_patches_to_these_files_are_red_in_the_jarvis_project_only(self):
         red = decide(Action("project", "apply_patch", "project jarvis-hq", {"project": "jarvis-hq", "files": ["jarvis/kernel/jarvis_kernel/tasks.py"]}, "private", False))
         self.assertEqual(red.name, "RED")
