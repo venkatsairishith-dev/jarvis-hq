@@ -121,7 +121,15 @@ supervisor that will start and stop everything as one.
 3. Check it still behaves after any model change: `python jarvis\persona\run_cases.py --model <model>` (add `--judge-model` for a
    stricter second opinion). Every case must pass.
 
-## 13. What is being built next
+## 13. Let another assistant read your JARVIS (read-only)
+
+Claude Code, Gemini CLI or OpenCode can look at JARVIS (tasks, notices, page watches, ideas, today's brief, the safety check)
+but never change anything:
+`claude mcp add jarvis -- python -m jarvis.bridge.readonly_mcp --data D:\jarvis\N.E.K.O-data\muse --vault D:\jarvis\vault`.
+What it shows goes to that assistant's cloud model, so it gives counts and states, and text only after the privacy redactor has
+hidden private values (no redactor, no text). Every look is logged in `mcp_reads.jsonl`.
+
+## 14. What is being built next
 
 See the plan's phases P1 to P10: one supervisor for all processes, the Hermes safety hook, the router inside JARVIS, PC power with
 undo and a PIN-gated admin broker, learned skills, coding agents with tested pushes, the openmuse features (watches, PDF forms,

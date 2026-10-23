@@ -1842,10 +1842,12 @@
   "integration": "pip",
   "machine": "Oracle VM (lab tool file)",
   "jarvis_files": [
-   "jarvis/lab/jarvis_mcp.py"
+   "jarvis/lab/jarvis_mcp.py",
+   "jarvis/bridge/readonly_mcp.py"
   ],
   "features_used": [
-   "connector_list/call/result tools for agents"
+   "connector_list/call/result tools for agents",
+   "read-only stdio server for coding CLIs (jarvis/bridge/readonly_mcp.py)"
   ],
   "unused_features": [],
   "size_class": "small",
