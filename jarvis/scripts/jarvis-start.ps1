@@ -85,7 +85,8 @@ $jarvis = "console not started"
 if (-not (Listening 8799)) {
   $consoleScript = Join-Path $PSScriptRoot 'start-console.ps1'
   if (Test-Path $consoleScript) {
-    try { & powershell -NoProfile -ExecutionPolicy Bypass -File $consoleScript | Out-Null } catch { }
+    # Start-Process -Wait, not a pipe: the console inherits a pipe's handle and the pipe would stay open for as long as it runs (found on the laptop)
+    try { Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$consoleScript`"" -WindowStyle Hidden -Wait | Out-Null } catch { }
     foreach ($i in 1..15) { if (Listening 8799) { break }; Start-Sleep 1 }
   }
 }
