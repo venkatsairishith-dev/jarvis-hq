@@ -32,7 +32,7 @@ def repo(tmp_path: Path) -> Path:
 
 
 def make(repo: Path, tmp_path: Path, **kw) -> tuple[WorkerSpace, Space]:
-    ws = WorkerSpace(str(repo), str(tmp_path / "wt"), ("tests/**",), **kw)
+    ws = WorkerSpace(str(repo), str(tmp_path / "wt"), ("tests/**",), state_dir=str(tmp_path / "state"), **kw)
     return ws, ws.create("w1")
 
 
@@ -91,7 +91,7 @@ def test_limits(repo, tmp_path):
     ws, sp = make(repo, tmp_path, max_diff_lines=5)
     (Path(sp.path) / "src" / "big.py").write_text("a\n" * 10)
     assert "too_many_lines" in kinds(ws, sp)
-    ws2 = WorkerSpace(str(repo), str(tmp_path / "wt2"), ("tests/**",), max_files=2)
+    ws2 = WorkerSpace(str(repo), str(tmp_path / "wt2"), ("tests/**",), max_files=2, state_dir=str(tmp_path / "state2"))
     sp2 = ws2.create("w2")
     for i in range(3):
         (Path(sp2.path) / "src" / f"f{i}.py").write_text("a\n")
@@ -136,8 +136,8 @@ def test_collect_patch(repo, tmp_path):
     (Path(sp.path) / "src" / "app.py").write_text("x = 2\n")
     (Path(sp.path) / "src" / "new.py").write_text("y = 1\n")
     patch = ws.collect_patch(sp)
-    assert "+x = 2" in patch and "src/new.py" in patch
-    assert "test_a.py" not in patch and "conftest" not in patch
+    assert isinstance(patch, bytes) and b"+x = 2" in patch and b"src/new.py" in patch
+    assert b"test_a.py" not in patch and b"conftest" not in patch
     status = subprocess.run(["git", "status", "--porcelain"], cwd=sp.path, capture_output=True, text=True).stdout
     assert "?? src/new.py" in status    # real index untouched: file still untracked
 
