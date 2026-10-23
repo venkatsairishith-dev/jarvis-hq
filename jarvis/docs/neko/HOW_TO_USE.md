@@ -85,6 +85,9 @@ the address that becomes a sign-in cookie. Typing http://127.0.0.1:8799 by hand 
 1. `D:\jarvis\tools\neko-venv\Scripts\python.exe jarvis\scripts\live_check.py`: servers, plugins, speech, kernel, audit chain,
    node and UI; exit code 0 means all passed (`--no-model` skips the paid model call).
 2. `jarvis\scripts\daily_report.py`: one-page daily health report, no model calls.
+   Safety posture: `python jarvis\tools\doctor.py` checks that JARVIS's ports listen only on this PC or Tailscale, no key sits in
+   the repo, the secrets folder is outside it, providers are encrypted and free, and skills are unchanged since they were checked.
+   Exit code 0 means no FAIL; it never prints a secret.
 3. Tests: `jarvis\scripts\dev-test.ps1 quick` (about 6 minutes) or `full` (about 40 minutes).
 4. The vault (`D:\jarvis\vault`, `daily\<date>.md`) records what was done each day and where work stopped.
 
