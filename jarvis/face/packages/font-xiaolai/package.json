@@ -1,0 +1,17 @@
+{
+  "name": "@proj-airi/font-xiaolai",
+  "type": "module",
+  "version": "0.12.0",
+  "private": true,
+  "description": "JARVIS stand-in for the 'Xiaolai SC' font: the font file is not shipped; the family name maps to fonts already installed.",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "default": "./index.css"
+    },
+    "./index.css": {
+      "default": "./index.css"
+    }
+  },
+  "main": "./index.css"
+}

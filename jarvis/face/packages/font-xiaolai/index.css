@@ -1,0 +1,7 @@
+/* JARVIS: the original 'Xiaolai SC' font (a large CJK display font) is not shipped with the face.
+   The family name is kept so existing styles still resolve; it maps to fonts already on the machine. */
+@font-face {
+  font-family: 'Xiaolai SC';
+  src: local('Segoe UI'), local('Noto Sans'), local('Helvetica Neue'), local('Arial');
+  font-display: swap;
+}
