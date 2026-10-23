@@ -1453,5 +1453,31 @@
    "routing",
    "ux"
   ]
+ },
+ {
+  "id": "J-072",
+  "area": "J",
+  "title": "Owner words: provider switch phrases",
+  "scenario": "'switch to groq', 'hey jarvis use dahl please', 'use local for the private lane', 'back to automatic', 'which provider am I on', plus ordinary requests ('switch to dark mode', 'use the calculator', 'open notepad').",
+  "expected": "Each phrase maps to the right request; no ordinary request is taken for a provider command.",
+  "risk": "medium",
+  "check": "owner_words_map_to_switch",
+  "dims": [
+   "routing",
+   "ux"
+  ]
+ },
+ {
+  "id": "J-073",
+  "area": "J",
+  "title": "Owner words: the kernel decides the switch",
+  "scenario": "The mapped request goes to the owner plane: a same-lane switch, a cross-lane request ('switch the private lane to <public provider>'), then back to automatic.",
+  "expected": "Same-lane switch works and the next call goes to it; cross-lane refused 400 by the kernel; automatic clears it; both changes audited as the owner; the private provider got 0 calls.",
+  "risk": "high",
+  "check": "owner_words_switch_kernel_decides",
+  "dims": [
+   "routing",
+   "security"
+  ]
  }
 ]

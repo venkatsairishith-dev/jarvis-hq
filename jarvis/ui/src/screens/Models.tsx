@@ -82,6 +82,49 @@ function Why() {
   );
 }
 
+interface LaneState { chain: string[]; preferred: string | null }
+interface Lanes { lanes: Record<string, LaneState> }
+
+function Switcher() {
+  const [s, setS] = useState<Lanes | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [phrase, setPhrase] = useState("");
+  const load = () => owner.get<Lanes>("models/lanes").then((x) => { setS(x); setErr(null); }).catch((e: Error) => setErr(e.message));
+  useEffect(() => { void load(); }, []);
+  const pick = async (lane: string, provider: string) => {
+    setMsg(null); setErr(null);
+    try { await owner.post("models/switch", { lane, provider }); setMsg(provider === "auto" ? `The ${lane} lane is back to automatic.` : `The ${lane} lane now asks ${provider} first.`); await load(); } catch (e) { setErr((e as Error).message); }
+  };
+  const say = async () => {
+    setMsg(null); setErr(null);
+    try { const r = await api.post<{ handled: boolean; say?: string }>("/api/providers/command", { text: phrase }); setMsg(r.handled ? (r.say ?? "Done.") : "That is not a provider command. Try “switch to groq” or “back to automatic”."); if (r.handled) await load(); } catch (e) { setErr((e as Error).message); }
+  };
+  return (
+    <Card title="Which provider to ask first">
+      {s && <div className="space-y-3 text-sm">
+        {Object.entries(s.lanes).map(([lane, st]) => (
+          <div key={lane} className="flex flex-wrap items-center gap-2">
+            <Badge tone={lane === "private" ? "done" : "wait"}>{lane}</Badge>
+            <label className="sr-only" htmlFor={`sw-${lane}`}>Provider for the {lane} lane</label>
+            <select id={`sw-${lane}`} className="rounded-lg border border-input bg-bg2 px-3 py-1.5 text-sm text-fg" value={st.preferred ?? "auto"} onChange={(e) => void pick(lane, e.target.value)}>
+              <option value="auto">automatic</option>{st.chain.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <span className="text-xs text-fg3">order: {st.chain.join(", ") || "none"}</span>
+          </div>))}
+        <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (phrase.trim()) void say(); }}>
+          <label className="sr-only" htmlFor="sw-phrase">Say or type a provider command</label>
+          <input id="sw-phrase" className="min-w-0 flex-1 rounded-lg border border-input bg-bg2 px-3 py-1.5 text-sm text-fg" placeholder="switch to groq / back to automatic" value={phrase} onChange={(e) => setPhrase(e.target.value)} />
+          <button className="rounded-md border border-edge px-3 py-1.5 text-sm hover:bg-hover disabled:opacity-50" disabled={!phrase.trim()}>Send</button>
+        </form>
+      </div>}
+      {msg && <p className="mt-2 text-sm" role="status">{msg}</p>}
+      {err && <ErrorNote>{err}</ErrorNote>}
+      <p className="mt-3 text-xs text-fg3">Your choice only reorders providers inside a lane the kernel already allows. It never crosses lanes, never enables a paid provider, and is written to the audit log.</p>
+    </Card>
+  );
+}
+
 export function Models() {
   const health = useStore((s) => s.health);
   const [tab, setTab] = useState<Tab>("providers");
@@ -124,8 +167,9 @@ export function Models() {
                     <td className="pr-3 text-xs text-fg3">{p.last_ok ? `ok ${ago(p.last_ok)}` : ""}{p.last_error ? ` · ${p.last_error}` : ""}
                       {m.kpis.measured_by_provider_24h?.[p.name] && <span className="block">{(m.kpis.measured_by_provider_24h[p.name].prompt + m.kpis.measured_by_provider_24h[p.name].completion).toLocaleString()} tokens reported (24 h)</span>}</td>
                     <td><ProbeButton name={p.name} /></td></tr>))}</tbody></table></div>}
-            <p className="mt-3 text-xs text-fg3">Routing is decided by the kernel's gateway: the lane comes from each agent's token, and a request never crosses lanes. Changing a provider is a configuration change on the server (<code>config/providers.json</code>), not a button here.</p>
+            <p className="mt-3 text-xs text-fg3">Routing is decided by the kernel's gateway: the lane comes from each agent's token, and a request never crosses lanes. Adding or removing a provider is a configuration change on the server (<code>config/providers.json</code>); choosing which one is asked first is the control below.</p>
           </Card>
+          <Switcher />
           <Why />
           <Card title="Who used which model (24 h)">
             {!m || m.agents.length === 0 ? <Empty title="No model calls recorded" /> : <ul className="divide-y divide-line">{m.agents.map((a) => (

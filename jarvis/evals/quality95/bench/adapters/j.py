@@ -1525,3 +1525,45 @@ def owner_route_after_failure(a):
     ok = (c1 == c2 == 200 and "RESTING_AFTER_ERRORS" in codes.get("groq", []) and r1.get("chosen") == "cerebras"
           and "groq" not in r1.get("chain", []) and "LANE_MISMATCH" in codes.get("dahl", []) and r2.get("chosen") == "groq")
     return ok, f"during the rest: chosen {r1.get('chosen')}, chain {r1.get('chain')}, groq {codes.get('groq')}; after: chosen {r2.get('chosen')}"
+
+
+# ---------------------------------------------------------------- the owner's spoken/typed provider switch (plan item 19)
+
+def _provider_command():
+    d = str(ROOT / "jarvis" / "console")
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    from jarvis_console import provider_command
+    return provider_command
+
+
+def owner_words_map_to_switch(a):
+    """The phrases map to the right request, and ordinary requests are never taken for a provider switch."""
+    pc = _provider_command()
+    known = {"private": ["local", "vm-llm"], "public": ["groq", "dahl"]}
+    want = {"switch to groq": ("switch", "groq"), "hey jarvis use dahl please": ("switch", "dahl"), "use local for the private lane": ("switch", "local"),
+            "back to automatic": ("auto", None), "which provider am I on": ("status", None)}
+    bad = [t for t, (act, prov) in want.items() if (pc.parse(t, known) or {}).get("action") != act or (prov and pc.parse(t, known).get("provider") != prov)]
+    leaked = [t for t in ("switch to dark mode", "use the calculator", "open notepad", "go to the downloads folder", "set a timer for ten minutes")
+              if pc.parse(t, known) is not None]
+    return not bad and not leaked, f"mis-mapped: {bad}; taken for a provider command: {leaked}"
+
+
+def owner_words_switch_kernel_decides(a):
+    """What the parser asks for, the kernel decides: same-lane switch works and is audited as the owner; a cross-lane request is
+    refused by the kernel (400), not by the parser; back to automatic clears the preference."""
+    pc = _provider_command()
+    with env() as e:
+        pub, cer, priv = e.mock("pub", [{"ok": reply("from pub")}]), e.mock("cer", [{"ok": reply("from cer")}]), e.mock("priv")
+        toks = e.proxy([P("pub", "public", pub.url, priority=1, model_pattern="."), P("cer", "public", cer.url, priority=2, model_pattern="."),
+                        P("priv", "private", priv.url, priority=1)])
+        me, lab = toks.issue("me", "owner"), toks.issue("lab", "public")
+        known = {"public": ["pub", "cer"], "private": ["priv"]}
+        sw = lambda cmd: e.post(me, {"lane": cmd["lane"], "provider": cmd["provider"]}, path="/v1/jarvis/owner/models/switch")
+        ok_c = sw(pc.parse("switch to cer", known))
+        c, _, b = e.post(lab, msg())
+        cross = sw(pc.parse("switch the private lane to cer", known))
+        auto = e.post(me, {"lane": "public", "provider": "auto"}, path="/v1/jarvis/owner/models/switch")
+        events = [(x["lane"], x["provider"], x["agent"]) for x in e.audit("lane_preference_set")]
+    ok = ok_c[0] == 200 and b"from cer" in b and cross[0] == 400 and auto[0] == 200 and events == [("public", "cer", "owner"), ("public", "auto", "owner")] and not priv.posts()
+    return ok, f"switch {ok_c[0]}, next call served by cer={b'from cer' in b}; cross-lane {cross[0]}; auto {auto[0]}; audit {events}"
