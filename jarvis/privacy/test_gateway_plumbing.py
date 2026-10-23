@@ -10,7 +10,7 @@ What this file proves, and what it does not:
 It runs in the stock image: if Presidio is not installed, its import is stubbed ONLY to be able to import the gateway module
 (the real detector class is never constructed here) and the stubs are removed again afterwards.
 
-    podman run --rm -v ~/hq-neko:/src:ro neko-test sh -c "cd /src/jarvis/privacy && python -B -m unittest test_gateway_plumbing -v"
+    podman run --rm -v ~/hq-jarvis:/src:ro jarvis-test sh -c "cd /src/jarvis/privacy && python -B -m unittest test_gateway_plumbing -v"
 """
 import json
 import os

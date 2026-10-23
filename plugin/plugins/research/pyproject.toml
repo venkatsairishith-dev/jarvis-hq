@@ -1,6 +1,0 @@
-[project]
-name = "research"
-version = "0.1.0"
-# Uses only what the shared N.E.K.O environment already has (lxml, numpy, onnxruntime, tokenizers). The NLI model files
-# live in D:\jarvis\models\nli (see jarvis/docs/05_OPERATIONS.md). Not vendored.
-dependencies = []

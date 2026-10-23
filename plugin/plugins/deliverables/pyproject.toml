@@ -1,6 +1,0 @@
-[project]
-name = "deliverables"
-version = "0.1.0"
-# Like doc_tools, the libraries come from the shared N.E.K.O environment (neko-venv), installed pinned and recorded in
-# jarvis/docs/05_OPERATIONS.md: python-pptx==1.0.2, pdfplumber==0.11.10 (pulls pdfminer.six, pypdfium2). Not vendored.
-dependencies = []

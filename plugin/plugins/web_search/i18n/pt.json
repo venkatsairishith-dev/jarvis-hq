@@ -1,4 +1,0 @@
-{
-  "plugin.name": "Busca na web",
-  "plugin.description": "Busca on-line que prioriza o AnySearch e seleciona a região pelo IP do usuário. A chave de API é opcional; em caso de falha, usa Baidu ou DuckDuckGo"
-}

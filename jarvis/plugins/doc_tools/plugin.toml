@@ -1,0 +1,16 @@
+[plugin]
+id = "doc_tools"
+name = "Document Tools"
+description = "Read documents (PDF, Word, Markdown, text, CSV, HTML) from the folders the owner allows and write new documents (Markdown, text, Word) to one output folder, never overwriting. Credentials and system folders are refused."
+short_description = "Safely read and write documents for work and study tasks."
+keywords = [
+    "document", "pdf", "word", "docx", "markdown", "read file", "write file", "report", "summarize file"
+]
+version = "0.1.0"
+type = "plugin"
+entry = "jarvis.plugins.doc_tools:DocToolsPlugin"
+
+
+[plugin_runtime]
+enabled = true
+auto_start = true

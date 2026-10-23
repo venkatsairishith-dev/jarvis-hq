@@ -1,0 +1,16 @@
+[plugin]
+id = "jarvis_bridge"
+name = "JARVIS Bridge"
+description = "Hands tasks the user gives the face by voice or text to JARVIS, the owner's main agent, which plans them, uses the right sub-agents and tools, asks for approval where needed and verifies the result."
+short_description = "Delegate real tasks (research, code, files, apps) to the JARVIS main agent and its sub-agents."
+keywords = [
+    "task", "do", "get done", "research", "code", "write", "fix", "build", "file", "folder", "open", "run", "search", "find", "organize", "download", "install", "agent", "jarvis", "delegate"
+]
+version = "0.1.0"
+type = "plugin"
+entry = "jarvis.plugins.jarvis_bridge:JarvisBridgePlugin"
+
+
+[plugin_runtime]
+enabled = true
+auto_start = true

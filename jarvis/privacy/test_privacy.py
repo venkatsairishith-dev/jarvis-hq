@@ -193,7 +193,7 @@ SECRET = "Blue7Whale"                                # made up, with no cue word
 
 class GatewayRoles(unittest.TestCase):
     def test_every_role_gets_the_full_pass(self):
-        # Audit MEM-M3 (2026-10-18): system and assistant text used to get the patterns only, and N.E.K.O puts recalled
+        # Audit MEM-M3 (2026-10-18): system and assistant text used to get the patterns only, and chat clients put recalled
         # memory in the system prompt. The old test asserted exactly that gap (system/assistant deep=False).
         spy = DeepOnly()
         gateway.redact_body({"messages": [{"role": "system", "content": "sys"}, {"role": "user", "content": "u"},
@@ -496,9 +496,9 @@ class ProviderFallback(unittest.TestCase):
                                      headers={"Content-Type": "application/json", "Authorization": "Bearer caller-key"})
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
-                return r.status, r.headers.get("X-Neko-Provider"), json.loads(r.read())
+                return r.status, r.headers.get("X-Jarvis-Provider"), json.loads(r.read())
         except urllib.error.HTTPError as e:
-            return e.code, e.headers.get("X-Neko-Provider"), json.loads(e.read())
+            return e.code, e.headers.get("X-Jarvis-Provider"), json.loads(e.read())
 
     def test_rate_limit_falls_back_with_the_fallbacks_own_key_and_model(self):
         self.servers[0].script = [429]

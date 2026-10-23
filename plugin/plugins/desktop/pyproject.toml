@@ -1,6 +1,0 @@
-[project]
-name = "desktop"
-version = "0.1.0"
-# Standard library only. The work happens in the JARVIS kernel (authorization) and the laptop node (jarvis/node/jarvis_node:
-# browserext, diag, repair, media, winbackend); this plugin asks the console's owner route and waits.
-dependencies = []

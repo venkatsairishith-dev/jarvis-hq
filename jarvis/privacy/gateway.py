@@ -60,8 +60,8 @@ def _count(mapping: Mapping):
 # ---------- outbound: redact ----------
 
 # Every role gets the full pass (patterns + PII model + Jev check), not only user/tool/function (audit MEM-M3, 2026-10-18):
-# N.E.K.O puts recalled memory in the SYSTEM prompt and resends earlier ASSISTANT replies, and the memory server's own
-# summary, correction and fact-extraction calls send the owner's conversation under whatever role they like. Placeholders
+# chat clients put recalled memory in the SYSTEM prompt and resend earlier ASSISTANT replies, and memory summary, correction
+# and fact-extraction calls send the owner's conversation under whatever role they like. Placeholders
 # in replies are restored as before. The redactor caches by sentence, so only new sentences cost model time.
 
 # Anything that is not text is never forwarded to the public model (audit PRO-D9): an image, audio or file part cannot be
@@ -91,7 +91,7 @@ SCALARS = {"max_tokens": (int,), "max_completion_tokens": (int,), "temperature":
            "n": (int,), "seed": (int,), "presence_penalty": (int, float), "frequency_penalty": (int, float),
            "logprobs": (bool,), "top_logprobs": (int,), "parallel_tool_calls": (bool,), "stream": (bool,), "echo": (bool,),
            "best_of": (int,)}
-# Provider switches N.E.K.O adds through extra_body (config/providers.py: enable_thinking, thinking.type, thinking_budget,
+# Provider switches that chat clients add through extra_body (enable_thinking, thinking.type, thinking_budget,
 # reasoning_effort, chat_template_kwargs). They hold no free text, so they go on only in this exact shape (booleans, integers,
 # and a fixed set of words); anything else under these names is refused.
 THINK_WORDS = {"disabled", "enabled", "auto", "between_tools", "none", "minimal", "low", "medium", "high"}
@@ -327,7 +327,7 @@ class SseRestorer:
 # ---------- providers (ordered fallback) ----------
 
 PROVIDERS_FILE = os.environ.get("JARVIS_PRIVACY_PROVIDERS", os.path.join(os.path.dirname(os.path.abspath(__file__)), "providers.json"))
-SECRET_ROOT = os.environ.get("NEKO_SECRET_REF_ROOTS", r"D:\jarvis-secrets").split(os.pathsep)[0]
+SECRET_ROOT = os.environ.get("JARVIS_SECRET_REF_ROOTS", r"D:\jarvis-secrets").split(os.pathsep)[0]
 RETRY_CODES = (429, 500, 502, 503, 504, 520, 522, 524)
 _cooldown: dict[str, float] = {}
 _keys: dict[str, str] = {}
@@ -558,7 +558,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     hdrs["Authorization"] = f"Bearer {key}"
                     # Groq's Cloudflare front refuses Python's default user agent (error 1010, seen live); a fallback
                     # must not depend on what the caller happened to send.
-                    hdrs["User-Agent"] = "neko-privacy-gateway/1.0"
+                    hdrs["User-Agent"] = "jarvis-privacy-gateway/1.0"
                     data = json.dumps({**body, "model": prov["model"]}, ensure_ascii=False).encode("utf-8")
                 req = urllib.request.Request(prov["base_url"] + self._path(), data=data, headers=hdrs,
                                              method="POST" if data is not None else "GET")
@@ -576,7 +576,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     self.send_response(e.code)
                     self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
                     self.send_header("Content-Length", str(len(payload)))
-                    self.send_header("X-Neko-Provider", prov["name"])
+                    self.send_header("X-Jarvis-Provider", prov["name"])
                     self.end_headers()
                     self.wfile.write(payload)
                     return
@@ -611,13 +611,13 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     self.send_response(resp.status)
                     self.send_header("Content-Type", ctype or "application/json")
                     self.send_header("Content-Length", str(len(data)))
-                    self.send_header("X-Neko-Provider", provider)
+                    self.send_header("X-Jarvis-Provider", provider)
                     self.end_headers()
                     self.wfile.write(data)
 
         def _relay_stream(self, resp, m):
             self.send_response(resp.status)
-            self.send_header("X-Neko-Provider", getattr(self, "_provider", ""))
+            self.send_header("X-Jarvis-Provider", getattr(self, "_provider", ""))
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Connection", "close")

@@ -1,0 +1,16 @@
+[plugin]
+id = "learn_vault"
+name = "Learn Vault"
+description = "A study vault in Obsidian format: read, search and save Markdown notes, keep exercises and summaries, and track learning progress per topic inside one bound folder."
+short_description = "Study notes, exercises and progress in an Obsidian-format vault."
+keywords = [
+    "study", "learn", "notes", "obsidian", "exercise", "quiz", "progress", "flashcards"
+]
+version = "0.1.0"
+type = "plugin"
+entry = "jarvis.plugins.learn_vault:LearnVaultPlugin"
+
+
+[plugin_runtime]
+enabled = true
+auto_start = true

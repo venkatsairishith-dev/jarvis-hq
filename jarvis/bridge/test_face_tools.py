@@ -190,3 +190,84 @@ def test_a_web_page_cannot_call_it(stack):
     assert post({"Origin": "https://evil.example"}) == 403
     assert post({"Host": f"evil.example:{stack}"}) in (403, 421)
     assert Console.seen == []
+
+
+# ---- end to end with the plugin host: the plugins' entries are tools, and what a plugin says on its own arrives once -------------
+
+DEMO = '''
+from jarvis.pluginapi import Ok, PluginBase, jarvis_plugin, plugin_entry
+
+
+@jarvis_plugin
+class Demo(PluginBase):
+    @plugin_entry(id="echo", name="Echo", description="Gives the text back and tells the owner it did.",
+                  input_schema={"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]})
+    async def echo(self, text: str, **_):
+        self.push_message(source="demo", parts=[{"type": "text", "text": "echoed " + text}])
+        return Ok({"text": text, "path": "C:\\\\Users\\\\someone\\\\secret.txt"})
+'''
+
+
+@pytest.fixture
+def plugin_stack(tmp_path, monkeypatch):
+    import sys
+    import textwrap
+
+    import uvicorn
+    from jarvis.pluginapi.host import PluginHost
+
+    root = tmp_path / "ft_plugins"
+    (root / "demo").mkdir(parents=True)
+    (root / "__init__.py").write_text("")
+    (root / "demo" / "__init__.py").write_text(textwrap.dedent(DEMO), encoding="utf-8")
+    (root / "demo" / "plugin.toml").write_text('[plugin]\nid = "demo"\nname = "Demo"\ndescription = "d"\nentry = "ft_plugins.demo:Demo"\n'
+                                              '[plugin_runtime]\nenabled = true\n', encoding="utf-8")
+    sys.path.insert(0, str(tmp_path))
+    port = free_port()
+    state = {}
+
+    async def serve():
+        host = PluginHost(root)
+        host.load()
+        await host.start()
+        app = F.build_server(F.FaceTools(client_factory=lambda: FakeClient(), console=CONSOLE), None, port, host).streamable_http_app(
+            host="127.0.0.1", transport_security=F.transport_security(port))
+        state["srv"] = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+        try:
+            await state["srv"].serve()
+        finally:
+            await host.stop()
+
+    th = threading.Thread(target=lambda: asyncio.run(serve()), daemon=True)
+    th.start()
+    for _ in range(100):
+        if state.get("srv") and state["srv"].started:
+            break
+        time.sleep(0.05)
+    yield port
+    state["srv"].should_exit = True
+    th.join(5)
+    sys.path.remove(str(tmp_path))
+    for name in [m for m in sys.modules if m == "ft_plugins" or m.startswith("ft_plugins.")]:
+        del sys.modules[name]
+
+
+def test_end_to_end_a_plugin_entry_is_a_tool_and_its_own_message_arrives_once(plugin_stack):
+    from mcp.client.session import ClientSession
+    from mcp.client.streamable_http import streamable_http_client
+
+    async def go():
+        async with streamable_http_client(f"http://127.0.0.1:{plugin_stack}/mcp") as (r, w):
+            async with ClientSession(r, w) as s:
+                await s.initialize()
+                names = sorted(t.name for t in (await s.list_tools()).tools)
+                echoed = await s.call_tool("demo__echo", {"text": "hello"})
+                first = await s.call_tool("jarvis_messages", {})
+                second = await s.call_tool("jarvis_messages", {})
+                return names, echoed, first, second
+    names, echoed, first, second = asyncio.run(go())
+    assert "demo__echo" in names and "jarvis_messages" in names and not any(n.startswith("jarvis_bridge__") for n in names)
+    result = json.loads(echoed.content[0].text)
+    assert result["result"]["text"] == "hello" and "someone" not in json.dumps(result), "results are cleaned before the face's model sees them"
+    one, two = json.loads(first.content[0].text), json.loads(second.content[0].text)
+    assert one["count"] == 1 and "echoed hello" in json.dumps(one) and two["count"] == 0

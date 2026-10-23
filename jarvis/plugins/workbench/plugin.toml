@@ -1,0 +1,16 @@
+[plugin]
+id = "workbench"
+name = "Workbench"
+description = "Turns a client's raw materials (audio, chats, documents) into source-grounded requirements, a plan and checked deliverables; generates structured prompts that can be edited, saved and run through JARVIS; and learns unfamiliar tasks by researching, testing a workflow in a sandbox and refining it (Propose-Probe-Compose) before keeping it."
+short_description = "Client projects, prompt generator and learning new tasks, with checks before anything counts as done."
+keywords = [
+    "client", "project", "requirements", "deliverables", "brief", "transcript", "chat history", "prompt", "prompt generator", "learn", "new task", "workflow", "skill"
+]
+version = "0.1.0"
+type = "plugin"
+entry = "jarvis.plugins.workbench:WorkbenchPlugin"
+
+
+[plugin_runtime]
+enabled = true
+auto_start = true

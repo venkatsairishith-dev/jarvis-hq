@@ -1,0 +1,11 @@
+[plugin]
+id = "web_search"
+name = "Web search"
+description = "Searches the web with DuckDuckGo for the research plugin and the planner. No key, no search library."
+version = "0.2.0"
+type = "plugin"
+entry = "jarvis.plugins.web_search:WebSearchPlugin"
+
+[plugin_runtime]
+enabled = true
+auto_start = true
