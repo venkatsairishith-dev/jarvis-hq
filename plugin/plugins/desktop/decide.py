@@ -392,6 +392,23 @@ def _negated_step(request: str, tool: str, s: dict) -> str:
     return ""
 
 
+# "Did the backup finish?", "is the download done?": a question about the state of one of the owner's own jobs. Three things must all be present: it opens
+# with an auxiliary verb (so "how do I check if a backup finished" and "what is ..." are not caught), it names a job-like thing, and it asks about a state.
+_STATUS_OPENS = re.compile(r"(?i)^\W*(?:(?:hey|ok|okay|hi)\s+\w+[,\s]+)?(?:did|does|has|have|had|is|are|was|were)\b")
+_STATUS_THING = re.compile(r"(?i)\b(?:back-?ups?|downloads?|uploads?|updates?|install(?:ation|er|s)?|sync(?:s|ed)?|scans?|jobs?|tasks?|builds?|scripts?|exports?|"
+                           r"imports?|transfers?|copy|copies|renders?|restores?|reports?|e-?mails?|messages?|prints?|reboot|restart|schedule[sd]?)\b")
+_STATUS_STATE = re.compile(r"(?i)\b(?:finish(?:ed)?|done|complete[d]?|ran|run|running|succeed(?:ed)?|work(?:ed)?|ready|fail(?:ed)?|go(?:ne)? through|"
+                           r"went through|happen(?:ed)?|start(?:ed)?|arrive[d]?|sent|stuck|hang|hung)\b")
+UNCHECKED_STATUS = ("I haven't checked that, and nothing I can read from here tells me. I can check the disk, network, running programs, "
+                    "crashes or services; tell me where the result would show up and I'll look.")
+
+
+def is_status_question(request: str) -> bool:
+    """True for a question about whether one of the owner's own jobs finished, ran or worked: only a real check may answer it."""
+    r = request or ""
+    return bool(_STATUS_OPENS.search(r) and _STATUS_THING.search(r) and _STATUS_STATE.search(r))
+
+
 def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
     """Parse the model's JSON and turn every step into a concrete, checked tool call; anything unclear -> clarify.
     Facts the request states outright (the account named, "report"/"slides") are read from the request itself."""
@@ -549,6 +566,11 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
     # "... and tell me when it is playing": the coordinator's report is the answer; an answer step after real steps adds nothing
     if any(st["tool"] != "answer" for st in steps):
         steps = [st for st in steps if st["tool"] != "answer"]
+    # A status question about the owner's own jobs ("did last night's backup finish?") has no honest "answer" step: only something that was
+    # actually checked can say. An answer-only plan lets a model guess, and the local decision model once invented a backup log with times and a
+    # disk error (persona case P-009, 2026-10-23). It becomes a plain "I haven't checked", never a made-up result. A real check_pc step is left alone.
+    if steps and all(st["tool"] == "answer" for st in steps) and is_status_question(request):
+        return Plan([], "clarify", question=UNCHECKED_STATUS, problems=problems + ["a status question has no check behind it"], raw=raw)
     before = list(steps)
     steps = complete_plan(steps, request, profiles)
     over = over_cap(before, steps)
