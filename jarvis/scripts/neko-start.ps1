@@ -65,6 +65,24 @@ if ((Get-Date).ToUniversalTime().Date -le [datetime]"2026-10-31" -and -not (List
     -RedirectStandardOutput "$logs\privacy-planner.out.log" -RedirectStandardError "$logs\privacy-planner.err.log" | Out-Null
   foreach ($i in 1..30) { if (Listening 48952) { break }; Start-Sleep 1 }
 }
+# Second-opinion gateway (127.0.0.1:48954, plan item 9): the same redaction as the default gateway, but its only provider is the reviewer
+# (Groq, free tier). Nothing is sent until a second opinion is asked for (python -m jarvis.bridge.second_opinion).
+if (-not (Listening 48954) -and (Test-Path $privPy) -and (Test-Path $privScript)) {
+  Start-Process $privPy -ArgumentList (Resolve-Path $privScript).Path, "--port", "48954", "--providers", (Resolve-Path (Join-Path $PSScriptRoot "..\privacy\providers.second.json")).Path -WindowStyle Hidden `
+    -RedirectStandardOutput "$logs\privacy-second.out.log" -RedirectStandardError "$logs\privacy-second.err.log" | Out-Null
+  foreach ($i in 1..30) { if (Listening 48954) { break }; Start-Sleep 1 }
+}
+# Page-watch runner (plan P7 step 9): checks due watches through the egress guard and proxy, files notices in the inbox. No port, so it is found
+# by its command line; a second copy would refuse to start anyway (OS lock). The phone ping is added only when the topic file exists.
+$muse = Join-Path $Data "muse"
+New-Item -ItemType Directory $muse -Force | Out-Null
+if (-not (Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'jarvis\.muse\.runner' })) {
+  $runnerArgs = @('-m', 'jarvis.muse.runner', '--watches', (Join-Path $muse 'watches.json'), '--inbox', (Join-Path $muse 'inbox.jsonl'))
+  $ntfyTopic = 'D:\jarvis-secrets\ntfy.topic'
+  if (Test-Path $ntfyTopic) { $runnerArgs += @('--push-topic-file', $ntfyTopic) }
+  Start-Process $py -ArgumentList $runnerArgs -WorkingDirectory $repo -WindowStyle Hidden `
+    -RedirectStandardOutput "$logs\muse-runner.out.log" -RedirectStandardError "$logs\muse-runner.err.log" | Out-Null
+}
 # Local specialist models (llama-swap on 127.0.0.1:8080): nothing is loaded until a model is asked for. Never piped (it starts a server).
 $localModels = Join-Path $PSScriptRoot "local-models.ps1"
 if (-not (Listening 8080) -and (Test-Path "D:\jarvis\tools\llama-swap\v261\llama-swap.exe")) {
