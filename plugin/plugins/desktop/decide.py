@@ -394,7 +394,10 @@ def _negated_step(request: str, tool: str, s: dict) -> str:
 
 # "Did the backup finish?", "is the download done?": a question about the state of one of the owner's own jobs. Three things must all be present: it opens
 # with an auxiliary verb (so "how do I check if a backup finished" and "what is ..." are not caught), it names a job-like thing, and it asks about a state.
-_STATUS_OPENS = re.compile(r"(?i)^\W*(?:(?:hey|ok|okay|hi)\s+\w+[,\s]+)?(?:did|does|has|have|had|is|are|was|were)\b")
+_STATUS_OPENS = re.compile(r"(?i)^\W*(?:(?:hey|ok|okay|hi)\s+\w+[,\s]+|(?:neko|jarvis|yui)\b[,:]?\s+)?(?:did|does|has|have|had|is|are|was|were)\b")
+# "does this script run on Windows?" asks what is possible, not what happened: it is not a status question (a model may answer it).
+_CAPABILITY = re.compile(r"(?i)\b(?:does|do|can|will|would)\b[^?.!]*\b(?:run|work|install)s?\b[^?.!]*\b(?:on|in|under|with)\s+"
+                         r"(?:windows|linux|mac(?:os)?|ubuntu|android|ios|wsl|docker|python|node|java|chrome|edge|firefox|arm|x64|x86|\d)")
 _STATUS_THING = re.compile(r"(?i)\b(?:back-?ups?|downloads?|uploads?|updates?|install(?:ation|er|s)?|sync(?:s|ed)?|scans?|jobs?|tasks?|builds?|scripts?|exports?|"
                            r"imports?|transfers?|copy|copies|renders?|restores?|reports?|e-?mails?|messages?|prints?|reboot|restart|schedule[sd]?)\b")
 _STATUS_STATE = re.compile(r"(?i)\b(?:finish(?:ed)?|done|complete[d]?|ran|run|running|succeed(?:ed)?|work(?:ed)?|ready|fail(?:ed)?|go(?:ne)? through|"
@@ -406,7 +409,7 @@ UNCHECKED_STATUS = ("I haven't checked that, and nothing I can read from here te
 def is_status_question(request: str) -> bool:
     """True for a question about whether one of the owner's own jobs finished, ran or worked: only a real check may answer it."""
     r = request or ""
-    return bool(_STATUS_OPENS.search(r) and _STATUS_THING.search(r) and _STATUS_STATE.search(r))
+    return bool(_STATUS_OPENS.search(r) and _STATUS_THING.search(r) and _STATUS_STATE.search(r) and not _CAPABILITY.search(r))
 
 
 def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
