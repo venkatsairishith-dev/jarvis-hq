@@ -554,7 +554,7 @@ class ApplyJob(unittest.TestCase):
             ("demo", "logs/auth.log"): "RED",
             ("demo", "jarvis/kernel/jarvis_kernel/policy.py"): "RED", ("demo", "kernel/jarvis_kernel/store.py"): "RED",
             ("jarvis-hq", "kernel/jarvis_kernel/store.py"): "RED", ("jarvis-hq", "config/providers.json"): "RED",
-            ("jarvis-hq", "config/sensitive_sites.json"): "RED", ("hq-neko", "plugin/x/settings.json"): "RED",
+            ("jarvis-hq", "config/sensitive_sites.json"): "RED", ("hq", "plugin/x/settings.json"): "RED",
             ("jarvis-hq", "README.md"): "YELLOW_APPROVAL", ("jarvis-hq", ".env"): "DENY",
         }
         got = {c: level(*c) for c in cases}

@@ -1,21 +1,19 @@
 """stop_task answers honestly, and a step TIMEOUT stops the helper like a Stop does (re-review M14 / L1-L3, findings c and d).
 
 * stop_task: `requested` when there was something to stop; `stopped` only once the run (and the helper's worker) really ended;
-  otherwise `still_running` names what has not. The widget shows that as "stop requested, N still running", not ok.
+  otherwise `still_running` names what has not. The caller shows that as "stop requested, N still running", not ok.
 * A step that runs out of time is cancelled AND its plugin is asked to stop (the desktop plugin would otherwise run on after
   main_agent reported "timed out; unknown"); the result is unknown/held for a step with side effects, with what ended.
 No model, no network."""
 from __future__ import annotations
 
 import asyncio
-import importlib.util
-import json
 from pathlib import Path
 
 from test_payload_outcome import PC, Ok, make, settle  # noqa: F401
 
 from jarvis.plugins import main_agent as ma
-from jarvis.plugins.main_agent.executor import StepContext, run_plan
+from jarvis.plugins.main_agent.executor import run_plan
 from jarvis.plugins.main_agent.planner import Plan, Step
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -75,35 +73,6 @@ def test_stop_that_the_run_does_not_finish_in_time_lists_the_run_as_still_runnin
     assert got == {"requested": True, "stopped": False, "run_id": "r-1", "state": "", "message": got["message"],
                    "still_running": [{"id": "r-1", "kind": "main-agent run", "state": "stopping"}]}
     assert "1 still running" in got["message"]
-
-
-def _widget():
-    path = ROOT / "jarvis" / "widget" / "widget_server.py"
-    import sys
-    sys.path.insert(0, str(path.parent))
-    spec = importlib.util.spec_from_file_location("widget_server_for_stop_report", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def _widget_stop(ws, result, monkeypatch):
-    monkeypatch.setattr(ws, "run_plugin_entry", lambda *a, **k: {"ok": True, "result": result})
-    return ws.stop_main_task()
-
-
-def test_the_widget_shows_a_requested_stop_with_helpers_still_running_as_not_ok(monkeypatch):
-    ws = _widget()
-    got = _widget_stop(ws, {"requested": True, "stopped": False, "still_running": [{"id": "a"}, {"id": "b"}], "message": "Stop requested"},
-                       monkeypatch)
-    assert got["ok"] is False and got["stopped"] is False and got["requested"] is True and got["still_running"] == 2
-    assert got["error"] == "stop requested, 2 still running"
-    done = _widget_stop(ws, {"requested": True, "stopped": True, "still_running": [], "message": "Stopped"}, monkeypatch)
-    assert done["ok"] is True and done["stopped"] is True and done["still_running"] == 0
-    nothing = _widget_stop(ws, {"requested": False, "stopped": False, "still_running": [], "message": "Nothing is running."}, monkeypatch)
-    assert nothing["ok"] is False and nothing["error"] == "nothing to stop"
-    old = _widget_stop(ws, {"stopped": True, "message": "Stopped"}, monkeypatch)             # an older main_agent: stopped only
-    assert old["ok"] is True and old["stopped"] is True
 
 
 # ------------------------------------------------------------------ (d) a step timeout stops the helper too

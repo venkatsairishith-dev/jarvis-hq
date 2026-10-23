@@ -19,7 +19,7 @@ import time
 
 from . import runtime, sensitive
 
-BACKUPS = os.environ.get("NEKO_REPAIR_BACKUPS", r"D:\jarvis\N.E.K.O-data\repair-backups")
+BACKUPS = os.environ.get("JARVIS_REPAIR_BACKUPS", r"D:\jarvis\data\repair-backups")
 MAX_FILE = 2_000_000
 PROTECTED_PROCS = {"system", "idle", "csrss", "lsass", "winlogon", "wininit", "services", "smss", "svchost", "dwm", "fontdrvhost",
                    "msmpeng", "securityhealthservice", "registry", "memcompression", "taskmgr", "jarvis_node", "python", "pythonw"}
@@ -65,7 +65,7 @@ def backup(path: str, why: str) -> str:
 
 
 def _atomic_write(path: str, data: bytes):
-    tmp = path + ".neko-tmp"
+    tmp = path + ".jarvis-tmp"
     with open(tmp, "wb") as f:
         f.write(data)
     os.replace(tmp, path)
@@ -185,7 +185,7 @@ def install(package: str) -> dict:
 
 def _listed(listing: str, package: str) -> bool:
     """True only when the Id column of winget's table holds exactly this id (case-insensitive, as winget compares ids).
-    A longer id that contains it (Neko.SampleApp.Beta) or an error text that echoes it is not a listing."""
+    A longer id that contains it (JARVIS.SampleApp.Beta) or an error text that echoes it is not a listing."""
     lines = [ln.rstrip() for ln in listing.splitlines()]
     for i in range(1, len(lines)):
         if not re.fullmatch(r"-{10,}", lines[i].strip()):

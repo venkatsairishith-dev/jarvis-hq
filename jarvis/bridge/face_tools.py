@@ -221,6 +221,8 @@ def main(argv=None) -> int:
     ap.add_argument("--data", help="folder for the read-only views (tasks.db, inbox.jsonl, watches.json, ideas.json)")
     ap.add_argument("--vault")
     args = ap.parse_args(argv)
+    import logging
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     views = None
     if args.data:
         from jarvis.bridge.readonly_mcp import Views, default_redactor

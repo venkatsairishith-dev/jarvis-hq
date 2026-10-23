@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 import path from "node:path";
 
 // The Bench screen on a phone: the built UI served by a throwaway console (jarvis/console/tests/e2e_bench_server.py) with
-// real benchmark result files and a fake benchmark runner. Runs on Linux (the neko-test container) or Windows.
+// real benchmark result files and a fake benchmark runner. Runs on Linux (the jarvis-test container) or Windows.
 //   JARVIS_PYTHON=python npx playwright test -c playwright.bench.config.ts
 // The console writes its master token to <JARVIS_RUN_DIR>/console.token; global-setup.ts reads it to sign the browser in.
 process.env.JARVIS_RUN_DIR ??= path.resolve(import.meta.dirname, "test-results", "run");

@@ -1,14 +1,13 @@
 """Pre-flight before the owner sits down to test: everything that would put an ERROR ON THE SCREEN, checked first, in plain words.
 
-    D:\\jarvis\\tools\\neko-venv\\Scripts\\python.exe jarvis\\scripts\\preflight.py [--no-live-check] [--json]
+    D:\\jarvis\\tools\\agent-venv\\Scripts\\python.exe jarvis\\scripts\\preflight.py [--no-live-check] [--json]
 
 Checks (all read-only, nothing is started or changed):
-  1. the live health check (live_check.py, ~70 checks of the running servers, plugins, secrets handling): every failure is listed;
+  1. the live health check (live_check.py: the running services, the tool server and its plugins, secrets handling): every failure is listed;
   2. every scheduled task whose name starts with "Jarvis": a task whose last run ended in a real error code is a window or a log line
      waiting to happen (a script that no longer exists, a program that crashed). Codes that only mean "running / not run yet / stopped
      by the user" are fine;
-  3. the wake listener: running, and not stuck in "error";
-  4. D: has room (the one storage rule: nothing outside D:).
+  3. D: has room (the one storage rule: nothing outside D:).
 Exit code 0 only when everything is green. A red line always says what is wrong and the next step; nothing is hidden or skipped.
 """
 from __future__ import annotations
@@ -80,18 +79,7 @@ def run(cmd: list[str], timeout: float) -> str:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, errors="replace").stdout
 
 
-def wake_state(fetch) -> tuple[bool, str]:
-    try:
-        st = fetch()
-    except Exception as exc:                                     # the listener is not answering at all
-        return False, f"the wake listener does not answer ({type(exc).__name__}): start the stack with jarvis\\scripts\\neko-start.ps1"
-    state = str((st or {}).get("state") or "")
-    if state in ("error", ""):
-        return False, f"the wake listener is in state '{state or 'unknown'}': {str((st or {}).get('detail') or '')[:120]}"
-    return True, f"state {state}"
-
-
-def gather(live_text: str | None, tasks_csv: str | None, wake, free_gb: float | None) -> list[dict]:
+def gather(live_text: str | None, tasks_csv: str | None, free_gb: float | None) -> list[dict]:
     items: list[dict] = []
     if live_text is not None:
         for name, ok, detail in parse_live_check(live_text):
@@ -99,9 +87,6 @@ def gather(live_text: str | None, tasks_csv: str | None, wake, free_gb: float | 
     if tasks_csv is not None:
         for r in audit_tasks(tasks_csv):
             items.append({"area": "scheduled task", "name": r["task"], "ok": r["ok"], "detail": r["detail"]})
-    if wake is not None:
-        ok, detail = wake_state(wake)
-        items.append({"area": "voice", "name": "wake listener", "ok": ok, "detail": detail})
     if free_gb is not None:
         items.append({"area": "disk", "name": "D: free space", "ok": free_gb >= MIN_FREE_GB, "detail": f"{free_gb:.1f} GB free (need {MIN_FREE_GB:.0f})"})
     return items
@@ -117,7 +102,7 @@ def report(items: list[dict]) -> tuple[str, int]:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--no-live-check", action="store_true", help="skip the ~70-check live health run (about 1 minute)")
+    ap.add_argument("--no-live-check", action="store_true", help="skip the live health run (about 1 minute)")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     live = None
@@ -126,22 +111,9 @@ def main(argv=None) -> int:
     tasks = None
     if os.name == "nt":
         tasks = run(["schtasks", "/Query", "/FO", "CSV", "/V"], 60)
-    wake = None
-    try:
-        import control_auth
-        import loopback_net
-        import urllib.request
-
-        def fetch():
-            req = urllib.request.Request("http://127.0.0.1:48945/status", headers=control_auth.headers_for("wake"))
-            with loopback_net.urlopen(req, timeout=5) as r:
-                return json.loads(r.read().decode("utf-8", "replace"))
-        wake = fetch
-    except Exception:                                            # no helpers on this machine: the check says so below
-        wake = None
     root = Path(os.environ.get("JARVIS_DATA_ROOT") or ("D:\\" if os.name == "nt" else "/"))
     free = shutil.disk_usage(root).free / 1e9 if root.exists() else None
-    items = gather(live, tasks, wake, free)
+    items = gather(live, tasks, free)
     text, code = report(items)
     print(json.dumps(items, indent=1) if a.json else text)
     return code

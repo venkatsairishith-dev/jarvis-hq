@@ -1,21 +1,15 @@
-Project N.E.K.O.
-Copyright 2025-2026 Project N.E.K.O. Team
-Copyright (c) 2025 Hongzhi Wen
+JARVIS
 
-This product is developed and maintained by the Project N.E.K.O. Team.
+Third-party code in this repository:
 
-Licensed under the Apache License, Version 2.0.
-See the LICENSE file for the full license text.
+Project AIRI (https://github.com/moeru-ai/airi), MIT licence, copyright Neko Ayaka and the Moeru AI Project AIRI Team.
+Imported as jarvis/face and changed; its licence is in jarvis/face/LICENSE.
 
-Third-party components retain their respective copyrights and licenses.
-For the bundled three-mmd components and their embedded babylon-mmd portions,
-see static/libs/THIRD_PARTY_NOTICES.md and static/libs/licenses/.
+Project N.E.K.O (https://github.com/Project-N-E-K-O/N.E.K.O), Apache License 2.0 (see LICENSE),
+copyright 2025-2026 Project N.E.K.O. Team and 2025 Hongzhi Wen. Two files of JARVIS were adapted from it, in English, with changes:
+  jarvis/plugins/web_search/_parsing.py   page parsers of N.E.K.O's web_search plugin
+  jarvis/plugins/main_agent/recall_render.py   N.E.K.O's memory/recall_render.py
+No other N.E.K.O code remains in this repository (it was removed on 2026-10-23).
 
-------------------------------------------------------------
-
-我们种下了人与猫娘幸福共生的种子，我们的征途是星辰大海。
-
-We have planted the seed of a happy symbiosis between humans and nekos;
-our journey is to the sea of stars.
-
-        —— Project N.E.K.O. Team
+Other third-party components keep their own copyrights and licences; the list, with versions and pins, is
+jarvis/tools/registry.json, and jarvis/tools/make_notices.py writes their notices.

@@ -210,7 +210,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
   - Wiring: all five N.E.K.O model URLs (conversation, summary, correction, emotion, agent) now point at it. Backup: `D:\jarvis-apps\tmp\core_config.before-privacy-gateway-20261015-230616.json`.
   - Measured live: Dahl received `[PASSWORD_1]` and `[EMAIL_ADDRESS_1]`, and N.E.K.O got the real e-mail back.
 - **Lanes do not change.** Dahl stays public-lane only and still gets no private connector data. The gateway is a second layer for what the owner types, not permission to send private material.
-- **Local models** (`jarvis/local_models/llama-swap.yaml`). [Scope 2026-10-19: the Vulkan GPU numbers here and in the D-entries above were measured only on the owner's Windows laptop (Radeon Pro 5500M, Boot Camp). macOS Metal, ROCm and NVIDIA CUDA/Vulkan are UNVERIFIED; no GPU exists on the Linux test server (CPU only). See `neko/MODEL_PLAN_LAPTOPS_2026-10.md`.] llama.cpp b11669 runs them on the Vulkan GPU, behind llama-swap (MIT) at 127.0.0.1:8080. A model loads on first use and unloads after 5 idle minutes, and one specialist is on the GPU at a time.
+- **Local models** (`jarvis/local_models/llama-swap.yaml`). [Scope 2026-10-19: the Vulkan GPU numbers here and in the D-entries above were measured only on the owner's Windows laptop (Radeon Pro 5500M, Boot Camp). macOS Metal, ROCm and NVIDIA CUDA/Vulkan are UNVERIFIED; no GPU exists on the Linux test server (CPU only). See `reports/MODEL_PLAN_LAPTOPS_2026-10.md`.] llama.cpp b11669 runs them on the Vulkan GPU, behind llama-swap (MIT) at 127.0.0.1:8080. A model loads on first use and unloads after 5 idle minutes, and one specialist is on the GPU at a time.
   - Generalist and router: Ling-3.0-tiny Q4_K_M, a mixture-of-experts model with 7.9B parameters in total but only 1.3B active per token (MIT). 31 tok/s, with 16 layers' experts kept in system RAM.
   - Code: Qwen2.5-Coder-1.5B, 80 tok/s.
   - Maths: Qwen2.5-Math-1.5B, 96 tok/s.
@@ -279,7 +279,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
   - Any settings.json stays console-only (existing rule).
 - **Privacy:** window and page text is written by the node to `outputs\neko-local`, and only a summary goes to the server.
   The plugin reads the file once and deletes it. The main agent gets a diagnosis, not the screen text, unless the owner
-  sets `NEKO_SCREEN_TEXT_TO_MODEL=1`; **since 2026-10-18 that flag means "the text may be offered after the privacy gateway cleared it (names and deep redaction confirmed ready)", or to a verified local model; with the gateway not ready it is withheld** (see `neko/REMEDIATION_FOLLOWUP_2026-10-18.md`). Screenshots are never taken by this flow.
+  sets `NEKO_SCREEN_TEXT_TO_MODEL=1`; **since 2026-10-18 that flag means "the text may be offered after the privacy gateway cleared it (names and deep redaction confirmed ready)", or to a verified local model; with the gateway not ready it is withheld** (see `reports/REMEDIATION_FOLLOWUP_2026-10-18.md`). Screenshots are never taken by this flow.
 - **Cancel:** `job/cancel`. The node reports every 3 s while busy, and `runtime.cancel` kills the process tree of the
   job. The kill switch now also stops the job in hand.
 - **Rejected:** a fake desktop interface; free-form PowerShell from a model; a dedicated browser profile (owner).
@@ -307,7 +307,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **Not yet proven:** the owner's own voice. That is the remaining test (operations).
 
 ## D25 Measured improvement: evaluations and feedback (Neko phase 7, part 1, 2026-10-16)
-- **Scorecard:** `jarvis/evals/neko_evals.py` scores the small models and pipelines on fixed labelled sets and saves each run.
+- **Scorecard:** `jarvis/evals/component_evals.py` scores the small models and pipelines on fixed labelled sets and saves each run.
   - It compares each run with the last one; a drop exits 1.
   - It is the gate for any prompt, model or threshold change. Changes go through git, which gives versioning and rollback.
 - **Feedback:** the Neko icon records 👍/👎 per deliverable in `feedback.jsonl`. It is read by people when tuning and never applied automatically.
@@ -360,7 +360,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
   - No automatic writing of research into memory (memory-poisoning risk; evidence 03).
 
 ## D21 Deliverables: decks and reports (Neko phase 1, 2026-10-16)
-- **Research:** `jarvis/docs/neko/evidence/05-documents-pptx-pdf.md`. No maintained open generator writes native charts, notes and PowerPoint animations together.
+- **Research:** `jarvis/docs/reports/evidence/05-documents-pptx-pdf.md`. No maintained open generator writes native charts, notes and PowerPoint animations together.
 - **Decks:**
   - python-pptx (MIT) writes the content: three themes, ten layouts, native charts and tables, notes, citation footnotes, a Sources slide.
   - OfficeCLI (Apache-2.0) adds transitions and entrance animations and validates the file against the OpenXML schema.
@@ -374,7 +374,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **Not done, on purpose:** morph-heavy designs (PowerPoint-only); Presenton and PPTAgent (telemetry by default, Linux only).
 
 ## D18 N.E.K.O is the base of the repository (2026-10-14)
-- **What changed.** The repository root is now N.E.K.O (Project-N-E-K-O/N.E.K.O, Apache-2.0, upstream 3ffcf7b9). The whole previous JARVIS tree (the old `main` at ff470e5, now branch `jarvis-hq-legacy`, also tag `pre-neko-base`) sits unchanged under `jarvis/`. It is a subtree merge (commit b77ddc7b), so both histories are kept and nothing was rewritten. Branches: `main` is the N.E.K.O-based tree, `neko-main` is a pure copy of N.E.K.O's main (tracks `neko/main`), `jarvis-hq-legacy` is the previous JARVIS history. Files: 0 N.E.K.O files modified or deleted, 305 added (jarvis/ and the two plugins), all 275 previous JARVIS files present. The `neko` remote's push URL is disabled.
+- **What changed.** The repository root is now N.E.K.O (Project-N-E-K-O/N.E.K.O, Apache-2.0, upstream 3ffcf7b9). The whole previous JARVIS tree (the old `main` at ff470e5, now branch `jarvis-hq-legacy`, also tag `pre-neko-base`) sits unchanged under `jarvis/`. It is a subtree merge (commit b77ddc7b), so both histories are kept and nothing was rewritten. Branches: `main` is the N.E.K.O-based tree, `neko-main` is a pure copy of N.E.K.O's main (tracks `reports/main`), `jarvis-hq-legacy` is the previous JARVIS history. Files: 0 N.E.K.O files modified or deleted, 305 added (jarvis/ and the two plugins), all 275 previous JARVIS files present. The `neko` remote's push URL is disabled.
 - **Why.** Owner direction ("use neko as our full base"), and the reuse-first rule: N.E.K.O already provides the character, voice and vision front end, five-layer memory, a plugin runtime and an agent server. JARVIS provides what N.E.K.O lacks: a deterministic authority, approvals, lanes, audit, connectors and lab agents. Rebuilding either would break the rule.
 - **Authority does not move.** The kernel is still the only authority. N.E.K.O parts are untrusted callers: `jarvis_bridge` reaches JARVIS only through the console's owner plane (`POST /api/owner/command`), holds no credential, and returns task state only unless the owner sets `JARVIS_BRIDGE_SPEAK_REPLY=1`. Anything JARVIS does is still decided by the kernel's policy and approvals.
 - **Upstream stays mergeable.** No N.E.K.O file was edited. The additions are `jarvis/`, `plugin/plugins/main_agent/` and `plugin/plugins/jarvis_bridge/`. Updating is `git fetch neko main` then `git merge neko/main`. Core edits are separate, individually justified phases.
@@ -428,7 +428,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
 - **trim-1**: vendored and pinned (Apache-2.0, LightGBM in Go, no network, checksum-checked model). Alone it kept every
   answer line on our fixtures but cut only 5.7% (conservative) to 49% (aggressive) and rarely met a budget; as a first pass
   before "evidence" it added about 50 ms and changed no outcome. Kept available behind the flag, not used by default.
-- **Benchmark v2** (`jarvis/evals/neko95/bench`): versioned cases with scenario, expected result, risk and dims; results
+- **Benchmark v2** (`jarvis/evals/quality95/bench`): versioned cases with scenario, expected result, risk and dims; results
   under the key "cases", so the frozen v1 scorer and its rules are untouched. Rubric v2 (`rubric_v2.json`) was written
   before any case ran: 10 x pass rate, capped by failed critical/high cases, deferred critical cases and small samples.
 - **Live tests on the Linux server** use Dahl's public lane only with synthetic data (owner-authorised key, to be revoked),
@@ -445,9 +445,9 @@ Each item below was a real fault or gap seen against the live system, not a theo
   `decide.py` on all 157 fixed cases (`bench/model_compare.py`). It scored 152/157; the next best was Qwen3.5-4B at 146,
   and no model of 1.2B or less scored above 112. Qwen3-1.7B stays the fast fallback (130, p50 1.0 s on CPU). Rejected: Qwen3.5-0.8B/2B/4B,
   Granite-4.2-3B, MiniCPM5-1B/2B, LFM2.5 (350M, 1.2B, 2.6B, 8B-A1B). Two LFM models often answered outside the JSON grammar.
-  Revisit only when a model beats 152/157 on these sets. Table: `neko/NEKO_95_MODEL_BENCHMARK.md`.
+  Revisit only when a model beats 152/157 on these sets. Table: `reports/QUALITY_95_MODEL_BENCHMARK.md`.
 - **Runtimes and frameworks: no change.** Keep llama.cpp + llama-swap, DBOS, the UIA-first desktop control and the kernel's
-  policy/approval gates (evidence: `neko/evidence/08-runtimes-agents-infra-2026-10-17.md`). The llama-server options that
+  policy/approval gates (evidence: `reports/evidence/08-runtimes-agents-infra-2026-10-17.md`). The llama-server options that
   make it an agent or open it up (`--tools`, `--agent`, MCP, `--props`, web UI, a plain `--api-key`) are banned by a test
   (`jarvis/local_models/test_server_flags.py`).
 - **Claim checker [first decision 2026-10-17 morning; superseded by the MiniCheck update below]: keep nli-deberta-v3-xsmall**, plus deterministic guards: units, dropped qualifiers, comparators, hedges,
@@ -460,7 +460,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
     no checking). Rule written before the runs: false acceptances lower or equal on all three sets, higher VitaminC recall,
     at most 5x the time. It is the only one that passed: 0/46, 0/18, 9/200 false acceptances (xsmall 2/46, 1/18, 10/200),
     VitaminC recall 0.71 (0.44), 3.6-3.9x the time. FactCG, MiniCheck-DeBERTa and HHEM failed the rule (int8 breaks both
-    DeBERTa-large models; FactCG fp32 is strictest but recall 0.31 and 7x). Evidence: `neko/evidence/11-claim-checker-candidates-2026-10-17.md`.
+    DeBERTa-large models; FactCG fp32 is strictest but recall 0.31 and 7x). Evidence: `reports/evidence/11-claim-checker-candidates-2026-10-17.md`.
     The laptop needs the converted file copied (Windows task, when the owner is home).
 - **Benchmark Console** (`/api/bench/*`, Bench screen): a loopback-only (127.0.0.1) screen with a phone-sized layout inside the existing console (it is NOT reachable from a phone; no phone access path is implemented or tested). Jobs are
   built only from allow-listed groups, existing case ids, pinned model names and fixed sets; the screen never downloads.
@@ -476,3 +476,23 @@ Each item below was a real fault or gap seen against the live system, not a theo
   - The fix lands only as a `caretaker/` branch plus a PR to `main` that the owner approves. The old pin is recorded first (PR body, `history.jsonl`), and everything is logged (`logs/caretaker/`, audit `caretaker_run`).
   - The kernel refuses caretaker dispatches that are not the fixed template, which never asks for a merge or a push to `main` (`policy.caretaker_problems`).
   - Leaked secrets, tampered files and replaced upstream assets are owner-only and never become tasks.
+
+## D31 The face is Project AIRI, imported as JARVIS's own code (2026-10-23, owner request)
+- **Decision.** N.E.K.O is replaced as JARVIS's face by Project AIRI (MIT) v0.12.0, imported into `jarvis/face` and maintained as JARVIS's own code. It is not tracked against AIRI and not updated from its releases; the internal package names are kept so a later AIRI security fix can still be compared and ported by hand. Research and the comparison: `reports/FACE_REPLACEMENT_2026-10-23.md`.
+- **The owner's four concerns about AIRI were fixed, not accepted** (commit 5b481f4, `jarvis/face/SECURITY.md`): the beta build and unfinished memory (the model can only suggest a memory, the owner accepts it in Settings > Memory), the 2025 character-card attack (card gate, content policy; the old fix is kept), the empty security policy (SECURITY.md is the policy, `jarvis/tools/test_face_guard.py` fails if a protection is removed), and undocumented usage data (analytics code, the cloud account and the updater are removed; a network lock lets nothing reach the internet except hosts the owner lists).
+- **Limits stated.** Windows are not sandboxed (`sandbox: false`, AIRI's preload needs Node); the Windows installer, the avatar on a real screen and the microphone are untested until the laptop pilot; build downloads (Live2D core, sample avatars) are pinned by SHA-256 on first use.
+
+## D32 JARVIS's own plugin API replaces the N.E.K.O plugin SDK (2026-10-23)
+- **Decision.** `jarvis/pluginapi` is a small plugin API and host: decorators (`jarvis_plugin`, `plugin_entry`, `lifecycle`, `timer_interval`), a host that loads `jarvis/plugins/*/plugin.toml`, a router for calls between plugins (depth-limited), an outbox for what plugins say on their own, and `register_tools`, which offers every entry as an MCP tool with its real JSON schema. The face's tool server (`jarvis/bridge/face_tools.py`) serves the plugins; every result is cleaned (`jarvis/plugins/_shared/screen_text.clean_result`) before the face's model sees it.
+- **Plugins moved** from `plugin/plugins` to `jarvis/plugins`. `web_search` was rewritten (DuckDuckGo only, no key, parsers adapted from N.E.K.O's Apache-2.0 plugin and credited in `NOTICE`). The planner's memory comes from an optional loopback recall service (`JARVIS_MEMORY_RECALL_URL`); with none connected, plans are made without memory. Browser-use and computer-use were removed: browsing and desktop control go through the `desktop` plugin and `jarvis_do`, so the kernel decides and the owner approves risky steps with the PIN.
+- **Test practice.** Each suite was compared test by test with its baseline before and after the move; the only differences are tests removed with the code they tested.
+
+## D33 N.E.K.O is removed from the repository (2026-10-23)
+- **Removed:** the N.E.K.O application (app, brain, main_logic, main_routers, memory, plugin, frontend, static, templates, launcher, docker, workflows and the rest), its Tauri shell, the "Hey Neko" wake listener, the desktop widget and icon, the persona installer for N.E.K.O's character store, and the N.E.K.O wake-word and speaker-model entries in the registry and the lock.
+- **Kept:** the Apache-2.0 licence and a `NOTICE` for the two pieces of N.E.K.O code JARVIS adapted (web search parsers, the recall renderer). The history documents under `jarvis/docs/reports` still describe the N.E.K.O era; they are records and were not rewritten. The last N.E.K.O tree is the branch `backup/neko-final-2026-10-23`.
+- **Names changed:** the data folder is `JARVIS_DATA_DIR` (default `D:\jarvis\data`; the old `D:\jarvis\N.E.K.O-data` is moved by `jarvis/scripts/migrate_data_dir.py`), environment variables `NEKO_*` became `JARVIS_*`, scheduled tasks are `JarvisStack`, `JarvisWatchdog` and `JarvisDailyReport`, the Python environment is `D:\jarvis\tools\agent-venv` (`jarvis/tools/requirements/agent-venv.txt`), start and stop are `jarvis-start.ps1` and `jarvis-stop.ps1`.
+
+## D34 What the move did not carry over (2026-10-23)
+- **Wake word and widget.** The "Hey Neko" listener depended on N.E.K.O's patched keyword spotter and voice session; the widget was N.E.K.O's icon page. Both are removed with their tests and the benchmark's voice area (G). The face hears through its own voice activity detection and the local speech server. A wake word for the face (AIRI has one) is a later decision; The earlier decision that the wake word stays off (D15) and the openWakeWord measurements (`jarvis/bench/wakeword`) still stand.
+- **Memory.** The planner no longer reads N.E.K.O's five-layer memory, and the face's memory is its own (owner-approved entries). Unifying the two, and writing accepted memories into the vault, is open work.
+- **Open for the laptop:** the pilot (build the installer, avatar on screen, microphone, end-to-end voice), moving the scheduled tasks to the new names, and recreating the Python environment from `agent-venv.txt`.

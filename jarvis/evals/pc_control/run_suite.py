@@ -1,6 +1,6 @@
 """The PC-control acceptance suite: every category, one row per distinct case, one JSON (2026-10-16). Windows.
 
-    D:\\jarvis\\tools\\neko-venv\\Scripts\\python.exe jarvis\\evals\\pc_control\\run_suite.py [--decider decider-qwen3-4b-2507] [--skip-live]
+    D:\\jarvis\\tools\\agent-venv\\Scripts\\python.exe jarvis\\evals\\pc_control\\run_suite.py [--decider decider-qwen3-4b-2507] [--skip-live]
 
   A  natural language -> plan: decision_cases.json (dev) + decision_cases_holdout.json, through the chosen local model
   B  Windows desktop execution (live, Notepad and the sample app)            live_desktop.py
@@ -21,7 +21,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-NEKO = r"D:\jarvis\tools\neko-venv\Scripts\python.exe"
+PY = r"D:\jarvis\tools\agent-venv\Scripts\python.exe"
 NODE_PY = r"D:\jarvis\tools\browser-venv\Scripts\python.exe"
 PRIV_PY = r"D:\jarvis\tools\privacy-venv\Scripts\python.exe"
 RES = HERE / "results"
@@ -36,7 +36,7 @@ def newest(prefix):
     return json.loads(files[-1].read_text(encoding="utf-8")) if files else {}
 
 
-def pytest_cases(cat, paths, py=NEKO, keyword=None, cwd=REPO):
+def pytest_cases(cat, paths, py=PY, keyword=None, cwd=REPO):
     xml = RES / f"_junit-{cat}.xml"
     args = [py, "-m", "pytest", *paths, "-q", "-p", "no:cacheprovider", f"--junitxml={xml}"] + (["-k", keyword] if keyword else [])
     sh(args, cwd=cwd)
@@ -66,7 +66,7 @@ def unittest_cases(cat, module, py, cwd):
 def decision_rows(decider):
     rows = []
     for setname, tag in (("decision_cases.json", "dev"), ("decision_cases_holdout.json", "holdout")):
-        sh([NEKO, str(HERE / "eval_decision.py"), "--models", decider, "--set", setname])
+        sh([PY, str(HERE / "eval_decision.py"), "--models", decider, "--set", setname])
         r = newest("decision")
         m = r["models"][0]
         failed = {f["id"]: f["why"] for f in m["failures"]}
@@ -96,8 +96,8 @@ def leak_scan(since):
     pats = {"bearer token": r"Bearer [A-Za-z0-9._-]{16,}", "groq key": r"gsk_[A-Za-z0-9]{20,}", "tavily key": r"tvly-[A-Za-z0-9]{10,}",
             "openai-style key": r"\bsk-[A-Za-z0-9]{20,}", "extension token": r"PLAYWRIGHT_MCP_EXTENSION_TOKEN=\S",
             "full owner address": r"venkatgaminggem17@gmail\.com"}
-    data = Path(r"D:\jarvis\N.E.K.O-data")
-    files = list((data / "logs").glob("*.log")) + list((data / "neko" / "pc_tasks").glob("*.json")) + [data / "neko" / "browser_profiles.json"]
+    data = Path(r"D:\jarvis\data")
+    files = list((data / "logs").glob("*.log")) + list((data / "plugins" / "pc_tasks").glob("*.json")) + [data / "plugins" / "browser_profiles.json"]
     rows = []
     for name, rx in pats.items():
         hits = [f.name for f in files if f.exists() and re.search(rx, f.read_text(encoding="utf-8", errors="replace"))]
@@ -106,7 +106,7 @@ def leak_scan(since):
     shots = [p.name for p in Path(r"D:\jarvis\outputs\screens").glob("*.png") if p.stat().st_mtime >= since] if Path(r"D:\jarvis\outputs\screens").is_dir() else []
     rows.append({"cat": "F", "id": "F-no-screenshots", "name": "no screenshots were taken or kept by the suite", "status": "fail" if shots else "pass",
                  "detail": ", ".join(shots)})
-    left = [p.name for p in Path(r"D:\jarvis\outputs\neko-local").glob("*")] if Path(r"D:\jarvis\outputs\neko-local").is_dir() else []
+    left = [p.name for p in Path(r"D:\jarvis\outputs\local-only").glob("*")] if Path(r"D:\jarvis\outputs\local-only").is_dir() else []
     rows.append({"cat": "F", "id": "F-no-local-text-left", "name": "no screen/page text or Playwright logs left behind",
                  "status": "fail" if left else "pass", "detail": ", ".join(left[:5])})
     return rows
@@ -129,16 +129,16 @@ def main():
         if "C" in want:
             rows += live_rows("C", "live_browser.py", NODE_PY)
         if "D" in want:
-            rows += live_rows("D", "live_diagnosis.py", NEKO)
+            rows += live_rows("D", "live_diagnosis.py", PY)
     if "E" in want:
-        rows += pytest_cases("E", ["plugin/plugins/desktop/tests/test_coordinator.py"], keyword="not resolution and not round3")
+        rows += pytest_cases("E", ["jarvis/plugins/desktop/tests/test_coordinator.py"], keyword="not resolution and not round3")
         rows += pytest_cases("E", ["jarvis/kernel/tests/test_node_loop.py"], keyword="cancel")
-        rows += pytest_cases("E", ["jarvis/kernel/tests/test_neko_node.py"], keyword="Cancellation")
-        rows += pytest_cases("E", ["jarvis/kernel/tests/test_neko_pc.py"], keyword="cancel")
-        rows += pytest_cases("E", ["plugin/plugins/desktop/tests/test_core.py"])
+        rows += pytest_cases("E", ["jarvis/kernel/tests/test_node_plugin_paths.py"], keyword="Cancellation")
+        rows += pytest_cases("E", ["jarvis/kernel/tests/test_pc_task_kernel.py"], keyword="cancel")
+        rows += pytest_cases("E", ["jarvis/plugins/desktop/tests/test_core.py"])
     if "F" in want:
-        rows += pytest_cases("F", ["jarvis/kernel/tests/test_neko_pc.py"], keyword="not cancel")
-        rows += pytest_cases("F", ["jarvis/kernel/tests/test_neko_node.py"], keyword="Profiles or allowlist or argv or Diagnostics or Repairs or Keys or youtube")
+        rows += pytest_cases("F", ["jarvis/kernel/tests/test_pc_task_kernel.py"], keyword="not cancel")
+        rows += pytest_cases("F", ["jarvis/kernel/tests/test_node_plugin_paths.py"], keyword="Profiles or allowlist or argv or Diagnostics or Repairs or Keys or youtube")
         rows += unittest_cases("F", "test_privacy", PRIV_PY, REPO / "jarvis" / "privacy")
         rows += leak_scan(since)
     real = [r for r in rows if r["status"] != "info"]

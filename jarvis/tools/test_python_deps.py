@@ -1,6 +1,6 @@
-"""Checks that JARVIS's own Python packages and the N.E.K.O.-Tauri submodule stay pinned and usable.
+"""Checks that JARVIS's own Python packages stay pinned and usable.
 
-Run in the neko-test image (repo mounted at /src):
+Run in the jarvis-test image (repo mounted at /src):
     python -m pytest jarvis/tools/test_python_deps.py -q -p no:cacheprovider
 """
 from __future__ import annotations
@@ -10,40 +10,29 @@ import importlib
 import importlib.metadata
 import re
 import subprocess
-import tomllib
 from pathlib import Path
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-SUBTREE_PATH = "jarvis/desktop/shell"   # was a submodule at jarvis/third_party/neko-tauri until plan P1 step 7
-OFFICIAL_URL = "https://github.com/Project-N-E-K-O/N.E.K.O.-Tauri"
 GROUPS = ("jarvis", "jarvis-dev")
-# Import name -> distribution name, for every package in the jarvis groups that JARVIS code imports.
+# Import name -> distribution name, for the packages in agent-venv.txt that JARVIS code imports and the tests need.
 IMPORT_TO_DIST = {
     "dbos": "dbos",
     "pptx": "python-pptx",
     "pdfplumber": "pdfplumber",
     "pypdfium2": "pypdfium2",
-    "kaldi_native_fbank": "kaldi-native-fbank",
 }
-REQUIREMENT_FILES = ("jarvis-venv.txt", "piper-venv.txt", "privacy-venv.txt")
+REQUIREMENT_FILES = ("agent-venv.txt", "jarvis-venv.txt", "piper-venv.txt", "privacy-venv.txt")
 
 
-def _pyproject() -> dict:
-    return tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
-
-
-def _group_pins() -> dict[str, dict[str, str]]:
-    """{group: {normalised name: exact version}} from pyproject's [dependency-groups]."""
-    out: dict[str, dict[str, str]] = {}
-    groups = _pyproject()["dependency-groups"]
-    for group in GROUPS:
-        out[group] = {}
-        for spec in groups[group]:
-            m = re.fullmatch(r"([A-Za-z0-9_.\-]+)==([A-Za-z0-9_.+\-]+)", spec.strip())
-            assert m, f"{group}: {spec!r} is not an exact == pin"
-            out[group][_norm(m.group(1))] = m.group(2)
+def _agent_pins() -> dict[str, str]:
+    """{normalised name: exact version} from requirements/agent-venv.txt."""
+    out: dict[str, str] = {}
+    for line in (REPO / "jarvis/tools/requirements/agent-venv.txt").read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^([A-Za-z0-9_.\-]+)==([A-Za-z0-9_.+\-]+)", line.strip())
+        if m:
+            out[_norm(m.group(1))] = m.group(2)
     return out
 
 
@@ -99,28 +88,11 @@ def test_module_is_importable(rel, module, names):
             importlib.import_module(f"{module}.{name}")
 
 
-def test_installed_versions_match_the_jarvis_groups():
-    pins = {name: ver for group in _group_pins().values() for name, ver in group.items()}
+def test_installed_versions_match_agent_venv_pins():
+    pins = _agent_pins()
     for dist in IMPORT_TO_DIST.values():
-        assert _norm(dist) in pins, f"{dist} is imported but not pinned in a jarvis group"
+        assert _norm(dist) in pins, f"{dist} is imported but not pinned in agent-venv.txt"
         assert importlib.metadata.version(dist) == pins[_norm(dist)], dist
-
-
-# ---------- uv.lock contains the jarvis groups ----------
-
-def test_uv_lock_has_the_jarvis_groups():
-    lock = tomllib.loads((REPO / "uv.lock").read_text(encoding="utf-8"))
-    root = [p for p in lock["package"] if p.get("source", {}).get("editable") == "."]
-    assert len(root) == 1, "no editable root package in uv.lock"
-    root = root[0]
-    versions = {p["name"]: p["version"] for p in lock["package"] if "version" in p}
-    for group, pins in _group_pins().items():
-        locked_names = {d["name"] for d in root["dev-dependencies"][group]}
-        assert locked_names == set(pins), f"uv.lock group {group}: {sorted(locked_names)}"
-        specs = {d["name"]: d["specifier"] for d in root["metadata"]["requires-dev"][group]}
-        for name, version in pins.items():
-            assert specs[name] == f"=={version}", f"uv.lock {group}: {name} {specs[name]}"
-            assert versions[name] == version, f"uv.lock resolves {name} {versions[name]}, pinned {version}"
 
 
 # ---------- requirement files for the laptop venvs ----------
@@ -131,39 +103,7 @@ def test_requirement_files_pin_exactly_and_say_where_pins_come_from(filename):
     pins = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
     assert pins, f"{filename} has no pins"
     for line in pins:
-        assert re.match(r"^[A-Za-z0-9_.\-]+==[A-Za-z0-9_.+\-]+\s", line), f"not an exact pin: {line!r}"
+        assert re.match(r"^[A-Za-z0-9_.\-]+==[A-Za-z0-9_.+\-]+[\s;]", line), f"not an exact pin: {line!r}"
         from_docs = "# from docs" in line and "verify on laptop" in line
         measured = re.search(r"# measured on laptop \d{4}-\d{2}-\d{2}", line) is not None   # read from the installed venv (uv pip list)
         assert from_docs or measured, f"pin without its source: {line!r}"
-
-
-# ---------- N.E.K.O.-Tauri subtree ----------
-
-def test_the_submodule_is_gone():
-    assert not (REPO / ".gitmodules").exists() or "neko-tauri" not in (REPO / ".gitmodules").read_text(encoding="utf-8")
-
-
-def _readme_pin() -> str:
-    readme = (REPO / "jarvis/third_party/README.md").read_text(encoding="utf-8")
-    row = [line for line in readme.splitlines() if line.startswith("|") and f"`{SUBTREE_PATH}`" in line]
-    assert len(row) == 1, "README has no table row for the subtree"
-    assert OFFICIAL_URL in row[0]
-    pins = re.findall(r"`([0-9a-f]{40})`", row[0])
-    assert len(pins) == 1, "README row has no 40-character commit pin"
-    return pins[0]
-
-
-def test_subtree_split_commit_equals_the_readme_pin():
-    """git subtree add --squash records the upstream commit in the squash commit message (git-subtree-split)."""
-    log = subprocess.run(["git", "log", "--format=%B", "--grep", f"git-subtree-dir: {SUBTREE_PATH}", "-n", "1"],
-                         cwd=REPO, capture_output=True, text=True, check=True).stdout
-    if not log.strip():
-        pytest.skip("subtree history not available (shallow clone)")
-    split = re.search(r"git-subtree-split: ([0-9a-f]{40})", log)
-    assert split and split.group(1) == _readme_pin()
-
-
-def test_subtree_is_present_and_apache_2():
-    licence = (REPO / SUBTREE_PATH / "LICENSE").read_text(encoding="utf-8")
-    assert "Apache License" in licence and "Version 2.0, January 2004" in licence
-    assert (REPO / SUBTREE_PATH / "NOTICE").is_file()

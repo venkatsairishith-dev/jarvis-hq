@@ -38,9 +38,9 @@ if str(ROOT) not in sys.path:                     # run as a script from any fol
 
 TAILSCALE_V4 = ipaddress.ip_network("100.64.0.0/10")
 TAILSCALE_V6 = ipaddress.ip_network("fd7a:115c:a1e0::/48")
-# Ports JARVIS itself listens on (jarvis/scripts/watchdog.py SERVERS, neko-start.ps1, the kernel); manifests add theirs.
-JARVIS_PORTS = {48911: "N.E.K.O main", 48912: "N.E.K.O memory", 48915: "N.E.K.O agent", 48916: "plugins", 48930: "local speech",
-                48940: "widget", 48945: "wake listener", 48950: "privacy gateway", 48952: "planner gateway", 8799: "JARVIS console",
+# Ports JARVIS itself listens on (jarvis/scripts/watchdog.py SERVERS, jarvis-start.ps1, the kernel); manifests add theirs.
+JARVIS_PORTS = {48930: "local speech", 48950: "privacy gateway", 48952: "planner gateway", 48954: "second-opinion gateway",
+                48970: "face tool server", 8799: "JARVIS console",
                 8080: "local models", 8091: "Verdict", 8790: "kernel", 8642: "Hermes API"}
 SECRET_NAME = re.compile(r"(^|/)(\.env(\.(?!example$|sample$)[^/]*)?|id_(rsa|ed25519|ecdsa|dsa)|[^/]+\.(pem|key|p12|pfx|token|keystore))$", re.I)
 SECRET_SHAPE = re.compile(r"\b(sk-(ant-)?[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}"

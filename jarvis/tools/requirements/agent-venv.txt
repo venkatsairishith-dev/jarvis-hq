@@ -1,0 +1,48 @@
+# agent-venv (laptop: D:\jarvis\tools\agent-venv, Python 3.11). Runs the plugin host and the face's tool server
+# (python -m jarvis.bridge.face_tools: jarvis/pluginapi and every plugin in jarvis/plugins), the page-watch runner
+# (jarvis.muse.runner) and the plugin unit tests. Pins marked "measured" are the versions the old environment had on the laptop
+# (installed from one lock file, 2026-10-21); pins marked "from docs" were tested on the Linux test server (2026-10-23) and are to
+# be compared with `pip freeze` on the laptop.
+# Install: uv pip install --python D:\jarvis\tools\agent-venv\Scripts\python.exe -r jarvis\tools\requirements\agent-venv.txt
+
+# The tool server (MCP over loopback HTTP) and the plugin host
+mcp==2.3.0   # from docs: tested 2026-10-23, verify on laptop
+mcp-types==2.3.0   # from docs: tested 2026-10-23, verify on laptop
+starlette==1.7.0   # from docs: tested 2026-10-23, verify on laptop
+uvicorn==0.54.0   # measured on laptop 2026-10-21
+anyio==4.15.1   # measured on laptop 2026-10-21
+httpx==0.28.1   # measured on laptop 2026-10-21
+pydantic==2.13.5   # measured on laptop 2026-10-21
+psutil==7.2.2   # measured on laptop 2026-10-21
+numpy==1.26.4   # measured on laptop 2026-10-21
+
+# Documents: doc_tools, deliverables, research
+python-pptx==1.0.2   # measured on laptop 2026-10-21
+pdfplumber==0.11.10   # measured on laptop 2026-10-21
+pypdfium2==5.14.0   # measured on laptop 2026-10-21
+pypdf==6.19.0   # measured on laptop 2026-10-21
+python-docx==1.2.0   # measured on laptop 2026-10-21
+openpyxl==3.1.5   # from docs: tested 2026-10-23, verify on laptop
+reportlab==4.4.9   # measured on laptop 2026-10-21
+matplotlib==3.10.7   # measured on laptop 2026-10-21
+pillow==12.3.0   # measured on laptop 2026-10-21
+jinja2==3.1.6   # measured on laptop 2026-10-21
+markupsafe==3.0.2   # measured on laptop 2026-10-21
+markdown-it-py==4.0.0   # measured on laptop 2026-10-21
+beautifulsoup4==4.15.0   # measured on laptop 2026-10-21
+lxml==6.1.3   # measured on laptop 2026-10-21
+
+# Research claim checker (local model) and durable missions
+onnxruntime==1.25.0   # measured on laptop 2026-10-21
+tokenizers==0.23.2   # measured on laptop 2026-10-21
+dbos==3.3.0   # measured on laptop 2026-10-21
+croniter==6.2.4   # measured on laptop 2026-10-21
+pyyaml==6.0.3   # measured on laptop 2026-10-21
+
+# The desktop plugin's PC monitor reads the Windows event log
+pywin32==311; sys_platform == "win32"   # measured on laptop 2026-10-21
+
+# Tests
+pytest==9.1.1   # measured on laptop 2026-10-21
+pytest-asyncio==1.4.0   # measured on laptop 2026-10-21
+pytest-randomly==4.1.0   # measured on laptop 2026-10-21

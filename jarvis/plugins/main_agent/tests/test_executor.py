@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from jarvis.plugins.main_agent.executor import (StepContext, StepFailed, StepResult, StepUnknown, final_text, run_plan, run_state)
+from jarvis.plugins.main_agent.executor import (StepFailed, StepResult, StepUnknown, final_text, run_plan, run_state)
 from jarvis.plugins.main_agent.planner import Plan, Step
 
 FAST = (0.0, 0.01)          # no real pause between retries in tests

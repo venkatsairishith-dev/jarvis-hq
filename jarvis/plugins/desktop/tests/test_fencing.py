@@ -5,7 +5,6 @@ that job cancelled and confirmed ended before the next task (or the owner's reco
 Real coordinator, real core.Pc, real lock files; the fake world of test_stop_ownership (no network); events, no sleeps."""
 import asyncio
 import json
-import os
 import threading
 
 import pytest
@@ -208,7 +207,7 @@ def test_a_job_the_node_never_confirms_is_escalated_to_the_owner_when_the_reaper
     assert hold.op.done.wait(WAIT)
     [alert] = C.alerts()
     assert alert["jobs"] == ["j1"] and "may still be acting on the PC" in alert["message"] and "Cancel" in alert["message"]
-    assert C.snapshot()["alerts"] == [alert], "the registry snapshot (widget, wake listener) carries it"
+    assert C.snapshot()["alerts"] == [alert], "the registry snapshot carries it"
     res = C.stop_all()
     assert res["alerts"] == [alert], "Stop's answer carries it"
     assert C.LOCK.exists() is False

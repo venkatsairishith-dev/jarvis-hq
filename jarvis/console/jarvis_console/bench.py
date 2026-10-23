@@ -2,8 +2,8 @@
 security cases. Read-mostly; the two things that run are fixed programs from the repo with argument lists built here
 from allow-lists (never from the request's text, never through a shell):
 
-    * jarvis/evals/neko95/bench/bench.py        (one area at a time, or every area = a full run)
-    * jarvis/evals/neko95/bench/model_compare.py (only candidates of model_candidates.json whose file is already here)
+    * jarvis/evals/quality95/bench/bench.py        (one area at a time, or every area = a full run)
+    * jarvis/evals/quality95/bench/model_compare.py (only candidates of model_candidates.json whose file is already here)
 
 One job at a time. A job runs in its own process group so Cancel stops it and everything it started.
 
@@ -49,7 +49,6 @@ GROUPS = {
     "long_horizon": ("Long-horizon missions", ["D"]),
     "recovery": ("Recovery", ["E"]),
     "memory": ("Memory", ["F"]),
-    "voice_offline": ("Voice (offline parts)", ["G"]),
     "research": ("Research", ["H"]),
     "documents": ("Documents", ["I"]),
     "routing": ("Routing", ["J"]),
@@ -162,10 +161,10 @@ class Bench:
 
     def __init__(self, cfg, command=None, python=None):
         self.cfg = cfg
-        self.dir = getattr(cfg, "bench_dir", None) or os.path.join(HQ, "evals", "neko95", "bench")
-        self.results = getattr(cfg, "bench_results_dir", None) or os.path.join(HQ, "evals", "neko95", "results")
+        self.dir = getattr(cfg, "bench_dir", None) or os.path.join(HQ, "evals", "quality95", "bench")
+        self.results = getattr(cfg, "bench_results_dir", None) or os.path.join(HQ, "evals", "quality95", "results")
         self.challenges = os.path.join(self.results, "challenges")
-        self.model_dir = getattr(cfg, "model_dir", None) or os.environ.get("NEKO_MODEL_DIR") or "/models"
+        self.model_dir = getattr(cfg, "model_dir", None) or os.environ.get("JARVIS_MODEL_DIR") or "/models"
         self.python = python or getattr(cfg, "bench_python", None) or os.environ.get("JARVIS_BENCH_PYTHON") or sys.executable
         self.command = command or self._default_command
         self.jobs: dict[str, Job] = {}
@@ -291,7 +290,7 @@ class Bench:
         out["failed"] = [{"id": r["id"], "title": r.get("title"), "status": r["status"], "risk": r.get("risk"),
                           "observed": _short(r.get("observed"))} for r in rows if r["status"] in ("fail", "error")]
         out["deferred"] = [{"id": r["id"], "title": r.get("title"), "area": r.get("area"), "risk": r.get("risk"),
-                            "platform": (cases.get(r["id"]) or {}).get("platform", "any"), "reason": _short(r.get("observed"), 160)}
+                            "platform": (cases.get(r["id"]) or {}).get("platform", "any") if r["id"] in cases else "removed", "reason": _short(r.get("observed"), 160)}
                            for r in rows if r["status"] == "deferred"]
         for n in full[-TREND_N:]:
             d = self._json(os.path.join(self.results, n)) or {}
@@ -610,15 +609,15 @@ class Bench:
             raise BenchError("not present on this machine (this screen never downloads): " + ", ".join(missing), 409)
         names, sets = list(dict.fromkeys(names)), list(dict.fromkeys(sets))
         steps = [("models " + ", ".join(names), self.command("models", {"models": names, "sets": sets}))]
-        return self._start("models", "Model comparison: " + ", ".join(names), steps, len(names), env={"NEKO_MODEL_DIR": self.model_dir})
+        return self._start("models", "Model comparison: " + ", ".join(names), steps, len(names), env={"JARVIS_MODEL_DIR": self.model_dir})
 
     # ---- challenge lab
     def _modules(self):
-        """The real decide.py and coordinator.py (loaded from the plugin folder without the N.E.K.O plugin host) and the
+        """The real decide.py and coordinator.py (loaded from the plugin folder without the plugin host) and the
         kernel's real policy and job mapping."""
         name = "_jarvis_bench_desktop"
         if name + ".coordinator" not in sys.modules:
-            ddir = os.path.join(REPO, "plugin", "plugins", "desktop")
+            ddir = os.path.join(HQ, "plugins", "desktop")
             pkg = types.ModuleType(name)
             pkg.__path__ = [ddir]
             sys.modules[name] = pkg
@@ -655,7 +654,7 @@ class Bench:
 
     @staticmethod
     def _kernel_bodies(step: dict) -> list[dict]:
-        """The owner-plane requests the desktop plugin's agents send for one plan step (plugin/plugins/desktop/__init__.py)."""
+        """The owner-plane requests the desktop plugin's agents send for one plan step (jarvis/plugins/desktop/__init__.py)."""
         t, s = step.get("tool"), step
         app = str(s.get("app") or "")
         if t == "open_website":

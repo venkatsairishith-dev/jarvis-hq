@@ -19,7 +19,7 @@ def ep(tmp_path, clock=None, **kw):
 
 def rec(e, task="open the report", state="done", shape=("plugin:desktop:run_pc_task", "think"), err="", run="r1", sec=3.0, **kw):
     steps = [{"ref": s, "out": "success" if not err else "failure", "err": err} for s in shape]
-    return e.record(run_id=run, task=task, source="widget", mode="work", state=state, shape=list(shape), steps=steps, seconds=sec, **kw)
+    return e.record(run_id=run, task=task, source="voice", mode="work", state=state, shape=list(shape), steps=steps, seconds=sec, **kw)
 
 
 def test_the_log_keeps_no_words_numbers_or_addresses_from_the_request(tmp_path):

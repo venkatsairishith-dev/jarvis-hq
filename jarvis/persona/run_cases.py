@@ -5,7 +5,7 @@ optional judge model.
         [--judge-model <model>] [--only P-001,P-007] [--out report.json]
 
 The default base URL is the privacy gateway, so private values are replaced before anything leaves the laptop. The prompt is the
-card's own text with the names filled in, as N.E.K.O does at run time; N.E.K.O adds memory and context on top, so a pass here is
+card's own text with the names filled in, as the face does at run time; the face adds memory and context on top, so a pass here is
 necessary, not sufficient. A case passes when every rule holds and, if a judge is used, the judge says it passes. The key file is
 read at run time and never printed. Exit code 0 = all passed.
 """
@@ -38,7 +38,7 @@ def default_transport(url: str, body: dict, headers: dict) -> dict:
 
 
 def system_prompt(card: dict, owner: str = "the owner") -> str:
-    return card["system_prompt"].replace("{LANLAN_NAME}", card["name"]).replace("{MASTER_NAME}", owner)
+    return card["system_prompt"].replace("{ASSISTANT_NAME}", card["name"]).replace("{OWNER_NAME}", owner)
 
 
 def check_rules(case: dict, reply: str) -> list[str]:

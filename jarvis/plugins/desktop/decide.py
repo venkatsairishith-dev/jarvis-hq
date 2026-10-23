@@ -1,6 +1,6 @@
 """The local decision model for PC tasks (2026-10-16): request -> structured plan, then deterministic resolution.
 
-Split of work (measured choice, see jarvis/docs/jarvis/PC_CONTROL_BENCHMARK.md):
+Split of work (measured choice, see jarvis/docs/reports/PC_CONTROL_BENCHMARK.md):
   * the small local model only EXTRACTS: what kind of task, which steps, and the phrases the owner used (account, app,
     site, query, file). Its output is forced into a JSON schema by llama.cpp's grammar, so it is always parseable;
   * deterministic code RESOLVES those phrases against facts: the Chrome profile registry (ambiguous -> ask), known

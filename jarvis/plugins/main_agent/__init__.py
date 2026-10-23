@@ -72,10 +72,10 @@ from .store import RunStore, plan_from_dict, plan_to_dict, result_from_dict, res
 THINK_INPUT_CHARS = 6000
 RESUMABLE = ("interrupted", "held", "partial", "failed")
 BUSY = "The main agent is still working on the previous task. Ask it to stop first, or wait."
-# Who asked. The widget (and "Hey JARVIS" through it) stops waiting after a few seconds, so a plan that fails or is stopped
+# Who asked. A spoken request ("voice") stops waiting after a few seconds, so a plan that fails or is stopped
 # later is also said in the face's chat; a chat tool call gets the failure as its own answer.
-SOURCES = ("chat", "widget")
-SPEAK_PLAN_FAILURE = ("widget",)
+SOURCES = ("chat", "voice")
+SPEAK_PLAN_FAILURE = ("voice",)
 # A plugin step in flight is asked to stop through its plugin's own stop entry, where one exists.
 STOP_ENTRIES = {"desktop": "desktop:stop_pc_task"}
 # Re-review M10 (2026-10-18): the guard was a two-name DENYLIST, so every other plugin (messenger_app, mcp_adapter, local_team,
@@ -219,7 +219,7 @@ def plan_failure_hint(message: str) -> str:
     if "api key" in low or "unauthorized" in low:
         return " The planner's key is missing or wrong: it is set in the face's settings."
     if "none of the available helpers" in low:
-        return " If you spoke, I may not have caught a task: say it again in one sentence right after \"Hey JARVIS\"."
+        return " If you spoke, I may not have caught a task: say it again in one sentence."
     if "did not return a plan" in low or "not valid json" in low or "wrong shape" in low:
         return " The planner model answered in the wrong format; asking again usually works, and a stronger planner model fixes it for good."
     if "did not answer" in low or "not set up" in low:
@@ -789,7 +789,7 @@ class MainAgentPlugin(PluginBase):
     def _mark(self, run: dict[str, Any]) -> None:
         try:
             self._store.mark(run)
-        except Exception as exc:           # the marker only informs the widget; losing it must never stop the work
+        except Exception as exc:           # the marker only informs status views; losing it must never stop the work
             self.logger.warning("main_agent could not write its planning marker: {}", type(exc).__name__)
 
     # classes of failure a different plan cannot fix: the owner, the configuration, or a capability that does not exist
@@ -861,7 +861,7 @@ class MainAgentPlugin(PluginBase):
             self.logger.warning("main_agent could not record an episode: {}", type(exc).__name__)
 
     def _end_unstarted(self, run: dict[str, Any], state: str, message: str, speak: bool) -> None:
-        """A run that never started a step ends: the marker says how (the widget and the icon read it), no run file is
+        """A run that never started a step ends: the marker says how (status views read it), no run file is
         kept (there is nothing to resume), and the claim is freed."""
         run.update(state=state, error=str(message)[:300], running=[], finished=time.time())
         if state == "failed":                              # a plan that never came: the planner's reliability is part of what is learned
@@ -934,7 +934,7 @@ class MainAgentPlugin(PluginBase):
                           "mode": {"type": "string", "enum": list(MODES), "default": DEFAULT_MODE,
                                    "description": "chat (no tools), work (tools), code (JARVIS lab agents in the bound project), learn (study vault and documents)."},
                           "source": {"type": "string", "enum": list(SOURCES),
-                                     "description": "Leave empty. 'widget' is set by the desktop widget, which does not wait for the plan."}},
+                                     "description": "Leave empty. 'voice' is set for spoken requests, which do not wait for the plan."}},
                       "required": ["task"]},
         timeout=300,
         llm_result_fields=["run_id", "message", "steps", "mode", "state"],
@@ -949,7 +949,7 @@ class MainAgentPlugin(PluginBase):
             return Err(SdkError(str(exc)))
         source = str(source or "").strip().lower()
         source = source if source in SOURCES else "chat"
-        if source == "widget":                               # "Hey JARVIS ..." and the widget box: maybe an answer to a waiting question
+        if source == "voice":                                # a spoken request: maybe an answer to a waiting question
             answered = await self._maybe_answer_by_utterance(task)
             if answered is not None:
                 return answered
@@ -960,7 +960,7 @@ class MainAgentPlugin(PluginBase):
         run = {"run_id": rid, "task": task[:2000], "mode": mode, "source": source, "summary": "", "started": time.time(),
                "plan": {"summary": "", "steps": []}, "results": {}, "running": [], "state": "planning"}
         self._runs[rid] = run                                # run_status and the panel show it
-        self._mark(run)                                      # the widget, the icon and "Hey JARVIS, stop" now see it
+        self._mark(run)                                      # status views and a spoken "stop" now see it
         speak = source in SPEAK_PLAN_FAILURE
         try:
             plan = await self._plan_unless_stopped(task, mode, cancel, run, kw.get("_ctx"))
@@ -1131,7 +1131,7 @@ class MainAgentPlugin(PluginBase):
     async def stop_task(self, **_):
         """Request the stop, wait a bounded time for the run (and the helper's worker) to really end, and answer honestly:
         `requested` is always true when there was something to stop; `stopped` only when it has ended; otherwise
-        `still_running` lists what has not (the widget and the wake listener show "stop requested, N still running")."""
+        `still_running` lists what has not (a caller shows "stop requested, N still running")."""
         with self._claim_lock:
             rid, cancel = self._active, self._cancel
         if rid is None or cancel is None:
@@ -1178,7 +1178,7 @@ class MainAgentPlugin(PluginBase):
             await asyncio.sleep(0.05)
         return True
 
-    # ---------- the owner's input: one shared path for the chat box, the widget box and "Hey JARVIS" ----------
+    # ---------- the owner's input: one shared path for the chat box and speech ----------
     def _ask(self, step: Step, raw: dict[str, Any]) -> None:
         """A step asked a question: record it on the run (persisted), tell the owner in the chat, hold the step."""
         rid = self._active
@@ -1274,7 +1274,7 @@ class MainAgentPlugin(PluginBase):
         return out
 
     async def _maybe_answer_by_utterance(self, text: str) -> Any:
-        """A spoken (or widget-typed) sentence answers the newest waiting question only when that is unambiguous
+        """A spoken sentence answers the newest waiting question only when that is unambiguous
         (input_request.from_utterance); otherwise it is a new task. Returns the entry result, or None for "a new task"."""
         found = self._open_requests()
         if not found:

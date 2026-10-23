@@ -21,8 +21,8 @@ from jarvis.pluginapi.log import BraceLogger
 from jarvis.plugins import main_agent as ma
 from jarvis.plugins._shared import screen_text
 from jarvis.plugins._shared.tests import fakes
-from jarvis.plugins._shared.tests.fakes import C_EMAIL, C_FILE, C_KEY, C_OCR, C_PATH, C_STREET, leaked
-from jarvis.plugins.main_agent.executor import StepContext, StepFailed, StepResult, run_plan
+from jarvis.plugins._shared.tests.fakes import C_EMAIL, C_KEY, C_OCR, C_PATH, C_STREET, leaked
+from jarvis.plugins.main_agent.executor import StepResult, run_plan
 from jarvis.plugins.main_agent.planner import Capability, Plan, PlanError, Step, parse_plan
 from jarvis.plugins.main_agent.store import RunStore, result_from_dict, result_to_dict
 from jarvis.pluginapi import Err, Ok

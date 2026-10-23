@@ -1,9 +1,9 @@
-"""Score local decision models on the PC-task request set (2026-10-16). Windows, neko-venv; llama-swap on 127.0.0.1:8080.
+"""Score local decision models on the PC-task request set (2026-10-16). Windows, agent-venv; llama-swap on 127.0.0.1:8080.
 
     python jarvis\\evals\\pc_control\\eval_decision.py --models decider-ling,decider-qwen3-1.7b,decider-qwen3-4b [--repeat 1]
 
 For each model, one at a time (llama-swap swaps them on the 4 GB GPU): every case in decision_cases.json goes through
-plugin/plugins/desktop/decide.py (the real prompt, schema and deterministic resolution) and is scored against its
+jarvis/plugins/desktop/decide.py (the real prompt, schema and deterministic resolution) and is scored against its
 expectation. Also measured: the first (cold) call incl. model load, warm latency p50/p95, JSON validity, and the
 llama-server process memory. Results: jarvis/evals/pc_control/results/decision-<time>.json.
 """
@@ -19,7 +19,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))
-from plugin.plugins.desktop import core, decide  # noqa: E402
+from jarvis.plugins.desktop import core, decide  # noqa: E402
 
 
 def score(plan: decide.Plan, exp: dict) -> tuple[bool, str]:

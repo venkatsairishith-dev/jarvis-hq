@@ -77,7 +77,7 @@ def render(f: dict, registry: list, test_map: dict, repo_url: str) -> dict:
     branch, fid = branch_for(f), f["id"]
     tests, areas = tests_for(f, registry, test_map)
     if f["kind"] == "test_failure" and f["evidence"].get("case"):
-        tests.append(f"python jarvis/evals/neko95/bench/bench.py --id {f['evidence']['case']}")
+        tests.append(f"python jarvis/evals/quality95/bench/bench.py --id {f['evidence']['case']}")
     tests += [test_map["bench_command"].format(area=a) for a in areas]
     ev = json.dumps(f["evidence"], indent=1, sort_keys=True, default=str)
     if len(ev) > EVIDENCE_MAX:
@@ -103,7 +103,7 @@ def render(f: dict, registry: list, test_map: dict, repo_url: str) -> dict:
         "3. Change only what the finding needs. Do not refactor, reformat or update anything else, and keep the record from step 2."
         + keep_scores,
         "4. Run these commands from the repository root and keep their real output (leave the result files the bench "
-        "writes under jarvis/evals/neko95/results/ out of the commit):",
+        "writes under jarvis/evals/quality95/results/ out of the commit):",
         *(f"   - {t}" for t in tests),
         f"5. Commit on {branch} and publish only that branch: git push -u origin {branch}",
         f"6. Open a pull request to main: gh pr create --base main --head {branch}. Its body has the finding id {fid}, the old and "

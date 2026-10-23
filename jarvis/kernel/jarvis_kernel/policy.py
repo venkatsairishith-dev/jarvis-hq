@@ -69,7 +69,7 @@ RULES = [
     # Connectors (2026-10-11): the OWNER'S risk class for the tool decides (decide below); a plain call is at most YELLOW_AUTO.
     ("connector", "list|describe|manage|result", GREEN),
     ("connector", "call", YELLOW_AUTO),
-    # Neko's PC control (owner decision 2026-10-16): the owner's own requests run ordinary actions at once (owner_direct,
+    # JARVIS's PC control (owner decision 2026-10-16): the owner's own requests run ordinary actions at once (owner_direct,
     # decide below); playing media in the browser is ordinary. Read-only diagnostics of the owner's PC are GREEN for the
     # owner's side. Repairs change the PC: approval, except putting a backed-up file back (the safe direction).
     ("browser", "play", YELLOW_AUTO),
@@ -387,7 +387,7 @@ JARVIS_SAFETY_FILES = {"scrub.py", "owner.py", "tasks.py", "jobs.py",
 # the rest of SAFETY_COMPONENTS is RED only when the project is JARVIS itself (its name, or a path inside JARVIS's own
 # packages), because in another project a store.py or settings.json is just that project's code.
 AGENT_RULE_COMPONENTS = {"claude.md", ".claude", "hooks.json", "settings.local.json"}
-JARVIS_PROJECT = re.compile(r"jarvis|neko|hermes", re.I)
+JARVIS_PROJECT = re.compile(r"jarvis|jarvis|hermes", re.I)
 JARVIS_DIRS = {"jarvis", "jarvis_kernel", "jarvis_node", "jarvis-secrets", ".jarvis", ".jarvis-kernel"}
 # Credential and secret stores that must never be read, copied or sent by an agent (matched on the normalized path).
 SECRET_PATTERNS = re.compile(
@@ -598,7 +598,7 @@ _CT_ARG = (r"(?:-q|-qq|-v|-vv|-x|-s|--tb=(?:short|line|no)|discover|-p no:cachep
 _CT_TEST_CMDS = (
     re.compile(rf"^(?:cd {_CT_PATH} && )?python3? (?:-B )?-m (?:pytest|unittest)(?: {_CT_ARG}){{0,12}}$"),
     re.compile(rf"^cd {_CT_PATH} && npm ci && npm test$"),
-    re.compile(r"^python3? jarvis/evals/neko95/bench/bench\.py --(?:area|id) [A-Z]{1,2}(?:-[0-9]{1,4})?$"),
+    re.compile(r"^python3? jarvis/evals/quality95/bench/bench\.py --(?:area|id) [A-Z]{1,2}(?:-[0-9]{1,4})?$"),
 )
 _CT_PIN_RULE = "Record the failing case, its observed result and the commit you started from instead of a pin."
 _CT_SCORE_RULE = " Never change the bench case, its expected result, the rubric or the scorer to make it pass."
@@ -741,7 +741,7 @@ def _ct_structure(instructions: str, criteria) -> list:
     take(rf"3\. Change only what the finding needs\. Do not refactor, reformat or update anything else, and keep the record from step 2\."
          rf"(?:{re.escape(_CT_SCORE_RULE)})?", "step 3")
     take(r"4\. Run these commands from the repository root and keep their real output \(leave the result files the bench writes under "
-         r"jarvis/evals/neko95/results/ out of the commit\):", "step 4")
+         r"jarvis/evals/quality95/results/ out of the commit\):", "step 4")
     n = 0
     while i < len(lines) and lines[i].startswith("   - "):
         cmd = lines[i][5:]

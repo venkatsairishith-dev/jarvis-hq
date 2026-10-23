@@ -7,10 +7,7 @@ asyncio loop (plugin/core/host.py), which is what asyncio.gather reproduces here
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import json
-import logging
-import sys
 import types
 from pathlib import Path
 
@@ -116,7 +113,7 @@ def marker(p):
 # ---------- one active run ----------
 
 def test_two_requests_at_the_same_time_only_one_starts_and_the_other_gets_busy(monkeypatch, tmp_path):
-    """Two "Hey JARVIS" commands (or a voice and a typed task) arriving together: the old code planned and started both."""
+    """Two spoken commands (or a voice and a typed task) arriving together: the old code planned and started both."""
     async def go():
         gate = asyncio.Event()
 
@@ -190,9 +187,9 @@ def test_stop_during_planning_cancels_the_plan_and_no_step_ever_starts(monkeypat
     async def go():
         gate = asyncio.Event()
         p = make(monkeypatch, tmp_path, plan_gate=gate)
-        task = asyncio.ensure_future(p.run_task(task="open notepad", source="widget"))
+        task = asyncio.ensure_future(p.run_task(task="open notepad", source="voice"))
         await asyncio.sleep(0.02)
-        assert marker(p)["state"] == "planning" and p._store.ids() == []   # the widget sees it; no run file yet
+        assert marker(p)["state"] == "planning" and p._store.ids() == []   # status views see it; no run file yet
         stop = (await p.stop_task()).value
         assert stop["stopped"] is True and "planned" in stop["message"]
         res = await task
@@ -223,10 +220,10 @@ def test_stop_arriving_just_as_planning_ends_still_starts_nothing(monkeypatch, t
 
 # ---------- the outcome is reported truthfully (D4) ----------
 
-def test_a_plan_that_fails_after_the_widget_stopped_waiting_is_reported(monkeypatch, tmp_path):
+def test_a_plan_that_fails_after_the_voice_request_stopped_waiting_is_reported(monkeypatch, tmp_path):
     async def go():
         p = make(monkeypatch, tmp_path, plan={"summary": "x", "steps": [{"id": "s1", "agent": "plugin", "plugin": "evil:run", "goal": "g"}]})
-        res = await p.run_task(task="do it", source="widget")
+        res = await p.run_task(task="do it", source="voice")
         assert type(res).__name__ == "Err" and p._active is None and p._store.ids() == []
         m = marker(p)
         assert m["state"] == "failed" and "not available" in m["error"]
@@ -388,46 +385,4 @@ def test_the_executor_never_starts_a_step_once_stop_is_set(monkeypatch):
         plan = Plan("p", [Step("a", "think", "g"), Step("b", "think", "g")])
         res = await run_plan(plan, dispatch, cancel=cancel, on_start=lambda s: cancel.set(), parallel=2)
         assert called == [] and [r.outcome for r in res] == ["not_executed", "not_executed"]
-    asyncio.run(go())
-
-
-# ---------- "Hey JARVIS, stop" during planning, end to end with the real widget and wake loop ----------
-
-def _load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def test_hey_jarvis_stop_during_planning_stops_it(monkeypatch, tmp_path):
-    """The real widget newest_run() reads main_agent's planning marker, so the real wake loop sees a task running, and the
-    stop reaches main_agent, which cancels the planning: the plan never runs."""
-    ws = _load("widget_server_rc", ROOT / "jarvis" / "widget" / "widget_server.py")
-    sys.path.insert(0, str(ROOT / "jarvis" / "wake"))
-    import test_wake_listener as T
-    import wake_listener as wl
-
-    async def go():
-        gate = asyncio.Event()
-        p = make(monkeypatch, tmp_path, plan_gate=gate)
-        loop = asyncio.get_running_loop()
-        planning = asyncio.ensure_future(p.run_task(task="open notepad", source="widget"))
-        await asyncio.sleep(0.02)
-
-        def running():
-            return (ws.newest_run(str(p._store.dir)) or {}).get("state") in ("running", "planning")
-
-        def stop():
-            return {"ok": asyncio.run_coroutine_threadsafe(p.stop_task(), loop).result(5).value["stopped"]}
-        w = wl.WakeLoop(lambda: T.FakeDetector(), vad_factory=T.FakeVad, transcribe=lambda a: "Stop.", submit=lambda t: {"ok": True},
-                        stop=stop, speaking=lambda: False, running=running, chime=lambda k: None)
-        await w.start()
-        await T.feed(w, [T.QUIET] * 5 + T.seconds(1, T.SPEECH) + T.seconds(1.2, T.QUIET))
-        assert w.last["what"] == "stop the running task" and w.last["ok"] is True
-        res = await planning
-        gate.set()
-        await asyncio.sleep(0.05)
-        assert res.value["state"] == "cancelled" and p.dispatched == []
-        assert ws.newest_run(str(p._store.dir))["state"] == "cancelled"
     asyncio.run(go())

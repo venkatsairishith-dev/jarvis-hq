@@ -19,7 +19,7 @@ OUTPUT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,79}\.(md|txt|html|json|
 MAX_OUTPUT = 200_000    # characters per saved output
 UI_OPS = {"launch", "click", "type", "focus", "key", "scroll", "click_at", "minimize", "maximize", "restore"}
 PC_OPS = {"open_app", "open_folder", "open_file", "list_folder"}   # "open Spotify", "open the X folder in Downloads"
-# Neko's PC control (2026-10-16). Browser: the owner's EXISTING Chrome profiles, by alias; the node keeps the registry.
+# JARVIS's PC control (2026-10-16). Browser: the owner's EXISTING Chrome profiles, by alias; the node keeps the registry.
 BROWSER_OPS = {"open": "open", "read": "snapshot", "tabs": "snapshot", "whoami": "snapshot", "find": "snapshot",
                "media": "snapshot", "play": "play", "click": "click", "type": "type", "press": "press"}
 DIAG_OPS = {"processes", "app_errors", "crashes", "services", "disk", "network", "app_info", "window_text",
@@ -41,7 +41,7 @@ KINDS = {
     "screenshot": ("ui", "screenshot"),    # a PNG of the desktop, written to the owner's outputs folder (never sent inline)
     # Connectors (2026-10-11): one operation on a local MCP server the owner allowed on that machine (connectors.py).
     "connector_op": ("connector", None),
-    # Neko (2026-10-16): the owner's existing Chrome profiles (Playwright MCP extension), read-only diagnostics, repairs
+    # JARVIS (2026-10-16): the owner's existing Chrome profiles (Playwright MCP extension), read-only diagnostics, repairs
     # with a backup first, and what the PC is playing (Windows media session).
     "browser_ext": ("browser", None),
     "diag": ("diag", None),

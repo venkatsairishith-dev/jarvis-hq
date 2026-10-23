@@ -78,7 +78,7 @@ ALERTS: "list[dict]" = []
 ALERT_KEEP = 10
 
 
-OPS_FILE = DATA / "plugins" / "pc_operations.json"      # the registry's snapshot for the widget and the wake listener (see publish)
+OPS_FILE = DATA / "plugins" / "pc_operations.json"      # the registry's snapshot for status views (see publish)
 PUBLISH_S = 5.0                 # the snapshot is rewritten this often while any operation lives
 APPROVAL_TTL_S = 1800.0         # a tracked pending approval is forgotten after this long (the kernel's own card expires sooner)
 _APPROVALS: "dict[str, dict]" = {}
@@ -145,7 +145,7 @@ def _approval_event(op: "Operation", pc, kind: str, aid: str) -> None:
         forget_approval(aid)
 
 
-# ---- the registry's snapshot, for the widget's "pc busy" and the wake listener's "stop" (review M14 / L1)
+# ---- the registry's snapshot, for status views ("is the PC busy?") (review M14 / L1)
 def snapshot(wall=time.time) -> dict:
     ops = [op.describe() for op in operations()]
     return {"at": wall(), "pid": os.getpid(), "busy": bool(ops), "operations": [
@@ -198,7 +198,7 @@ def _poke_publisher() -> None:
 
 
 def _refresh_activity() -> None:
-    """The JARVIS icon's activity file expires after 2 minutes (neko_state.ACTIVITY_FOR_S): while operations live and the last
+    """The activity file for status views expires after 2 minutes: while operations live and the last
     state is a working one, keep it fresh so a long step does not look idle."""
     try:
         from . import core

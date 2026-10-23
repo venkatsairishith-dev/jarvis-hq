@@ -1,0 +1,25 @@
+# Copy of ~/jarvis-test/Containerfile on the relative's Linux server (rootless podman image jarvis-test), kept here for history.
+# JARVIS test environment (2026-10-16): the project dependencies + test tools, Linux. Source is mounted at /src
+# (read-only, or :O for a throw-away writable overlay). Build with ./sync-and-build.sh so the lock matches the repo.
+FROM docker.io/library/python:3.11-slim
+RUN apt-get update -q && apt-get install -y -q --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN pip install -q uv
+# Google Chrome: the node browser launches channel="chrome" (test_browser). Playwright's own installer, version 1.63.0
+# (installed here first so this layer survives dependency changes).
+RUN uv pip install -q --system "playwright==1.63.0" && python -m playwright install --with-deps chrome && rm -rf /var/lib/apt/lists/*
+# gitleaks (secret scanner): jarvis_kernel.scrub uses it as its second pass; without it 5 kernel tests skip. Checksum pinned.
+RUN python -c "import urllib.request as u; u.urlretrieve('https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz', '/tmp/gl.tgz')" \
+ && echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gl.tgz" | sha256sum -c - && tar -xzf /tmp/gl.tgz -C /usr/local/bin gitleaks && rm /tmp/gl.tgz && gitleaks version
+# Node.js 24 (as on the laptop): the face's tests (jarvis/face) and the console UI tests run JS through node. Checksum pinned.
+RUN python -c "import urllib.request as u; u.urlretrieve('https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-x64.tar.xz', '/tmp/node.txz')" \
+ && echo "cc2f601cee82d9a5a233302fe307abc600727035fd7d2c3a3571755989e95008  /tmp/node.txz" | sha256sum -c - \
+ && python -c "import tarfile; tarfile.open('/tmp/node.txz').extractall('/opt', filter='tar')" && rm /tmp/node.txz \
+ && ln -s /opt/node-v24.22.0-linux-x64/bin/node /opt/node-v24.22.0-linux-x64/bin/npm /opt/node-v24.22.0-linux-x64/bin/npx /usr/local/bin/ && node --version
+# JARVIS's Python dependencies at the exact versions of jarvis/tools/requirements/agent-venv.txt (the laptop's agent-venv; the
+# pywin32 line is skipped here by its platform marker) plus the pieces the kernel, console and node tests need.
+COPY agent-venv.txt /deps/agent-venv.txt
+RUN uv pip install -q --system -r /deps/agent-venv.txt
+RUN uv pip install -q --system psutil pytest pytest-asyncio pytest-randomly pytest-xdist && which uvx ruff
+# The code comes from /src through PYTHONPATH, like the laptop's checkout. Node prints TAP.
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUTF8=1 PYTHONPATH=/src NODE_OPTIONS=--test-reporter=tap
+WORKDIR /src

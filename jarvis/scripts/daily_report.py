@@ -1,4 +1,4 @@
-"""One-page daily health report for the N.E.K.O + JARVIS stack. Windows, read-only, no model calls.
+"""One-page daily health report for the JARVIS stack. Windows, read-only, no model calls.
 
     python daily_report.py        writes <data>\\logs\\daily_report_YYYYMMDD.md (keeps the newest 14) and prints where
 
@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import sys
 
-DATA = os.environ.get("NEKO_STORAGE_SELECTED_ROOT", r"D:\jarvis\N.E.K.O-data")
+DATA = os.environ.get("JARVIS_DATA_DIR", r"D:\jarvis\data")
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOGS = os.path.join(DATA, "logs")
 
@@ -69,7 +69,7 @@ def main():
             pass
     stray = os.path.join(os.path.abspath(os.path.join(HERE, "..", "..")), ".venv")
     if os.path.isdir(stray):
-        lines.append(f"- NOTE: a project .venv exists at {stray}; neko-start.ps1 removes it if empty")
+        lines.append(f"- NOTE: a project .venv exists at {stray}; jarvis-start.ps1 removes it if empty")
 
     path = os.path.join(LOGS, f"daily_report_{today}.md")
     os.makedirs(LOGS, exist_ok=True)

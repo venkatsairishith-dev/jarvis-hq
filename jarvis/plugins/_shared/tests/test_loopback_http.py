@@ -258,27 +258,6 @@ def test_node_vision_call(proxy, service, monkeypatch, tmp_path):
     assert proxy == [] and len(log) == 1 and "image_url" in log[0][2]
 
 
-def test_wake_listener_call(proxy, service):
-    try:
-        wl = _load("wake_listener_t", "jarvis/wake/wake_listener.py", "jarvis/wake")
-    except ImportError as e:
-        pytest.skip(f"the wake listener's own dependencies are not installed here ({e.name})")
-    base, log = service
-    wl.http_json(base + "/v1/audio/transcriptions?language=en", raw=b"RIFFCANARYWAV", ctype="audio/wav")
-    assert proxy == [] and len(log) == 1 and "CANARYWAV" in log[0][2]
-    with pytest.raises(ValueError):
-        wl.http_json("http://example.com/x", {"a": 1})
-
-
-def test_widget_fetch_call(proxy, service):
-    ws = _load("widget_server_t2", "jarvis/widget/widget_server.py")
-    base, log = service
-    assert ws.fetch_json(base + "/health") == {"ok": True, "text": "x", "choices": [{"message": {"content": "{}"}}]}
-    assert ws.fetch_json(base + "/api/task", data={"task": CANARY}) is not None
-    assert proxy == [] and len(log) == 2
-    assert ws.fetch_json("http://example.com/x") is None          # refused: fetch_json answers None on any failure
-
-
 def test_the_bridge_client_and_main_agent_clients_use_trust_env_false(proxy, service, monkeypatch):
     """jarvis_bridge.client and main_agent already built their httpx clients with trust_env=False; this pins it with a real proxy."""
     import asyncio

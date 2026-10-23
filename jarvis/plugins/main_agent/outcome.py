@@ -119,7 +119,7 @@ _reg("research", "research_topic", shape=("spec", "summary"))
 _reg("local_team", "ask_local solve_with_team", shape=("answer", "plan", "text"))
 _reg("local_team", "team_status", kind="read")
 _reg("main_agent", "run_status plan_task", kind="read", free_status=True)       # the run's own state (held, failed ...) is the data read
-_reg("main_agent", "run_task", kind="start", shape=("run_id",), words=(("answered", "success"),))   # a widget/voice answer resumes a held run
+_reg("main_agent", "run_task", kind="start", shape=("run_id",), words=(("answered", "success"),))   # a spoken answer resumes a held run
 _reg("main_agent", "resume_run", kind="start", shape=("run_id",))
 _reg("main_agent", "pending_inputs", kind="read")
 _reg("main_agent", "learning_stats", kind="read")

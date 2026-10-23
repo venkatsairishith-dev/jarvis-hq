@@ -1,5 +1,5 @@
 # The JARVIS subsystem is stored and checked out byte-for-byte.
 #
-# The repository root (N.E.K.O) normalises text to LF. JARVIS must not be touched by that: skill PROVENANCE.json files and the
-# deployment sync compare SHA-256 hashes of these exact bytes, so a CRLF -> LF rewrite would break provenance and look like drift.
+# Skill PROVENANCE.json files and the deployment sync compare SHA-256 hashes of these exact bytes, so a CRLF -> LF rewrite
+# (by git or an editor setting) would break provenance and look like drift.
 * -text

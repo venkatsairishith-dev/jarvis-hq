@@ -5,7 +5,7 @@ interrupted and the step that was in flight becomes `unknown` (it may or may not
 
 A run that is being planned has no plan and no step yet, so it gets no run file. Instead one small marker file
 (ACTIVE_MARKER, not *.json, so it is never listed as a run) says "a task is being planned" and, if it never starts, how it
-ended (stopped, or the plan failed and why). The widget, the JARVIS icon and "Hey JARVIS, stop" read it; it is removed when the
+ended (stopped, or the plan failed and why). Status views read it; it is removed when the
 run starts and its run file takes over.
 Step results are what the model-facing steps returned (capped), so the folder sits with the face's own data, not in the repo.
 """

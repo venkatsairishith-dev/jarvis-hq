@@ -1,6 +1,6 @@
 # JARVIS face
 
-The avatar, chat and voice window of JARVIS. It replaces N.E.K.O as JARVIS's face. It is a desktop app (Electron, Vue) that
+The avatar, chat and voice window of JARVIS. It replaced N.E.K.O (removed on 2026-10-23) as JARVIS's face. It is a desktop app (Electron, Vue) that
 runs on the owner's laptop (Windows) and shows a Live2D, VRM or MMD avatar.
 
 The face decides nothing. Chat goes through the privacy gateway, speech goes to the local speech server, and every action goes
@@ -65,8 +65,12 @@ pnpm run dev            # development window
 Start JARVIS's side first: the privacy gateway (48950), the local speech server (48930) and the tool server:
 
 ```
-python -m jarvis.bridge.face_tools --data D:\jarvis\N.E.K.O-data\muse --vault D:\jarvis\vault
+python -m jarvis.bridge.face_tools --data D:\jarvis\data\muse --vault D:\jarvis\vault     # jarvis\scripts\jarvis-start.ps1 does this
 ```
+
+The tool server also offers every entry of the JARVIS plugins (`jarvis/plugins`) as a tool named `<plugin>__<entry>`, and a
+`jarvis_messages` tool for what plugins say on their own. `--plugins none` turns the plugins off, `--plugins research,doc_tools`
+narrows them. Their results are cleaned before the face's model sees them.
 
 In the face, open Settings > Providers > OpenAI Compatible and paste the provider key the gateway forwards (it stays on this
 PC, in the face's own settings). Speech needs no key.
@@ -95,7 +99,7 @@ network lock, the MCP lockdown, the JARVIS defaults and the tool server.
 
 - **Not yet run on the laptop.** It is built and tested on Linux; the Windows installer, the avatar on a real screen, the
   microphone and the end-to-end voice path still need the laptop (pilot, Phase B in
-  `jarvis/docs/neko/research-2026-10-22/NEKO_REPLACEMENT_2026-10-23.md`).
+  `jarvis/docs/reports/research-2026-10-22/FACE_REPLACEMENT_2026-10-23.md`).
 - **Non-English data remains** where it is data, not prose: the speech readers' Japanese, Korean and Chinese tables for maths
   and chemistry, MMD morph names (they are the identifiers inside MMD model files) and test fixtures.
 - AIRI's cloud client code is still present but unreachable (it points at nothing). Removing it is clean-up, not security.

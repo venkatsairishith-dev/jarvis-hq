@@ -1,10 +1,10 @@
-"""Detect this computer's hardware and pick a Neko model profile. Windows first; Linux and macOS work with fallbacks.
+"""Detect this computer's hardware and pick a JARVIS model profile. Windows first; Linux and macOS work with fallbacks.
 
-    python hwdetect.py            print the readings, the profile and why, and save them to <data>\\neko\\hardware.json
+    python hwdetect.py            print the readings, the profile and why, and save them to <data>\\jarvis\\hardware.json
     python hwdetect.py --json     the same as JSON only
 
 GPU memory comes from llama.cpp itself (`llama-server --list-devices`), which is what will actually run the models;
-WMI's AdapterRAM is a 32-bit field and wrong above 4 GB. Profiles and their models: jarvis/docs/neko/NEKO_MODEL_MATRIX.md.
+WMI's AdapterRAM is a 32-bit field and wrong above 4 GB. Profiles and their models: jarvis/docs/reports/MODEL_MATRIX.md.
 """
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ import subprocess
 import sys
 import time
 
-LLAMA = os.environ.get("NEKO_LLAMA_SERVER", r"D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe")
-OUT = os.path.join(os.environ.get("NEKO_STORAGE_SELECTED_ROOT", r"D:\jarvis\N.E.K.O-data"), "neko", "hardware.json")
+LLAMA = os.environ.get("JARVIS_LLAMA_SERVER", r"D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe")
+OUT = os.path.join(os.environ.get("JARVIS_DATA_DIR", r"D:\jarvis\data"), "jarvis", "hardware.json")
 PROFILES = {
     "remote_only": "under 6 GB of RAM: local models would crowd out everything else; routing stays local, models are remote",
     "cpu8": "CPU only, about 8 GB RAM: one small model at a time (2B router, 1.5B coder); planning and research remote",
@@ -116,9 +116,9 @@ def choose(mem: dict, devices: list[dict]) -> tuple[str, str]:
 def detect(runner=subprocess.run) -> dict:
     mem, devices = memory_gb(), gpus(runner=runner)
     profile, why = choose(mem, devices)
-    override = os.environ.get("NEKO_MODEL_PROFILE", "").strip()
+    override = os.environ.get("JARVIS_MODEL_PROFILE", "").strip()
     if override in PROFILES:
-        profile, why = override, f"set by NEKO_MODEL_PROFILE (detected: {why})"
+        profile, why = override, f"set by JARVIS_MODEL_PROFILE (detected: {why})"
     return {"checked": time.strftime("%Y-%m-%d %H:%M:%S"), "os": f"{platform.system()} {platform.release()} ({platform.version()})",
             "cpu": cpu_info(), "memory": mem, "gpus": devices, "disk_free_gb": disks(),
             "profile": profile, "why": why, "profile_meaning": PROFILES[profile]}

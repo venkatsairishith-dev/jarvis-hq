@@ -1,4 +1,4 @@
-"""Completion H (2026-10-19): a route-by-route matrix over ALL FOUR local servers (console, widget, wake status, speech).
+"""Completion H (2026-10-19): a route-by-route matrix over the local servers (console, speech).
 
 For every route the code defines, and for every HTTP method (GET, HEAD, OPTIONS, POST, PUT, PATCH, DELETE, TRACE, CONNECT, PROPFIND and an
 unknown one), an UNAUTHENTICATED request must not get a 2xx answer unless the route is public by design, must not receive any canary
@@ -106,13 +106,13 @@ class MatrixMixin:
                     self.check(sf, method, target, body=body, label="matrix")
                     count += 1
             self.assertEqual(sf.changed(), [], sf.name)                        # nothing happened anywhere
-        self.assertGreater(count, 1100)      # the predecessor guessed 1500; the real number of (server, method, route) combinations is 1177
+        self.assertGreater(count, 800)       # the real number of (server, method, route) combinations is 814
 
     def test_unauthenticated_requests_with_forwarded_and_override_headers_get_nothing_more(self):
         tricks = (("X-Forwarded-For: 127.0.0.1",), ("X-Forwarded-Host: 127.0.0.1",), ("X-Forwarded-Proto: https",), ("X-Original-URL: /health",),
                   ("X-Rewrite-URL: /health",), ("X-HTTP-Method-Override: GET",), ("X-Real-IP: 127.0.0.1",), ("Forwarded: for=127.0.0.1;host=127.0.0.1",),
                   ("Referer: http://127.0.0.1/",), ("Origin: http://127.0.0.1",), ("Origin: null",), ("Authorization: Bearer x",),
-                  ("Cookie: session=1; jarvis_console_session=x; jarvis_widget_session=x",), ("Sec-Fetch-Site: same-origin",))
+                  ("Cookie: session=1; jarvis_console_session=x",), ("Sec-Fetch-Site: same-origin",))
         for sf in self.surfaces:
             for extra in tricks:
                 for target in sf.routes_get[:6]:
@@ -218,65 +218,6 @@ def start_console(case):
     return sf
 
 
-def start_widget(case):
-    spec = importlib.util.spec_from_file_location("widget_matrix", os.path.join(HERE, "..", "..", "widget", "widget_server.py"))
-    ws = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(ws)
-    case.ws, case.calls = ws, []
-    ws.build_status = lambda fetch, *a, **k: {"canary": CANARY}
-    ws.neko_state = lambda fetch=None: {"canary": CANARY}
-    ws.FEEDBACK_FILE = os.path.join(case.tmp.name, "feedback.jsonl")
-
-    def fetch(url, timeout=2.0, data=None):
-        case.calls.append((url, data))
-        return None
-    handler = ws.make_handler(os.path.join(HERE, "..", "..", "widget", "index.html"), fetch)
-    case.wsrv = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=case.wsrv.serve_forever, daemon=True).start()
-    sf = Surface()
-    sf.name, sf.port, sf.master, sf.header = "widget", case.wsrv.server_address[1], handler.control_secret, "X-Jarvis-Control"
-    sf.public = ("/health", "/auth/login.js")
-    sf.routes_get = ["/api/status", "/api/neko", "/api/events", "/open-console", "/", "/neko", "/index.html", "/auth/session", "/auth/code"]
-    sf.routes_write = ["/api/task", "/api/action", "/api/feedback", "/auth/session", "/auth/code", "/api/approve", "/api/kill"]
-    sf.has_pages, sf.page_targets = True, ("/", "/neko", "/index.html")
-    sf.changed = lambda: ([] if not [c for c in case.calls if c[1]] and not os.path.exists(ws.FEEDBACK_FILE) and not handler.gate._sessions and not handler.gate._codes
-                          else ["changed"])
-    return sf
-
-
-class WakeStub:
-    def __init__(self):
-        self.paused, self.lang, self.events = False, "en", []
-
-    def status(self):
-        return {"state": "wake_listening", "canary": CANARY}
-
-    def request_cancel(self):
-        self.events.append("cancel")
-
-    def set_lang(self, v):
-        self.events.append(("lang", v))
-        return None
-
-    def log(self, msg):
-        pass
-
-
-def start_wake(case):
-    sys.path.insert(0, os.path.join(HERE, "..", "..", "wake"))
-    import wake_listener as wl
-    case.stub = WakeStub()
-    case.wake_srv = wl.serve_status(case.stub, 0)
-    sf = Surface()
-    sf.name, sf.port, sf.master, sf.header = "wake", case.wake_srv.server_address[1], case.wake_srv.control_secret, "X-Jarvis-Control"
-    sf.public = ("/health",)
-    sf.routes_get = ["/status", "/lang", "/status?x=1"]
-    sf.routes_write = ["/cancel", "/pause", "/resume", "/lang", "/lang?lang=hi", "/status"]
-    sf.has_pages, sf.page_targets = False, ()
-    sf.changed = lambda: ([] if not case.stub.events and case.stub.paused is False else ["changed"])
-    return sf
-
-
 def start_speech(case):
     spec = importlib.util.spec_from_file_location("lss_matrix", os.path.join(HERE, "..", "..", "scripts", "local_speech_server.py"))
     lss = importlib.util.module_from_spec(spec)
@@ -301,11 +242,11 @@ class AllServers(MatrixMixin, unittest.TestCase):
         self.tmp_holder = None
         c = _Case()
         self.c = c
-        sfs = [start_console(c), start_widget(c), start_wake(c), start_speech(c)]
+        sfs = [start_console(c), start_speech(c)]
         self.surfaces = sfs
 
     def tearDown(self):
-        for fn in (lambda: self.c.srv.shutdown(), lambda: self.c.wsrv.shutdown(), lambda: self.c.wake_srv.shutdown(), lambda: self.c.ssrv.shutdown(),
+        for fn in (lambda: self.c.srv.shutdown(), lambda: self.c.ssrv.shutdown(),
                    lambda: self.c.ksrv.shutdown(), lambda: self.c.k.db.close(), lambda: self.c.tmp.cleanup()):
             try:
                 fn()
@@ -328,15 +269,14 @@ class RouteInventory(unittest.TestCase):
         api = src[src.index("        def _api(self, method, name, q):"):src.index("        def _connectors(self")]
         prefixes = set(re.findall(r'name\.startswith\("([^"]+)"\)', api)) | set(re.findall(r'name == "([^"]+)"', api))
         body = open(__file__, encoding="utf-8").read()
-        text = body[body.index("def start_console"):body.index("def start_widget")]
+        text = body[body.index("def start_console"):body.index("def start_speech")]
         self.assertGreaterEqual(len(prefixes), 10)
         for p in prefixes:
             self.assertIn("/api/" + p.rstrip("/"), text, f"console route {p!r} is not in the matrix")
 
-    def test_every_route_of_the_widget_wake_and_speech_servers_in_the_code_is_in_the_matrix(self):
+    def test_every_route_of_the_speech_server_in_the_code_is_in_the_matrix(self):
         base = os.path.join(HERE, "..", "..")
-        for rel, start in (("widget/widget_server.py", "def start_widget"), ("wake/wake_listener.py", "def start_wake"),
-                           ("scripts/local_speech_server.py", "def start_speech")):
+        for rel, start in (("scripts/local_speech_server.py", "def start_speech"),):
             src = open(os.path.join(base, rel), encoding="utf-8").read()
             routes = set(re.findall(r'(?:path|route|self\.path) (?:==|in) \(?"(/[a-z/_.-]+)"', src)) | set(re.findall(r'"(/(?:api|auth)/[a-z_/.-]+)"', src))
             body = open(__file__, encoding="utf-8").read()

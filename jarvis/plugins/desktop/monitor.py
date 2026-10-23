@@ -26,7 +26,7 @@ from pathlib import Path
 CRASH_IDS = (1000, 1002, 1026)
 DISK_FLOOR_GB = {"C:\\": 12.0, "D:\\": 3.0}
 SERVICES = {"face tool server": 48970, "speech server": 48930,
-            "wake listener": 48945, "privacy gateway": 48950, "llama-swap": 8080, "JARVIS console": 8799}
+            "privacy gateway": 48950, "llama-swap": 8080, "JARVIS console": 8799}
 QUIET_S = 30 * 60
 KEEP_HELD_S = 24 * 3600                                  # unsaid repeats of a crash are forgotten after a day
 STUCK_GRACE_S = 120

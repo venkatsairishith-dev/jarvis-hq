@@ -20,13 +20,13 @@ def row(name, result, status="Ready", run="powershell.exe x.ps1", state="Enabled
 class Tasks(unittest.TestCase):
     def test_only_jarvis_tasks_and_only_real_errors_are_red(self):
         csv_text = HEADER + row("JarvisNode", "267009", "Running") + row("JarvisLab", "2147942402", run="wscript.exe D:\\gone\\start.vbs") \
-            + row("JarvisNekoStack", "0") + row("JarvisWidget", "267011") + row("Microsoft\\Windows\\X", "1") \
+            + row("JarvisStack", "0") + row("JarvisFace", "267011") + row("Microsoft\\Windows\\X", "1") \
             + row("JarvisOld", "-2147024894") + row("JarvisOff", "2147942402", state="Disabled") + HEADER
         got = {r["task"]: r for r in P.audit_tasks(csv_text)}
-        self.assertEqual(sorted(got), ["JarvisLab", "JarvisNekoStack", "JarvisNode", "JarvisOff", "JarvisOld", "JarvisWidget"])
+        self.assertEqual(sorted(got), ["JarvisFace", "JarvisLab", "JarvisNode", "JarvisOff", "JarvisOld", "JarvisStack"])
         self.assertFalse(got["JarvisLab"]["ok"]); self.assertIn("a file the task starts is missing", got["JarvisLab"]["detail"])
         self.assertFalse(got["JarvisOld"]["ok"])                                      # the same code written as a signed number
-        for fine in ("JarvisNode", "JarvisNekoStack", "JarvisWidget", "JarvisOff"):
+        for fine in ("JarvisNode", "JarvisStack", "JarvisFace", "JarvisOff"):
             self.assertTrue(got[fine]["ok"], fine)                                    # running, success, never run, disabled
         self.assertEqual(got["JarvisLab"]["runs"], "wscript.exe D:\\gone\\start.vbs")
 
@@ -41,25 +41,15 @@ class Rest(unittest.TestCase):
         out = "noise\n[PASS] kernel reachable -- ok\n[FAIL] Dahl slots -- no key\n[PASS] audit chain\n"
         self.assertEqual(P.parse_live_check(out), [("kernel reachable", True, "ok"), ("Dahl slots", False, "no key"), ("audit chain", True, "")])
 
-    def test_wake_listener_states(self):
-        self.assertTrue(P.wake_state(lambda: {"state": "wake_listening"})[0])
-        ok, why = P.wake_state(lambda: {"state": "error", "detail": "microphone error"})
-        self.assertFalse(ok); self.assertIn("microphone error", why)
-
-        def down():
-            raise OSError("refused")
-        ok, why = P.wake_state(down)
-        self.assertFalse(ok); self.assertIn("neko-start.ps1", why)
-
     def test_the_report_is_green_only_when_everything_is(self):
-        items = P.gather("[PASS] a\n[PASS] b\n", HEADER + row("JarvisNode", "0"), lambda: {"state": "wake_listening"}, 40.0)
+        items = P.gather("[PASS] a\n[PASS] b\n", HEADER + row("JarvisNode", "0"), 40.0)
         text, code = P.report(items)
         self.assertEqual(code, 0); self.assertIn("ALL GREEN", text); self.assertIn("0 red", text)
-        bad = P.gather("[PASS] a\n[FAIL] planner -- 429\n", HEADER + row("JarvisLab", "2147942402"), lambda: {"state": "error"}, 2.0)
+        bad = P.gather("[PASS] a\n[FAIL] planner -- 429\n", HEADER + row("JarvisLab", "2147942402"), 2.0)
         text, code = P.report(bad)
         self.assertEqual(code, 1)
         self.assertIn("RED  [live check] planner -- 429", text); self.assertIn("RED  [scheduled task] JarvisLab", text)
-        self.assertIn("RED  [disk] D: free space", text); self.assertIn("NOT READY: fix the 4 red", text)
+        self.assertIn("RED  [disk] D: free space", text); self.assertIn("NOT READY: fix the 3 red", text)
 
 
 if __name__ == "__main__":

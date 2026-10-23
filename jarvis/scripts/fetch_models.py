@@ -19,7 +19,7 @@ UA = {"User-Agent": "jarvis-model-fetch"}
 LING = ("generalist (MoE, 1.3B active)", "inclusionAI/Ling-3.0-tiny-GGUF", "Ling-3.0-tiny-Q4_K_M.gguf")
 CODER = ("code", "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF", "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")
 MATH = ("maths", "bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF", "Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf")
-PROFILE_MODELS = {   # (role, repo, file) per hardware profile (jarvis/docs/neko/NEKO_MODEL_MATRIX.md)
+PROFILE_MODELS = {   # (role, repo, file) per hardware profile (jarvis/docs/reports/MODEL_MATRIX.md)
     # The generalist also routes; SmolLM2-360M was tried as a router and dropped (too inaccurate, see local_team/core.py).
     "vram4": [LING, CODER, MATH],
     "cpu8": [("general + router", "unsloth/Qwen3.5-2B-GGUF", "Qwen3.5-2B-Q4_K_M.gguf"), CODER, MATH],

@@ -1,6 +1,6 @@
 """Loopback-only HTTP for JARVIS-authored programs that cannot import the plugin package (completion H, 2026-10-19). Standard library only.
 
-Same rules as plugin/plugins/_shared/loopback_http.py (re-review M13): urllib's urlopen() reads http_proxy / https_proxy / ALL_PROXY from the
+Same rules as jarvis/plugins/_shared/loopback_http.py (re-review M13): urllib's urlopen() reads http_proxy / https_proxy / ALL_PROXY from the
 environment, so with a proxy configured and 127.0.0.1 missing from no_proxy, text and tokens meant for a loopback service (the console,
 the widget, the speech server, a local model) went to the PROXY. Here the proxy map is explicitly empty, the host must be exactly
 127.0.0.1, ::1 or localhost with no user:password@, and a redirect is never followed. A genuine external call (a download, a web

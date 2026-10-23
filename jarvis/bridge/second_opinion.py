@@ -123,7 +123,7 @@ def ask(plan: str, reviewer: dict, question: str = "", public_text: bool = False
         text = str(reply["choices"][0]["message"]["content"] or "")
     except (urllib.error.URLError, OSError, KeyError, IndexError, TypeError, ValueError) as e:
         raise SecondOpinionError(f"{reviewer['name']} did not answer ({type(e).__name__})") from None
-    answered_by = str({k.lower(): v for k, v in rh.items()}.get("x-neko-provider", ""))
+    answered_by = str({k.lower(): v for k, v in rh.items()}.get("x-jarvis-provider", ""))
     if answered_by and answered_by != reviewer["name"]:
         raise SecondOpinionError(f"the answer came from {answered_by}, not {reviewer['name']}: not used as a second opinion")
     verdict, points, summary = parse(text)

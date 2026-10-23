@@ -11,7 +11,7 @@ Push channel: ntfy (Apache-2.0/GPL-2.0 server, plain HTTP API; self-hosted or nt
 it can read the pings), so it is read from a file under the secrets folder at send time, never logged or put in an error. Pings are
 rate-limited and coalesced. The transport is injectable; the default uses urllib with no redirects and no environment proxy.
 
-    python -m jarvis.muse.notify --inbox D:\\jarvis\\N.E.K.O-data\\muse\\inbox.jsonl --list
+    python -m jarvis.muse.notify --inbox D:\\jarvis\\data\\muse\\inbox.jsonl --list
 """
 from __future__ import annotations
 

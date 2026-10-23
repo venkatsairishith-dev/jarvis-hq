@@ -92,7 +92,7 @@ class Fence(unittest.TestCase):
 
     def test_without_a_lock_path_only_the_duplicate_rule_applies(self):
         self.plane.pc_lock_path = None
-        for k in ("JARVIS_PC_LOCK", "NEKO_STORAGE_SELECTED_ROOT"):
+        for k in ("JARVIS_PC_LOCK", "JARVIS_DATA_DIR"):
             os.environ.pop(k, None)
         self.assertEqual(self.pc({"op": "windows", "holder": {"token": TOK_A, "task": "t", "seq": 1}})[0], 202)
 

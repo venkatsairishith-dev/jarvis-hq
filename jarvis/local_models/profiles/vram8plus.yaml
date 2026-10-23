@@ -1,4 +1,4 @@
-# Neko local models, profile vram8plus: a GPU with 6 GB free or more (NEKO_MODEL_MATRIX.md). llama-swap over llama.cpp's
+# JARVIS local models, profile vram8plus: a GPU with 6 GB free or more (MODEL_MATRIX.md). llama-swap over llama.cpp's
 # Vulkan build (use a CUDA build on NVIDIA). -fa off is kept because flash attention broke output on one RDNA1 card; on
 # other GPUs test with it on. Files: python jarvis\scripts\fetch_models.py --profile vram8plus. Speeds need a benchmark.
 healthCheckTimeout: 240
@@ -25,7 +25,7 @@ models:
     aliases: [math, maths, local-math]
     ttl: 300
 
-  # PC-task decision model: the alias "decider" (plugin/plugins/desktop/decide.py DEFAULT_MODEL). It was missing from this
+  # PC-task decision model: the alias "decider" (jarvis/plugins/desktop/decide.py DEFAULT_MODEL). It was missing from this
   # profile, so on this hardware every PC task fell back to "no plan" (MEM-M5, 2026-10-18).
   # Qwen3-4B-Instruct-2507 is the chosen decider (PC_CONTROL_BENCHMARK.md: 92.9% dev, 3.3 s median on a 4 GB GPU), all layers on the GPU.
   # The model files here are pinned in jarvis/tools/jarvis.lock.json (models/gguf/...); fetch them with the lock fetcher, not with

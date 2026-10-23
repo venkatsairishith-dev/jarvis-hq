@@ -1,4 +1,4 @@
-"""Category B: the Windows execution layer on real, harmless apps (Notepad, the Neko sample app), node code called
+"""Category B: the Windows execution layer on real, harmless apps (Notepad, the JARVIS sample app), node code called
 directly (the kernel's part is tested separately). Windows, browser-venv (the node's Python). Opens and closes Notepad;
 types only into its own new, unsaved document; never saves.
 
@@ -95,8 +95,8 @@ def main():
     case("B01", "open an app (launch allowlist) and see its window", lambda: (W.launch("notepad", {}), time.sleep(2),
          (bool(windows.wait_for(lambda w: w["process"].lower() == "notepad", timeout=6)), "window appeared"))[-1])
     case("B02", "focus a window and confirm it is in front", lambda: (W.focus("notepad|", {}), (state()[2], "foreground"))[-1])
-    case("B03", "type into a field found by its accessible name", lambda: (W.type_text(f"notepad|{field()}", {"text": "neko test 1"}),
-         ("neko test 1" in ps(VALUE), ps(VALUE)[:40]))[-1])
+    case("B03", "type into a field found by its accessible name", lambda: (W.type_text(f"notepad|{field()}", {"text": "jarvis test 1"}),
+         ("jarvis test 1" in ps(VALUE), ps(VALUE)[:40]))[-1])
     case("B04", "minimize a window", lambda: (W.BACKEND["minimize"]("notepad|", {}), (state()[0], "iconic"))[-1])
     case("B05", "restore a minimized window", lambda: (W.BACKEND["restore"]("notepad|", {}), (not state()[0] and not state()[1], "normal"))[-1])
     case("B06", "maximize then restore", lambda: (W.BACKEND["maximize"]("notepad|", {}), z := state()[1], W.BACKEND["restore"]("notepad|", {}),
@@ -140,10 +140,10 @@ def _focus_switch():
     W.focus("mspaint|", {})
     time.sleep(0.5)
     W.key("notepad|", {"text": "end"})
-    W.type_text(f"notepad|{field()}", {"text": " neko test 2"})
+    W.type_text(f"notepad|{field()}", {"text": " jarvis test 2"})
     v = ps(VALUE)
     subprocess.run(["taskkill", "/IM", "mspaint.exe", "/F"], capture_output=True)
-    return "neko test 2" in v, v[:60]
+    return "jarvis test 2" in v, v[:60]
 
 
 def _close_unsaved():
@@ -163,16 +163,16 @@ def _close_unsaved():
 
 
 def _sample_dialog():
-    subprocess.run(["taskkill", "/IM", "NekoSampleApp.exe", "/F"], capture_output=True)
-    subprocess.Popen([r"D:\jarvis\tests\neko-sample-app\NekoSampleApp.exe"])
+    subprocess.run(["taskkill", "/IM", "JARVISSampleApp.exe", "/F"], capture_output=True)
+    subprocess.Popen([r"D:\jarvis\tests\jarvis-sample-app\JARVISSampleApp.exe"])
     time.sleep(3)
-    r = diag.run({"op": "window_text", "target": "NekoSampleApp"})
+    r = diag.run({"op": "window_text", "target": "JARVISSampleApp"})
     data = json.load(open(r["local_result"], encoding="utf-8"))
     os.remove(r["local_result"])
     texts = " ".join(t for w in data for t in w.get("texts") or [])
-    W.click("NekoSampleApp|OK", {})
+    W.click("JARVISSampleApp|OK", {})
     time.sleep(1.5)
-    exited = not subprocess.run(["tasklist", "/FI", "IMAGENAME eq NekoSampleApp.exe"], capture_output=True, text=True).stdout.count("NekoSampleApp")
+    exited = not subprocess.run(["tasklist", "/FI", "IMAGENAME eq JARVISSampleApp.exe"], capture_output=True, text=True).stdout.count("JARVISSampleApp")
     return "not valid" in texts and exited, f"text read: {'not valid' in texts}; exited after OK: {exited}"
 
 

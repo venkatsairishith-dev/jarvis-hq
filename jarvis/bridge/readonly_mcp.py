@@ -11,7 +11,7 @@ replaced private values with placeholders. If the redactor cannot be loaded, fre
 addresses are reduced to their host name; mail excerpts, page text and task parameters are never returned. Every call is
 logged (tool name and time) to <data>/mcp_reads.jsonl.
 
-    claude mcp add jarvis -- python -m jarvis.bridge.readonly_mcp --data D:\\jarvis\\N.E.K.O-data\\muse --vault D:\\jarvis\\vault
+    claude mcp add jarvis -- python -m jarvis.bridge.readonly_mcp --data D:\\jarvis\\data\\muse --vault D:\\jarvis\\vault
 """
 from __future__ import annotations
 

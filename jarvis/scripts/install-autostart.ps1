@@ -1,15 +1,15 @@
-# Start N.E.K.O (UI, memory, agent + plugins), the local speech server and the JARVIS console at Windows login.
+# Start the JARVIS local services (privacy gateway, speech, tool server, console) and the face at Windows login.
 # Windows, current user only: no administrator rights, nothing outside the user's own scheduled tasks.
 #
-#   install-autostart.ps1            # create or update the task "JarvisNekoStack" (runs neko-start.ps1 at login)
+#   install-autostart.ps1            # create or update the task "JarvisStack" (runs jarvis-start.ps1 at login)
 #   install-autostart.ps1 -Remove    # delete that one task
 #   install-autostart.ps1 -Status    # show the task and what it runs
 #
-# neko-start.ps1 is idempotent (a server that already listens is left alone), so a manual start and the login start do not clash.
+# jarvis-start.ps1 is idempotent (a server that already listens is left alone), so a manual start and the login start do not clash.
 # The existing JarvisNode task (the laptop node) is not touched.
 param([switch]$Remove, [switch]$Status)
-$name = "JarvisNekoStack"
-$start = (Resolve-Path (Join-Path $PSScriptRoot "neko-start.ps1")).Path
+$name = "JarvisStack"
+$start = (Resolve-Path (Join-Path $PSScriptRoot "jarvis-start.ps1")).Path
 
 if ($Status) {
   $t = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
@@ -37,5 +37,5 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
   -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
-  -Description "Starts N.E.K.O, the local speech server and the JARVIS console at login (neko-start.ps1)." -Force | Out-Null
+  -Description "Starts JARVIS's local services and the face at login (jarvis-start.ps1)." -Force | Out-Null
 "installed task $name (at login of $user, after 30 s): $start"

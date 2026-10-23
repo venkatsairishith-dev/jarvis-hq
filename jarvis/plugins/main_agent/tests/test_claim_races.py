@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from test_run_control import THINK, TWO, Err, make, settle  # noqa: E402
+from test_run_control import THINK, Err, make, settle  # noqa: E402
 
 from jarvis.plugins.main_agent.planner import Plan, Step  # noqa: E402
 from jarvis.plugins.main_agent.store import plan_to_dict  # noqa: E402
@@ -162,7 +162,7 @@ def test_a_resume_that_could_not_start_does_not_leave_the_claim_held(monkeypatch
 
 
 def test_the_planning_marker_and_the_claim_agree_at_every_step(monkeypatch, tmp_path):
-    """run_status, the widget and "stop" all read the same claim: never a claimed run without a record or the reverse."""
+    """run_status, status views and "stop" all read the same claim: never a claimed run without a record or the reverse."""
     async def go():
         gate = asyncio.Event()
         p = make(monkeypatch, tmp_path, plan=THINK, plan_gate=gate)

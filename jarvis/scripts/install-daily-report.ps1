@@ -1,13 +1,13 @@
 # Write the daily health report (daily_report.py) every morning. Windows, current user only: no administrator rights.
 #
-#   install-daily-report.ps1            create or update the task "JarvisNekoDailyReport" (09:00 every day; runs when the laptop wakes if it missed it)
+#   install-daily-report.ps1            create or update the task "JarvisDailyReport" (09:00 every day; runs when the laptop wakes if it missed it)
 #   install-daily-report.ps1 -Remove    delete that one task
 #   install-daily-report.ps1 -Status    show the task and the newest report
 param([switch]$Remove, [switch]$Status, [string]$At = "09:00")
-$name = "JarvisNekoDailyReport"
-$py = "D:\jarvis\tools\neko-venv\Scripts\python.exe"
+$name = "JarvisDailyReport"
+$py = "D:\jarvis\tools\agent-venv\Scripts\python.exe"
 $script = (Resolve-Path (Join-Path $PSScriptRoot "daily_report.py")).Path
-$data = "D:\jarvis\N.E.K.O-data"
+$data = "D:\jarvis\data"
 if ($Status) {
   $t = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
   if (-not $t) { "not installed"; return }
@@ -29,5 +29,5 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
   -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
-  -Description "Writes a one-page health report for N.E.K.O and JARVIS (daily_report.py). No model calls." -Force | Out-Null
+  -Description "Writes a one-page health report for JARVIS (daily_report.py). No model calls." -Force | Out-Null
 "installed task $name (daily at $At): $script"

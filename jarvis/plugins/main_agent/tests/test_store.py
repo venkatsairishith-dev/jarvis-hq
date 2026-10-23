@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 
 from jarvis.plugins.main_agent.executor import StepResult
 from jarvis.plugins.main_agent.planner import Plan, Step, effect_of

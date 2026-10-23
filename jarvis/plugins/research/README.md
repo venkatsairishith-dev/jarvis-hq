@@ -44,7 +44,7 @@ When a budget stops the run, the result says so in `notes`.
 
 **Measured (2026-10-16):** the NLI check got 16 of 16 on a small hand-made set of supported and unsupported claims, at ~0.1 s per check. The Jev decision model said "supported" for every claim (8 of 16), so it is not used here.
 
-**Measured (2026-10-17):** `jarvis/evals/neko95/bench/claims_eval.py` runs `verify.supported` on labelled (passage, claim) sets in `tests/fixtures` and reports precision, recall, false acceptance (an unsupported claim confirmed: the serious error), false rejection and a calibration table. Results go to `jarvis/evals/neko95/results/claims-<set>-<time>.json`.
+**Measured (2026-10-17):** `jarvis/evals/quality95/bench/claims_eval.py` runs `verify.supported` on labelled (passage, claim) sets in `tests/fixtures` and reports precision, recall, false acceptance (an unsupported claim confirmed: the serious error), false rejection and a calibration table. Results go to `jarvis/evals/quality95/results/claims-<set>-<time>.json`.
 
 | Set | False acceptance | Recall |
 |---|---|---|
@@ -55,7 +55,7 @@ When a budget stops the run, the result says so in `notes`.
 The guards do not help much on VitaminC: low recall there means many true claims stay "unconfirmed", which is the safe side. Larger NLI models accepted more false claims, so xsmall is kept.
 
 ```
-RESEARCH_NLI_DIR=<model dir> python jarvis/evals/neko95/bench/claims_eval.py --set claims_v2
+RESEARCH_NLI_DIR=<model dir> python jarvis/evals/quality95/bench/claims_eval.py --set claims_v2
 ```
 
 **Tests:** `pytest plugin/plugins/research/tests` (fakes only; no network). The test that uses the real NLI model is skipped unless `RESEARCH_NLI_DIR` points at the model files.

@@ -17,8 +17,8 @@ from jarvis_console.config import Config
 from jarvis_console.server import make_server
 
 HQ = os.path.abspath(os.path.join(HERE, "..", ".."))
-BENCH_DIR = os.path.join(HQ, "evals", "neko95", "bench")
-REAL_RESULTS = os.path.join(HQ, "evals", "neko95", "results")
+BENCH_DIR = os.path.join(HQ, "evals", "quality95", "bench")
+REAL_RESULTS = os.path.join(HQ, "evals", "quality95", "results")
 FAKE = os.path.join(HERE, "fixtures", "fake_bench_runner.py")
 NEWEST_FULL, OLDER_FULL = "bench-20261017-031703.json", "bench-20261016-181824.json"
 FIXTURES = [NEWEST_FULL, OLDER_FULL, "score-20261016-150635-baseline.json", "score-20261016-154951-server-rescore.json",
@@ -121,7 +121,7 @@ class SummaryTest(Base):
         self.assertEqual(s["live"][0]["evidence"], "live")
         self.assertEqual(s["context"][0]["set"], "holdout2")
         self.assertIsNone(s["models"])                                   # no models-*.json in the fixtures: nothing invented
-        self.assertEqual(len(s["groups"]), 15)
+        self.assertEqual(len(s["groups"]), 14)
 
     def test_cases_for_a_dimension_and_security_list(self):
         code, d = self.call("GET", "/api/bench/cases?dim=security")

@@ -1,4 +1,4 @@
-"""Where the node's workspace folder (cache\\, outputs\\) is, in the old layout and in the N.E.K.O-based layout.
+"""Where the node's workspace folder (cache\\, outputs\\) is, in the old layout and in the current one (JARVIS in <repo>\\jarvis).
 
 A wrong answer here would silently move the folder delivered files are written to, so both layouts are pinned."""
 import os
@@ -26,12 +26,12 @@ class WorkspaceFolder(unittest.TestCase):
 
     def test_new_layout_workspace_is_the_parent_of_the_repo(self):
         with tempfile.TemporaryDirectory() as ws:
-            repo = os.path.join(ws, "hq-neko")
+            repo = os.path.join(ws, "hq")
             os.makedirs(os.path.join(repo, "jarvis"))
-            os.makedirs(os.path.join(repo, "plugin"))               # N.E.K.O's own folder marks the repo root
+            os.makedirs(os.path.join(repo, ".git"))                  # the repository root holds .git
             self.assertEqual(paths.home_for(os.path.join(repo, "jarvis")), real(ws))
 
-    def test_a_folder_named_jarvis_without_neko_next_to_it_is_not_mistaken_for_the_new_layout(self):
+    def test_a_folder_named_jarvis_without_the_old_layout_next_to_it_is_not_mistaken_for_the_new_layout(self):
         with tempfile.TemporaryDirectory() as ws:
             j = os.path.join(ws, "jarvis")
             os.makedirs(j)

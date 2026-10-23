@@ -1,4 +1,4 @@
-"""Completion H (2026-10-19): sign-in hardening of the console and the widget, over real HTTP: brute-force limit, one-time-code replay (also
+"""Completion H (2026-10-19): sign-in hardening of the console, over real HTTP: brute-force limit, one-time-code replay (also
 concurrent), session fixation, CSRF on cookie-authenticated writes, Origin/Referer/Sec-Fetch variants, cookie flags, response headers on
 sensitive answers, redirects, and no token/code/cookie in logs, error bodies or URLs. Synthetic canaries only."""
 import contextlib
@@ -164,24 +164,6 @@ class ConsoleHardening(Mixin, unittest.TestCase):
         self.sensitive, self.write_path = "/api/owner/state", "/api/owner/command"
         before = self.k.db.execute("SELECT COUNT(*) FROM owner_commands").fetchone()[0]
         self.changed = lambda: [] if self.k.db.execute("SELECT COUNT(*) FROM owner_commands").fetchone()[0] == before else ["command"]
-
-
-class WidgetHardening(Mixin, unittest.TestCase):
-    def setUp(self):
-        self.c = mx._Case()
-        import tempfile
-        self.c.tmp = tempfile.TemporaryDirectory()
-        self.sf = mx.start_widget(self.c)
-        self.port = self.sf.port
-        self.gate = self.c.wsrv.RequestHandlerClass.gate
-        self.header = "X-Jarvis-Control"
-        self.master_header = {self.header: self.sf.master}
-        self.sensitive, self.write_path = "/api/status", "/api/task"
-        self.changed = lambda: [c for c in self.c.calls if c[1]]      # a signed-in session is expected here; only forwarded POST bodies would be a change
-
-    def tearDown(self):
-        self.c.wsrv.shutdown()
-        self.c.tmp.cleanup()
 
 
 if __name__ == "__main__":

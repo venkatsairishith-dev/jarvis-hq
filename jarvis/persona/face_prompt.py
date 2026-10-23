@@ -4,8 +4,8 @@
     python jarvis/persona/face_prompt.py --check   exits 1 when the face's prompt differs from the card
 
 The card (jarvis_card.json) stays the one source. The face's built-in card reads its description from the i18n key
-`base.prompt.prefix`; that block is replaced with the card's system prompt, with N.E.K.O's placeholders filled in
-({LANLAN_NAME} -> JARVIS, {MASTER_NAME} -> the owner) and vue-i18n's special characters escaped. The rest of base.yaml
+`base.prompt.prefix`; that block is replaced with the card's system prompt, with the face's placeholders filled in
+({ASSISTANT_NAME} -> JARVIS, {OWNER_NAME} -> the owner) and vue-i18n's special characters escaped. The rest of base.yaml
 (the avatar's expression tokens) is kept as it is.
 """
 from __future__ import annotations
@@ -23,10 +23,32 @@ PREFIX_KEY = "  prefix: |\n"
 I18N_SPECIAL = "{}@$|"                                  # vue-i18n message syntax; each is written as {'x'}
 
 
+DANGER_LINE = "without considering its potential dangers"      # a preset some chat frontends add: a card must never carry it
+
+
+class CardError(RuntimeError):
+    pass
+
+
+def load_card(path: Path = CARD) -> dict:
+    """The card, checked: it needs a name, a profile and a prompt with the two name placeholders, and no preset that tells the
+    model to ignore dangers."""
+    card = json.loads(Path(path).read_text(encoding="utf-8"))
+    prompt = card.get("system_prompt", "")
+    if not card.get("name") or not isinstance(card.get("profile"), dict) or not prompt:
+        raise CardError("card needs name, profile and system_prompt")
+    if DANGER_LINE in prompt or "<JARVIS_PERSONA_SELECTION>" in prompt:
+        raise CardError("card prompt contains a preset text")
+    for placeholder in ("{ASSISTANT_NAME}", "{OWNER_NAME}"):
+        if placeholder not in prompt:
+            raise CardError(f"card prompt lacks {placeholder}")
+    return card
+
+
 def render(card: dict) -> str:
     """The card's prompt as plain text for the face."""
-    text = card["system_prompt"].replace("{LANLAN_NAME}", "JARVIS")
-    text = text.replace("{MASTER_NAME}'s", "the owner's").replace("{MASTER_NAME}", "the owner")
+    text = card["system_prompt"].replace("{ASSISTANT_NAME}", "JARVIS")
+    text = text.replace("{OWNER_NAME}'s", "the owner's").replace("{OWNER_NAME}", "the owner")
     text = re.sub(r"(^|[.!?] |- )the owner", lambda m: m.group(1) + "The owner", text, flags=re.M)
     leftover = re.findall(r"\{[A-Z_]+\}", text)
     if leftover:

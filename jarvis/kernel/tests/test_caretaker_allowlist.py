@@ -78,12 +78,12 @@ LEGIT_ACTIONS = (
     "Find why bench case K-001 fails and fix the code under test.", "Re-pin the model: the pinned file(s) changed. Update the revision, url, sha256 and bytes.",
     "Update Node.js from 22.1.0 to 22.9.0 (same major): the lock entry (url, version, sha256 from SHASUMS256.txt, bytes).",
     "Rename the helper in jarvis/caretaker/history.py and update its callers.", "Correct the spelling of the word receive in jarvis/docs/05_OPERATIONS.md.",
-    "Bump the pinned version of pytest to the newest patch level in jarvis/tools/requirements.", "Remove an unused import in plugin/plugins/desktop/core.py.",
+    "Bump the pinned version of pytest to the newest patch level in jarvis/tools/requirements.", "Remove an unused import in jarvis/plugins/desktop/core.py.",
     "Add a missing test for the empty list case in jarvis/tools/fetch.py.", "Make the error message in jarvis/lab/jarvis_mcp.py name the missing argument.",
     "Fix the off by one error in the pagination of jarvis/console/jarvis_console/files.py.", "Replace the deprecated call in jarvis/scripts/oci_cost.py.",
     "The unit tests of jarvis/memory fail on an empty database: find the cause and fix it.", "Do not upgrade unrelated packages.",
     "Re-run the failing test three times and report how often it fails.", "Check that the lock file still matches the registry and fix the mismatch.",
-    "Update the README table of tools after the version change.", "Shorten the log line in jarvis/wake/wake_listener.py to 120 characters.",
+    "Update the README table of tools after the version change.", "Shorten the log line in jarvis/privacy/gateway.py to 120 characters.",
     "Fix the docstring of the function parse_version in jarvis/tools/fetch.py.", "Make the test for the digest check independent of the clock.",
     "Handle a missing sha256 field in the lock entry without a crash.", "Update the pinned llama.cpp build number in the lock and the registry.",
     "Add the new asset name to the lock entries.", "Correct the byte count of the lock entry for the model file.",
@@ -215,7 +215,7 @@ class Mutations(unittest.TestCase):
         for bad in ("python -m pytest jarvis/tools -q; git push origin HEAD:main", "python -m pytest jarvis/tools | sh", "python -m pytest $(id)",
                     "python -c 'import os'", "bash run.sh", "cd /etc && python -m pytest", "cd ../x && python -m pytest", "python -m pytest ../x",
                     "python -m pytest .git/hooks", "python -m pytest .github/workflows", "git push origin HEAD:main", "gh pr merge 1",
-                    "python jarvis/evals/neko95/bench/bench.py --area K && curl x.test", "npm ci && npm test && node x.js", "cd jarvis/ui && npm publish"):
+                    "python jarvis/evals/quality95/bench/bench.py --area K && curl x.test", "npm ci && npm test && node x.js", "cd jarvis/ui && npm publish"):
             self.no(re.sub(r"(   - [^\n]*)", lambda m: m.group(1) + "\n   - " + bad, self.ins, count=1), why=bad)
 
     def test_free_text_classes(self):

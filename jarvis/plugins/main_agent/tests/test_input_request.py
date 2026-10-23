@@ -189,12 +189,12 @@ def test_cancel_ends_the_held_task(monkeypatch, tmp_path):
     assert isinstance(run(p.answer_input(run_id=rid, request_id=qid, values={"clarification": "x"})), Err)
 
 
-def test_voice_and_widget_text_use_the_same_answer_path(monkeypatch, tmp_path):
+def test_voice_and_typed_text_use_the_same_answer_path(monkeypatch, tmp_path):
     done = []
     p, entry, rid = start_held(monkeypatch, tmp_path, done=done)
 
     async def say(text):
-        res = await p.run_task(task=text, source="widget")
+        res = await p.run_task(task=text, source="voice")
         await settle(p)
         return res
     first = run(say("the answer is notepad"))
@@ -206,7 +206,7 @@ def test_an_unrelated_command_while_a_question_waits_starts_a_new_task(monkeypat
     p, entry, rid = start_held(monkeypatch, tmp_path)
 
     async def say(text):
-        res = await p.run_task(task=text, source="widget")
+        res = await p.run_task(task=text, source="voice")
         await settle(p)
         return res
     res = run(say("play some music"))
@@ -216,7 +216,7 @@ def test_an_unrelated_command_while_a_question_waits_starts_a_new_task(monkeypat
 
 def test_a_secret_question_is_never_answered_by_voice(monkeypatch, tmp_path):
     p, entry, rid = start_held(monkeypatch, tmp_path, secret_request)
-    res = run(p.run_task(task=f"the answer is {FAKE_KEY}", source="widget"))
+    res = run(p.run_task(task=f"the answer is {FAKE_KEY}", source="voice"))
     assert res.value["state"] == "needs_input" and "type it" in res.value["message"]
     assert FAKE_KEY not in json.dumps(res.value) and len(entry.seen) == 1
     assert FAKE_KEY not in (p._store.dir / f"{rid}.json").read_text()

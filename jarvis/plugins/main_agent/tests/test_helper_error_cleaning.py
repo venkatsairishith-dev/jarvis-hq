@@ -1,9 +1,6 @@
 """Re-review M12: the JARVIS helper echoes what they saw in their error strings; those reached the step error,
 the run file and the chat push raw. Now cleaned at the source. HTTP edge: httpx MockTransport. Synthetic canaries only."""
 import asyncio
-import json
-import logging
-import types
 
 import pytest
 

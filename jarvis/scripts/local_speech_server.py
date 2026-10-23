@@ -1,11 +1,11 @@
 """A local OpenAI-compatible speech endpoint backed by JARVIS's own voice models.
 
-N.E.K.O's "custom" text-to-speech provider speaks the OpenAI speech API. JARVIS already holds, and has tested, local models
+The face (jarvis/face) speaks and listens through the OpenAI speech API. JARVIS already holds, and has tested, local models
 (Kokoro for English; Piper voices for Hindi and Telugu) behind `jarvis_console.voice.Voice`. This is only the wire format
 between the two: no engine code, no model download, no cloud.
 
   POST /v1/audio/speech   {"model": "...", "input": "...", "voice": "en|hi|te", "response_format": "pcm|wav"}
-                          -> raw PCM16 mono at 24 kHz (what N.E.K.O expects) or a WAV file
+                          -> raw PCM16 mono at 24 kHz (what the face plays) or a WAV file
   POST /v1/audio/transcriptions   multipart (file, language) or a raw audio/wav body -> {"text": "..."}
                           int8 speech recognition: Parakeet for English, IndicConformer for Hindi and Telugu
   POST /interrupt         cancel the synthesis requests in flight (their audio is dropped and they answer 409) and clear the
@@ -18,11 +18,11 @@ synthesis request and 12 MB of audio per recognition request, one job at a time.
 
 Route classes (re-review M3, 2026-10-19): public-harmless: GET /health, /v1/models, /activity (timestamps and a speaking estimate, no
 text, no audio). Compute routes, left open on purpose: POST /v1/audio/speech and /v1/audio/transcriptions take text or audio from the
-caller and return the result; they keep no history and change nothing but the speaking estimate, and N.E.K.O's own TTS/ASR clients
-(not ours to change) call them without a credential. The cost of that is free local compute for any loopback client, not data.
+caller and return the result; they keep no history and change nothing but the speaking estimate, and the face's TTS/STT clients
+call them without a credential. The cost of that is free local compute for any loopback client, not data.
 POST /interrupt is the one route that changes what is happening (it drops speech in progress), so (audit M15) it needs this
 launch's control secret in `X-Jarvis-Control`, an exact loopback Host on this port and no foreign Origin. main() publishes the
-secret to <run dir>/speech.token (jarvis/scripts/control_auth.py) for the wake listener. A process of the same OS user can still
+secret to <run dir>/speech.token (jarvis/scripts/control_auth.py) for the local tools that interrupt speech. A process of the same OS user can still
 read that file; the worst a forged /interrupt does is cut off speech, never start an action.
 
 Run with the JARVIS console's Python:  D:\\jarvis\\tools\\jarvis-venv\\Scripts\\python.exe local_speech_server.py [--port 48930]
@@ -46,7 +46,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "console"))
 sys.path.insert(0, HERE)
 import control_auth   # noqa: E402  per-launch secret for the one state-changing route (audit M15)
 
-OUT_RATE = 24000                 # the PCM rate N.E.K.O's OpenAI-compatible TTS worker plays
+OUT_RATE = 24000                 # the PCM rate of the raw audio the face plays
 MAX_BODY = 64 * 1024
 MAX_AUDIO_BODY = 12 * 1024 * 1024
 LANG_ALIASES = {"en": "en", "english": "en", "hi": "hi", "hindi": "hi", "te": "te", "telugu": "te"}
@@ -110,7 +110,7 @@ def parse_multipart(body: bytes, content_type: str) -> dict:
     return parts
 
 
-_ACTIVITY = {"tts_at": 0.0, "tts_audio_s": 0.0, "asr_at": 0.0}   # for the Neko icon: what speech work happened when
+_ACTIVITY = {"tts_at": 0.0, "tts_audio_s": 0.0, "asr_at": 0.0}   # for status views: what speech work happened when
 
 
 def _wav_seconds(wav: bytes) -> float:
@@ -119,7 +119,7 @@ def _wav_seconds(wav: bytes) -> float:
         import wave
         with wave.open(io.BytesIO(wav)) as w:
             return w.getnframes() / float(w.getframerate() or 1)
-    except Exception:                                      # noqa: BLE001 - only an estimate for the icon
+    except Exception:                                      # noqa: BLE001 - only an estimate
         return 0.0
 
 
@@ -132,7 +132,7 @@ _SYNTH_LOCK = threading.Lock()
 def interrupt() -> dict:
     """Cancel in-flight synthesis and clear the speaking estimate. Truthful by construction: `cancelled` counts requests
     whose audio was dropped; `playback_stopped` is always false because audio the page already received is played by the page
-    (N.E.K.O has no HTTP route to stop it), which this server cannot reach. UNVERIFIED on real hardware."""
+    (the face's player is not reachable from here), which this server cannot reach. UNVERIFIED on real hardware."""
     with _SYNTH_LOCK:
         _SYNTH["epoch"] += 1
         cancelled = _SYNTH["inflight"]

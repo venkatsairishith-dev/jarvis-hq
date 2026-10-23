@@ -211,7 +211,7 @@ class Callers(Base):
             src = open(os.path.join(HERE, "..", rel), encoding="utf-8").read()
             self.assertNotIn("urllib.request.urlopen(", src, rel)
             self.assertIn("loopback_net", src, rel)
-        for rel in ("scripts/watchdog.py", "scripts/live_check.py", "scripts/open_console.py", "scripts/voice_chain_demo.py", "wake/eval_wake.py", "wake/loopback_test.py"):
+        for rel in ("scripts/watchdog.py", "scripts/live_check.py", "scripts/open_console.py"):
             src = open(os.path.join(HERE, "..", "..", rel), encoding="utf-8").read()
             self.assertNotIn("urllib.request.urlopen(", src, rel)
             self.assertIn("loopback_net", src, rel)

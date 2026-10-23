@@ -1,25 +1,24 @@
 """Authentication for the local control surfaces (audit M15 2026-10-18; re-review M3 2026-10-19). Standard library only.
 
-Four servers on this machine can read private state or change what the PC does: the JARVIS console (:8799), the desktop widget
-(:48940), the wake-word status server (:48945) and the local speech server (:48930). Loopback is not a person: any program on the
+Two servers on this machine can read private state or change what the PC does: the JARVIS console (:8799) and the local speech
+server (:48930). Loopback is not a person: any program on the
 laptop, and any web page through DNS rebinding or a forged Origin, can reach it. Version 1 of this module (M15) put a per-launch
 secret in the pages the servers serve; the re-review showed that was no barrier, because `GET /` handed that secret to ANY
 loopback client. This version does not hand a credential to whoever asks.
 
 Route classes (every route of each server is in one of these):
   public-harmless   /health-style liveness (no private data), static JS/CSS, the login page. No credential.
-  sensitive-read    owner state, tasks, approvals, audit/events, memory, files, desktop state/screen, bench results, widget status and
-                    the Neko state stream, wake /status. A credential is required.
+  sensitive-read    owner state, tasks, approvals, audit/events, memory, files, desktop state/screen, bench results. A credential is required.
   state-changing    everything that POSTs or DELETEs. A credential AND, for a browser, a per-session double-submit token.
 
 Credentials (two kinds)
   * MASTER token. Each server makes a random one at every launch (`new_secret`) and publishes it to `<name>.token`, a 0600 file in
     a per-user runtime folder (`run_dir`): %LOCALAPPDATA%\\jarvis\\run on Windows (per-user by default), $XDG_RUNTIME_DIR/jarvis or
-    ~/.jarvis/run elsewhere (0700 folder). First-party PROGRAMS (wake listener, watchdog, desktop plugin, jarvis_bridge, the owner's
+    ~/.jarvis/run elsewhere (0700 folder). First-party PROGRAMS (watchdog, desktop plugin, jarvis_bridge, the owner's
     scripts) read that file and send the token in the server's header (`X-Jarvis-Console` / `X-Jarvis-Control`). `read` refuses a
     token file that other users could read. The master token is never put in a page, a URL, a cookie or a log.
   * BROWSER SESSION. A page load alone proves nothing, so a bare `GET /` from an unauthenticated client gets a login page with no
-    secret in it. The launcher (`jarvis/scripts/open_console.py`, `open-widget.ps1`) holds the master token, asks the server for a
+    secret in it. The launcher (`jarvis/scripts/open_console.py`) holds the master token, asks the server for a
     ONE-TIME LAUNCH CODE (`POST /auth/code`, valid 60 s, used once) and opens the browser at `http://127.0.0.1:PORT/#code=...`
     (a URL fragment is never sent to a server and the login script removes it). The login script POSTs the code to
     `/auth/session`; the server answers with an HttpOnly, SameSite=Strict session cookie bound to the exact Host:port it was
@@ -198,7 +197,7 @@ def login_page(product: str) -> bytes:
             f"<title>{safe}: sign in</title></head><body style=\"font:16px system-ui;padding:2rem;max-width:34rem\">"
             f"<h1>{safe}</h1><p id=\"msg\">Signing in...</p>"
             "<p>This window opens from JARVIS with a one-time link. If you see this, start it from the JARVIS launcher "
-            "(<code>open_console.py</code> or the widget's <em>Open console</em> link).</p>"
+            "(<code>open_console.py</code>).</p>"
             "<script src=\"/auth/login.js\"></script></body></html>").encode("utf-8")
 
 

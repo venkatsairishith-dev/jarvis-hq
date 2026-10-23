@@ -1,7 +1,7 @@
 """Check whether a cited passage supports a sentence, with a small local checker model (no PyTorch; onnxruntime only).
 
 Default model since 2026-10-17 (evidence 11): lytang/MiniCheck-RoBERTa-Large (MIT), revision 74c89196, converted to int8
-ONNX here by jarvis/evals/neko95/bench/nli_export.py (onnx/model_quint8.onnx, 357 MB, sha256 eb111209...2dc0), in
+ONNX here by jarvis/evals/quality95/bench/nli_export.py (onnx/model_quint8.onnx, 357 MB, sha256 eb111209...2dc0), in
 D:\\jarvis\\models\\nli\\minicheck-roberta-large. Measured against the previous checker under the rule written before the
 runs: false acceptances 0/46, 0/18, 9/200 (xsmall 2/46, 1/18, 10/200), VitaminC recall 0.71 (0.44), 3.6-3.9x the time.
 Fallback: cross-encoder/nli-deberta-v3-xsmall (Apache-2.0), int8 ONNX, pinned revision a150876, sha256-checked, 87 MB,

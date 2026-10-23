@@ -1,4 +1,4 @@
-"""Group the warnings and errors in the N.E.K.O logs by pattern, newest first. Windows, read-only.
+"""Group the warnings and errors in the JARVIS service logs (<data>\\logs) by pattern, newest first. Windows, read-only.
 
     python log_digest.py [--since HH:MM] [--top 25] [--day YYYYMMDD]
 
@@ -12,7 +12,7 @@ import glob
 import os
 import re
 
-DATA = os.environ.get("NEKO_STORAGE_SELECTED_ROOT", r"D:\jarvis\N.E.K.O-data")
+DATA = os.environ.get("JARVIS_DATA_DIR", r"D:\jarvis\data")
 LINE = re.compile(r"^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) - (\S+) - (WARNING|ERROR|CRITICAL) - (.*)$")
 
 
@@ -34,7 +34,11 @@ def main():
     counts = collections.Counter()
     first, last, example = {}, {}, {}
     for path in glob.glob(os.path.join(DATA, "logs", "**", "*.log"), recursive=True):
-        if a.day not in os.path.basename(path) and not path.endswith(("launcher.out.log", "launcher.err.log")):
+        try:
+            written = datetime.date.fromtimestamp(os.path.getmtime(path)).strftime("%Y%m%d")
+        except OSError:
+            continue
+        if a.day not in os.path.basename(path) and written < a.day:        # a file with the day in its name, or written since that day
             continue
         comp = os.path.basename(path).replace(".log", "")
         try:

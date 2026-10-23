@@ -42,8 +42,8 @@ def test_first_sentence_is_short_and_table_safe():
 
 @pytest.mark.parametrize("path", [
     "jarvis/kernel/tests/test_x.py", "jarvis/egress/test_proxy.py", "jarvis/ui/node_modules/a/b.js", "jarvis/vendor/x/y.py",
-    "jarvis/third_party/README.md", "jarvis/desktop/shell/src/main.rs", "jarvis/evals/neko95/bench/cases/a.json",
-    "jarvis/bench/neko/result.json", "plugin/plugins/research/tests/test_a.py",
+    "jarvis/evals/quality95/bench/cases/a.json",
+    "jarvis/bench/models/result.json", "jarvis/plugins/research/tests/test_a.py",
 ])
 def test_tests_data_and_upstream_code_are_not_mapped(path):
     assert md.EXCLUDE.search(path)
@@ -83,11 +83,8 @@ def test_real_lock_builds():
 
 
 @pytest.mark.parametrize("path,text,want", [
-    ("plugin/plugins/research/plugin.toml", '[plugin]\nid = "research"\nshort_description = "Cited web research."\n', "Cited web research."),
-    ("plugin/plugins/research/pyproject.toml", '[project]\nname = "research"\n', "Python package metadata for `research`."),
-    ("plugin/plugins/research/plugin.meta.json", "{}", "Metadata snapshot of the `research` plugin made by `neko-plugin build`; "
-                                                      "regenerate, never edit by hand."),
-    ("plugin/plugins/main_agent/ui/panel.tsx", "export default 1;\n", "Panel of the `main_agent` plugin shown inside N.E.K.O's plugin manager."),
+    ("jarvis/plugins/research/plugin.toml", '[plugin]\nid = "research"\nshort_description = "Cited web research."\n', "Cited web research."),
+    ("jarvis/plugins/research/pyproject.toml", '[project]\nname = "research"\n', "Python package metadata for `research`."),
     ("jarvis/hermes/plugins/x/plugin.yaml", 'name: x\ndescription: "Blocks risky calls."\n', "Blocks risky calls."),
     ("jarvis/ui/playwright.live.config.ts", "export default {};\n", "Playwright test settings (live run) for the console UI."),
     ("jarvis/ui/src/screens/CommandCenter.tsx", "export function CommandCenter() {}\n", "Console UI screen: Command Center."),

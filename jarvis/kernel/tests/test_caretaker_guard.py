@@ -185,7 +185,7 @@ class SafetyComponents(unittest.TestCase):
             self.assertNotEqual(self.level("fs", "write", f"/srv/work/shop/app/{pkg}/combos.py"), "RED", pkg)   # another project's router/
 
     def test_p4_step5_admin_broker_and_its_verb_catalogue_are_red(self):
-        for path in ("/srv/anywhere/adminctl.py", "D:/jarvis/hq-neko/jarvis/config/admin_verbs.json"):
+        for path in ("/srv/anywhere/adminctl.py", "D:/jarvis/hq/jarvis/config/admin_verbs.json"):
             self.assertEqual(self.level("fs", "write", path), "RED", path)
             self.assertEqual(self.level("config", "set", path), "RED", path)
         for verb in ("winget_install", "service_restart", "reboot"):        # an admin verb is never below RED (no rule: fail closed)

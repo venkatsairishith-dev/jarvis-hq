@@ -35,7 +35,7 @@ class Fake:
         self.calls.append((url, body, headers))
         if self.exc:
             raise self.exc
-        return {"choices": [{"message": {"content": self.text}}]}, {"X-Neko-Provider": self.provider}
+        return {"choices": [{"message": {"content": self.text}}]}, {"X-JARVIS-Provider": self.provider}
 
 
 def test_ask_parses_and_attributes(secrets):
@@ -133,7 +133,7 @@ def test_default_transport_over_loopback(secrets):
             out = json.dumps({"choices": [{"message": {"content": GOOD}}]}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            self.send_header("X-Neko-Provider", "groq")
+            self.send_header("X-JARVIS-Provider", "groq")
             self.send_header("Content-Length", str(len(out)))
             self.end_headers()
             self.wfile.write(out)

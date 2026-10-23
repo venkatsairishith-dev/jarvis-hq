@@ -6,17 +6,17 @@
 # Endpoint: http://127.0.0.1:8080/v1 (OpenAI-compatible; model = general | code | math | router). Loopback only.
 # These models see your real text: they never leave the PC. Dahl only ever sees text passed through the privacy gateway.
 #
-# The model set follows the hardware profile chosen by jarvis\local_models\hwdetect.py (saved in <data>\neko\hardware.json;
-# run it again after a hardware change, or set NEKO_MODEL_PROFILE). vram4 (this laptop) uses llama-swap.yaml; the other
+# The model set follows the hardware profile chosen by jarvis\local_models\hwdetect.py (saved in <data>\jarvis\hardware.json;
+# run it again after a hardware change, or set JARVIS_MODEL_PROFILE). vram4 (this laptop) uses llama-swap.yaml; the other
 # profiles use local_models\profiles\<profile>.yaml. remote_only starts no local models.
 param([switch]$Stop, [string]$Profile = "")
 . (Join-Path $PSScriptRoot "d-env.ps1")
 $exe = "D:\jarvis\tools\llama-swap\v261\llama-swap.exe"
-$logs = "D:\jarvis\N.E.K.O-data\logs"
-$hwFile = "D:\jarvis\N.E.K.O-data\neko\hardware.json"
+$logs = "D:\jarvis\data\logs"
+$hwFile = "D:\jarvis\data\jarvis\hardware.json"
 if (-not $Profile -and -not $Stop) {
   if (-not (Test-Path $hwFile)) {
-    & "D:\jarvis\tools\neko-venv\Scripts\python.exe" (Join-Path $PSScriptRoot "..\local_models\hwdetect.py") --json | Out-Null
+    & "D:\jarvis\tools\agent-venv\Scripts\python.exe" (Join-Path $PSScriptRoot "..\local_models\hwdetect.py") --json | Out-Null
   }
   try { $Profile = (Get-Content $hwFile -Raw | ConvertFrom-Json).profile } catch { $Profile = "vram4" }
 }

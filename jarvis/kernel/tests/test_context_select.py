@@ -83,9 +83,9 @@ class Modes(unittest.TestCase):
 
     def test_a_flood_of_warnings_does_not_hide_the_one_error(self):
         warn = [f"DeprecationWarning: old api call {i}" for i in range(2000)]
-        text = "\n".join(warn[:900] + ["ERROR: disk quota exceeded on /var/lib/neko"] + warn[900:])
+        text = "\n".join(warn[:900] + ["ERROR: disk quota exceeded on /var/lib/jarvis"] + warn[900:])
         s = CS.select(text, "why did the job stop", 4000, "evidence")
-        self.assertIn("ERROR: disk quota exceeded on /var/lib/neko", s.text.split("\n"))
+        self.assertIn("ERROR: disk quota exceeded on /var/lib/jarvis", s.text.split("\n"))
 
     def test_binary_looking_text_gets_the_plain_head_cut(self):
         s = CS.select("A\x00" * 5000, "x", 100, "evidence")

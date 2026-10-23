@@ -26,4 +26,4 @@ config/connectors.local.json
 *.part
 models/
 # the Benchmark Console challenge lab: text the owner typed on the phone, kept as untrusted local results only
-evals/neko95/results/challenges/
+evals/quality95/results/challenges/

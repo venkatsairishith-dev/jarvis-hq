@@ -31,7 +31,7 @@ def test_profiles():
 
 
 def test_override(monkeypatch):
-    monkeypatch.setenv("NEKO_MODEL_PROFILE", "cpu8")
+    monkeypatch.setenv("JARVIS_MODEL_PROFILE", "cpu8")
     monkeypatch.setattr(hw, "gpus", lambda runner=None: [])
     info = hw.detect()
-    assert info["profile"] == "cpu8" and "NEKO_MODEL_PROFILE" in info["why"]
+    assert info["profile"] == "cpu8" and "JARVIS_MODEL_PROFILE" in info["why"]

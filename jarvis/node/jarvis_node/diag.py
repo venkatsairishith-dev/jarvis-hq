@@ -1,9 +1,9 @@
-"""Read-only diagnostics of this Windows PC for Neko's repair workflow (2026-10-16). Nothing here changes the PC.
+"""Read-only diagnostics of this Windows PC for JARVIS's repair workflow (2026-10-16). Nothing here changes the PC.
 
 Each check is a fixed PowerShell script in this file; the only input is a short name (a process, a service), passed as an
 environment variable. Text that came from the screen or from event messages (window text, error messages) is written to
-a LOCAL file under outputs/neko-local/ and only counts and safe facts go back to the kernel: screen contents never leave
-the laptop unless the owner asks. The Neko plugin on this laptop reads the local file and deletes it.
+a LOCAL file under outputs/local-only/ and only counts and safe facts go back to the kernel: screen contents never leave
+the laptop unless the owner asks. The JARVIS plugin on this laptop reads the local file and deletes it.
 """
 import json
 import os
@@ -160,7 +160,7 @@ def run(p: dict, runner=None, lister=None) -> dict:
 
 
 def save_local(kind: str, data) -> str:
-    """Screen or message text for the Neko plugin on this laptop only. The plugin reads it once and deletes it."""
+    """Screen or message text for the JARVIS plugin on this laptop only. The plugin reads it once and deletes it."""
     d = local_result_dir()
     os.makedirs(d, exist_ok=True)
     sweep_local()

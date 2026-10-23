@@ -157,7 +157,7 @@ Hands-on work is dispatched to the lab.
 3. On failure, a repair attempt gets the verifier's findings.
 4. Evidence and the verdict go to the kernel.
 
-[Correction 2026-10-19: "A separate verifier session ... The worker's own claim never counts" is a design intent. Same-user code could influence the verifier until the fourth pass (`neko/REMEDIATION_PASS4_2026-10-19.md` section 1). Now a task is called `verified` only when the isolation mode is `full` (code as `jarvis-sandbox`, verifier as `jarvis-verify`, set up by the owner on the lab box) AND the owner has declared `JARVIS_LAB_VERIFIER_TOOLS=sandboxed`; every other mode ends "completed, NOT verified". Not live-verified: needs the lab box (BLOCKED, owner).] The runner follows the owner's pause and cancel. Root reads agent files only without following links. A failed status request (network blip, kernel restart) never stops the work.
+[Correction 2026-10-19: "A separate verifier session ... The worker's own claim never counts" is a design intent. Same-user code could influence the verifier until the fourth pass (`reports/REMEDIATION_PASS4_2026-10-19.md` section 1). Now a task is called `verified` only when the isolation mode is `full` (code as `jarvis-sandbox`, verifier as `jarvis-verify`, set up by the owner on the lab box) AND the owner has declared `JARVIS_LAB_VERIFIER_TOOLS=sandboxed`; every other mode ends "completed, NOT verified". Not live-verified: needs the lab box (BLOCKED, owner).] The runner follows the owner's pause and cancel. Root reads agent files only without following links. A failed status request (network blip, kernel restart) never stops the work.
 
 **Delivery.** The lab cannot see the owner's computer, so delivery is the runner's job, after verification:
 1. The worker puts the files the owner should get in `./deliver/` in its workspace.
@@ -338,45 +338,49 @@ External services and MCP servers are reached only through the kernel. Full desi
 - **Agent access.** `connector_list`, `connector_call`, `connector_result` in the agent tool file (`lab/jarvis_mcp.py`), dispatched by the same `/v1/jarvis/actions` path as every other action; there is no other route to a connector.
 - **Owner access.** `/v1/jarvis/owner/connectors*` (catalogue, definition, per-tool classification and switch, test, connect, disconnect, try a read tool, calls) and the Connectors screen (Alt+0).
 
-## Repository base: N.E.K.O (added 2026-10-14)
+## Repository layout and the face (rewritten 2026-10-23; the N.E.K.O base was removed)
+Until 2026-10-23 the repository root was the open-source companion app N.E.K.O and JARVIS lived under `jarvis/`. N.E.K.O is gone:
+the face is now Project AIRI's desktop app, imported as JARVIS's own code (`jarvis/face`), the plugins run on JARVIS's own plugin
+API (`jarvis/pluginapi`), and the whole repository is JARVIS. The backup of the last N.E.K.O tree is the branch
+`backup/neko-final-2026-10-23`. Decisions: D31 to D34 in `03_DECISIONS.md`.
 ```
-repo root          N.E.K.O (upstream, unmodified): app/, brain/, main_logic/, memory/, plugin/, frontend/, static/ ...
-  plugin/plugins/main_agent     plan a task, run it with the sub-agents that fit (added)
-  plugin/plugins/jarvis_bridge  door from N.E.K.O to JARVIS's owner plane (added)
-  jarvis/                       the JARVIS subsystem, byte-for-byte (kernel, node, console, ui, lab, hermes, hub, deploy, docs)
+jarvis/face         the avatar, chat and voice window (Electron + Vue, Live2D/VRM/MMD); decides nothing
+jarvis/pluginapi    the plugin API and host: loads jarvis/plugins/*/plugin.toml, runs lifecycle and timers, routes calls between
+                    plugins, offers every entry as an MCP tool with its real JSON schema
+jarvis/plugins      main_agent, jarvis_bridge, desktop, research, deliverables, local_team, doc_tools, learn_vault, workbench, web_search
+jarvis/bridge       face_tools.py: the tool server the face connects to (MCP over loopback HTTP, 127.0.0.1:48970)
+jarvis/privacy      privacy gateway 127.0.0.1:48950 (planner gateway 48952, second opinion 48954)
+jarvis/console      owner console 127.0.0.1:8799: approvals, audit, connectors, and the Bench screen
+jarvis/kernel, node, lab, hermes, hub, deploy, ui ...   the JARVIS subsystem
 ```
 ```
-voice/text -> N.E.K.O (48911 UI, 48912 memory, 48915 agent server, 48916 plugin runtime)
-           -> main_agent.run_task: planner (N.E.K.O "agent" model) -> validated plan -> waves of steps
-                think | plugin entry | browser | computer (opt-in) | jarvis
-           -> jarvis step: jarvis_bridge -> JARVIS console 127.0.0.1:8799 -> kernel -> Hermes -> lab agents
-                (kernel policy, approvals, lanes and audit decide; the bridge has no credential)
-           -> one combined message pushed back (push_message, ai_behavior=respond)
+speech or text -> the face -> privacy gateway 48950 -> model provider (private values replaced)
+               -> local speech server 48930 (speech to text, text to speech)
+               -> tool server 48970:  jarvis_do / jarvis_task_result / jarvis_cancel / jarvis_waiting / jarvis_ready / jarvis_messages
+                                      and <plugin>__<entry> for every plugin entry (results cleaned before the model sees them)
+           jarvis_do -> JARVIS console 127.0.0.1:8799 -> kernel -> Hermes -> lab agents
+                (kernel policy, approvals, lanes and audit decide; the face and the tool server hold no credential)
+           main_agent__run_task: planner (the "agent" model: JARVIS_AGENT_BASE_URL) -> validated plan -> waves of steps
+                think | plugin entry | jarvis   (browsing and desktop work go through the desktop plugin and jarvis_do)
 ```
 - **Trust.** The plan is fixed before any tool output is read, so a page or file cannot add steps. A plan may name only sub-agents in the live catalogue, with arguments checked against each entry's schema. `main_agent` and `jarvis_bridge` are never offered as plain plugin sub-agents (no recursion).
-- **Privacy.** Planning and reasoning use N.E.K.O's own "agent" model, chosen by the owner; JARVIS private results are not returned to it by default.
-- **Language.** English is forced by `NEKO_LANGUAGE=en` in the start script.
-### N.E.K.O is the front end (added 2026-10-14)
-- **One entry point:** the N.E.K.O web UI (48911) and her voice. `jarvis/scripts/neko-start.ps1` starts everything; the JARVIS console (8799) is the approvals and audit surface, not a second place to give orders.
-- **Hosted panels** (N.E.K.O Plugin Manager, Hosted TSX, checked with the project's own checker): `jarvis_bridge` *JARVIS* and `main_agent` *Main Agent*. Each panel reads a `@ui.context` (state only) and calls exposed `@ui.action` entries. The bridge's context never carries reply text.
-- **Authority unchanged:** nothing in these panels can approve, deny or bypass the kernel; a risky action raised by a JARVIS step appears in the JARVIS console for the owner.
-## Neko's parts and the benchmark (added 2026-10-17; D19 to D30)
+- **Privacy.** Planning and reasoning use the "agent" model the owner chose, through the privacy gateway; JARVIS private results are not returned to it by default.
+- **Authority unchanged.** Nothing in the face can approve, deny or bypass the kernel; a risky action appears in the JARVIS console for the owner. The face's own protections (network lock, content policy, card gate, owner-approved memory, no analytics, no updates) are listed in `jarvis/face/SECURITY.md` and enforced by `jarvis/tools/test_face_guard.py`.
+- **Not carried over from the N.E.K.O era (removed 2026-10-23):** the "Hey Neko" wake listener and the desktop widget (the face hears through its own voice activity detection and speaks through the local speech server), N.E.K.O's memory server (the planner reads recalled memory from an optional loopback service, `JARVIS_MEMORY_RECALL_URL`), its browser-use and computer-use helpers, and the Tauri desktop shell.
+
+## The plugins and the benchmark (added 2026-10-17; D19 to D30)
 ```
-N.E.K.O (voice, chat, memory, plugin runtime)
-  plugin/plugins/desktop        decider (decide.py) -> coordinator -> PC jobs through the kernel; missions (DBOS), monitor, skills gate
-  plugin/plugins/research       search -> read -> write -> claim check (local NLI + deterministic guards)
-  plugin/plugins/deliverables   PPTX decks and PDF reports, checked before hand-over
-  plugin/plugins/local_team     local specialist models through llama-swap 127.0.0.1:8080
-  plugin/plugins/doc_tools      read allowed documents as data; write to one output folder
-  plugin/plugins/learn_vault    a study vault (Markdown notes), separate from JARVIS's memory vault
-  plugin/plugins/main_agent, jarvis_bridge   (2026-10-14, above)
-jarvis/privacy                  privacy gateway 127.0.0.1:48950: N.E.K.O's model URLs point at it (D19)
-jarvis/wake                     "Hey Neko" listener (status 127.0.0.1:48945)
-jarvis/console                  owner console 127.0.0.1:8799: approvals, audit, connectors, and the Bench screen
-jarvis/evals/neko95             v1 scorecard (frozen rules) and benchmark v2 (bench/)
+jarvis/plugins/desktop        decider (decide.py) -> coordinator -> PC jobs through the kernel; missions (DBOS), monitor, skills gate
+jarvis/plugins/research       search -> read -> write -> claim check (local NLI + deterministic guards)
+jarvis/plugins/deliverables   PPTX decks and PDF reports, checked before hand-over
+jarvis/plugins/local_team     local specialist models through llama-swap 127.0.0.1:8080
+jarvis/plugins/doc_tools      read allowed documents as data; write to one output folder
+jarvis/plugins/learn_vault    a study vault (Markdown notes), separate from JARVIS's memory vault
+jarvis/plugins/main_agent, jarvis_bridge   plan-then-run orchestration and the door to JARVIS's owner plane
+jarvis/evals/quality95        v1 scorecard (frozen rules) and benchmark v2 (bench/)
 ```
 - **Authority does not move.** Every PC action is a kernel job queued by the owner plane; policy, approvals, audit and the kill switch cover it (D27).
-- **Model servers stay plain.** Every llama-server binds 127.0.0.1 with `--no-webui` and none of the agent or MCP options; `jarvis/local_models/test_server_flags.py` enforces it (D30). The decider is Qwen3-4B-Instruct-2507, with Qwen3-1.7B as the fast fallback (`neko/NEKO_95_MODEL_BENCHMARK.md`).
+- **Model servers stay plain.** Every llama-server binds 127.0.0.1 with `--no-webui` and none of the agent or MCP options; `jarvis/local_models/test_server_flags.py` enforces it (D30). The decider is Qwen3-4B-Instruct-2507, with Qwen3-1.7B as the fast fallback (`reports/QUALITY_95_MODEL_BENCHMARK.md`).
 - **Claim check.** A cited sentence is confirmed only when the NLI model supports it and the deterministic guards agree: units match, no qualifier is dropped, comparators and hedges agree with the source. Sentences addressed to AI assistants are removed from fetched pages before any text is evidence (D30).
-- **Benchmark v2.** 860 versioned cases drive the real code with fixtures; each replaced boundary is named "fake" or "mock" in its scenario. Rubric v2 was written before any case ran. Results are keyed "cases", so the frozen v1 scorer is untouched. Windows-only and owner-hardware cases are deferred, never simulated (D29, D30).
+- **Benchmark v2.** Versioned cases drive the real code with fixtures; each replaced boundary is named "fake" or "mock" in its scenario. Rubric v2 was written before any case ran. Results are keyed "cases", so the frozen v1 scorer is untouched. Windows-only and owner-hardware cases are deferred, never simulated (D29, D30). The voice area (G) was removed on 2026-10-23 with the wake listener it tested.
 - **Benchmark Console.** Routes `/api/bench/*` in the existing console; no new port. Jobs come only from allow-lists and run as fixed repo programs with argument lists. Challenge-lab results are untrusted, stay local and never become expectations (D30; how to use it: 05_OPERATIONS).

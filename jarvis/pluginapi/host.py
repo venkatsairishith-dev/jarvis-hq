@@ -1,6 +1,6 @@
 """The plugin host: loads plugins, runs their lifecycle and timers, routes calls between them, and offers their entries as tools.
 
-Before 2026-10 this was N.E.K.O's plugin server. JARVIS now runs its plugins in the same process as the face's tool server
+Before 2026-10 this was the face's plugin server. JARVIS now runs its plugins in the same process as the face's tool server
 (jarvis/bridge/face_tools.py), so a plugin entry is an MCP tool the face's model can call, and the kernel still decides every
 action a plugin takes (plugins act through the console and the kernel, never on their own authority).
 

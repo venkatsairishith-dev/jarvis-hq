@@ -16,7 +16,7 @@ What it is used for:
     produce a plan that parse_plan accepts against the live catalogue.
   * stats(): success rate per plan shape and per helper, the commonest error classes, whether the last runs are better than the ones
     before: the measurable side of "it improves with use".
-  * (next stage) candidates for the desktop skill gate and bounded self-correction: see jarvis/docs/jarvis/SELF_IMPROVEMENT_2026-10-22.md.
+  * (next stage) candidates for the desktop skill gate and bounded self-correction: see jarvis/docs/reports/SELF_IMPROVEMENT_2026-10-22.md.
 """
 from __future__ import annotations
 

@@ -1,12 +1,12 @@
 """Generate the "how it works" reference docs (plan P10; owner's note: "explain each file, each model"):
 
-- jarvis/docs/neko/FILE_MAP.md: every JARVIS-owned code and config file, grouped by folder, with one line saying what it does.
+- jarvis/docs/reports/FILE_MAP.md: every JARVIS-owned code and config file, grouped by folder, with one line saying what it does.
   The line comes from the file itself (Python module docstring, the leading comment of a script, "_note"/"about" in JSON, a
   systemd Description=, an HTML <title>), so the map stays true when code changes. Files without one are listed as such.
-- jarvis/docs/neko/MODELS.md: every model JARVIS can download (jarvis/tools/jarvis.lock.json), with its role, machines, size and
+- jarvis/docs/reports/MODELS.md: every model JARVIS can download (jarvis/tools/jarvis.lock.json), with its role, machines, size and
   licence.
 
-Upstream code is not mapped file by file (N.E.K.O's own tree, jarvis/vendor, jarvis/third_party, the Tauri shell subtree, the face's imported AIRI code); tests
+Upstream code is not mapped file by file (jarvis/vendor, jarvis/third_party, the face's imported AIRI code); tests
 and data files are left out. Uses git ls-files, so only tracked files appear.
 
     python jarvis/tools/make_docs.py            write both files
@@ -24,15 +24,14 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-FILE_MAP = ROOT / "jarvis" / "docs" / "neko" / "FILE_MAP.md"
-MODELS = ROOT / "jarvis" / "docs" / "neko" / "MODELS.md"
+FILE_MAP = ROOT / "jarvis" / "docs" / "reports" / "FILE_MAP.md"
+MODELS = ROOT / "jarvis" / "docs" / "reports" / "MODELS.md"
 LOCK = ROOT / "jarvis" / "tools" / "jarvis.lock.json"
 
-# JARVIS's own code: the jarvis/ tree and the plugins JARVIS added to N.E.K.O (README.MD, "Where JARVIS lives")
-ROOTS = ("jarvis/",) + tuple(f"plugin/plugins/{p}/" for p in (
-    "desktop", "research", "deliverables", "local_team", "main_agent", "jarvis_bridge", "learn_vault", "doc_tools", "workbench"))
+# JARVIS's own code: the jarvis/ tree (the plugins live in jarvis/plugins)
+ROOTS = ("jarvis/",)
 EXCLUDE = re.compile(
-    r"^jarvis/(vendor|third_party|desktop/shell|docs)/"           # upstream code and the docs themselves
+    r"^jarvis/(vendor|third_party|docs)/"           # upstream code and the docs themselves
     # the face is imported AIRI code (jarvis/face/README.md lists what JARVIS changed); only the files JARVIS wrote are mapped
     r"|^jarvis/face/(?!apps/stage-tamagotchi/src/main/jarvis/|packages/stage-shared/src/jarvis\.ts$|packages/stage-ui/src/stores/modules/jarvis-defaults\.ts$)"
     r"|(^|/)(tests?|__tests__|fixtures|results|evidence|node_modules|dist|build|cases|data)/"
@@ -77,7 +76,7 @@ def describe(path: str, text: str) -> str:
 
 
 # Files whose job follows from their name and place (manifests, build configs, generated snapshots). The plugin files are
-# described by N.E.K.O's plugin contract (CONTEXT.md, "Manifest Contract").
+# described by their manifest (plugin.toml, read by jarvis/pluginapi).
 def _by_convention(path: str, text: str) -> str:
     folder, _, name = path.rpartition("/")
     owner = folder.rsplit("/", 1)[-1]
@@ -92,11 +91,8 @@ def _by_convention(path: str, text: str) -> str:
             return first_sentence(d.get("description", "")) or f"Python package metadata for `{d.get('name', owner)}`."
     except Exception:
         pass
-    plugin = path.startswith("plugin/plugins/")
     table = {
-        "config.schema.json": f"Settings form schema of the `{owner}` plugin (shown in N.E.K.O's plugin manager, 8 languages).",
         "config.example.toml": f"Example settings for the `{owner}` plugin (copy to config.toml and edit).",
-        "plugin.meta.json": f"Metadata snapshot of the `{owner}` plugin made by `neko-plugin build`; regenerate, never edit by hand.",
         "tsconfig.json": "TypeScript compiler settings for this folder.",
         "vite.config.ts": "Vite build and dev-server settings for the console UI.",
         "kernel-metadata.json": "Kaggle notebook settings (name, code file, GPU, private) for `kaggle kernels push`.",
@@ -104,7 +100,6 @@ def _by_convention(path: str, text: str) -> str:
         "App.tsx": "Console UI shell: navigation, keyboard shortcuts and the screens.",
         "ui.tsx": "Shared console UI widgets (badges, buttons, dialogs, keys).",
         "format.ts": "Formatting helpers for the console UI (relative times, sizes).",
-        "panel.tsx": f"Panel of the `{path.split('/')[2] if plugin else owner}` plugin shown inside N.E.K.O's plugin manager.",
         "plugin.yaml": "Hermes plugin manifest.",
         "sparkline.js": "Third-party sparkline chart library (minified) used by the hub page.",
         "active.json": "Lab skills currently active in Hermes, each with its sha256, commit, risk, activation time and backup.",
@@ -220,8 +215,8 @@ def build_file_map(root: Path = ROOT, files: list[str] | None = None) -> str:
            "renaming files (`--check` tells you when this page is stale).", "",
            f"{len(files)} files in {len(groups)} folders. {missing} have no description in the file yet: give them a module "
            "docstring or a leading comment and re-run.", "",
-           "Covered: the `jarvis/` tree and the plugins JARVIS added (" + ", ".join(r.split('/')[2] for r in ROOTS[1:]) + "). "
-           "Not covered file by file: N.E.K.O's own tree, `jarvis/vendor`, `jarvis/third_party`, the Tauri shell subtree, the face's "
+           "Covered: the `jarvis/` tree, plugins included. "
+           "Not covered file by file: `jarvis/vendor`, `jarvis/third_party`, the face's "
            "imported AIRI code (`jarvis/face/README.md`), tests and data.",
            ""]
     for folder in sorted(groups):
@@ -272,7 +267,7 @@ def build_models(lock_path: Path = LOCK) -> str:
     out = ["# JARVIS models", "",
            "Generated by `jarvis/tools/make_docs.py` from `jarvis/tools/jarvis.lock.json`; do not edit by hand. Every file is pinned "
            "by upstream revision and sha256 and fetched with `jarvis/tools/fetch.py`. Why each model was chosen, and the measured "
-           "speeds and scores, are in `NEKO_MODEL_MATRIX.md` and `NEKO_95_MODEL_BENCHMARK.md`.", "",
+           "speeds and scores, are in `MODEL_MATRIX.md` and `QUALITY_95_MODEL_BENCHMARK.md`.", "",
            "Machines: " + "; ".join(f"`{k}` = {v}" for k, v in machines.items()) + ".", "",
            f"{len(groups)} models ({sum(len(v) for v in groups.values())} files).", "",
            "## Models", "", "| Model (role) | Files | Machines | Size | Licence | Optional |", "|---|---|---|---|---|---|"]

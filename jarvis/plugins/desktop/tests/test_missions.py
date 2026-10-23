@@ -361,7 +361,7 @@ def test_a_cancelled_mission_frees_the_pc_lock(eng):
 
 
 # ---------------------------------------------------------------- 2026-10-18: the four failed live missions, PC-D5/D6/D9
-# The live results (jarvis/evals/neko95/results/mission-20261016-*.json) each reproduced with fakes. Every case below
+# The live results (jarvis/evals/quality95/results/mission-20261016-*.json) each reproduced with fakes. Every case below
 # failed (or hung for the step's whole timeout) on the code before this change.
 import asyncio
 import threading

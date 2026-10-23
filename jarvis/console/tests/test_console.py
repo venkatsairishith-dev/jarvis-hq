@@ -146,7 +146,7 @@ class Server(Base):
             self.assertTrue(reply.get("reload"), name)                                 # tells the page to re-read its secret
             self.assertNotIn(self.srv.console_secret, json.dumps(reply))
         self.assertEqual(self.k.db.execute("SELECT COUNT(*) FROM owner_commands").fetchone()[0], before)    # nothing reached the kernel
-        # the right secret works, with or without an Origin (a local program that read the page, like the NEKO bridge)
+        # the right secret works, with or without an Origin (a local program that read the page, like the plugin bridge)
         self.assertEqual(self.call("POST", "/api/owner/command", body)[0], 202)
         for _ in range(100):
             if not self.plane.busy.locked():

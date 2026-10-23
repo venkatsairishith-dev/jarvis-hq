@@ -1,4 +1,4 @@
-"""Benchmark: Windows-MCP (CursorTouch, MIT, 0.8.7, isolated venv) vs Neko's own UIA layer on the same Notepad tasks
+"""Benchmark: Windows-MCP (CursorTouch, MIT, 0.8.7, isolated venv) vs JARVIS's own UIA layer on the same Notepad tasks
 (2026-10-16). Windows. Telemetry off; only its read/click/type tools are enabled (no PowerShell, registry, files).
     D:\\jarvis\\tools\\browser-venv\\Scripts\\python.exe jarvis\\evals\\pc_control\\compare_windows_mcp.py [--list]
 Measures per task: success (checked by reading Notepad's text through Win32) and seconds, over N repeats.
@@ -79,7 +79,7 @@ def run_wmcp(tools, reps):
     return r
 
 
-def run_neko(reps):
+def run_uia(reps):
     r = {"snapshot": [], "type": [], "ok": 0, "failures": []}
     for i in range(reps):
         fresh_notepad()
@@ -89,11 +89,11 @@ def run_neko(reps):
         f = next((e for e in els if str(e.get("cls") or "").startswith("Edit")), None)
         t = time.time()
         try:
-            W.type_text(f"notepad|{f['id']}", {"text": f"neko {i}"})
+            W.type_text(f"notepad|{f['id']}", {"text": f"jarvis {i}"})
         except Exception as e:  # noqa: BLE001
             r["failures"].append(f"round {i}: type {str(e)[:80]}")
         r["type"].append(time.time() - t)
-        r["ok"] += f"neko {i}" in LD.ps(LD.VALUE)
+        r["ok"] += f"jarvis {i}" in LD.ps(LD.VALUE)
     return r
 
 
@@ -114,11 +114,11 @@ def main():
         return
     tools = sys.argv[1] if len(sys.argv) > 1 else "Snapshot,Type"
     reps = 5
-    out = {"repeats": reps, "phases": "separate (Windows-MCP first, then Neko), a fresh Notepad each round"}
+    out = {"repeats": reps, "phases": "separate (Windows-MCP first, then JARVIS), a fresh Notepad each round"}
     out["windows_mcp"] = summary(run_wmcp(tools, reps), reps)
     subprocess.run(["taskkill", "/IM", "windows-mcp.exe", "/F"], capture_output=True)
     time.sleep(2)
-    out["neko_uia"] = summary(run_neko(reps), reps)
+    out["jarvis_uia"] = summary(run_uia(reps), reps)
     subprocess.run(["taskkill", "/IM", "notepad.exe", "/F"], capture_output=True)
     print(json.dumps(out, indent=1))
     (HERE / "results" / f"windows-mcp-{time.strftime('%Y%m%d-%H%M%S')}.json").write_text(json.dumps(out, indent=1), encoding="utf-8")

@@ -1,7 +1,7 @@
 """MEM-M5: every hardware profile must define the llama-swap aliases that JARVIS code asks for, or say in the file that it does
 not. Run: python -m pytest jarvis/local_models/test_profile_aliases.py
 
-Callers: plugin/plugins/desktop/decide.py asks for DEFAULT_MODEL ("decider"); jarvis/node/jarvis_node/vision.py asks for
+Callers: jarvis/plugins/desktop/decide.py asks for DEFAULT_MODEL ("decider"); jarvis/node/jarvis_node/vision.py asks for
 VISION_MODEL ("vision-ground"). Before the fix only llama-swap.yaml (vram4) had them, so on cpu8, cpu16 and vram8plus every
 PC task fell back to "no plan" and vision could never answer. remote_only starts no local models (local-models.ps1) and so
 has no file.
@@ -29,7 +29,7 @@ def caller_aliases():
     decide = read(os.path.join(REPO, "plugin", "plugins", "desktop", "decide.py"))
     vision = read(os.path.join(JARVIS, "node", "jarvis_node", "vision.py"))
     d = re.search(r'(?m)^DEFAULT_MODEL\s*=\s*"([^"]+)"', decide)
-    v = re.search(r'(?m)^VISION_MODEL\s*=\s*os\.environ\.get\("NEKO_VISION_MODEL",\s*"([^"]+)"\)', vision)
+    v = re.search(r'(?m)^VISION_MODEL\s*=\s*os\.environ\.get\("JARVIS_VISION_MODEL",\s*"([^"]+)"\)', vision)
     assert d and v, "the callers' alias constants moved: update this test"
     return {"decide.DEFAULT_MODEL": d.group(1), "vision.VISION_MODEL": v.group(1)}
 

@@ -11,7 +11,7 @@ _spec = importlib.util.spec_from_file_location("run_builder", HERE / "run_builde
 rb = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rb)
 
-WT = Path(r"D:\jarvis\hq-neko-sdk")
+WT = Path(r"D:\jarvis\hq-sdk")
 
 
 def test_refused_after_expiry_and_for_other_models_and_over_cap():
@@ -30,7 +30,7 @@ def test_secrets_folder_is_denied_in_any_tool():
 
 def test_file_tools_stay_inside_the_worktree():
     assert rb.deny_reason("Write", {"file_path": str(WT / "jarvis" / "x.py")}, WT) is None
-    assert rb.deny_reason("Write", {"file_path": r"D:\jarvis\hq-neko\x.py"}, WT)
+    assert rb.deny_reason("Write", {"file_path": r"D:\jarvis\hq\x.py"}, WT)
     assert rb.deny_reason("Edit", {"file_path": str(WT / ".." / "other" / "x.py")}, WT)
 
 

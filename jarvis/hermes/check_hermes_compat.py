@@ -6,7 +6,7 @@ For each checkout it loads Hermes's real MemoryProvider base class, loads jarvis
 the plugin subclasses the real base; every abstract method is implemented (the class can be built); register(ctx) hands out a NEW instance
 on every load (Hermes' multiplexing contract: one instance per profile); and the plugin keeps no module-level mutable state.
 Exit 0 only if every checkout passes. It does not start Hermes, so it runs on any Python 3.9+ (the real Hermes needs 3.14).
-Used for the 0.22 upgrade plan (jarvis/docs/neko/HERMES_0_22_UPGRADE_2026-10-22.md); run it on the candidate tag's checkout before any deploy.
+Used for the 0.22 upgrade plan (jarvis/docs/reports/HERMES_0_22_UPGRADE_2026-10-22.md); run it on the candidate tag's checkout before any deploy.
 """
 from __future__ import annotations
 

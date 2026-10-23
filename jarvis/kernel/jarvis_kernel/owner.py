@@ -718,13 +718,13 @@ class Owner:
     # Fencing (completion A, 2026-10-19). The desktop plugin sends body["holder"] = {token, task, seq} with every PC job request.
     # token = the PC-lock holder's identity; seq = that holder's request counter. A request whose token is NOT the one now in the
     # PC lock file is from a stale executor (its lock was taken over or recovered): refused, no job. The file is read only when
-    # the kernel is told where it is (JARVIS_PC_LOCK, or NEKO_STORAGE_SELECTED_ROOT/neko/pc_task.lock); when it is not (kernel
+    # the kernel is told where it is (JARVIS_PC_LOCK, or JARVIS_DATA_DIR/jarvis/pc_task.lock); when it is not (kernel
     # and plugin on different machines) only the plugin-side fence and the duplicate rule apply. A (token, seq) seen before is
     # answered with the job it made. Requests without a holder (the console's own buttons) are unchanged.
     def _pc_lock_file(self):
         p = os.environ.get("JARVIS_PC_LOCK")
-        if not p and os.environ.get("NEKO_STORAGE_SELECTED_ROOT"):
-            p = os.path.join(os.environ["NEKO_STORAGE_SELECTED_ROOT"], "neko", "pc_task.lock")
+        if not p and os.environ.get("JARVIS_DATA_DIR"):
+            p = os.path.join(os.environ["JARVIS_DATA_DIR"], "jarvis", "pc_task.lock")
         return getattr(self, "pc_lock_path", None) or p
 
     def _pc_holder(self, h):

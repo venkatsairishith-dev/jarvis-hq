@@ -147,14 +147,13 @@ def test_killing_the_supervisor_leaves_no_orphans(tmp_path):
         p.kill()
 
 
-def test_laptop_manifest_parses_is_loopback_only_and_matches_neko_start():
+def test_laptop_manifest_parses_is_loopback_only_and_matches_jarvis_start():
     comps = manifest.load(HERE / "manifests" / "laptop.json")
-    assert [c.name for c in manifest.order(comps)] == ["privacy-gateway", "local-speech", "widget", "neko"] or \
-        [c.name for c in manifest.order(comps)][-1] == "neko"
+    assert [c.name for c in manifest.order(comps)][-1] == "face-tools"          # started last: it depends on the other two
     assert all(c.host == "127.0.0.1" for c in comps)
-    start = (HERE.parent / "scripts" / "neko-start.ps1").read_text(encoding="utf-8")
+    start = (HERE.parent / "scripts" / "jarvis-start.ps1").read_text(encoding="utf-8")
     for c in comps:
-        assert str(c.port) in start, f"{c.name}: port {c.port} not in neko-start.ps1"
-    env = next(c for c in comps if c.name == "neko").env
+        assert str(c.port) in start, f"{c.name}: port {c.port} not in jarvis-start.ps1"
+    env = next(c for c in comps if c.name == "face-tools").env
     for k in env:
-        assert k in start, f"{k} is not set by neko-start.ps1"
+        assert k in start, f"{k} is not set by jarvis-start.ps1"

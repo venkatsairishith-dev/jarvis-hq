@@ -26,7 +26,7 @@ def test_vue_i18n_special_characters_are_escaped():
 
 def test_an_unknown_placeholder_is_refused():
     with pytest.raises(ValueError):
-        P.render({"system_prompt": "{LANLAN_NAME} meets {SOMEONE}"})
+        P.render({"system_prompt": "{ASSISTANT_NAME} meets {SOMEONE}"})
 
 
 def test_only_the_prefix_block_is_replaced():

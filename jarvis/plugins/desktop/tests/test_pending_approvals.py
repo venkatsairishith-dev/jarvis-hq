@@ -4,13 +4,11 @@
   cancelled or Stop is pressed (kernel owner/deny); an approval nothing here created is never touched; an approval already
   decided or expired is tolerated; a denied approval cannot be used afterwards.
 * The registry publishes a snapshot (coordinator.publish) that stays fresh while any operation lives, however long its current
-  step takes, so the widget's pc.busy (and with it the spoken "stop") does not depend on a file that only a step's start wrote.
+  step takes, so "is the PC busy?" does not depend on a file that only a step's start wrote.
 The real core.Pc and the real entries talk to the fake console of test_stop_ownership; no sleeps as synchronisation.
 """
 import asyncio
-import importlib.util
 import json
-import sys
 import threading
 from pathlib import Path
 
@@ -252,29 +250,3 @@ def test_the_snapshot_keeps_being_refreshed_while_an_operation_lives_with_no_pro
         t.join(WAIT)
     assert json.loads(C.OPS_FILE.read_text())["busy"] is False, "the snapshot must say idle once the operation is gone"
 
-
-def _widget():
-    path = ROOT / "jarvis" / "widget" / "widget_server.py"
-    sys.path.insert(0, str(path.parent))
-    spec = importlib.util.spec_from_file_location("widget_server_for_pc_test", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def test_the_widgets_pc_busy_follows_the_registry_snapshot_even_after_two_minutes_of_silence(tmp_path):
-    ws = _widget()
-    ops_file = tmp_path / "ops.json"
-    assert ws.pc_busy(str(tmp_path / "none.json"), str(ops_file))["busy"] is False
-    op = C.begin("task", "task-long")
-    C.publish(ops_file)
-    got = ws.pc_busy(str(tmp_path / "activity-from-ten-minutes-ago.json"), str(ops_file))
-    assert got["busy"] is True and got["source"] == "registry" and got["operations"][0]["id"] == "task-long"
-    snap = json.loads(ops_file.read_text())                           # the snapshot is fresh, whatever the activity file says
-    snap["operations"][0]["idle_s"] = 900
-    ops_file.write_text(json.dumps(snap))
-    assert ws.pc_busy(None, str(ops_file))["busy"] is True
-    snap["at"] -= 3600                                                # the plugin process died: nobody refreshes it any more
-    ops_file.write_text(json.dumps(snap))
-    assert ws.pc_busy(None, str(ops_file))["busy"] is False
-    op.entry_exit()

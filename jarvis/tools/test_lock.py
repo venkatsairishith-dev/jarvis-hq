@@ -1,7 +1,7 @@
 """Checks the download lock (jarvis/tools/jarvis.lock.json) and the fetcher (jarvis/tools/fetch.py).
 
 No test touches the internet: downloads come from a local http.server on 127.0.0.1, and a guard refuses any other
-connection. Run in the neko-test image (repo mounted at /src):
+connection. Run in the jarvis-test image (repo mounted at /src):
     python -m pytest jarvis/tools/test_lock.py -q -p no:cacheprovider
 """
 from __future__ import annotations
@@ -126,16 +126,15 @@ def test_dest_is_relative_and_inside_the_root(lock):
 
 
 def test_existing_pins_are_kept(lock):
-    """Pins already in the repo (model_candidates.json, Containerfile, wake_word_bundle.py) appear unchanged."""
-    cands = json.loads((HERE.parent / "evals/neko95/bench/model_candidates.json").read_text(encoding="utf-8"))
+    """Pins already in the repo (model_candidates.json, Containerfile) appear unchanged."""
+    cands = json.loads((HERE.parent / "evals/quality95/bench/model_candidates.json").read_text(encoding="utf-8"))
     by_sha = {e["sha256"]: e for e in lock["entries"] if e["sha256"]}
     for c in cands.values():
         assert c["sha256"] in by_sha, c["file"]
         e = by_sha[c["sha256"]]
         assert e["revision"]["commit"] == c["revision"] and e["bytes"] == c["bytes"], c["file"]
     for pinned in ("551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",     # gitleaks linux_x64, Containerfile
-                   "cc2f601cee82d9a5a233302fe307abc600727035fd7d2c3a3571755989e95008",     # node linux-x64, Containerfile
-                   "68447f4fbc67e70eee3a93961f36e81e98f47aef73ce7e7ca00885c6cd3616a6"):    # N.E.K.O KWS model
+                   "cc2f601cee82d9a5a233302fe307abc600727035fd7d2c3a3571755989e95008"):    # node linux-x64, Containerfile
         assert pinned in by_sha
 
 

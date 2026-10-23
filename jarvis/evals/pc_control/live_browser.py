@@ -47,16 +47,16 @@ def main():
     with B.Session(PROF, isolated=True) as s:
         nav = lambda page: B.navigate(s, base + page)                                # noqa: E731
         snap = lambda: s.call("browser_snapshot", {})                                # noqa: E731
-        case("C01", "navigate to a page and confirm where we are", lambda: (lambda t: (B.page_meta(t)["title"] == "Neko Test Form", B.page_meta(t)))(nav("form.html")))
+        case("C01", "navigate to a page and confirm where we are", lambda: (lambda t: (B.page_meta(t)["title"] == "JARVIS Test Form", B.page_meta(t)))(nav("form.html")))
         case("C02", "read the page (accessibility snapshot) and find its heading", lambda: (lambda t: (("heading", "Contact form") in
              [(r, n) for r, n, _ in B.elements(t)], f"{len(B.elements(t))} named elements"))(snap()))
         case("C03", "find a control by its visible name", lambda: (lambda ref: (bool(B.REF.match(ref)), ref))(B.find_ref(snap(), "Send")))
         case("C04", "fill a labelled form field", lambda: (lambda r: (r["ok"] and r["typed_chars"] == 4, r.get("ref")))(
              B.act(s, "type", "", "Your name", "Ravi", PROF)))
         case("C05", "fill a second field (textarea) by its label", lambda: (lambda r: (r["ok"], r.get("ref")))(
-             B.act(s, "type", "", "Message", "hello neko", PROF)))
+             B.act(s, "type", "", "Message", "hello jarvis", PROF)))
         case("C06", "click a button by name, and verify the result appeared", lambda: (B.act(s, "click", "", "Send", "", PROF),
-             (lambda t: ("message received: hello neko" in t and "Thanks Ravi" in t, "status text checked"))(snap()))[-1])
+             (lambda t: ("message received: hello jarvis" in t and "Thanks Ravi" in t, "status text checked"))(snap()))[-1])
         case("C07", "a missing element gives a clear error and no click", lambda: refused(lambda: B.act(s, "click", "", "Delete everything", "", PROF), ["no button"]))
         case("C08", "changed layout: the renamed button is still found by name start", lambda: (nav("form_v2.html"),
              B.act(s, "type", "", "Message", "v2 text", PROF), B.act(s, "click", "", "Submit", "", PROF),
@@ -73,7 +73,7 @@ def main():
         case("C15", "an unreachable address fails cleanly", lambda: _unreachable(s))
         case("C16", "the code-running and cookie tools stay unavailable", lambda: (all(_blocked(s, t) for t in
              ("browser_run_code_unsafe", "browser_cookie_list", "browser_storage_state")), "blocked by the allowlist"))
-        case("C17", "a page's own text cannot widen what Neko may do (read stays local)", lambda: _injection(s, nav))
+        case("C17", "a page's own text cannot widen what JARVIS may do (read stays local)", lambda: _injection(s, nav))
         case("C18", "navigation completion is verified by the page address", lambda: (lambda t: (B.page_meta(t)["url"].endswith("/form.html"),
              B.page_meta(t)["url"]))(nav("form.html")))
     # a session that dies is reported, not hung on

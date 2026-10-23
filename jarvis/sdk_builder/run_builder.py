@@ -1,6 +1,6 @@
 """Second builder: one bounded Claude Agent SDK run in its own git worktree (owner exception, expires 2026-11-05).
 
-    D:\\jarvis\\tools\\sdk-venv\\Scripts\\python.exe jarvis\\builder\\run_builder.py --worktree D:\\jarvis\\hq-neko-sdk --task-file TASK.md [--model claude-sonnet-5-5] [--max-budget-usd 5] [--max-turns 40]
+    D:\\jarvis\\tools\\sdk-venv\\Scripts\\python.exe jarvis\\builder\\run_builder.py --worktree D:\\jarvis\\hq-sdk --task-file TASK.md [--model claude-sonnet-5-5] [--max-budget-usd 5] [--max-turns 40]
 
 Rules enforced here, not left to the model:
 - The API key is read from a file under D:\\jarvis-secrets by this process, handed only to the SDK process environment, and scrubbed from

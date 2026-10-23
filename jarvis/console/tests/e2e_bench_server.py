@@ -24,7 +24,7 @@ from jarvis_kernel.store import Kernel
 HQ = os.path.abspath(os.path.join(HERE, "..", ".."))
 PORT = int(os.environ.get("E2E_CONSOLE_PORT", "8812"))
 UI = os.environ.get("E2E_UI_DIR", os.path.join(HQ, "ui", "dist"))
-REAL_RESULTS = os.path.join(HQ, "evals", "neko95", "results")
+REAL_RESULTS = os.path.join(HQ, "evals", "quality95", "results")
 FAKE = os.path.join(HERE, "fixtures", "fake_bench_runner.py")
 FIXTURES = ["bench-20261016-173117.json", "bench-20261016-181824.json", "bench-20261017-031703.json", "score-20261016-150635-baseline.json",
             "score-20261016-154951-server-rescore.json", "score-20261016-161950-interim.json", "scorecard-v2-20261017-031704.json",

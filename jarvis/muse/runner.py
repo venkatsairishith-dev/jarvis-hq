@@ -10,7 +10,7 @@ Fetching: every URL (and every redirect target) must pass jarvis/egress/ssrf_gua
 egress proxy named in jarvis/config/egress.json, http(s) only, at most MAX_BYTES, text types only, and HTML is reduced to its visible
 text. The page text is data for the diff, never instructions.
 
-    python -m jarvis.muse.runner --watches D:\\jarvis\\N.E.K.O-data\\muse\\watches.json --inbox D:\\jarvis\\N.E.K.O-data\\muse\\inbox.jsonl
+    python -m jarvis.muse.runner --watches D:\\jarvis\\data\\muse\\watches.json --inbox D:\\jarvis\\data\\muse\\inbox.jsonl
         [--push-topic-file D:\\jarvis-secrets\\ntfy.topic] [--once]
 """
 from __future__ import annotations

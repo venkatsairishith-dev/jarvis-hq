@@ -1,7 +1,6 @@
-"""Open the JARVIS console (or the widget) in the browser with a ONE-TIME launch code. Standard library only.
+"""Open the JARVIS console in the browser with a ONE-TIME launch code. Standard library only.
 
     python open_console.py                 the console   http://127.0.0.1:8799/
-    python open_console.py --server widget the widget    http://127.0.0.1:48940/
     python open_console.py --print-url     print the URL (it holds a code that works once, for 60 s) instead of opening it
 
 The servers no longer put any credential in `GET /` (re-review M3, 2026-10-19): this launcher reads the server's master token from its
@@ -23,13 +22,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import control_auth  # noqa: E402
 import loopback_net  # noqa: E402  loopback only, no proxy, no redirect (completion H)
 
-SERVERS = {"console": (8799, "/"), "widget": (48940, "/"), "neko": (48940, "/neko")}
+SERVERS = {"console": (8799, "/")}
 
 
 def launch_url(server: str = "console", directory: str | None = None, opener=loopback_net.urlopen) -> str:
     """The URL with a fresh one-time code; raises RuntimeError with a plain reason when the server is not running or refuses."""
     port, path = SERVERS[server]
-    name = "console" if server == "console" else "widget"
+    name = server
     headers = control_auth.headers_for(name, directory)
     if not headers:
         raise RuntimeError(f"no {name}.token in {directory or control_auth.run_dir()}: is the {name} running (it writes the file at start)?")

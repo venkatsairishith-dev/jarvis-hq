@@ -1,16 +1,16 @@
 # Run the self-healing watchdog (watchdog.py) every 10 minutes. Windows, current user only: no administrator rights.
 #
-#   install-watchdog.ps1            create or update the task "JarvisNekoWatchdog"
+#   install-watchdog.ps1            create or update the task "JarvisWatchdog"
 #   install-watchdog.ps1 -Remove    delete that one task
 #   install-watchdog.ps1 -Status    show the task and the watchdog's last verdict
 #
 # The watchdog checks the stack, starts whatever is down, never touches the JARVIS kernel and makes no model calls. Its log is
 # <data>\logs\watchdog.log and its last verdict <data>\logs\watchdog_status.json.
 param([switch]$Remove, [switch]$Status)
-$name = "JarvisNekoWatchdog"
-$py = "D:\jarvis\tools\neko-venv\Scripts\python.exe"
+$name = "JarvisWatchdog"
+$py = "D:\jarvis\tools\agent-venv\Scripts\python.exe"
 $script = (Resolve-Path (Join-Path $PSScriptRoot "watchdog.py")).Path
-$data = "D:\jarvis\N.E.K.O-data"
+$data = "D:\jarvis\data"
 
 if ($Status) {
   $t = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
@@ -32,5 +32,5 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
   -ExecutionTimeLimit (New-TimeSpan -Minutes 15) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
-  -Description "Checks N.E.K.O and the JARVIS console every 10 minutes and restarts what is down (watchdog.py)." -Force | Out-Null
+  -Description "Checks JARVIS's local services and the console every 10 minutes and restarts what is down (watchdog.py)." -Force | Out-Null
 "installed task $name (every 10 minutes, first run in 2 minutes): $script"

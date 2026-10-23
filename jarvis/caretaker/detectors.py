@@ -15,7 +15,7 @@ Kinds:
                     their dependencies), the registry's pip tools, and the npm lock of jarvis/ui
   lock_drift        jarvis/tools/fetch.py's own check (imported, not shelled out) for one machine and data root
   test_failure      fail and error cases of the newest FULL benchmark v2 run (results/bench-*.json)
-  secret_scan       gitleaks over JARVIS's own code (jarvis/, plugin/plugins/), when the binary is present (secrets are never read back:
+  secret_scan       gitleaks over JARVIS's own code (jarvis/, jarvis/plugins/), when the binary is present (secrets are never read back:
                     only rule, file and line are kept)
 
 Network: only HTTPS (or plain http to this machine, for tests), with timeouts, a per-host rate limit and a response
@@ -45,7 +45,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = REPO / "jarvis" / "tools"
-BENCH_RESULTS = REPO / "jarvis" / "evals" / "neko95" / "results"
+BENCH_RESULTS = REPO / "jarvis" / "evals" / "quality95" / "results"
 SEVERITIES = ("info", "low", "medium", "high", "critical")
 KINDS = ("upstream_release", "advisory", "lock_drift", "test_failure", "secret_scan")
 UNTRUSTED_MAX = 1200                 # characters of outside text kept per source
@@ -341,7 +341,12 @@ def _norm(name: str) -> str:
 
 
 def _uv_index(repo: Path):
-    d = tomllib.loads((repo / "uv.lock").read_text(encoding="utf-8"))
+    """The packages of a uv.lock at the repository root, when there is one (the repository has none since 2026-10-23: the pins are
+    the jarvis/tools/requirements files)."""
+    try:
+        d = tomllib.loads((repo / "uv.lock").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
     by = {}
     for p in d.get("package", []):
         by.setdefault(_norm(p["name"]), []).append(p)
@@ -391,7 +396,7 @@ def pypi_packages(repo: Path, registry: list):
         words = {_norm(w) for w in re.split(r"[^A-Za-z0-9_.\-]+", r["name"]) if w}
         names = {PIP_ALIASES.get(w, w) for w in words} & known
         if not names:
-            notes.append(f"advisory: registry pip tool {r['name']!r}: no PyPI package found in uv.lock or requirements; not covered")
+            notes.append(f"advisory: registry pip tool {r['name']!r}: no PyPI package found in the requirements files; not covered")
         for n in names:
             tool_of.setdefault(n, r["name"])
     out = {}
@@ -407,6 +412,9 @@ def pypi_packages(repo: Path, registry: list):
                 out.setdefault((n, p["version"]), tool)
         for v in req.get(n, ()):
             out.setdefault((n, v), tool)
+    for n, versions in req.items():                        # every pinned requirement is checked, under its registry tool when it has one
+        for v in versions:
+            out.setdefault((n, v), tool_of.get(n, f"requirements pin ({n})"))
     return sorted((n, v, t) for (n, v), t in out.items()), notes
 
 
@@ -473,7 +481,7 @@ def detect_advisory(repo: Path, registry: list, http: Http, endpoints=None, batc
             target = max((x for x in per if x), key=_ver_tuple, default=None)
             unfixed = [a["id"] for a, x in zip(advs, per) if x is None]
             where = ("jarvis/ui/package.json and package-lock.json" if eco == "npm"
-                     else "pyproject.toml (the dependency groups) and uv.lock, or the jarvis/tools/requirements files, wherever it is pinned")
+                     else "the jarvis/tools/requirements files (wherever it is pinned)")
             findings.append(make_finding(
                 tool, "advisory", top, {"ecosystem": eco, "package": name, "version": ver, "advisories": [a["id"] for a in advs]},
                 {"ecosystem": eco, "package": name, "version": ver, "used_by": tool,
@@ -545,7 +553,7 @@ def detect_test_failure(results_dir=None):
 
 
 # ---------------------------------------------------------------- secret_scan (gitleaks)
-SECRET_SCAN_PATHS = ("jarvis", "plugin/plugins")    # JARVIS's own code; the vendored N.E.K.O base is upstream's to scan
+SECRET_SCAN_PATHS = ("jarvis",)    # JARVIS's own code (the plugins and the face are inside it)
 
 
 def detect_secret_scan(repo: Path, gitleaks=None, timeout=900, paths=SECRET_SCAN_PATHS):

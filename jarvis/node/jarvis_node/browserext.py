@@ -1,10 +1,10 @@
-"""The owner's EXISTING Chrome profiles for Neko (2026-10-16). Windows.
+"""The owner's EXISTING Chrome profiles for JARVIS (2026-10-16). Windows.
 
 Profiles: a registry built from Chrome's profile list (Local State -> profile.info_cache: folder, display name, Google
 account name, the account's name before the @). Only aliases and a masked account ("ven***@gmail.com") are kept, in
-D:\\jarvis\\N.E.K.O-data\\neko\\browser_profiles.json. No cookie, password, token or key is ever read: the encrypted key
+D:\\jarvis\\data\\jarvis\\browser_profiles.json. No cookie, password, token or key is ever read: the encrypted key
 in the same file is not touched, and no profile folder file is opened. "default" is the owner's default account.
-An alias that fits more than one profile is refused with the candidates, so Neko asks the owner once.
+An alias that fits more than one profile is refused with the candidates, so JARVIS asks the owner once.
 
 Two ways to act, both on the owner's real, logged-in browser:
  1. Without the extension: "open" starts Chrome with --profile-directory, which opens a new tab in that profile's window.
@@ -15,7 +15,7 @@ Two ways to act, both on the owner's real, logged-in browser:
     cookie, network, devtools and code-running tools are not enabled (no --caps) and never called. Images are not returned.
     The connection token (shown in the extension) is read from D:\\jarvis-secrets\\playwright\\extension-token.txt into the
     server's environment only, never logged or returned. Without it the extension asks the owner to allow each connection.
-Page text stays on this laptop: it is written to outputs\\neko-local and only a summary (title, address, counts) goes back.
+Page text stays on this laptop: it is written to outputs\\local-only and only a summary (title, address, counts) goes back.
 """
 import json
 import os
@@ -32,10 +32,10 @@ CHROME = next((p for p in (r"C:\Program Files\Google\Chrome\Application\chrome.e
                            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
                            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe") if os.path.isfile(p)), None)
 USER_DATA = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
-REGISTRY = os.environ.get("NEKO_BROWSER_PROFILES", r"D:\jarvis\N.E.K.O-data\neko\browser_profiles.json")
-DEFAULT_ACCOUNT = os.environ.get("NEKO_DEFAULT_ACCOUNT_PREFIX", "venkatgaminggem17")   # the owner's default (2026-10-16)
+REGISTRY = os.environ.get("JARVIS_BROWSER_PROFILES", r"D:\jarvis\data\jarvis\browser_profiles.json")
+DEFAULT_ACCOUNT = os.environ.get("JARVIS_DEFAULT_ACCOUNT_PREFIX", "venkatgaminggem17")   # the owner's default (2026-10-16)
 NODE = next((p for p in (r"C:\Program Files\nodejs\node.exe",) if os.path.isfile(p)), "node")
-MCP_CLI = os.environ.get("NEKO_PLAYWRIGHT_MCP", r"D:\jarvis\tools\playwright-mcp\node_modules\@playwright\mcp\cli.js")
+MCP_CLI = os.environ.get("JARVIS_PLAYWRIGHT_MCP", r"D:\jarvis\tools\playwright-mcp\node_modules\@playwright\mcp\cli.js")
 # The one @playwright/mcp version this node starts (2026-10-17). Checked at every start against the package.json next to
 # cli.js, so an `npm update` cannot silently bring a different server: 0.0.82 began exposing a page's own WebMCP
 # tools (webmcp_*, untrusted) and 0.0.81 changed the Linux sandbox default. Change it only after reading the release
@@ -66,7 +66,7 @@ def check_mcp_version(cli: str = None, want: str = MCP_VERSION) -> str:
         got = None
     if got != want:
         raise BrowserError(f"Playwright MCP {got or 'is not installed or unreadable'}{' is installed' if got else ''} at "
-                           f"{os.path.dirname(cli)}; Neko starts only the pinned {want}: npm install --save-exact @playwright/mcp@{want}")
+                           f"{os.path.dirname(cli)}; JARVIS starts only the pinned {want}: npm install --save-exact @playwright/mcp@{want}")
     return got
 
 
@@ -83,7 +83,7 @@ def account_id(email: str) -> str:
     """A one-way fingerprint of an account address: tells apart accounts whose masks look the same (ven***@gmail.com)
     without keeping the address."""
     import hashlib
-    return hashlib.sha256(("neko-account:" + (email or "").strip().lower()).encode()).hexdigest()[:16] if email else ""
+    return hashlib.sha256(("jarvis-account:" + (email or "").strip().lower()).encode()).hexdigest()[:16] if email else ""
 
 
 def build_registry(local_state_path=None, path=REGISTRY) -> dict:
@@ -361,11 +361,11 @@ def element_by_ref(snapshot: str, ref: str) -> tuple[str, str, str] | None:
     return hit[0]
 
 
-# Fields Neko never types into: passwords and passcodes, PINs, one-time and verification codes, card security codes.
+# Fields JARVIS never types into: passwords and passcodes, PINs, one-time and verification codes, card security codes.
 SECRET_FIELD = re.compile(r"(?i)pass(?:word|code|phrase)|\bpin\b|\botp\b|one[- ]?time|\b2fa\b|two[- ]?factor|"
                           r"(?:verification|security|confirmation|auth(?:entication|enticator)?|access|sms|login|sign[- ]?in) ?code|"
                           r"\bcvv\b|\bcvc\b|\bcsc\b|card security|secret")
-NO_SECRET_TYPING = "Neko does not type into sign-in, password, PIN or one-time-code fields: please sign in yourself"
+NO_SECRET_TYPING = "JARVIS does not type into sign-in, password, PIN or one-time-code fields: please sign in yourself"
 
 
 def secret_field(role: str, name: str) -> bool:
@@ -377,7 +377,7 @@ AUTH_HOSTS = ("accounts.google.com", "login.microsoftonline.com", "login.live.co
 
 
 def auth_required(snapshot: str, url: str = "") -> bool:
-    """Does this page ask the owner to sign in? (a password box, or a sign-in page) Neko never fills in passwords."""
+    """Does this page ask the owner to sign in? (a password box, or a sign-in page) JARVIS never fills in passwords."""
     if any(h in (url or "") for h in AUTH_HOSTS):
         return True
     els = elements(snapshot)
@@ -386,7 +386,7 @@ def auth_required(snapshot: str, url: str = "") -> bool:
     return has_password or (sign_in and any(r == "textbox" for r, _, _ in els))
 
 
-# A human check (CAPTCHA, "verify you are human", Cloudflare/hCaptcha/reCAPTCHA widgets). Neko never solves, clicks or
+# A human check (CAPTCHA, "verify you are human", Cloudflare/hCaptcha/reCAPTCHA widgets). JARVIS never solves, clicks or
 # types into one: the owner does it in the visible browser, then asks again.
 CHALLENGE = re.compile(r"(?i)\b(?:re|h)?captcha\b|not a robot|verify (?:that )?you(?:'re| are) (?:a )?human|are you (?:a )?(?:robot|human)"
                        r"|security challenge|human verification|cloudflare turnstile")
@@ -490,7 +490,7 @@ def whoami(sess, profile: dict) -> dict:
 def _no_ai_chat(url: str) -> None:
     site = ai_chat_site(url)
     if site:
-        raise BrowserError(f"{site} is open for you to use yourself: Neko does not read, click or type there (its terms forbid "
+        raise BrowserError(f"{site} is open for you to use yourself: JARVIS does not read, click or type there (its terms forbid "
                            "automated use); ask that model through its API instead")
 
 
@@ -523,7 +523,7 @@ def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | N
                 raise BrowserError(f"element {target} is not on the page now: read the page again")
         else:
             if CHALLENGE.search(target) and challenge_required(snap, url):
-                raise BrowserError("this page asks for a human check (CAPTCHA): Neko does not answer it; please complete it "
+                raise BrowserError("this page asks for a human check (CAPTCHA): JARVIS does not answer it; please complete it "
                                    "yourself in the browser, then ask again")
             if op == "type" and auth_required(snap, url) and SECRET_FIELD.search(target):
                 raise BrowserError(NO_SECRET_TYPING)
@@ -531,7 +531,7 @@ def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | N
             el = element_by_ref(snap, ref) or ("", target, ref)
         role, name, ref = el
         if CHALLENGE.search(name) and challenge_required(snap, url):
-            raise BrowserError("this page asks for a human check (CAPTCHA): Neko does not answer it; please complete it "
+            raise BrowserError("this page asks for a human check (CAPTCHA): JARVIS does not answer it; please complete it "
                                "yourself in the browser, then ask again")
         # a field with no name on a sign-in page is unknown, not safe: it may well be the password box
         if op == "type" and (secret_field(role, name) or (not name.strip() and auth_required(snap, url))):
@@ -567,7 +567,7 @@ def run(p: dict, session_factory=None) -> dict:
         return open_plain(prof, url)
     if not ready:
         return {"ok": False, "error": f"the Playwright extension is not installed in the {prof['name']} profile ({prof['dir']}); "
-                                      f"install it from the Chrome Web Store (id {EXTENSION_ID}) to let Neko read pages, click and play",
+                                      f"install it from the Chrome Web Store (id {EXTENSION_ID}) to let JARVIS read pages, click and play",
                 "profile": prof["dir"], "needs": "extension"}
     try:
         with Session(prof, session_factory) as sess:

@@ -1,4 +1,4 @@
-# Windows. Save one Chrome profile's Playwright-extension connection token so Neko can connect to that profile without the
+# Windows. Save one Chrome profile's Playwright-extension connection token so JARVIS can connect to that profile without the
 # "Allow & select" prompt each time. The OWNER runs this; the token is never shown, logged or sent anywhere.
 #
 #   1. In the Chrome profile, click the Playwright MCP extension icon and press "Copy" next to the token

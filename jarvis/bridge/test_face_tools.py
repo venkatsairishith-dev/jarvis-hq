@@ -28,7 +28,7 @@ class FakeClient:
         if self.fail:
             raise CONSOLE.BridgeError(self.fail, 503)
 
-    async def delegate(self, task, source="neko"):
+    async def delegate(self, task, source="jarvis"):
         self.calls.append(("delegate", task, source))
         self._maybe_fail()
         return {"id": "c1", "state": "running"}

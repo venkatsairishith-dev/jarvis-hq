@@ -3,7 +3,7 @@
 Ladder (cheapest and most certain first): UI Automation (ui.py / diag window_text) -> Windows' built-in OCR on a capture
 of that one window -> a local vision model (llama-swap "vision", UI-Venus-1.5-2B) for what has no readable text.
   * capture: PrintWindow of the target window only (never the desktop, never other windows), saved under
-    outputs\\neko-local and deleted after use; nothing leaves the PC.
+    outputs\\local-only and deleted after use; nothing leaves the PC.
   * observed vs inferred: OCR text is OBSERVED (it is on the screen); anything the vision model says is INFERRED and is
     labelled so; a point from the model is checked before use (inside the window) and its click is verified afterwards.
 Reused: Windows.Media.Ocr (built into Windows 10, via PowerShell's WinRT bridge), llama.cpp's multimodal server.
@@ -20,8 +20,8 @@ import urllib.request
 from . import runtime
 from .paths import local_result_dir, sweep_local
 
-VISION_URL = os.environ.get("NEKO_VISION_URL", "http://127.0.0.1:8080/v1/chat/completions")
-VISION_MODEL = os.environ.get("NEKO_VISION_MODEL", "vision-ground")
+VISION_URL = os.environ.get("JARVIS_VISION_URL", "http://127.0.0.1:8080/v1/chat/completions")
+VISION_MODEL = os.environ.get("JARVIS_VISION_MODEL", "vision-ground")
 
 CAPTURE = r"""
 $ErrorActionPreference='Stop'
@@ -43,12 +43,12 @@ $bmp = New-Object System.Drawing.Bitmap $w, $hh
 $g = [System.Drawing.Graphics]::FromImage($bmp); $dc = $g.GetHdc()
 [void][PW]::PrintWindow($h, $dc, 2)               # PW_RENDERFULLCONTENT: this window's own pixels, even if covered
 $g.ReleaseHdc($dc); $g.Dispose()
-$s = [int]$env:NEKO_SCALE                         # small UI text reads far better enlarged (OCR coordinates are scaled back)
+$s = [int]$env:JARVIS_SCALE                         # small UI text reads far better enlarged (OCR coordinates are scaled back)
 $big = New-Object System.Drawing.Bitmap ($w * $s), ($hh * $s)
 $g2 = [System.Drawing.Graphics]::FromImage($big)
 $g2.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
 $g2.DrawImage($bmp, 0, 0, $w * $s, $hh * $s); $g2.Dispose(); $bmp.Dispose()
-$big.Save($env:NEKO_PNG, [System.Drawing.Imaging.ImageFormat]::Png); $big.Dispose()
+$big.Save($env:JARVIS_PNG, [System.Drawing.Imaging.ImageFormat]::Png); $big.Dispose()
 @{ width = $w; height = $hh; left = $r.L; top = $r.T; scale = $s } | ConvertTo-Json -Compress
 """
 OCR = r"""
@@ -59,7 +59,7 @@ $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsR
 $null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]
 $asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
 function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op)); $task.Wait(-1) | Out-Null; $task.Result }
-$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($env:NEKO_PNG)) ([Windows.Storage.StorageFile])
+$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($env:JARVIS_PNG)) ([Windows.Storage.StorageFile])
 $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
 try {
   $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
@@ -88,7 +88,7 @@ def capture(proc: str, scale: int = 2) -> tuple[str, dict]:
         raise VisionError("bad target")
     sweep_local()
     path = os.path.join(local_result_dir(), f"window-{secrets.token_hex(4)}.png")
-    r = runtime.powershell(CAPTURE.replace("__PICK__", _pick()), {"JARVIS_UI_PROC": proc, "NEKO_PNG": path, "NEKO_SCALE": str(int(scale))}, 30)
+    r = runtime.powershell(CAPTURE.replace("__PICK__", _pick()), {"JARVIS_UI_PROC": proc, "JARVIS_PNG": path, "JARVIS_SCALE": str(int(scale))}, 30)
     if r.returncode or not os.path.isfile(path):
         msg = "no window" if "no window" in (r.stderr or "") else ("window is minimized" if "minimized" in (r.stderr or "") else "capture failed")
         raise VisionError(msg)
@@ -97,7 +97,7 @@ def capture(proc: str, scale: int = 2) -> tuple[str, dict]:
 
 def ocr(png: str, scale: int = 1) -> list[dict]:
     """Lines and words with boxes in the WINDOW's pixels (divided by the capture's enlargement)."""
-    r = runtime.powershell(OCR, {"NEKO_PNG": png}, 60)
+    r = runtime.powershell(OCR, {"JARVIS_PNG": png}, 60)
     if r.returncode:
         raise VisionError("ocr failed")
     out = (r.stdout or "").strip()
@@ -158,14 +158,14 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 # The picture goes to a model on THIS PC: an explicit empty proxy map, so http_proxy / https_proxy / ALL_PROXY in the environment can
-# never send a screenshot to a proxy instead of the loopback server (re-review M13). Same rule as plugin/plugins/_shared/loopback_http.py,
+# never send a screenshot to a proxy instead of the loopback server (re-review M13). Same rule as jarvis/plugins/_shared/loopback_http.py,
 # repeated here because the node does not import the plugin package.
 _LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
 
 
 def ask_vision(png: str, prompt: str, schema: dict | None = None, timeout: float = 120) -> str:
     """The local vision model's answer (INFERRED, never treated as observation). The screenshot goes only to a model on THIS PC:
-    NEKO_VISION_URL pointing anywhere else is refused before the picture is even read (a screenshot is the most private thing
+    JARVIS_VISION_URL pointing anywhere else is refused before the picture is even read (a screenshot is the most private thing
     this node holds)."""
     if not _on_this_pc(VISION_URL):
         raise VisionError("the vision model's address is not on this PC, so the screenshot was not sent")

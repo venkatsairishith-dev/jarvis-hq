@@ -1,7 +1,6 @@
 """Completion H (2026-10-19): a health answer must not say ready/ok while a REQUIRED component is disabled or unavailable.
 
-Console (kernel unreachable / token refused / kill switch / voice models absent), the speech server (models absent), the wake listener,
-the widget's status (degraded gateway or speech, unauthorized kernel) and the watchdog (answers-but-broken components make the status
+Console (kernel unreachable / token refused / kill switch / voice models absent), the speech server (models absent) and the watchdog (answers-but-broken components make the status
 unhealthy without triggering a restart). Real HTTP against the real handlers where there is one."""
 import contextlib
 import http.client
@@ -140,43 +139,6 @@ class SpeechHealth(unittest.TestCase):
         self.assertEqual(transcribe.readiness()["problems"], ["engine_missing", "stt_en_missing", "vad_missing"])
 
 
-class WidgetStatus(unittest.TestCase):
-    def setUp(self):
-        self.ws = load("widget_health", "widget/widget_server.py")
-        import tempfile
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-
-    def status(self, **over):
-        ws = self.ws
-        table = {u: {"status": "ok", "ready": True} for u in ws.SERVERS.values()}
-        table["http://127.0.0.1:8799/api/health"] = {"kernel": {"reachable": True, "authorized": True, "killed": False}}
-        table["http://127.0.0.1:8799/api/owner/state"] = {"busy": False, "approvals": []}
-        table["http://127.0.0.1:48916/plugins"] = {"plugins": [{"id": p, "status": "running"} for p in ws.PLUGINS]}
-        table.update(over)
-        return ws.build_status(lambda url, timeout=2.0, data=None: table.get(url), os.path.join(self.tmp.name, "r"), os.path.join(self.tmp.name, "w.json"))
-
-    def test_everything_ready_is_healthy(self):
-        s = self.status()
-        self.assertTrue(s["healthy"], s["problems"])
-
-    def test_a_degraded_gateway_or_speech_server_is_not_healthy(self):
-        ws = self.ws
-        for name, payload in (("privacy", {"ok": True, "ready": False, "degraded": ["pii_model_missing"]}), ("speech", {"status": "degraded", "ready": False, "problems": ["stt_hi_missing"]})):
-            s = self.status(**{ws.SERVERS[name]: payload})
-            self.assertFalse(s["healthy"], name)
-            self.assertTrue(any(name in p for p in s["problems"]), s["problems"])
-
-    def test_the_gateway_being_down_or_the_kernel_token_refused_is_not_healthy(self):
-        ws = self.ws
-        self.assertFalse(self.status(**{ws.SERVERS["privacy"]: None})["healthy"])
-        s = self.status(**{"http://127.0.0.1:8799/api/health": {"kernel": {"reachable": True, "authorized": False, "killed": False}}})
-        self.assertFalse(s["healthy"])
-        self.assertIn("kernel (token refused)", s["problems"])
-        s = self.status(**{"http://127.0.0.1:8799/api/health": {"kernel": {"reachable": False}}})
-        self.assertFalse(s["healthy"])
-
-
 class WatchdogHonesty(unittest.TestCase):
     def setUp(self):
         self.wd = load("watchdog_health", "scripts/watchdog.py")
@@ -187,8 +149,8 @@ class WatchdogHonesty(unittest.TestCase):
 
     def test_all_good_has_no_degraded_components(self):
         wd = self.wd
-        t = {wd.SERVERS["privacy"][0]: {"ready": True}, wd.SERVERS["speech"][0]: {"ready": True}, wd.WAKE_URL: {"ready": True}}
-        self.assertEqual(wd.degraded_components([], self.good, self.fetch(t), wake_up=True, wake_wanted_=True), [])
+        t = {wd.SERVERS["privacy"][0]: {"ready": True}, wd.SERVERS["speech"][0]: {"ready": True}}
+        self.assertEqual(wd.degraded_components([], self.good, self.fetch(t)), [])
 
     def test_kernel_states(self):
         wd = self.wd
@@ -198,15 +160,14 @@ class WatchdogHonesty(unittest.TestCase):
             self.assertTrue(any(word in b for b in bad), (kernel, bad))
         self.assertEqual(wd.degraded_components(["console"], {}, self.fetch(t)), [])        # a down console is already a "down" problem
 
-    def test_gateway_speech_and_wake_not_ready(self):
+    def test_gateway_and_speech_not_ready(self):
         wd = self.wd
         t = {wd.SERVERS["privacy"][0]: {"ok": True, "ready": False, "degraded": ["pii_model_missing"]},
-             wd.SERVERS["speech"][0]: {"status": "degraded", "ready": False, "problems": ["stt_en_missing"]}, wd.WAKE_URL: {"ready": False}}
-        bad = wd.degraded_components([], self.good, self.fetch(t), wake_up=True, wake_wanted_=True)
-        self.assertEqual(len(bad), 3, bad)
+             wd.SERVERS["speech"][0]: {"status": "degraded", "ready": False, "problems": ["stt_en_missing"]}}
+        bad = wd.degraded_components([], self.good, self.fetch(t))
+        self.assertEqual(len(bad), 2, bad)
         self.assertTrue(any("pii_model_missing" in b for b in bad))
         self.assertTrue(any("stt_en_missing" in b for b in bad))
-        self.assertEqual(len(wd.degraded_components([], self.good, self.fetch(t), wake_up=True, wake_wanted_=False)), 2)    # wake not wanted: not judged
 
     def test_a_down_component_is_not_double_reported(self):
         wd = self.wd

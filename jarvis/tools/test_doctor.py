@@ -29,7 +29,7 @@ Active Connections
   TCP    127.0.0.1:8799         127.0.0.1:50000        ESTABLISHED     4242
   TCP    100.101.102.103:8790   0.0.0.0:0              ABHÖREN         77
   TCP    [::]:445               [::]:0                 LISTENING       4
-  TCP    [::1]:48911            [::]:0                 LISTENING       900
+  TCP    [::1]:48970            [::]:0                 LISTENING       900
 """
 
 
@@ -40,7 +40,7 @@ def test_parse_proc_net_v4_and_v6():
 
 def test_parse_netstat_any_language():
     assert D.parse_netstat(NETSTAT) == [("0.0.0.0", 135), ("127.0.0.1", 8799), ("100.101.102.103", 8790), ("::", 445),
-                                        ("::1", 48911)]
+                                        ("::1", 48970)]
 
 
 @pytest.mark.parametrize("ip,want", [("127.0.0.1", "loopback"), ("::1", "loopback"), ("0.0.0.0", "all"), ("::", "all"),

@@ -277,3 +277,13 @@ def test_pypi_collection_on_the_real_repo_covers_the_jarvis_groups():
     pk, _ = D.pypi_packages(repo, reg)
     names = {n for n, v, t in pk}
     assert {"dbos", "python-pptx", "pdfplumber", "pypdfium2", "kaldi-native-fbank"} <= names
+
+
+def test_without_a_uv_lock_every_pinned_requirement_is_still_checked(tmp_path):
+    """The repository has no uv.lock since 2026-10-23; the jarvis/tools/requirements pins are the only source."""
+    repo = tmp_path / "repo"
+    (repo / "jarvis" / "tools" / "requirements").mkdir(parents=True)
+    (repo / "jarvis" / "tools" / "requirements" / "agent-venv.txt").write_text(
+        "httpx==0.28.1   # measured on laptop 2026-10-21\npywin32==311; sys_platform == \"win32\"\n", encoding="utf-8")
+    pkgs, notes = D.pypi_packages(repo, [{"name": "httpx", "integration": "pip", "category": "python"}])
+    assert ("httpx", "0.28.1", "httpx") in pkgs and not any("uv.lock" in n for n in notes)

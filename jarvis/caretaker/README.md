@@ -8,7 +8,7 @@ Keeps the tools JARVIS is built from healthy: everything in `jarvis/tools/regist
   - `advisory`: OSV advisories for the pinned PyPI packages (uv groups `jarvis` / `jarvis-dev` with their dependencies, the registry's pip tools) and the `jarvis/ui` npm lock. Only package names and versions are sent.
   - `lock_drift`: `fetch.py`'s own check of the files on one machine.
   - `test_failure`: failed and errored cases of the newest full benchmark v2 run.
-  - `secret_scan`: gitleaks over JARVIS's own code (`jarvis/`, `plugin/plugins/`; config `secret_scan_paths`), when gitleaks is installed. The vendored N.E.K.O base is left to upstream. Only the rule, file and line are kept, never the secret.
+  - `secret_scan`: gitleaks over JARVIS's own code (`jarvis/`, `jarvis/plugins/`; config `secret_scan_paths`), when gitleaks is installed. The vendored the face base is left to upstream. Only the rule, file and line are kept, never the secret.
 - **Logs and de-duplicates** (`run.py`). A finding id is a hash of the tool, the kind and the key evidence. The same issue keeps the same id on every run.
 - **Hands each new finding to the lab** as a kernel outcome task (task create, then lab dispatch, through the kernel's HTTP API). The `Idempotency-Key` is the finding id, so a re-run never makes a second task.
   - Only findings of severity `medium` or higher get a task, at most 5 per run.

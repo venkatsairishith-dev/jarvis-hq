@@ -1,6 +1,6 @@
 # Shared helpers for the JARVIS servers' credentials (Windows PowerShell). Dot-source it:  . (Join-Path $PSScriptRoot 'jarvis-auth.ps1')
 #
-# Each server (console 8799, widget 48940, wake 48945, speech 48930) writes its MASTER token to <name>.token in the per-user run folder
+# Each server (console 8799, speech 48930) writes its MASTER token to <name>.token in the per-user run folder
 # %LOCALAPPDATA%\jarvis\run (per-user by default). First-party scripts read it and send it in the server's header. The browser never
 # gets a token in a page: Get-LaunchUrl asks the server for a ONE-TIME launch code (valid 60 s, used once) and returns the URL with
 # the code in the fragment, which the login page exchanges for an HttpOnly session cookie (jarvis/scripts/control_auth.py).

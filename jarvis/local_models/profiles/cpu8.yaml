@@ -1,4 +1,4 @@
-# Neko local models, profile cpu8: CPU only, about 8 GB RAM (NEKO_MODEL_MATRIX.md). llama-swap over llama.cpp's CPU build.
+# JARVIS local models, profile cpu8: CPU only, about 8 GB RAM (MODEL_MATRIX.md). llama-swap over llama.cpp's CPU build.
 # One model at a time; planning, deep research and long writing go to the remote model through the privacy gateway.
 # Files: python jarvis\scripts\fetch_models.py --profile cpu8. Speeds are estimates until benchmarked on such a machine.
 healthCheckTimeout: 180
@@ -25,10 +25,10 @@ models:
     aliases: [math, maths, local-math]
     ttl: 300
 
-  # PC-task decision model: the alias "decider" (plugin/plugins/desktop/decide.py DEFAULT_MODEL). It was missing from this
+  # PC-task decision model: the alias "decider" (jarvis/plugins/desktop/decide.py DEFAULT_MODEL). It was missing from this
   # profile, so on this hardware every PC task fell back to "no plan" (MEM-M5, 2026-10-18).
   # Qwen3-1.7B is the low-memory choice in PC_CONTROL_BENCHMARK.md (82.9% dev, 76.7% held-out, 1.0 s median on the laptop GPU; 1.1 GB file) and fits 8 GB RAM; the
-  # 4B model (92.9%) would not leave room for Windows, the browser and the N.E.K.O servers.
+  # 4B model (92.9%) would not leave room for Windows, the browser and the the face servers.
   # The model files here are pinned in jarvis/tools/jarvis.lock.json (models/gguf/...); fetch them with the lock fetcher, not with
   # fetch_models.py --profile (that one only knows the models/llm set). NOT yet run on this hardware class.
   decider-qwen3-1.7b:

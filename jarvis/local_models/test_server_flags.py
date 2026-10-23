@@ -124,7 +124,7 @@ def test_the_proxy_listens_on_loopback_only():
 
 
 def test_the_benchmark_server_is_started_the_same_way():
-    with open(os.path.join(REPO, "jarvis", "evals", "neko95", "bench", "model_compare.py"), encoding="utf-8") as fh:
+    with open(os.path.join(REPO, "jarvis", "evals", "quality95", "bench", "model_compare.py"), encoding="utf-8") as fh:
         src = fh.read()
     start = src[src.index("def start("):src.index("def make_post(")]
     assert '"--host", "127.0.0.1"' in start and '"--no-webui"' in start

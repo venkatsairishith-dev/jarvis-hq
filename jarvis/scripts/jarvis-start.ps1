@@ -4,7 +4,7 @@
 # One-time setup of the agent environment (plugins, tool server, watch runner; nothing outside D:):
 #   $env:UV_PYTHON_INSTALL_DIR = "D:\jarvis\tools\uv-python"; $env:UV_CACHE_DIR = "D:\jarvis\cache\uv"
 #   D:\jarvis\tools\uv\uv.exe venv D:\jarvis\tools\agent-venv --python 3.11
-#   D:\jarvis\tools\uv\uv.exe pip install --python D:\jarvis\tools\agent-venv\Scripts\python.exe -r jarvis\requirements\agent-venv.txt
+#   D:\jarvis\tools\uv\uv.exe pip install --python D:\jarvis\tools\agent-venv\Scripts\python.exe -r jarvis\tools\requirements\agent-venv.txt
 # The speech server has its own environment (D:\jarvis\tools\jarvis-venv); the privacy gateway has privacy-venv.
 param(
   [string]$Venv = "D:\jarvis\tools\agent-venv",
