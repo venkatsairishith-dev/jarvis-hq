@@ -1,0 +1,99 @@
+# JARVIS face
+
+The avatar, chat and voice window of JARVIS. It replaces N.E.K.O as JARVIS's face. It is a desktop app (Electron, Vue) that
+runs on the owner's laptop (Windows) and shows a Live2D, VRM or MMD avatar.
+
+The face decides nothing. Chat goes through the privacy gateway, speech goes to the local speech server, and every action goes
+to the JARVIS tool server, which hands it to the console and the kernel. The kernel decides what may run and asks the owner for
+the PIN when a step is risky.
+
+```
+face (this folder) --chat--> privacy gateway 127.0.0.1:48950/v1 --> model provider (private values replaced)
+                   --voice-> local speech server 127.0.0.1:48930/v1 (Kokoro / Piper, speech to text)
+                   --tools-> JARVIS tool server 127.0.0.1:48970/mcp (jarvis/bridge/face_tools.py)
+                                --> JARVIS console --> kernel (policy, PIN, audit)
+```
+
+## Where it comes from
+
+Built from **Project AIRI** (moeru-ai/airi, MIT), tag v0.12.0, commit `3b0672e3668bd1ade1210e579818f379e4f8a224`. It is
+JARVIS's own code now: it is not tracked against AIRI and is never updated from AIRI's releases. Commit `7390cb5` is the
+unchanged import, so every JARVIS change can be read as a diff against it. The internal package names (`@proj-airi/*`) are
+kept so that a later AIRI security fix can still be compared and ported by hand.
+
+Taken: the desktop app (`apps/stage-tamagotchi`), the 44 workspace packages it needs, three small `server/packages` libraries,
+and the workspace files. Left out: AIRI's web and mobile apps, its cloud server, its Godot app, its computer-use service and
+its CJK display fonts (62 MB).
+
+## What JARVIS changed
+
+| Change | Where |
+|---|---|
+| **Network lock.** Every request from every window, and every `fetch` in the main process, may reach only this PC (loopback), the tailnet (100.64.0.0/10) and hosts the owner lists in `JARVIS_FACE_ALLOW_HOSTS` (comma separated, `*.example.com` allowed). Everything else is cancelled before it leaves the PC. | `apps/stage-tamagotchi/src/main/jarvis/network-lock.ts` |
+| **Tools only from JARVIS.** The face never starts a program as an MCP server (AIRI allowed any command in `mcp.json`). It connects only to HTTP servers on this PC or the tailnet, and a new config starts with the JARVIS tool server. | `src/main/services/airi/mcp-servers/index.ts` |
+| **No computer use, no Home Assistant control.** Both acted on the PC or the home outside the kernel. Removed: the main-process service, the chat tool, the composer button, the native `@auv-js` packages. | main `index.ts`, `src/renderer/stores/tools/` |
+| **No analytics.** The OpenPanel adapter, its configuration (AIRI's analytics endpoint) and the dependency are removed; no build can turn analytics on. | `packages/stage-ui/src/libs/product-signals/` |
+| **No updates from AIRI.** The auto-updater is off and the GitHub release feed (moeru-ai/airi) is removed from the installer config. | main `index.ts`, `electron-builder.config.ts` |
+| **No AIRI account.** The sign-in button is removed; AIRI's paid cloud providers only appear after a sign-in, which can no longer happen, and the network lock blocks AIRI's servers anyway. | controls island |
+| **JARVIS defaults.** Empty chat, hearing and speech settings start on the privacy gateway and the local speech server. Settings the owner made are never changed. | `packages/stage-ui/src/stores/modules/jarvis-defaults.ts`, `packages/stage-shared/src/jarvis.ts` |
+| **JARVIS character.** The built-in card is named JARVIS and its prompt is generated from `jarvis/persona/jarvis_card.json` (`python jarvis/persona/face_prompt.py`; `--check` tells whether they match). AIRI's character prompt is gone. | `packages/i18n/src/locales/en/base.yaml` |
+| **Name.** App id `jarvis.face`, product name JARVIS, window titles, tray, English interface text. Uninstalling keeps the face's settings. | `electron-builder.config.ts`, `src/main/windows/`, `packages/i18n/` |
+| **English only.** The 10 other interface languages and the translation glossary are removed. JARVIS still answers in the language the owner speaks. | `packages/i18n/` |
+| **No Spine runtime.** Spine avatars need the Spine Runtimes, which only a Spine Editor licence holder may integrate. The runtime is removed; a Spine avatar shows a notice. | `packages/stage-ui-spine/` |
+| **Smaller fonts.** The three CJK display fonts are stand-ins that map their names to fonts already on the PC. | `packages/font-*` |
+
+## Build and run (Windows laptop, or Linux for tests)
+
+Needs Node 22 and pnpm 11 (`corepack enable`). The first build downloads, and caches under `.cache/`:
+
+- the **Live2D Cubism SDK for Web** core from cubism.live2d.com. It is Live2D's proprietary software, never stored in this
+  repository; by building, the owner accepts Live2D's licence (free for individuals and small businesses);
+- the sample avatars (Hiyori from Live2D's sample collection, two VRoid sample avatars) from dist.ayaka.moe.
+
+```
+cd jarvis\face
+pnpm install
+pnpm run build          # packages, then the app (out\)
+pnpm run build:win      # an installer under apps\stage-tamagotchi\dist\
+pnpm run dev            # development window
+```
+
+Start JARVIS's side first: the privacy gateway (48950), the local speech server (48930) and the tool server:
+
+```
+python -m jarvis.bridge.face_tools --data D:\jarvis\N.E.K.O-data\muse --vault D:\jarvis\vault
+```
+
+In the face, open Settings > Providers > OpenAI Compatible and paste the provider key the gateway forwards (it stays on this
+PC, in the face's own settings). Speech needs no key.
+
+## Tests
+
+```
+pnpm -F @proj-airi/stage-tamagotchi exec vitest run
+pnpm -F @proj-airi/stage-ui exec vitest run
+python -m pytest jarvis/bridge/test_face_tools.py
+```
+
+Measured on 2026-10-23 against the unchanged import (`efe0dd0`): the suites of stage-tamagotchi, stage-ui, stage-shared and
+provider-inference give the same results, apart from tests removed or renamed with the code they tested. New tests cover the
+network lock, the MCP lockdown, the JARVIS defaults and the tool server.
+
+## Known limits
+
+- **Not yet run on the laptop.** It is built and tested on Linux; the Windows installer, the avatar on a real screen, the
+  microphone and the end-to-end voice path still need the laptop (pilot, Phase B in
+  `jarvis/docs/neko/research-2026-10-22/NEKO_REPLACEMENT_2026-10-23.md`).
+- **Non-English data remains** where it is data, not prose: the speech readers' Japanese, Korean and Chinese tables for maths
+  and chemistry, MMD morph names (they are the identifiers inside MMD model files) and test fixtures.
+- AIRI's cloud client code is still present but unreachable (no sign-in; the network lock blocks its servers). Removing it is
+  a clean-up for later.
+- AIRI's security history: the character-card XSS that could run commands (GHSA-9832-f8jx-hw6f) was fixed in
+  v0.7.2-beta.3, and the CI advisory (GHSA-fvf7-wrqx-3m6c) concerned AIRI's GitHub workflows, not the app. Import character
+  cards only from sources you trust.
+
+## Licences
+
+AIRI's code is MIT (`LICENSE`, copyright Neko Ayaka and the Moeru AI Project AIRI Team); keep that file with the code.
+`packages/font-departure-mono` is SIL OFL 1.1 (its `LICENSE`). The Live2D Cubism core and the sample avatars are downloaded at
+build time under their own terms and are not part of this repository.

@@ -5,6 +5,7 @@ Outside code that JARVIS carries in the repository (a git subtree, squashed). Ea
 | Part | Path | Upstream | Pin | Licence |
 |---|---|---|---|---|
 | N.E.K.O.-Tauri (desktop shell) | `jarvis/desktop/shell` | https://github.com/Project-N-E-K-O/N.E.K.O.-Tauri | `b7b4fd70692489ca94457bc95f968e36ed61c4c4` (branch `main`, 2026-07-29) | Apache-2.0 |
+| Project AIRI (the face; imported as JARVIS's own code, not a subtree) | `jarvis/face` | https://github.com/moeru-ai/airi | tag `v0.12.0`, `3b0672e3668bd1ade1210e579818f379e4f8a224` | MIT (details in `jarvis/face/README.md`) |
 
 ## N.E.K.O.-Tauri
 

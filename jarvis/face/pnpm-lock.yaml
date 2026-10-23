@@ -42,15 +42,6 @@ catalogs:
     '@electron/notarize':
       specifier: ^3.1.1
       version: 3.1.1
-    '@esotericsoftware/spine-webgl':
-      specifier: ~4.2.0
-      version: 4.2.119
-    '@esotericsoftware/spine-webgl-4-0':
-      specifier: npm:@esotericsoftware/spine-webgl@~4.0.31
-      version: 4.0.31
-    '@esotericsoftware/spine-webgl-4-1':
-      specifier: npm:@esotericsoftware/spine-webgl@~4.1.56
-      version: 4.1.56
     '@fontsource-variable/comfortaa':
       specifier: ^5.3.0
       version: 5.3.0
@@ -3157,15 +3148,6 @@ importers:
 
   packages/stage-ui-spine:
     dependencies:
-      '@esotericsoftware/spine-webgl':
-        specifier: 'catalog:'
-        version: 4.2.119
-      '@esotericsoftware/spine-webgl-4-0':
-        specifier: 'catalog:'
-        version: '@esotericsoftware/spine-webgl@4.0.31'
-      '@esotericsoftware/spine-webgl-4-1':
-        specifier: 'catalog:'
-        version: '@esotericsoftware/spine-webgl@4.1.56'
       '@moeru/std':
         specifier: 'catalog:'
         version: 0.1.0-beta.17
@@ -4618,24 +4600,6 @@ packages:
   '@eslint/plugin-kit@0.7.2':
     resolution: {integrity: sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
-
-  '@esotericsoftware/spine-core@4.0.31':
-    resolution: {integrity: sha512-SiP87Xudw8qfg6t1Gv4NVoqP+Tw0eaCj1ApS+GXLdCvb/i5FNQevqEt4RgEvD8j1vJy+WVriPLMJYQSdaSehgA==}
-
-  '@esotericsoftware/spine-core@4.1.56':
-    resolution: {integrity: sha512-sJbqIof+yE7LbkImbJt2cHfYcGBqadABttx8RY3ggu4JCa0sZLGdh+tWwe0+aRoN/91VI0rGSgG16fmkZ7Hc8Q==}
-
-  '@esotericsoftware/spine-core@4.2.119':
-    resolution: {integrity: sha512-lvaRECaQDScO758ZSAR1Fj+GWkBKVZxPdgT/gCiKqdkrjZCDu2UzgbZtdPhxnLPcKG/zsaGJkfbN4OS0wHsxZQ==}
-
-  '@esotericsoftware/spine-webgl@4.0.31':
-    resolution: {integrity: sha512-G6j31+caQJck/4UN8TVaTKnU0RPysI7ECMkCxcXBGsTmv98m0O5Wx18YgeIf//Bg8KAO+mZ/DmwzeScwGG9HPA==}
-
-  '@esotericsoftware/spine-webgl@4.1.56':
-    resolution: {integrity: sha512-LNr/X4B81/rC96mzFV+L5LPnqaIj1v3RBCKTagmFlAd/2MtXcxwEatIQVPq487NigFwlrkvmxQuMpl1TRf3xxw==}
-
-  '@esotericsoftware/spine-webgl@4.2.119':
-    resolution: {integrity: sha512-8SaY+Ii1MMA8ZJOq1VxffzJ8ns/45M9wc0mjEMg/dHFWR/yvxsMx2fJhq2aRbRkYRobBr8Hu9jOleyUSkFD0Gw==}
 
   '@exodus/bytes@1.15.1':
     resolution: {integrity: sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q==}
@@ -15085,24 +15049,6 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
-
-  '@esotericsoftware/spine-core@4.0.31': {}
-
-  '@esotericsoftware/spine-core@4.1.56': {}
-
-  '@esotericsoftware/spine-core@4.2.119': {}
-
-  '@esotericsoftware/spine-webgl@4.0.31':
-    dependencies:
-      '@esotericsoftware/spine-core': 4.0.31
-
-  '@esotericsoftware/spine-webgl@4.1.56':
-    dependencies:
-      '@esotericsoftware/spine-core': 4.1.56
-
-  '@esotericsoftware/spine-webgl@4.2.119':
-    dependencies:
-      '@esotericsoftware/spine-core': 4.2.119
 
   '@exodus/bytes@1.15.1(@noble/hashes@2.3.0)':
     optionalDependencies:

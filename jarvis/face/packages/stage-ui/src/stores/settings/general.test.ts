@@ -48,20 +48,20 @@ describe('store settings-general', () => {
     const settingsStore = useSettingsGeneral()
     const resolvedLanguage = settingsStore.getLanguage()
 
-    // navigator.language 'zh-CN' gets remapped to 'zh-Hans'
-    expect(resolvedLanguage).toBe('zh-Hans')
+    // JARVIS: the interface is English only, so any other system language resolves to English
+    expect(resolvedLanguage).toBe('en')
     expect(localStorageMock.getItem).toHaveBeenCalledWith('settings/language')
   })
 
   it('issue #1658: returns persisted language when localStorage has a value', () => {
-    // User previously selected Traditional Chinese
-    store['settings/language'] = 'zh-Hant'
+    // User previously selected English (JARVIS: the only interface language)
+    store['settings/language'] = 'en'
     vi.stubGlobal('navigator', { language: 'zh-CN' })
 
     const settingsStore = useSettingsGeneral()
     const resolvedLanguage = settingsStore.getLanguage()
 
     // Should respect the persisted language, not fallback to navigator.language
-    expect(resolvedLanguage).toBe('zh-Hant')
+    expect(resolvedLanguage).toBe('en')
   })
 })

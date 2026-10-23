@@ -35,6 +35,19 @@ Updated 2026-10-23 (cloud session) from branch `claude/implementation-plan-desig
 | 20 | Its own VM doing browser research like openmuse | TODO / OWNER | Kernel and Hermes run on the Oracle VM (2 CPU / 11 GiB, within Always Free); the WSL agent computer was lost | Agent desktop on the VM (P2), after the owner checks both instances' shapes against the 2 OCPU / 12 GB free limit. Candidate: Cua Spaces for Hermes (`trycua/hermes-cua-spaces`, MIT, plugin 0.4.0 at `82bb8d3`): a fresh throwaway machine per job, watchable live; local Spaces only (no paid cua.ai cloud), pinned install (not `curl \| sh`), telemetry off, egress through the JARVIS proxy, kernel hook kept. Untested: arm64 on the Oracle VM and the Hermes upgrade it needs |
 | 21 | Everything openmuse can do | BUILT | Page watches, finance CSV, durable task state, PDF forms, Gmail/Calendar drafts (no send path) **BUILT** in `jarvis/muse/`; the watch runner (checks on schedule, survives restarts, fetches only through the egress guard) and notifications (local inbox plus content-free phone pings over ntfy) **BUILT** (`runner.py`, `notify.py`); ideas with evidence **BUILT** (`ideas.py`); parity table below | Start the runner from the supervisor, show the inbox in the console, owner creates an ntfy topic; browser profiles with takeover; no-network computer (P7) |
 
+## Replacing N.E.K.O with the new face
+
+Owner's choice (2026-10-23): replace N.E.K.O with another app, integrated as JARVIS's own code. Plan and reasons:
+`research-2026-10-22/NEKO_REPLACEMENT_2026-10-23.md`.
+
+| Step | Status | What exists |
+|---|---|---|
+| Face imported and made JARVIS's own (`jarvis/face`, from Project AIRI v0.12.0, MIT) | **BUILT** | Analytics, updater, AIRI account, computer use, Home Assistant control, program-starting MCP servers, the Spine runtime and 10 interface languages removed; network lock (this PC, tailnet, hosts you list); chat on the privacy gateway, voice on the local speech server; the JARVIS card as its character. Builds; its test suites match the unchanged import |
+| Face tool server (`jarvis/bridge/face_tools.py`, 127.0.0.1:48970) | **BUILT** | The face asks, the console and kernel decide (PIN for risky steps); web pages cannot call it; 8 tests including MCP to console over real HTTP |
+| Pilot on the laptop next to N.E.K.O (Phase B) | TODO / OWNER | Build on Windows, avatar on screen, microphone and voice path, the 18 persona cases, a week of use |
+| `jarvis/pluginapi` shim, memory on the kernel store (Phase A) | TODO | After the laptop's item-19 work lands |
+| Remove N.E.K.O, English-only repository (Phase C) | TODO | After the pilot passes |
+
 ## openmuse parity (item 21)
 
 Each row of openmuse's own feature inventory (`docs/FEATURES.md` at commit 1ac68f3) against JARVIS. "Tests" are the files that
@@ -61,3 +74,4 @@ pin the behaviour; a row is only DONE when it is also switched on.
 - The live microphone test and "Hey Neko" recordings (`05_OPERATIONS.md`, "Hey Neko" section).
 - Oracle console: the shapes of both instances against the free 2 OCPU / 12 GB total (never touch `hermes-agent-vm-2`).
 - Merging the work into `main` when the phases are done.
+- Trying the new face on the laptop (`HOW_TO_USE.md` section 15); building it accepts Live2D's licence for the Cubism core (free for individuals).

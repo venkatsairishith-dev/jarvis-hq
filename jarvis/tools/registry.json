@@ -2914,5 +2914,32 @@
    "content_hash"
   ],
   "evidence": "Reviewed 2026-10-22 before vendoring: no eval/exec/open/subprocess/network calls; only write is the optional scan cache (callers pass cache_dir). Copied verbatim; MIT LICENSE kept beside it."
+ },
+ {
+  "name": "Project AIRI (the face: avatar, chat and voice desktop app)",
+  "category": "face",
+  "upstream_url": "https://github.com/moeru-ai/airi",
+  "licence": "MIT",
+  "licence_spdx": "MIT",
+  "pinned_version": "tag v0.12.0, commit 3b0672e3668bd1ade1210e579818f379e4f8a224",
+  "pin_location": [
+   "jarvis/face/README.md"
+  ],
+  "integration": "imported source, now JARVIS's own code (unchanged import is commit 7390cb5; JARVIS changes are the diff on top)",
+  "machine": "laptop (Windows), Electron; built and tested on Linux",
+  "jarvis_files": [
+   "jarvis/face/",
+   "jarvis/face/apps/stage-tamagotchi/src/main/jarvis/network-lock.ts",
+   "jarvis/face/packages/stage-ui/src/stores/modules/jarvis-defaults.ts",
+   "jarvis/persona/face_prompt.py",
+   "jarvis/bridge/face_tools.py"
+  ],
+  "features_used": [
+   "Live2D / VRM / MMD avatar stage",
+   "chat window",
+   "voice input and output (OpenAI-compatible)",
+   "MCP client (HTTP only)"
+  ],
+  "evidence": "Licences: AIRI code MIT; packages/font-departure-mono SIL OFL 1.1; the Live2D Cubism core and sample avatars are downloaded at build under their own terms and not stored. Reviewed 2026-10-23: removed OpenPanel analytics, auto-updater and AIRI release feed, account sign-in, computer use (@auv-js), Home Assistant control, stdio MCP servers, the Spine Runtimes (need a Spine Editor licence) and 10 non-English interface languages; added a network lock (loopback, tailnet, owner-listed hosts). GHSA-9832-f8jx-hw6f fixed upstream in v0.7.2-beta.3. Test suites match the unchanged import apart from tests removed with their code."
  }
 ]

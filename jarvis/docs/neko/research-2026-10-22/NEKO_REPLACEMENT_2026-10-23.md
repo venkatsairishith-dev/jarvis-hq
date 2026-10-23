@@ -1,7 +1,11 @@
 # Replacing N.E.K.O as JARVIS's base: findings and plan (2026-10-23)
 
 The owner asked to replace N.E.K.O (Chinese-first, about 190,000 lines of Chinese in 2,764 inherited files) with another app, research
-first. Nothing has been changed yet.
+first.
+
+**Progress (2026-10-23, later):** the owner chose to integrate AIRI as JARVIS's own code. Done: `jarvis/face` (AIRI v0.12.0,
+made JARVIS's own; see its README) and the face tool server `jarvis/bridge/face_tools.py` (Phase A step 2). Next: the laptop
+pilot (Phase B), then the plugin shim and memory move (Phase A steps 1 and 3), then Phase C.
 
 ## 1. How much of JARVIS depends on N.E.K.O (measured on this branch)
 

@@ -1014,7 +1014,7 @@ describe('airi-card store', () => {
 
     expect(cardStore.cards.has(cardId)).toBe(false)
     expect(cardStore.activeCardId).toBe('default')
-    expect(cardStore.activeCard?.name).toBe('ReLU')
+    expect(cardStore.activeCard?.name).toBe('JARVIS')
   })
 
   it('keeps the built-in fallback card when deletion is requested directly', async () => {
@@ -1048,7 +1048,7 @@ describe('airi-card store', () => {
     await cardStore.initialize()
 
     expect(cardStore.activeCardId).toBe('default')
-    expect(cardStore.activeCard?.name).toBe('ReLU')
+    expect(cardStore.activeCard?.name).toBe('JARVIS')
   })
 
   describe('applySynchronizedCards', () => {
@@ -1179,7 +1179,7 @@ describe('airi-card store', () => {
         const { rejected } = cardStore.applySynchronizedCards({ ...noChanges, upserts: { default: { '/systemPrompt': 'Be kind' } } })
 
         expect(rejected).toEqual([])
-        expect(cardStore.cards.get('default')).toMatchObject({ name: 'ReLU', description: builtInDescription, systemPrompt: 'Be kind' })
+        expect(cardStore.cards.get('default')).toMatchObject({ name: 'JARVIS', description: builtInDescription, systemPrompt: 'Be kind' })
       })
 
       // Every device ships the preset Avatar Model. Its reference is built-in content, not an edit.

@@ -6,7 +6,7 @@
 - jarvis/docs/neko/MODELS.md: every model JARVIS can download (jarvis/tools/jarvis.lock.json), with its role, machines, size and
   licence.
 
-Upstream code is not mapped file by file (N.E.K.O's own tree, jarvis/vendor, jarvis/third_party, the Tauri shell subtree); tests
+Upstream code is not mapped file by file (N.E.K.O's own tree, jarvis/vendor, jarvis/third_party, the Tauri shell subtree, the face's imported AIRI code); tests
 and data files are left out. Uses git ls-files, so only tracked files appear.
 
     python jarvis/tools/make_docs.py            write both files
@@ -33,6 +33,8 @@ ROOTS = ("jarvis/",) + tuple(f"plugin/plugins/{p}/" for p in (
     "desktop", "research", "deliverables", "local_team", "main_agent", "jarvis_bridge", "learn_vault", "doc_tools", "workbench"))
 EXCLUDE = re.compile(
     r"^jarvis/(vendor|third_party|desktop/shell|docs)/"           # upstream code and the docs themselves
+    # the face is imported AIRI code (jarvis/face/README.md lists what JARVIS changed); only the files JARVIS wrote are mapped
+    r"|^jarvis/face/(?!apps/stage-tamagotchi/src/main/jarvis/|packages/stage-shared/src/jarvis\.ts$|packages/stage-ui/src/stores/modules/jarvis-defaults\.ts$)"
     r"|(^|/)(tests?|__tests__|fixtures|results|evidence|node_modules|dist|build|cases|data)/"
     r"|(^|/)(test_[^/]*|conftest\.py|[^/]*\.test\.[a-z]+|[^/]*\.spec\.[a-z]+)$"
     r"|^jarvis/(evals|bench)/.*\.json$|(^|/)[^/]*result[^/]*\.json$")              # benchmark data and results are not code
@@ -219,7 +221,8 @@ def build_file_map(root: Path = ROOT, files: list[str] | None = None) -> str:
            f"{len(files)} files in {len(groups)} folders. {missing} have no description in the file yet: give them a module "
            "docstring or a leading comment and re-run.", "",
            "Covered: the `jarvis/` tree and the plugins JARVIS added (" + ", ".join(r.split('/')[2] for r in ROOTS[1:]) + "). "
-           "Not covered file by file: N.E.K.O's own tree, `jarvis/vendor`, `jarvis/third_party`, the Tauri shell subtree, tests and data.",
+           "Not covered file by file: N.E.K.O's own tree, `jarvis/vendor`, `jarvis/third_party`, the Tauri shell subtree, the face's "
+           "imported AIRI code (`jarvis/face/README.md`), tests and data.",
            ""]
     for folder in sorted(groups):
         out += [f"## `{folder}/`", ""]

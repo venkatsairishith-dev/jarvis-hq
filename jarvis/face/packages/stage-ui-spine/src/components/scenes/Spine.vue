@@ -1,14 +1,16 @@
 <script setup lang="ts">
+/**
+ * JARVIS stand-in for AIRI's Spine avatar scene.
+ *
+ * The Spine Runtimes (Esoteric Software) may only be integrated by a holder of a Spine Editor licence, so JARVIS does
+ * not ship them. This component keeps the props, models, events and exposed methods of the original, renders a short
+ * notice instead of a model, and reports an error so the stage can tell the owner to pick a Live2D, VRM or MMD avatar.
+ */
 import type { Emotion } from '../../constants/emotions'
 
-import { Screen } from '@proj-airi/ui'
-import { ref, watch } from 'vue'
+import { onMounted } from 'vue'
 
-import SpineCanvas from './spine/Canvas.vue'
-import SpineModel from './spine/Model.vue'
-
-const props = withDefaults(defineProps<{
-  /** Scene painted inside the canvas, behind the model. */
+withDefaults(defineProps<{
   backgroundUrl?: string | null
   modelSrc?: string
   modelId?: string
@@ -20,74 +22,30 @@ const props = withDefaults(defineProps<{
   renderScale?: number
 }>(), {
   paused: false,
-  premultipliedAlpha: true,
-  defaultMixDuration: 0.2,
-  idleAnimationEnabled: true,
-  maxFps: 0,
-  renderScale: 1,
 })
 
 const emit = defineEmits<{ (e: 'error', error: Error): void }>()
 
 const componentState = defineModel<'pending' | 'loading' | 'mounted'>('state', { default: 'pending' })
-const componentStateCanvas = defineModel<'pending' | 'loading' | 'mounted'>('canvasState', { default: 'pending' })
-const componentStateModel = defineModel<'pending' | 'loading' | 'mounted'>('modelState', { default: 'pending' })
-const modelFailed = ref(false)
-watch(() => [props.modelSrc, props.modelId], () => {
-  modelFailed.value = false
-})
+defineModel<'pending' | 'loading' | 'mounted'>('canvasState', { default: 'pending' })
+defineModel<'pending' | 'loading' | 'mounted'>('modelState', { default: 'pending' })
 
-const canvasRef = ref<InstanceType<typeof SpineCanvas>>()
-const modelRef = ref<InstanceType<typeof SpineModel>>()
-
-watch([componentStateModel, componentStateCanvas], () => {
-  componentState.value = (!modelFailed.value && componentStateModel.value === 'mounted' && componentStateCanvas.value === 'mounted')
-    ? 'mounted'
-    : 'loading'
-})
-
-function reportModelError(error: Error) {
-  modelFailed.value = true
+onMounted(() => {
   componentState.value = 'loading'
-  emit('error', error)
-}
+  emit('error', new Error('Spine avatars are not available in JARVIS (the Spine Runtimes need a Spine Editor licence). Choose a Live2D, VRM or MMD avatar.'))
+})
 
 defineExpose({
-  canvasElement: () => canvasRef.value?.canvasElement(),
-  captureFrame: () => canvasRef.value?.captureFrame(),
-  setEmotion: (emotion: Emotion, intensity?: number) => modelRef.value?.setEmotion(emotion, intensity),
-  listAnimations: () => modelRef.value?.listAnimations() ?? [],
-  listSkins: () => modelRef.value?.listSkins() ?? [],
+  canvasElement: (): HTMLCanvasElement | undefined => undefined,
+  captureFrame: async (): Promise<Blob | undefined> => undefined,
+  setEmotion: (_emotion: Emotion, _intensity?: number): void => {},
+  listAnimations: (): string[] => [],
+  listSkins: (): string[] => [],
 })
 </script>
 
 <template>
-  <Screen v-slot="{ width, height }" relative>
-    <SpineCanvas
-      ref="canvasRef"
-      v-slot="{ canvas }"
-      v-model:state="componentStateCanvas"
-      :width="width"
-      :height="height"
-      :resolution="renderScale"
-    >
-      <SpineModel
-        ref="modelRef"
-        v-model:state="componentStateModel"
-        :background-url="backgroundUrl"
-        :model-src="modelSrc"
-        :model-id="modelId"
-        :canvas="canvas"
-        :width="width"
-        :height="height"
-        :resolution="renderScale"
-        :paused="paused"
-        :premultiplied-alpha="premultipliedAlpha"
-        :default-mix-duration="defaultMixDuration"
-        :idle-animation-enabled="idleAnimationEnabled"
-        :max-fps="maxFps"
-        @error="reportModelError"
-      />
-    </SpineCanvas>
-  </Screen>
+  <div :class="['h-full w-full flex items-center justify-center p-4 text-center text-sm opacity-70']">
+    Spine avatars are not available in JARVIS. Choose a Live2D, VRM or MMD avatar.
+  </div>
 </template>

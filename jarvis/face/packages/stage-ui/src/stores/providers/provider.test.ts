@@ -178,6 +178,7 @@ describe('provider store synchronization boundary', () => {
     })
   })
 
+  // JARVIS: the interface is English only, so a Chinese language setting from AIRI no longer applies.
   it('uses the current interface language when Sherpaw is first configured', async () => {
     let storedLanguage = 'en'
     vi.stubGlobal('localStorage', { getItem: () => storedLanguage })
@@ -192,7 +193,7 @@ describe('provider store synchronization boundary', () => {
 
       expect(configStore.getProviderConfig('sherpaw-transcription')).toMatchObject({
         model: 'paraformer-zh-en',
-        modelLanguageFilter: 'zh',
+        modelLanguageFilter: 'en',
       })
     }
     finally {

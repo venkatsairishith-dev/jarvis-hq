@@ -136,7 +136,25 @@ gpt-oss-120b by default) to review a plan. It goes through the privacy gateway f
 can never trigger an action: JARVIS only shows it next to its own view. Gemini stays off as you chose; a paid ChatGPT or Gemini API
 needs your approval first. The second-opinion gateway must be running (`gateway.py --port 48954 --providers providers.second.json`).
 
-## 15. What is being built next
+## 15. The new face (replacing N.E.K.O; pilot, not yet tried on the laptop)
+
+JARVIS's new avatar, chat and voice window lives in `jarvis\face` (built from Project AIRI, now JARVIS's own code). Keep using
+N.E.K.O until the pilot passes. To try it on the laptop (Windows):
+
+1. Start the privacy gateway, the local speech server and the face's tool server:
+   `python -m jarvis.bridge.face_tools --data D:\jarvis\N.E.K.O-data\muse --vault D:\jarvis\vault` (it listens on
+   127.0.0.1:48970 only, and web pages cannot call it).
+2. `cd jarvis\face`, then `pnpm install` and `pnpm run dev` (or `pnpm run build:win` for an installer). The first build
+   downloads the Live2D Cubism core from Live2D (their licence, free for individuals) and the sample avatars.
+3. In the face: Settings > Providers > OpenAI Compatible, paste the key the gateway forwards. Chat already points at the gateway
+   and speech at the local speech server.
+4. Ask it to do something: it hands the task to JARVIS (`jarvis_do`), the kernel decides, and anything risky waits for your PIN
+   in the console. The face cannot approve.
+
+The face can reach only this PC and your tailnet. To let it download AIRI's on-device speech models, add the host once:
+`set JARVIS_FACE_ALLOW_HOSTS=huggingface.co,*.hf.co` before starting it. Details and what was removed: `jarvis\face\README.md`.
+
+## 16. What is being built next
 
 See the plan's phases P1 to P10: one supervisor for all processes, the Hermes safety hook, the router inside JARVIS, PC power with
 undo and a PIN-gated admin broker, learned skills, coding agents with tested pushes, the openmuse features (watches, PDF forms,
