@@ -26,7 +26,7 @@ def read(path):
 
 def caller_aliases():
     """The aliases the code asks for, read from the callers' own source so this test follows them."""
-    decide = read(os.path.join(REPO, "plugin", "plugins", "desktop", "decide.py"))
+    decide = read(os.path.join(REPO, "jarvis", "plugins", "desktop", "decide.py"))
     vision = read(os.path.join(JARVIS, "node", "jarvis_node", "vision.py"))
     d = re.search(r'(?m)^DEFAULT_MODEL\s*=\s*"([^"]+)"', decide)
     v = re.search(r'(?m)^VISION_MODEL\s*=\s*os\.environ\.get\("JARVIS_VISION_MODEL",\s*"([^"]+)"\)', vision)

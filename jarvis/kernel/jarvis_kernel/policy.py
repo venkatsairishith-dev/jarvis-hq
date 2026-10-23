@@ -387,7 +387,7 @@ JARVIS_SAFETY_FILES = {"scrub.py", "owner.py", "tasks.py", "jobs.py",
 # the rest of SAFETY_COMPONENTS is RED only when the project is JARVIS itself (its name, or a path inside JARVIS's own
 # packages), because in another project a store.py or settings.json is just that project's code.
 AGENT_RULE_COMPONENTS = {"claude.md", ".claude", "hooks.json", "settings.local.json"}
-JARVIS_PROJECT = re.compile(r"jarvis|jarvis|hermes", re.I)
+JARVIS_PROJECT = re.compile(r"jarvis|(?:^|[^a-z])hq(?:$|[^a-z])|hermes", re.I)      # JARVIS itself: "jarvis-hq", "hq", "hermes"
 JARVIS_DIRS = {"jarvis", "jarvis_kernel", "jarvis_node", "jarvis-secrets", ".jarvis", ".jarvis-kernel"}
 # Credential and secret stores that must never be read, copied or sent by an agent (matched on the normalized path).
 SECRET_PATTERNS = re.compile(

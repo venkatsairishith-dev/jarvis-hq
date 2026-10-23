@@ -1,1 +1,0 @@
-"""Candidate-control unit tests."""
