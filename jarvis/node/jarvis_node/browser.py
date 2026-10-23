@@ -22,7 +22,7 @@ import tempfile
 import urllib.parse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "kernel"))
-from jarvis_kernel.policy import internal_host  # noqa: E402
+from jarvis_kernel.policy import ai_chat_host, internal_host  # noqa: E402
 from jarvis_kernel.scrub import scrub  # noqa: E402
 
 KEYS = {"Enter", "Tab", "Escape"}
@@ -53,6 +53,9 @@ def check_url(url: str, allow_hosts=()) -> str:
     host = parts.hostname or ""
     if not host:
         raise BrowserError("no host")
+    site = ai_chat_host(host)
+    if site:                                       # plan P9 step 6: agents ask those models through their APIs, never their chat sites
+        raise BrowserError(f"{site} is not automated (its terms forbid it); ask that model through its API")
     if host not in allow_hosts:
         if internal_host(host):
             raise BrowserError("internal address")

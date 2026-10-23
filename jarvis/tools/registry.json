@@ -1533,7 +1533,7 @@
   "licence_spdx": "Apache-2.0"
  },
  {
-  "name": "ntfy (phone push, HTTP API only)",
+  "name": "ntfy (phone notifications, HTTP API only)",
   "category": "infra",
   "upstream_url": "https://github.com/binwiederhier/ntfy",
   "licence": "Apache-2.0",

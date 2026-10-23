@@ -25,6 +25,7 @@ import time
 import urllib.parse
 
 from . import runtime
+from .sensitive import ai_chat_site
 from .paths import local_result_dir, sweep_local
 
 CHROME = next((p for p in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -486,6 +487,13 @@ def whoami(sess, profile: dict) -> dict:
             "error": None if emails else "no account shown (signed out, or the page did not load)"}
 
 
+def _no_ai_chat(url: str) -> None:
+    site = ai_chat_site(url)
+    if site:
+        raise BrowserError(f"{site} is open for you to use yourself: Neko does not read, click or type there (its terms forbid "
+                           "automated use); ask that model through its API instead")
+
+
 def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | None:
     """One browser action in an open session (the owner's profile, or an isolated test browser). Elements are found by
     accessible role and name in the page snapshot; a click or typing goes to that exact element's ref."""
@@ -495,6 +503,7 @@ def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | N
     if op in ("read", "find"):
         t = sess.call("browser_snapshot", {}) if op == "read" else sess.call("browser_find", {"text": target})
         meta = page_meta(t)
+        _no_ai_chat(meta.get("url", ""))                    # before anything of the page is kept or returned
         return {"ok": True, **meta, "chars": len(t), "auth_required": auth_required(t, meta.get("url", "")),
                 "challenge_required": challenge_required(t, meta.get("url", "")),
                 "local_result": save_local("page", t), "note": "the page text stayed on this laptop (local_result)"}
@@ -507,6 +516,7 @@ def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | N
         # PC-D3: typing by ref "e5" went into a password box).
         snap = sess.call("browser_snapshot", {})
         url = page_meta(snap).get("url", "")
+        _no_ai_chat(url)
         if REF.match(target or ""):
             el = element_by_ref(snap, target)
             if el is None:
@@ -532,6 +542,7 @@ def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | N
         t = sess.call("browser_type", {"target": ref, "element": target or ref, "text": text})
         return {"ok": True, "typed_chars": len(text), "ref": ref, **page_meta(t)}
     if op == "press":
+        _no_ai_chat(page_meta(sess.call("browser_snapshot", {})).get("url", ""))      # Enter would send a typed prompt
         t = sess.call("browser_press_key", {"key": text or "Enter"})
         return {"ok": True, "pressed": text or "Enter", **page_meta(t)}
     if op == "play":

@@ -316,8 +316,9 @@ def sensitive_host(host: str, sites: dict = None) -> str:
     return ""
 
 
-def _judge_text(raw: str, sites: dict, rest: list) -> str:
-    """The reason (or "") for the hosts in one folded text; tokens that are no URL are left in `rest` as plain words."""
+def _judge_text(raw: str, sites: dict, rest: list, judge=None) -> str:
+    """The reason (or "") for the hosts in one folded text; tokens that are no URL are left in `rest` as plain words.
+    judge(host, sites) gives the reason for one host (sensitive_host unless another rule, such as ai_chat_host, is asked)."""
     for tok0 in re.split(r"[\s\"'<>()\[\]{},;|]+", raw):
         if not tok0:
             continue
@@ -338,7 +339,7 @@ def _judge_text(raw: str, sites: dict, rest: list) -> str:
                 tail = tok[m.end():]
             hosts += [m.group(1) for m in _EMBEDDED_DOMAIN.finditer(tail)]      # ?next=https://chase.com, /go/icicibank.com
             for h in hosts:
-                why = sensitive_host(h, sites)
+                why = (judge or sensitive_host)(h, sites)
                 if why:
                     return why
     return ""
@@ -1041,6 +1042,37 @@ def _rule_level(tool: str, op: str):
     return RED, "no rule: fail closed"
 
 
+# AI chat websites (plan P9 step 6, 2026-10-24). Their terms forbid automated use of the chat and programmatic extraction of
+# its answers (OpenAI Terms of Use; Anthropic Consumer Terms: no automated access except through the API; Google's terms for
+# Gemini), and JARVIS reaches those models through their APIs and the router instead. JARVIS may OPEN one of these sites for
+# the owner to use; it never reads, finds, clicks, types, selects, presses keys or plays there, and the node refuses the same
+# on the live page address (jarvis_node/browserext.py, browser.py), which the kernel does not see for a click on an open tab.
+AI_CHAT_DOMAINS = frozenset({"chatgpt.com", "chat.openai.com", "gemini.google.com", "claude.ai"})
+AI_CHAT_APPS = re.compile(r"(?<![\w-])chatgpt(?![\w-])", re.I)        # the ChatGPT desktop app's process and window title
+AI_CHAT_HANDS_OFF_OK = frozenset({"open", "launch", "focus", "minimize", "maximize", "restore", "list_windows"})   # nothing read or typed
+
+
+def ai_chat_host(host: str, _sites=None) -> str:
+    """Which AI chat site this host is ("" when none), in every form host_forms gives, on label boundaries."""
+    for f in host_forms(host)[0]:
+        labels = f.strip("[]").rstrip(".").split(".")
+        for i in range(len(labels)):
+            if ".".join(labels[i:]) in AI_CHAT_DOMAINS:
+                return ".".join(labels[i:])
+    return ""
+
+
+def ai_chat_target(texts, apps=()) -> str:
+    """The AI chat site these strings (URLs or hosts) point at, or the ChatGPT app when one of `apps` (an app or process name,
+    an element or window title: never typed text, so typing "chatgpt alternatives" into a search box stays allowed) names it."""
+    for t in texts if isinstance(texts, (list, tuple)) else [texts]:
+        raw = fold_text(_unquote(str(t)))
+        site = _judge_text(raw, {}, [], judge=ai_chat_host) or _judge_text(_NEWLINES.sub("", raw), {}, [], judge=ai_chat_host)
+        if site:
+            return site
+    return "the ChatGPT app" if any(AI_CHAT_APPS.search(fold_text(str(x))) for x in apps) else ""
+
+
 def _jarvis_project(a: Action) -> bool:
     """project.apply_patch: is the project JARVIS itself? Its allowlist name says so (jarvis-hq), or one of the patched files
     lies in JARVIS's own packages (kernel/jarvis_kernel/..., jarvis/...). Raw names only: the kernel's own working directory
@@ -1097,6 +1129,11 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         why = sensitive_target([_canon(lf)[0] for lf in leaves])
         if why:
             level, reason = DENY, f"UI or browser on a password manager, wallet or banking app ({why})"
+    if tool in ("ui", "browser") and op not in AI_CHAT_HANDS_OFF_OK and level < DENY:
+        site = ai_chat_target([_canon(lf)[0] for lf in leaves], apps=[str(a.target)] if tool == "ui" else [])
+        if site:
+            level, reason = DENY, (f"automating {site} is against its terms: JARVIS may open it for the owner, but asks those "
+                                   "models only through their APIs")
     if tool == "pc" and _name(a.lane) == "public" and level < DENY:
         if op == "list_folder":
             level, reason = DENY, "a lab agent may not read the owner's folders (the names would reach a public-lane model)"

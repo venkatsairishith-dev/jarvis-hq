@@ -41,6 +41,11 @@ try:
     from jarvis_kernel.policy import sensitive_target as _kernel_check   # noqa: E402
 except Exception:                       # a node without the kernel package: the floor alone still refuses
     _kernel_check = None
+try:
+    from jarvis_kernel.policy import ai_chat_host as _kernel_ai_chat     # noqa: E402
+except Exception:
+    _kernel_ai_chat = None
+AI_CHAT_FLOOR = ("chatgpt.com", "chat.openai.com", "gemini.google.com", "claude.ai")      # = policy.AI_CHAT_DOMAINS
 
 
 def sensitive_target(texts) -> str:
@@ -56,6 +61,22 @@ def sensitive_target(texts) -> str:
             return why
     m = FLOOR.search(" ".join(t)) or FLOOR.search(" ".join(_fold_fallback(x) for x in t))     # as written, and as a browser reads it
     return f"'{m.group(0)}' names a password manager, wallet, bank, broker or payment app" if m else ""
+
+
+def ai_chat_site(url: str) -> str:
+    """The AI chat site (chatgpt.com, gemini.google.com, ...) a page address is on, "" when none (plan P9 step 6: JARVIS may
+    open one for the owner but never reads, clicks, types or presses keys there). The kernel's reading of the host when it is
+    importable, and the node's own floor as well."""
+    u = _fold_fallback(url).strip()
+    host = (urllib.parse.urlsplit(u if "//" in u else "//" + u).hostname or "").rstrip(".")
+    if not host:
+        return ""
+    if _kernel_ai_chat is not None:
+        site = _kernel_ai_chat(host)
+        if site:
+            return site
+    labels = host.split(".")
+    return next((".".join(labels[i:]) for i in range(len(labels)) if ".".join(labels[i:]) in AI_CHAT_FLOOR), "")
 
 
 def why(*texts) -> str:

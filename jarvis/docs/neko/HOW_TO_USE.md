@@ -63,6 +63,8 @@ the address that becomes a sign-in cookie. Typing http://127.0.0.1:8799 by hand 
   chat, file or log.
 - **Stop everything:** the console's Kill button. Lifting it is only possible at the kernel console (`python3 -m jarvis_kernel resume`).
 - Banks, payment sites, wallets and password managers are always refused, even with your approval.
+- ChatGPT, Gemini and Claude websites: JARVIS opens them for you, but never reads, clicks or types there (their terms forbid
+  automated use). To get another model's opinion, JARVIS asks it through its API.
 
 ## 7. Models and providers
 
