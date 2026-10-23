@@ -797,6 +797,45 @@ class Owner:
                 return 200, {"providers": ov["providers"], "agents": ov["agents"], "kpis": ov["kpis"], "actions_24h": ov["actions_24h"],
                              "series_24h": ov["series_24h"], "nodes": ov["nodes"], "outputs": ov["outputs"]}
             R[("GET", "models")] = guard(models)
+
+            # The owner's own "which provider am I on / switch to <provider>" (plan item 19). The same kernel table and rules as the agents' models.prefer
+            # action: the choice only reorders the chain INSIDE the lane (a private lane never reaches a public provider), the kernel authorizes it,
+            # and it is written to the audit log. "auto" goes back to the normal order.
+            from . import gateway as _gw
+            from .policy import Action as _Action
+            _LANE_PREFS = "CREATE TABLE IF NOT EXISTS lane_prefs(lane TEXT PRIMARY KEY, provider TEXT, set_at REAL, by_agent TEXT)"
+
+            def lanes_state(b, q):
+                self.k.db.execute(_LANE_PREFS)
+                out = {}
+                for lane in ("private", "public"):
+                    try:
+                        chain = [p.name for p in _gw.plan(providers, lane)]
+                    except _gw.RouteError:
+                        chain = []
+                    row = self.k.db.execute("SELECT provider, set_at, by_agent FROM lane_prefs WHERE lane=?", (lane,)).fetchone()
+                    out[lane] = {"chain": chain, "preferred": row[0] if row else None, "set_at": row[1] if row else None, "by": row[2] if row else None}
+                return 200, {"lanes": out}
+
+            def lane_switch(b, q):
+                lane, target = str(b.get("lane", "")), str(b.get("provider", "")).strip()
+                if lane not in ("private", "public"):
+                    raise OwnerError("lane must be private or public")
+                self.k.db.execute(_LANE_PREFS)
+                if target in ("", "auto"):
+                    self.k.db.execute("DELETE FROM lane_prefs WHERE lane=?", (lane,))
+                    self.k.audit.append("lane_preference_set", {"lane": lane, "provider": "auto", "agent": "owner"})
+                    return 200, {"status": "done", "lane": lane, "preferred": None}
+                match = [x for x in providers if x.name == target and x.enabled and _gw.allowed(lane, x.lane)]
+                if not match or not match[0].available():
+                    return 400, {"error": "no such usable provider in this lane"}
+                if not self.k.authorize(_Action("models", "prefer", target, {}, lane, True)).allowed:
+                    return 403, {"error": "the kernel refused this switch"}
+                self.k.db.execute("INSERT OR REPLACE INTO lane_prefs VALUES (?,?,?,?)", (lane, target, self.clock(), "owner"))
+                self.k.audit.append("lane_preference_set", {"lane": lane, "provider": target, "agent": "owner"})
+                return 200, {"status": "done", "lane": lane, "preferred": target}
+            R[("GET", "models/lanes")] = guard(lanes_state)
+            R[("POST", "models/switch")] = guard(lane_switch)
         if self.memories is not None:
             from .memory import Conflict, MemoryError as MemErr
             M = self.memories
