@@ -1,0 +1,11 @@
+{
+  "_note": "Reviewers JARVIS may ask for a second opinion (plan item 9). Each goes through a privacy gateway instance whose only provider is that reviewer. lane: 'private' = the provider does not train on API data, so the owner's redacted plans may go there; 'public' = only text the owner marked public. A reviewer whose key file is missing is reported, not skipped silently. Paid reviewers stay disabled unless the owner approves them ($0 rule). Gemini: left off by the owner (2026-10-22); its free tier may train on data, so it would be public-lane only. ChatGPT: no OpenAI key; the chatgpt.com website is never automated.",
+  "reviewers": [
+    {"name": "groq", "label": "gpt-oss-120b on Groq", "gateway": "http://127.0.0.1:48954/v1", "key_file": "providers/groq.key",
+     "model": "openai/gpt-oss-120b", "lane": "private", "paid": false, "enabled": true},
+    {"name": "gemini", "label": "Gemini (API)", "gateway": "http://127.0.0.1:48955/v1", "key_file": "providers/gemini.key",
+     "model": "gemini-3.5-flash-lite", "lane": "public", "paid": false, "enabled": false},
+    {"name": "openai", "label": "ChatGPT model (API)", "gateway": "http://127.0.0.1:48956/v1", "key_file": "providers/openai.key",
+     "model": "gpt-5.4-nano", "lane": "private", "paid": true, "enabled": false}
+  ]
+}

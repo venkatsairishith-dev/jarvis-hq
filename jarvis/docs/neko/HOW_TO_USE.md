@@ -129,7 +129,14 @@ but never change anything:
 What it shows goes to that assistant's cloud model, so it gives counts and states, and text only after the privacy redactor has
 hidden private values (no redactor, no text). Every look is logged in `mcp_reads.jsonl`.
 
-## 14. What is being built next
+## 14. A second opinion from another model
+
+`python -m jarvis.bridge.second_opinion --file plan.md --question "What would you change?"` asks a different model (Groq's
+gpt-oss-120b by default) to review a plan. It goes through the privacy gateway first, the answer says which model gave it, and it
+can never trigger an action: JARVIS only shows it next to its own view. Gemini stays off as you chose; a paid ChatGPT or Gemini API
+needs your approval first. The second-opinion gateway must be running (`gateway.py --port 48954 --providers providers.second.json`).
+
+## 15. What is being built next
 
 See the plan's phases P1 to P10: one supervisor for all processes, the Hermes safety hook, the router inside JARVIS, PC power with
 undo and a PIN-gated admin broker, learned skills, coding agents with tested pushes, the openmuse features (watches, PDF forms,

@@ -1,0 +1,8 @@
+{
+  "_note": "Second-opinion gateway instance (port 48954, plan item 9): the same redaction as the default gateway, but its first and only provider is the reviewer model, so a second opinion never silently comes from the planner's provider. The caller (jarvis/bridge/second_opinion.py) sends the reviewer's key from its key file; this file holds no key. Start: gateway.py --port 48954 --providers providers.second.json.",
+  "cooldown_seconds": 60,
+  "providers": [
+    {"name": "groq", "base_url": "https://api.groq.com/openai/v1", "enabled": true, "key": "from_request",
+     "_note": "Groq's free base plan (no training on API data per its terms at the time of the owner's choice, 2026-10-16); 30 requests/min, 1,000/day for gpt-oss-120b."}
+  ]
+}
