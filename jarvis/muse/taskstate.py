@@ -157,6 +157,19 @@ class TaskStore:
         with self._lock:
             return self._task(self._row(self._db, task_id))
 
+    def list(self, states: Optional[tuple[str, ...]] = None, since: Optional[float] = None, limit: int = 200) -> list[dict]:
+        """Read-only listing, newest change first: tasks in `states` (all when None) updated at or after `since`."""
+        where, args = [], []
+        if states:
+            where.append(f"state IN ({', '.join('?' * len(states))})")
+            args += list(states)
+        if since is not None:
+            where.append("updated >= ?")
+            args.append(since)
+        sql = "SELECT * FROM tasks" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY updated DESC LIMIT ?"
+        with self._lock:
+            return [self._task(r) for r in self._db.execute(sql, (*args, int(limit))).fetchall()]
+
     def enqueue(self, kind: str, params: Any = None, run_at: Optional[float] = None,
                 key: Optional[str] = None) -> str:
         with self._tx() as db:
