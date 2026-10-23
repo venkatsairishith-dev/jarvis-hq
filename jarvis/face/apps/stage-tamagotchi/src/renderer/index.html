@@ -3,18 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, viewport-fit=cover" />
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <!-- <meta
+    <!--
+      JARVIS: Content-Security-Policy. AIRI shipped this block commented out, so the page had no policy at all.
+      What it stops: script in the page's own markup (an injected <img onerror=...>), script from any other site, plugins,
+      <base> tricks and form posts. A page that gets attacker text still cannot run attacker script.
+      What it leaves open on purpose: connections and images over http(s)/ws(s), because the owner chooses the endpoints
+      (privacy gateway, speech server, tool server). The network lock (src/main/jarvis) limits which hosts those may be.
+      'wasm-unsafe-eval' is for the on-device speech and vision models; 'unsafe-inline' for styles is for generated CSS.
+    -->
+    <meta
       http-equiv="Content-Security-Policy"
-      content="
-      default-src 'self';
-      script-src-elem 'self' 'unsafe-eval' https://cdn.jsdelivr.net/;
-      script-src 'self' 'unsafe-eval';
-      style-src 'self' 'unsafe-inline';
-      img-src 'self' data: blob:;
-      font-src 'self' https://fonts.gstatic.com/;
-      connect-src 'self' https://cdn.jsdelivr.net/ blob: https://openrouter.ai/ https://huggingface.co/ https://*.cdn.hf.co/"
-    /> -->
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' airi-sherpaw:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; media-src 'self' data: blob: http: https:; font-src 'self' data:; worker-src 'self' blob: airi-sherpaw:; connect-src 'self' blob: data: http: https: ws: wss: airi-sherpaw:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
     <script src="/assets/js/CubismSdkForWeb-5-r.3/Core/live2dcubismcore.min.js"></script>
   </head>
 

@@ -11,6 +11,7 @@ import {
   generateCodeVerifier,
   generateState,
 } from '@proj-airi/stage-shared/auth'
+import { JARVIS_NO_CLOUD_URL } from '@proj-airi/stage-shared/jarvis'
 import { shell } from 'electron'
 
 import {
@@ -31,7 +32,7 @@ type MainContext = ReturnType<typeof createContext>['context']
 // OIDC configuration for the Electron client.
 const OIDC_CLIENT_ID = import.meta.env.VITE_OIDC_CLIENT_ID || 'airi-stage-electron'
 const OIDC_SCOPES = 'openid profile email offline_access'
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'https://api.airi.build'
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || JARVIS_NO_CLOUD_URL
 const OIDC_AUTHORIZE_PATH = '/api/auth/oauth2/authorize'
 const OIDC_TOKEN_PATH = '/api/auth/oauth2/token'
 

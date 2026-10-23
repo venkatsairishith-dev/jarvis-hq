@@ -1,8 +1,10 @@
+import { JARVIS_NO_CLOUD_URL } from '@proj-airi/stage-shared/jarvis'
+
 import { authedFetch } from '../libs/auth-fetch'
 
 /** Uses the Cloud origin and shared token refresh. Only same-origin paths can receive credentials. */
 export function useCloudFetch() {
-  const baseUrl = new URL(import.meta.env.VITE_CLOUD_URL || 'https://cloud.airi.build')
+  const baseUrl = new URL(import.meta.env.VITE_CLOUD_URL || JARVIS_NO_CLOUD_URL)
 
   return (path: string, init?: RequestInit): Promise<Response> => {
     const url = new URL(path, baseUrl)

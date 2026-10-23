@@ -18,14 +18,20 @@ import { env } from 'node:process'
 
 const NETWORK_SCHEMES = new Set(['http:', 'https:', 'ws:', 'wss:', 'ftp:'])
 
+function bare(host: string): string {
+  const h = host.toLowerCase()
+  return h.startsWith('[') && h.endsWith(']') ? h.slice(1, -1) : h
+}
+
 function isLoopback(host: string): boolean {
-  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1' || host === '[::1]')
+  const h = bare(host)
+  if (h === 'localhost' || h.endsWith('.localhost') || h === '::1' || h === '::ffff:127.0.0.1')
     return true
-  return /^127(?:\.\d{1,3}){3}$/.test(host)
+  return /^127(?:\.\d{1,3}){3}$/.test(h)
 }
 
 function isTailnet(host: string): boolean {
-  const m = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(host)
+  const m = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(bare(host))
   if (!m)
     return false
   const a = Number(m[1])
@@ -42,11 +48,17 @@ export function parseAllowHosts(value: string | undefined): string[] {
 }
 
 function isListed(host: string, allowHosts: string[]): boolean {
+  const h = bare(host)
   return allowHosts.some((entry) => {
     if (entry.startsWith('*.'))
-      return host.endsWith(entry.slice(1))
-    return host === entry
+      return h.endsWith(entry.slice(1))
+    return h === entry
   })
+}
+
+/** True when the face may talk to `host` (a name or an address, with or without IPv6 brackets). */
+export function isAllowedHost(host: string, allowHosts: string[] = parseAllowHosts(env.JARVIS_FACE_ALLOW_HOSTS)): boolean {
+  return isLoopback(host) || isTailnet(host) || isListed(host, allowHosts)
 }
 
 /** True when the face may open `url`. A URL that cannot be parsed is refused. */
@@ -60,8 +72,7 @@ export function isAllowedUrl(url: string, allowHosts: string[] = parseAllowHosts
   }
   if (!NETWORK_SCHEMES.has(parsed.protocol))
     return true
-  const host = parsed.hostname.toLowerCase()
-  return isLoopback(host) || isTailnet(host) || isListed(host, allowHosts)
+  return isAllowedHost(parsed.hostname, allowHosts)
 }
 
 function urlOf(input: unknown): string {

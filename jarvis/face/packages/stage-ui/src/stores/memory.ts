@@ -12,6 +12,11 @@ export interface MemoryEntry {
   /** The character card that owns this memory. Without it, the owner made the memory general. */
   persona?: string
   updatedAt: number
+  /**
+   * JARVIS: a fact the model suggested. It waits for the owner, and neither the index nor a read shows it to the model
+   * until the owner accepts it in Settings. This keeps text from a web page or an email from becoming a lasting "memory".
+   */
+  proposed?: boolean
 }
 
 /** Turns a free name into the kebab-case key that entries use. */
@@ -20,14 +25,15 @@ export function memoryName(name: string) {
 }
 
 /**
- * Long-term memory as a small index and one entry per fact, kept by the character itself.
+ * Long-term memory as a small index and one entry per fact.
  *
  * Use when:
- * - A run reads the index or an entry, writes or forgets a fact, or Settings lists the memories by card.
+ * - A run reads the index or an entry, suggests a fact, or Settings lists, accepts, edits and removes memories.
  *
  * Expects:
- * - Callers pass the character card of the run. It reads its own memories and the general ones.
- * - Only the owner makes a memory general, in Settings. A run writes and forgets only its own card's memories.
+ * - Callers pass the character card of the run. It reads its own accepted memories and the general ones.
+ * - JARVIS: a run only suggests ({@link propose}); the owner accepts in Settings. A run can withdraw its own suggestions
+ *   but cannot erase an accepted memory. Only the owner makes a memory general.
  *
  * Returns:
  * - Whether memory is on, entries, the index for a card, and actions that change entries.
@@ -38,17 +44,22 @@ export const useMemoryStore = defineStore('memory', () => {
 
   const sorted = computed(() => [...entries.value].sort((left, right) => left.name.localeCompare(right.name)))
 
+  /** Accepted memories only: the model never sees a suggestion that the owner has not accepted. */
+  const accepted = computed(() => sorted.value.filter(entry => !entry.proposed))
+  /** Suggestions that wait for the owner. */
+  const proposals = computed(() => sorted.value.filter(entry => entry.proposed))
+
   /** General memories and the persona's own. */
   function visibleTo(personaId: string) {
-    return sorted.value.filter(entry => !entry.persona || entry.persona === personaId)
+    return accepted.value.filter(entry => !entry.persona || entry.persona === personaId)
   }
 
   /** The index for a card: its own memories, then general ones, each as a name and its description. */
   function indexFor(personaId: string) {
     const line = (entry: MemoryEntry) => `- ${entry.name}: ${entry.description}`
     const byName = (left: MemoryEntry, right: MemoryEntry) => left.name.localeCompare(right.name)
-    const own = sorted.value.filter(entry => entry.persona === personaId).sort(byName).map(line)
-    const general = sorted.value.filter(entry => !entry.persona).sort(byName).map(line)
+    const own = accepted.value.filter(entry => entry.persona === personaId).sort(byName).map(line)
+    const general = accepted.value.filter(entry => !entry.persona).sort(byName).map(line)
     return [
       ...(own.length ? [`Your own:\n${own.join('\n')}`] : []),
       ...(general.length ? [`General:\n${general.join('\n')}`] : []),
@@ -62,19 +73,44 @@ export const useMemoryStore = defineStore('memory', () => {
     return matches.find(entry => entry.persona === personaId) ?? matches[0]
   }
 
-  /** Creates or replaces an entry of the card by name. Returns the stored entry, or undefined for an empty name or body. */
-  function write(entry: Pick<MemoryEntry, 'name' | 'description' | 'body'>, personaId: string) {
+  function store(entry: Pick<MemoryEntry, 'name' | 'description' | 'body'>, personaId: string, proposed: boolean) {
     const name = memoryName(entry.name)
     if (!name || !entry.body.trim())
       return undefined
-    const next: MemoryEntry = { name, description: entry.description.trim(), body: entry.body.trim(), persona: personaId, updatedAt: Date.now() }
+    const next: MemoryEntry = { name, description: entry.description.trim(), body: entry.body.trim(), persona: personaId, updatedAt: Date.now(), ...(proposed ? { proposed: true } : {}) }
     entries.value = [...entries.value.filter(existing => existing.name !== name || existing.persona !== personaId), next]
     return next
   }
 
+  /** The owner saves a fact (from Settings): it is accepted at once. Returns the entry, or undefined for an empty name or body. */
+  function write(entry: Pick<MemoryEntry, 'name' | 'description' | 'body'>, personaId: string) {
+    return store(entry, personaId, false)
+  }
+
+  /**
+   * A run suggests a fact. It waits for the owner. A suggestion never replaces an accepted memory of the same name:
+   * it is refused, so a run cannot quietly rewrite what the owner accepted.
+   */
+  function propose(entry: Pick<MemoryEntry, 'name' | 'description' | 'body'>, personaId: string) {
+    const name = memoryName(entry.name)
+    if (entries.value.some(existing => existing.name === name && existing.persona === personaId && !existing.proposed))
+      return undefined
+    return store(entry, personaId, true)
+  }
+
+  /** The owner accepts a suggestion. */
+  function accept(entry: Pick<MemoryEntry, 'name' | 'persona'>) {
+    const target = entries.value.find(existing => existing.name === entry.name && existing.persona === entry.persona && existing.proposed)
+    if (!target)
+      return false
+    const { proposed: _proposed, ...kept } = target
+    entries.value = entries.value.map(existing => existing === target ? { ...kept, updatedAt: Date.now() } : existing)
+    return true
+  }
+
   /** Makes a card's memory general, so every card reads it. A general memory with the same name gives way. */
   function makeGeneral(entry: Pick<MemoryEntry, 'name' | 'persona'>) {
-    const source = entries.value.find(existing => existing.name === entry.name && existing.persona === entry.persona)
+    const source = entries.value.find(existing => existing.name === entry.name && existing.persona === entry.persona && !existing.proposed)
     if (!source?.persona)
       return
     const { persona: _card, ...general } = source
@@ -86,10 +122,13 @@ export const useMemoryStore = defineStore('memory', () => {
     entries.value = entries.value.filter(existing => existing.name !== entry.name || existing.persona !== entry.persona)
   }
 
-  /** Forgets an entry of the card by name. General memories belong to the owner, so a run cannot forget them. */
+  /**
+   * A run withdraws one of its own suggestions by name. Accepted memories and general ones belong to the owner, so a run
+   * cannot forget them: the owner removes them in Settings.
+   */
   function forget(name: string, personaId: string) {
     const key = memoryName(name)
-    const target = entries.value.find(entry => entry.name === key && entry.persona === personaId)
+    const target = entries.value.find(entry => entry.name === key && entry.persona === personaId && entry.proposed)
     if (!target)
       return false
     remove(target)
@@ -104,10 +143,14 @@ export const useMemoryStore = defineStore('memory', () => {
   return {
     enabled,
     entries: sorted,
+    accepted,
+    proposals,
     visibleTo,
     indexFor,
     read,
     write,
+    propose,
+    accept,
     makeGeneral,
     forget,
     remove,

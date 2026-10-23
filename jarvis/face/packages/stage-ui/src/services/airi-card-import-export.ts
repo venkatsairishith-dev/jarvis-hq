@@ -10,6 +10,7 @@ import JSZip from 'jszip'
 import { exportToJSON } from '@proj-airi/ccc'
 import { array, literal, object, optional, parse, picklist, record, string, unknown as unknownSchema } from 'valibot'
 
+import { gateImportedCard } from '../libs/cards/card-gate'
 import { wakeWordSchema } from '../libs/voice/wake-words'
 import { DisplayModelFormat } from '../stores/display-models'
 import { createAvatarModelReference } from './avatar-model'
@@ -117,7 +118,11 @@ export async function importAiriCardPackage({ file, displayModelsStore }: { file
   const cardJson = await readJsonFile(zip, manifest.card.path, characterCardV3Schema)
   const displayModel = await importDisplayModel(zip, manifest, displayModelsStore)
 
-  return exportToJSON(cardFromCharacterCard(cardJson, displayModel, manifest.resources?.displayModel.controls))
+  // JARVIS: card text is reduced to plain text and size-capped before the card is stored (libs/cards/card-gate.ts).
+  const { card: gated, report } = gateImportedCard(cardFromCharacterCard(cardJson, displayModel, manifest.resources?.displayModel.controls))
+  if (report.tagsRemoved || report.linksRemoved || report.textsCut)
+    console.warn('[card-gate] cleaned an imported card', report)
+  return exportToJSON(gated)
 }
 
 async function exportDisplayModel(card: AiriCard, store: DisplayModelsStore) {

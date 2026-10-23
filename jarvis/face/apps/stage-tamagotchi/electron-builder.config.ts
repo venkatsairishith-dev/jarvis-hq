@@ -113,13 +113,7 @@ export default {
   asarUnpack: [
     '**/*.node',
   ],
-  extraResources: [
-    {
-      from: '../../engines/stage-tamagotchi-godot/out/${os}',
-      to: 'godot-stage',
-      filter: ['**/*'],
-    },
-  ],
+  // JARVIS: no extra resources (AIRI shipped a Godot stage here; it is not part of the face).
   extraMetadata: {
     name: 'jarvis.face',
     main: 'out/main/index.js',

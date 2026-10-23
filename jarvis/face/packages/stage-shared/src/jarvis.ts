@@ -12,6 +12,12 @@ export const JARVIS_ENDPOINTS = {
   tools: 'http://127.0.0.1:48970/mcp',
 } as const
 
+/**
+ * Where AIRI's cloud client (account, notifications inbox, feature flags) points. JARVIS has no cloud, so this is
+ * a loopback address with nothing behind it: those code paths fail at once, locally, and nothing leaves the PC.
+ */
+export const JARVIS_NO_CLOUD_URL = 'http://127.0.0.1:1'
+
 /** The name of the one MCP server the face connects to. */
 export const JARVIS_TOOL_SERVER_NAME = 'jarvis'
 

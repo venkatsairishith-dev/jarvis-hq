@@ -20,7 +20,7 @@
     "start:xwayland": "install-electron && electron-vite preview -- --ozone-platform=x11",
     "dev": "install-electron && electron-vite dev",
     "dev:xwayland": "install-electron && electron-vite dev -- --ozone-platform=x11",
-    "build": "electron-vite build",
+    "build": "electron-vite build && node scripts/verify-downloads.mjs",
     "test:run": "vitest run",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "pnpm run build && electron-builder --dir",
@@ -29,7 +29,10 @@
     "build:linux": "pnpm run build && electron-builder --linux",
     "check:reproducible-build": "tsx scripts/check-reproducible-build.ts",
     "smoke:desktop-overlay-live-window": "NODE_OPTIONS='--experimental-websocket' tsx scripts/desktop-overlay-live-window-smoke.ts",
-    "smoke:linux-window-render": "NODE_OPTIONS='--experimental-websocket' tsx scripts/linux-window-render-smoke.ts"
+    "smoke:linux-window-render": "NODE_OPTIONS='--experimental-websocket' tsx scripts/linux-window-render-smoke.ts",
+    "check:csp": "node scripts/csp-check.mjs",
+    "check:launch": "node scripts/launch-check.mjs",
+    "check:downloads": "node scripts/verify-downloads.mjs"
   },
   "dependencies": {
     "@proj-airi/electron-native-backdrop": "workspace:^",

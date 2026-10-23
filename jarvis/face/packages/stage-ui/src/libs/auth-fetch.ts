@@ -1,6 +1,4 @@
 import { useAuthStore } from '../stores/auth'
-import { getAnalyticsIdentitySnapshot } from './product-signals'
-import { SERVER_URL } from './server'
 
 /**
  * Fetch wrapper that transparently refreshes the OIDC access token on 401
@@ -28,12 +26,7 @@ export async function authedFetch(
     const headers = new Headers(init?.headers)
     if (token)
       headers.set('Authorization', `Bearer ${token}`)
-    const openpanelIdentity = shouldAttachOpenpanelIdentity(input) ? getAnalyticsIdentitySnapshot() : null
-    if (openpanelIdentity) {
-      headers.set('x-openpanel-device-id', openpanelIdentity.distinctId)
-      if (openpanelIdentity.sessionId)
-        headers.set('x-openpanel-session-id', openpanelIdentity.sessionId)
-    }
+    // JARVIS: AIRI attached an analytics device id to every API request here. No analytics identifier is ever sent.
     return fetch(input, { ...init, headers, credentials: 'omit' })
   }
 
@@ -62,12 +55,4 @@ export async function authedFetch(
   if (retried.status === 401)
     await authStore.expireSession(version)
   return retried
-}
-
-function shouldAttachOpenpanelIdentity(input: RequestInfo | URL): boolean {
-  const url = typeof input === 'string'
-    ? input
-    : input instanceof URL ? input.toString() : input.url
-
-  return new URL(url, SERVER_URL).origin === new URL(SERVER_URL).origin
 }

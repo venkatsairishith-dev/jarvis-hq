@@ -594,8 +594,31 @@ pages:
     upload: Upload
     upload_desc: Click or drag an AIRI card package to import
   memory:
-    description: Where memories got stored, and organized
+    description: What JARVIS remembers about you. JARVIS only suggests; you decide.
     title: Memory
+    enabled:
+      label: Use long-term memory
+      description: When this is off, JARVIS neither reads nor suggests memories.
+    proposals:
+      title: Waiting for you
+      description: JARVIS suggested these. It cannot see them until you accept them.
+      empty: Nothing is waiting.
+      accept: Accept
+      reject: Reject
+    entries:
+      title: Remembered
+      empty: Nothing is remembered yet.
+      remove: Remove
+      general: Make general
+      general_hint: A general memory is read by every character.
+      owner_general: General
+      own: This character
+    add:
+      title: Add a memory
+      name: Name
+      description: One line for the index
+      body: The fact
+      save: Save
   data:
     title: Data
     description: Manage stored JARVIS data, exports, and resets

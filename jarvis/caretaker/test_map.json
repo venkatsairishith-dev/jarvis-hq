@@ -29,7 +29,7 @@
     "browser": {"tests": [], "bench_areas": ["C"]},
     "computer": {"tests": ["python -m pytest plugin/plugins/desktop/tests -q -p no:cacheprovider"], "bench_areas": ["B"]},
     "ui": {"tests": ["cd jarvis/ui && npm ci && npm test"], "bench_areas": ["L"]},
-    "face": {"tests": ["python -m pytest jarvis/bridge/test_face_tools.py jarvis/persona/test_face_prompt.py -q -p no:cacheprovider"], "bench_areas": []},
+    "face": {"tests": ["python -m pytest jarvis/bridge/test_face_tools.py jarvis/persona/test_face_prompt.py jarvis/tools/test_face_guard.py -q -p no:cacheprovider"], "bench_areas": []},
     "eval": {"tests": [], "bench_areas": []},
     "memory": {"tests": [], "bench_areas": ["F"]}
   },

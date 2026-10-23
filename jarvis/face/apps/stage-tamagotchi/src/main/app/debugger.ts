@@ -6,6 +6,9 @@ import { app, shell } from 'electron'
 
 /** Enables Electron's CDP endpoint before the app ready event. */
 export function setupDebugger() {
+  // JARVIS: the debugging port gives full control of every window; an installed app never opens it.
+  if (app.isPackaged)
+    return
   if (/^true$/i.test(env.APP_REMOTE_DEBUG || '')) {
     const remoteDebugPort = Number(env.APP_REMOTE_DEBUG_PORT || '9222')
     if (Number.isNaN(remoteDebugPort) || !Number.isInteger(remoteDebugPort) || remoteDebugPort < 0 || remoteDebugPort > 65535) {
@@ -24,7 +27,7 @@ export function setupDebugger() {
  * setting `APP_REMOTE_DEBUG_NO_OPEN=true`.
  */
 export function openDebugger() {
-  if (/^true$/i.test(env.APP_REMOTE_DEBUG || '')) {
+  if (!app.isPackaged && /^true$/i.test(env.APP_REMOTE_DEBUG || '')) {
     const remoteDebugEndpoint = `http://localhost:${env.APP_REMOTE_DEBUG_PORT || '9222'}`
 
     http.get(`${remoteDebugEndpoint}/json`, (res) => {

@@ -19,7 +19,6 @@ import type {
 
 import process from 'node:process'
 
-import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -56,6 +55,14 @@ import { onAppBeforeQuit } from '../../../libs/bootkit/lifecycle'
 import { getElectronMainDirname } from '../../../libs/electron/location'
 
 type GodotStageProcess = ChildProcessByStdio<null, Readable, Readable>
+
+/**
+ * JARVIS: the face never starts a program. AIRI launched a Godot executable here; the Godot engine is not part of the
+ * face, and a settings page or a chat must never be able to start any other executable either.
+ */
+function spawn(_executable: string, _args: string[], _options: unknown): GodotStageProcess {
+  throw new Error('JARVIS: the face does not start programs, so the Godot stage is unavailable.')
+}
 type MainContext = ReturnType<typeof createContext>['context']
 
 const DEFAULT_GODOT_REMOTE_DEBUG_URI = 'tcp://127.0.0.1:6007'

@@ -33,6 +33,7 @@ import { createGlobalAppConfig } from './configs/global'
 import { createIOTraceHubConfig } from './configs/io-trace-hub'
 import { createIOTraceRecordingConfig } from './configs/io-trace-recording'
 import { installNetworkLock, lockGlobalFetch } from './jarvis/network-lock'
+import { applyChromiumLock, lockNodeSockets } from './jarvis/socket-lock'
 import { emitAppBeforeQuit, emitAppWindowAllClosed } from './libs/bootkit/lifecycle'
 import { getRendererRoot, setElectronMainDirname } from './libs/electron/location'
 import { createI18n } from './libs/i18n'
@@ -85,6 +86,9 @@ protocol.registerSchemesAsPrivileged([{
 }])
 setGlobalFormat(Format.Pretty)
 setGlobalLogLevel(LogLevel.Log)
+// JARVIS: the network lock's lower half goes on first: sockets, listeners and Chromium's name resolution and WebRTC.
+lockNodeSockets(message => console.warn(`[jarvis:network-lock] ${message}`))
+applyChromiumLock(app.commandLine)
 setupDebugger()
 
 const log = useLogg('main').useGlobalConfig()

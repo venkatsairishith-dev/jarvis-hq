@@ -7,6 +7,7 @@ import {
   inboxServiceMarkAllInboxMessagesRead,
   inboxServiceMarkInboxMessageRead,
 } from '@proj-airi/cloud-client'
+import { JARVIS_NO_CLOUD_URL } from '@proj-airi/stage-shared/jarvis'
 import { useIntervalFn, useWindowFocus } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { array, integer, isoTimestamp, minValue, nonEmpty, number, object, parse, pipe, record, safeParse, string, unknown } from 'valibot'
@@ -47,7 +48,7 @@ const messageSchema = object({
  */
 export const useInboxStore = defineStore('inbox', () => {
   const auth = useAuthStore()
-  const baseUrl = import.meta.env.VITE_CLOUD_URL || 'https://cloud.airi.build'
+  const baseUrl = import.meta.env.VITE_CLOUD_URL || JARVIS_NO_CLOUD_URL
 
   const unread = shallowRef(0)
   const messages = shallowRef<InboxMessage[]>([])

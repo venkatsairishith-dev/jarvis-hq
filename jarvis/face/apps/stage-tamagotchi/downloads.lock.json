@@ -1,0 +1,25 @@
+{
+  "_note": "SHA-256 of every file the build downloads. AIRI's build plugins check nothing; JARVIS fails the build when a file differs. Taken on 2026-10-23 from the files the hosts served that day (trust on first use). To accept a new version on purpose: build, read the new hash, check the source, and edit this file in a reviewed commit.",
+  "files": {
+    "public/assets/js/CubismSdkForWeb-5-r.3/Core/live2dcubismcore.min.js": {
+      "sha256": "944988f1523c9f888afe3611b630121ff503ea6246971d2eeee76f45cbfb8004",
+      "from": "https://cubism.live2d.com/sdk-web/bin/CubismSdkForWeb-5-r.3.zip (Live2D proprietary; not stored in this repository)"
+    },
+    "../../.cache/live2d/models/hiyori_free_zh.zip": {
+      "sha256": "eb98cbdbde4f1aa91a1f4d8c1d817072e2a7413c1a87ab23c95d62be7cb9c640",
+      "from": "https://dist.ayaka.moe/live2d-models/hiyori_free_zh.zip (Live2D sample model)"
+    },
+    "../../.cache/live2d/models/hiyori_pro_zh.zip": {
+      "sha256": "b1951f1f8762e44c12871ab7694e8a10c6737e0c411310b9fbaedb3c2cf2534b",
+      "from": "https://dist.ayaka.moe/live2d-models/hiyori_pro_zh.zip (Live2D sample model)"
+    },
+    "../../.cache/vrm/models/AvatarSample-A/AvatarSample_A.vrm": {
+      "sha256": "2a0ccd84880b03d7b65503d8b6287f7a97f3bb4fab70a5fd0a47b433c97827f5",
+      "from": "https://dist.ayaka.moe/vrm-models/VRoid-Hub/AvatarSample-A/AvatarSample_A.vrm (VRoid sample)"
+    },
+    "../../.cache/vrm/models/AvatarSample-B/AvatarSample_B.vrm": {
+      "sha256": "7fca4a77fdc60ab2c78a9907430744562626180125fa386eb74fb2ea15c2e518",
+      "from": "https://dist.ayaka.moe/vrm-models/VRoid-Hub/AvatarSample-B/AvatarSample_B.vrm (VRoid sample)"
+    }
+  }
+}
