@@ -106,7 +106,7 @@ export function setupWorkspaceWindowManager(params: {
       : screen.getPrimaryDisplay()
 
     const window = new BrowserWindow({
-      title: 'AIRI',
+      title: 'JARVIS',
       ...display.workArea,
       show: false,
       icon,

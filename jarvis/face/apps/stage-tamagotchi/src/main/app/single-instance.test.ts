@@ -34,7 +34,7 @@ describe('installSingleInstanceGuard', async () => {
    * const installed = installSingleInstanceGuard({ app, getWindow })
    * expect(installed).toBe(false)
    */
-  it('quits the secondary process when another AIRI instance already owns the lock', () => {
+  it('quits the secondary process when another JARVIS instance already owns the lock', () => {
     const app = createMockApp(false)
 
     const installed = installSingleInstanceGuard({

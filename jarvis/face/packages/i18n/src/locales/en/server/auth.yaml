@@ -5,11 +5,11 @@ electronCallback:
     signedIn: You are signed in
     signInFailed: Sign-in failed
     finishSignInInAiri: Finish sign-in in AIRI
-    openAiriToContinue: Open AIRI to continue
+    openAiriToContinue: Open JARVIS to continue
   message:
     checkingResponse: Checking your sign-in response and preparing the handoff to AIRI.
     passingToAiri: Passing your sign-in back to AIRI now. This page should close in a moment.
-    syncedAndSafeToClose: We notified AIRI client you signed from.
+    syncedAndSafeToClose: We notified JARVIS client you signed from.
     invalidResponse: We could not use this sign-in response.
     loopbackUnreachable: The browser could not reach AIRI through the local callback port.
     tryOpenDirectly: We will try opening the local handoff directly. If that still fails, use the button below.
@@ -19,7 +19,7 @@ electronCallback:
     safeToClose: It is safe to close this tab now.
     whyStillHere: Why this tab still here?
   action:
-    openAiriManually: Open AIRI manually
+    openAiriManually: Open JARVIS manually
   hint:
     closeTabManually: Some browsers do not allow this page to close itself automatically. You can close it manually.
 signIn:
@@ -198,6 +198,6 @@ webCallback:
     missingCodeOrState: Missing authorization code or state
     missingFlowState: Missing OIDC flow state - please try logging in again
     tokenExchangeFailed: Token exchange failed
-    finalizing: Finalizing authentication with AIRI.
+    finalizing: Finalizing authentication with JARVIS.
   action:
     tryAgain: Try again

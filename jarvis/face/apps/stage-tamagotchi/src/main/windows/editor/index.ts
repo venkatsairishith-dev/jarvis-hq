@@ -31,7 +31,7 @@ export function setupEditorWindowManager(params: {
 }): EditorWindowManager {
   const reusable = createReusableWindow(async () => {
     const window = new ElectronBrowserWindow({
-      title: 'AIRI Editor',
+      title: 'JARVIS Editor',
       width: 1200,
       height: 800,
       minWidth: 800,

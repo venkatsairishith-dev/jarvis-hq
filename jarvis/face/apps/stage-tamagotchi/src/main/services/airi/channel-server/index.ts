@@ -233,10 +233,10 @@ function isTrustedServerChannelCertificate(request: ServerChannelCertificateVeri
 
   const issuer = request.certificate.issuer
   return request.certificate.subject.commonName === 'localhost'
-    && issuer.commonName === 'AIRI'
+    && issuer.commonName === 'JARVIS'
     && issuer.country === 'US'
     && issuer.locality === 'Local'
-    && issuer.organizations.includes('AIRI')
+    && issuer.organizations.includes('JARVIS')
 }
 
 function configureServerChannelCertificateTrust() {
@@ -307,7 +307,7 @@ async function generateCertificate() {
   }
   else {
     ca = await createCA({
-      organization: 'AIRI',
+      organization: 'JARVIS',
       countryCode: 'US',
       state: 'Development',
       locality: 'Local',

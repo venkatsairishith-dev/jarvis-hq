@@ -14,7 +14,6 @@ import { useI18n } from 'vue-i18n'
 import StatusIsland from '../status-island/index.vue'
 import ControlButtonTooltip from './control-button-tooltip.vue'
 import ControlButton from './control-button.vue'
-import ControlsIslandAuthButton from './controls-island-auth-button.vue'
 import ControlsIslandChatButton from './controls-island-chat-button.vue'
 import ControlsIslandFadeOnHover from './controls-island-fade-on-hover.vue'
 import ControlsIslandProfilePicker from './controls-island-profile-picker.vue'
@@ -426,12 +425,7 @@ function resetMainWindowPosition() {
                 </div>
                 <!-- v-show keeps dialogs and listeners of the controls mounted while the list shows. -->
                 <div v-show="menuView === 'controls'" :class="['flex flex-col gap-1']">
-                  <ControlsIslandAuthButton
-                    :active="expanded"
-                    :button-style="adjustStyleClasses.button"
-                    :icon-class="adjustStyleClasses.icon"
-                  />
-
+                  <!-- JARVIS: no AIRI account; the face signs in to nothing. -->
                   <!--
                     The same Notifications row as the mobile menu. It is a plain button like the account card above,
                     because BasicButton centers its content and does not suit a full-width row.

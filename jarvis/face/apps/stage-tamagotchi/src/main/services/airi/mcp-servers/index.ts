@@ -23,6 +23,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { defineInvokeHandler } from '@moeru/eventa'
 import { errorMessageFrom } from '@moeru/std'
+import { JARVIS_ENDPOINTS, JARVIS_TOOL_SERVER_NAME } from '@proj-airi/stage-shared/jarvis'
 import { app, shell } from 'electron'
 
 import {
@@ -36,6 +37,7 @@ import {
   electronMcpWriteConfigText,
 } from '../../../../shared/eventa'
 import { isHttpServerConfig, parseElectronMcpConfigText } from '../../../../shared/mcp-config'
+import { isAllowedUrl } from '../../../jarvis/network-lock'
 import { onAppBeforeQuit } from '../../../libs/bootkit/lifecycle'
 
 /** A transport that the MCP client can drive. Both kinds expose `close`. */
@@ -61,8 +63,11 @@ export interface McpManager {
   testServer: (payload: ElectronMcpTestPayload) => Promise<ElectronMcpTestResult>
 }
 
+// JARVIS: the face starts with one tool server, JARVIS's own. The kernel decides every action that server is asked for.
 const defaultMcpConfig: ElectronMcpConfigFile = {
-  mcpServers: {},
+  mcpServers: {
+    [JARVIS_TOOL_SERVER_NAME]: { url: JARVIS_ENDPOINTS.tools },
+  },
 }
 const toolNameSeparator = '::'
 const mcpRequestTimeoutMsec = 10_000
@@ -132,18 +137,15 @@ async function closeSession(session: McpServerSession) {
  *   transport that reaches `config.url` and sends `config.headers` on every request
  */
 function createTransport(config: ElectronMcpServerConfig): McpTransport {
-  if (isHttpServerConfig(config)) {
-    return new StreamableHTTPClientTransport(new URL(config.url), {
-      requestInit: { headers: config.headers },
-    })
-  }
+  // JARVIS: the face never starts a program. A stdio server would run any command written into mcp.json, which is
+  // exactly what a chat or card exploit would aim for. Tools come over HTTP from this PC or the tailnet only.
+  if (!isHttpServerConfig(config))
+    throw new Error('JARVIS: the face does not start programs. Connect to the JARVIS tool server over HTTP instead.')
+  if (!isAllowedUrl(config.url))
+    throw new Error('JARVIS: an MCP server must be on this PC or the tailnet.')
 
-  return new StdioClientTransport({
-    command: config.command,
-    args: config.args ?? [],
-    env: config.env,
-    cwd: config.cwd,
-    stderr: 'pipe',
+  return new StreamableHTTPClientTransport(new URL(config.url), {
+    requestInit: { headers: config.headers },
   })
 }
 

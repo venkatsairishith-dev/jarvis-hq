@@ -37,7 +37,7 @@ export function setupOnboardingWindowManager(params: {
 
   const reusableWindow = createReusableWindow(async () => {
     const newWindow = new BrowserWindow({
-      title: 'Welcome to AIRI',
+      title: 'Welcome to JARVIS',
       width: 1000,
       height: 650,
       minWidth: 400,

@@ -253,7 +253,7 @@ initializeForm()
               <i18n-t keypath="settings.dialogs.onboarding.credentialsSafeOpenSource" tag="span">
                 <template #github>
                   <span inline-flex translate-y-1 items-center gap-1>
-                    <span i-simple-icons:github inline-block /><a decoration-underline decoration-dashed href="https://github.com/moeru-ai/airi" target="_blank" rel="noopener noreferrer">GitHub</a>
+                    <span i-simple-icons:github inline-block /><a decoration-underline decoration-dashed href="https://github.com/venkatsairishith-dev/jarvis-hq" target="_blank" rel="noopener noreferrer">GitHub</a>
                   </span>
                 </template>
               </i18n-t>

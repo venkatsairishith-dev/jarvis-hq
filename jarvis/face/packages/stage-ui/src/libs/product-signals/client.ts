@@ -1,7 +1,5 @@
 import type { AboutBuildInfo } from '../../components/scenarios/about/types'
 
-import { isEnvTruthy } from '@proj-airi/stage-shared'
-
 export interface AnalyticsIdentitySnapshot {
   /** Current provider distinct id for the browser, device, or user. */
   distinctId: string
@@ -185,8 +183,9 @@ export function configureAnalyticsAdapter(loader: AnalyticsAdapterLoader): void 
   adapterLoader = loader
 }
 
+/** JARVIS: product analytics are removed from the face; no build turns them on. */
 export function isAnalyticsAvailableInBuild(): boolean {
-  return isEnvTruthy(import.meta.env.VITE_ENABLE_ANALYTICS)
+  return false
 }
 
 export function enableAnalyticsCapture(): boolean {

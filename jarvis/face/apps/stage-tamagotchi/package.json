@@ -3,13 +3,13 @@
   "type": "module",
   "version": "0.12.0",
   "private": true,
-  "description": "LLM powered virtual character",
+  "description": "JARVIS's face: avatar, chat and voice desktop app (built from Project AIRI, MIT)",
   "author": {
     "name": "Moeru AI",
     "email": "airi@moeru.ai",
     "url": "https://github.com/moeru-ai"
   },
-  "homepage": "https://airi.moeru.ai/docs/",
+  "homepage": "https://github.com/venkatsairishith-dev/jarvis-hq",
   "main": "./out/main/index.js",
   "scripts": {
     "lint": "eslint --cache .",
@@ -24,24 +24,14 @@
     "test:run": "vitest run",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "pnpm run build && electron-builder --dir",
-    "build:flatpak": "pnpm run build:unpack && flatpak-builder --user --install-deps-from=flathub ./flatpak ai.moeru.airi.flatpak.yml --force-clean",
     "build:win": "pnpm run build && electron-builder --win",
     "build:mac": "pnpm run build && electron-builder --mac",
     "build:linux": "pnpm run build && electron-builder --linux",
-    "rename-artifacts": "mkdir -p bundle && tsx scripts/rename-artifacts.ts",
-    "merge-latest-mac": "tsx scripts/merge-latest-mac.ts",
-    "regenerate-windows-latest": "tsx scripts/regenerate-windows-latest.ts",
-    "artifacts-metadata": "tsx scripts/artifacts-metadata.ts",
     "check:reproducible-build": "tsx scripts/check-reproducible-build.ts",
     "smoke:desktop-overlay-live-window": "NODE_OPTIONS='--experimental-websocket' tsx scripts/desktop-overlay-live-window-smoke.ts",
-    "smoke:linux-window-render": "NODE_OPTIONS='--experimental-websocket' tsx scripts/linux-window-render-smoke.ts",
-    "update-test:generate": "tsx scripts/update-test/generate-manifest.ts",
-    "update-test:server": "tsx scripts/update-test/start-server.ts",
-    "update-test:matrix": "bash scripts/update-test/run-matrix.sh"
+    "smoke:linux-window-render": "NODE_OPTIONS='--experimental-websocket' tsx scripts/linux-window-render-smoke.ts"
   },
   "dependencies": {
-    "@auv-js/cli": "catalog:",
-    "@auv-js/sdk": "catalog:",
     "@proj-airi/electron-native-backdrop": "workspace:^",
     "@xsai-apple-speech/transcription-native": "catalog:",
     "@xsai-apple-vision/vision-native": "catalog:",

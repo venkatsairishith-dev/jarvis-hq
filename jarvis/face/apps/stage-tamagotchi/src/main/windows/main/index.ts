@@ -106,10 +106,10 @@ export async function setupMainWindow(params: {
 
   setupConfig()
 
-  const mainWindowConfig = getConfig().windows?.find(w => w.title === 'AIRI' && w.tag === 'main')
+  const mainWindowConfig = getConfig().windows?.find(w => w.title === 'JARVIS' && w.tag === 'main')
 
   const window = new BrowserWindow({
-    title: 'AIRI',
+    title: 'JARVIS',
     width: mainWindowConfig?.width ?? 450.0,
     height: mainWindowConfig?.height ?? 600.0,
     x: mainWindowConfig?.x,
@@ -169,11 +169,11 @@ export async function setupMainWindow(params: {
       config.windows = []
     }
 
-    const existingConfigIndex = config.windows.findIndex(w => w.title === 'AIRI' && w.tag === 'main')
+    const existingConfigIndex = config.windows.findIndex(w => w.title === 'JARVIS' && w.tag === 'main')
 
     if (existingConfigIndex === -1) {
       config.windows.push({
-        title: 'AIRI',
+        title: 'JARVIS',
         tag: 'main',
         x: newBounds.x,
         y: newBounds.y,
@@ -182,7 +182,7 @@ export async function setupMainWindow(params: {
       })
     }
     else {
-      const mainWindowConfig = defu(config.windows[existingConfigIndex], { title: 'AIRI', tag: 'main' })
+      const mainWindowConfig = defu(config.windows[existingConfigIndex], { title: 'JARVIS', tag: 'main' })
 
       mainWindowConfig.x = newBounds.x
       mainWindowConfig.y = newBounds.y

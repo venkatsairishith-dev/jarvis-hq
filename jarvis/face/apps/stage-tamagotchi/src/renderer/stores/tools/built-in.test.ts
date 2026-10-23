@@ -45,10 +45,9 @@ describe('useTamagotchiBuiltinToolsStore', async () => {
       { id: 'tamagotchi:image_journal', defaultActive: false },
       { id: 'tamagotchi:stage_widgets', defaultActive: false },
       { id: 'tamagotchi:get_weather', defaultActive: false },
-      { id: 'tamagotchi:computer_use', defaultActive: false },
-      { id: 'tamagotchi:computer_use_read_image', defaultActive: false },
     ])
-    expect(toolsStore.tools.filter(tool => tool.requiresExplicitSelection).map(tool => tool.function.name)).toEqual(['computer_use', 'computer_use_read_image'])
+    // JARVIS: AIRI's computer use is removed; nothing registers it.
+    expect(toolsStore.tools.filter(tool => tool.requiresExplicitSelection)).toEqual([])
     expect(toolsStore.getToolsByNames('get_weather')[0]?.function.name).toBe('get_weather')
   })
 })

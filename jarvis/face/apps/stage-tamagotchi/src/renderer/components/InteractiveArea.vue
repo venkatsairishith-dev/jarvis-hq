@@ -31,10 +31,7 @@ import ChatViewportLayout from './chat-viewport-layout.vue'
 import { electronOpenSettings } from '../../shared/eventa'
 import { useHearingInputChannel } from '../composables/use-hearing-input-channel'
 import { computerUseToolReferences, useToolSelectionStore, widgetToolReferences } from '../stores/tools'
-import { COMPUTER_USE_READ_IMAGE_TOOL_NAME, COMPUTER_USE_TOOL_NAME } from '../stores/tools/builtin/computer-use'
 import { WEATHER_TOOL_NAME } from '../stores/tools/builtin/weather'
-import { computerUseReadImageToolCallWidget } from './chat-tool-renderers/computer-use-read-image-tool-call-widget'
-import { computerUseToolCallWidget } from './chat-tool-renderers/computer-use/widget'
 import { weatherToolCallWidget } from './chat-tool-renderers/weather-tool-call-widget'
 
 const props = withDefaults(defineProps<{
@@ -139,8 +136,6 @@ const toolCallRenderers = {
 } satisfies ChatToolCallRendererRegistry
 const toolCallWidgets = {
   [WEATHER_TOOL_NAME]: weatherToolCallWidget,
-  [COMPUTER_USE_TOOL_NAME]: computerUseToolCallWidget,
-  [COMPUTER_USE_READ_IMAGE_TOOL_NAME]: computerUseReadImageToolCallWidget,
 } satisfies ChatToolCallWidgetRegistry
 const {
   trackChatMessageDeleted,
@@ -546,19 +541,6 @@ defineExpose({
             @click="handleManualAttach"
           >
             <span :class="['i-solar:paperclip-bold-duotone h-5 w-5']" />
-          </GhostButton>
-          <GhostButton
-            data-testid="computer-use-toggle"
-            size="unset"
-            :class="['size-9']"
-            :aria-label="t('stage.computer-use.label')"
-            :title="t('stage.computer-use.description')"
-            :active="computerUseEnabled"
-            :aria-pressed="computerUseEnabled"
-            :disabled="isActiveSessionSending"
-            @click="computerUseEnabled = !computerUseEnabled"
-          >
-            <span :class="['i-solar:monitor-bold-duotone h-5 w-5 shrink-0']" />
           </GhostButton>
 
           <!-- The voice control shows its recording status here, so the composer keeps its height. -->

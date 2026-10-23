@@ -13,7 +13,7 @@ describe('createDesktopOverlayWindowOptions', () => {
       preloadPath: '/tmp/airi-overlay-preload.js',
     })
 
-    expect(options.title).toBe('AIRI Desktop Overlay')
+    expect(options.title).toBe('JARVIS Desktop Overlay')
     expect(options.x).toBe(-222)
     expect(options.y).toBe(-1080)
     expect(options.width).toBe(1920)

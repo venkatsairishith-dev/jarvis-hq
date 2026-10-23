@@ -15,7 +15,7 @@ import { artistryToolReferences, computerUseToolReferences } from './built-in'
  * so the value has to cross windows. A restart returns to the default, as the composer did before.
  */
 export const useToolSelectionStore = defineStore('tamagotchi-tool-selection', () => {
-  const computerUseEnabled = ref(true)
+  const computerUseEnabled = ref(false)
 
   /** Tool references of a new turn. Retries and tool reruns build their own lists from {@link computerUseEnabled}. */
   const requestTools = computed<ChatToolReference[]>(() => computerUseEnabled.value

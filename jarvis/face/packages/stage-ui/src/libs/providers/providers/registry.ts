@@ -55,8 +55,11 @@ export function registerProviders(definitions: readonly ProviderDefinition[]): v
   }
 }
 
+// JARVIS: AIRI's paid cloud providers need an AIRI account and are never offered.
+const hiddenProviderIds = new Set(['official-provider', 'official-provider-speech', 'official-provider-speech-streaming', 'official-provider-transcription', 'vision-official-provider'])
+
 export function listProviders(): ProviderDefinition[] {
-  const providerDefs = Array.from(providerRegistry.values()).map(def => ({ order: 99999, ...def }))
+  const providerDefs = Array.from(providerRegistry.values()).filter(def => !hiddenProviderIds.has(def.id)).map(def => ({ order: 99999, ...def }))
   const sorted = orderBy(providerDefs, [p => p.order, 'name'], ['asc', 'asc'])
   return sorted
 }

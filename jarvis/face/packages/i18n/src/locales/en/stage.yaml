@@ -55,7 +55,7 @@ chat:
     system-default: System default
     listen: Listen continuously
     push-to-talk: Push to Talk
-    push-to-talk-unavailable: This device has no Push to Talk key, so AIRI does not listen. Change the input mode in Hearing settings.
+    push-to-talk-unavailable: This device has no Push to Talk key, so JARVIS does not listen. Change the input mode in Hearing settings.
     wake-word: Listen for wake words
     hearing-settings: More Hearing settings…
     options-hint: Hover or right-click for options
@@ -188,7 +188,7 @@ chat:
     stop: Stop response
   message:
     character-name:
-      airi: AIRI
+      airi: JARVIS
       core-system: Core System
       you: You
   reply:
@@ -350,7 +350,7 @@ computer-use:
 status:
   preparing: Preparing microphone
   listening: Listening
-  paused: Listening paused while AIRI speaks
+  paused: Listening paused while JARVIS speaks
   transcribing: Transcribing
   hearing-error: Could not transcribe audio
   no-transcript: Recognized speech will appear here.

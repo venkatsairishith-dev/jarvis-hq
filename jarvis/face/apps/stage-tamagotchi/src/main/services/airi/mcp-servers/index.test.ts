@@ -108,7 +108,7 @@ describe('createMcpManager', () => {
 
   async function startServers(...serverNames: string[]) {
     await writeFile(join(userDataPath, 'mcp.json'), JSON.stringify({
-      mcpServers: Object.fromEntries(serverNames.map(name => [name, { command: 'test-mcp-server' }])),
+      mcpServers: Object.fromEntries(serverNames.map(name => [name, { url: `http://127.0.0.1:48970/${name}` }])),
     }))
     const manager = createMcpManager()
     managers.push(manager)
@@ -202,28 +202,48 @@ describe('createMcpManager', () => {
     ])
   })
 
-  it('includes stderr captured during connect failures in MCP server test results', async () => {
+  // JARVIS: a stdio server would run any command written into mcp.json, so the face refuses to start one.
+  it('refuses to start a program as an MCP server', async () => {
     const { createMcpManager } = await import('./index')
     const manager = createMcpManager()
 
-    clientMocks.connect.mockImplementationOnce(async (transport: { stderr: NodeJS.WritableStream }) => {
-      transport.stderr.write('Missing required environment variable: API_KEY\n')
-      throw new Error('connect failed')
-    })
-
     const result = await manager.testServer({
-      name: 'broken-server',
+      name: 'program',
       config: {
-        command: 'broken-mcp-server',
+        command: 'calc.exe',
       },
     })
 
     expect(result.ok).toBe(false)
-    expect(result.error).toContain('connect failed')
-    expect(result.error).toContain('Missing required environment variable: API_KEY')
+    expect(result.error).toContain('does not start programs')
+    expect(clientMocks.connect).not.toHaveBeenCalled()
   })
 
-  it('reaches a remote server over streamable HTTP and sends its headers', async () => {
+  it('refuses an MCP server outside this PC and the tailnet', async () => {
+    const { createMcpManager } = await import('./index')
+    const manager = createMcpManager()
+
+    const result = await manager.testServer({
+      name: 'remote-server',
+      config: {
+        url: 'https://mcp.example.com/mcp',
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('this PC or the tailnet')
+    expect(httpTransportMock.url).toBeUndefined()
+  })
+
+  it('starts with the JARVIS tool server in a new config file', async () => {
+    const manager = createMcpManager()
+    managers.push(manager)
+    await manager.applyAndRestart()
+
+    expect(httpTransportMock.url?.toString()).toBe('http://127.0.0.1:48970/mcp')
+  })
+
+  it('reaches a tailnet server over streamable HTTP and sends its headers', async () => {
     const { createMcpManager } = await import('./index')
     const manager = createMcpManager()
 
@@ -233,14 +253,14 @@ describe('createMcpManager', () => {
     const result = await manager.testServer({
       name: 'remote-server',
       config: {
-        url: 'https://mcp.example.com/mcp',
+        url: 'http://100.125.91.51:48970/mcp',
         headers: { Authorization: 'Bearer token' },
       },
     })
 
     expect(result.ok).toBe(true)
     expect(result.tools).toEqual(['search_docs'])
-    expect(httpTransportMock.url?.toString()).toBe('https://mcp.example.com/mcp')
+    expect(httpTransportMock.url?.toString()).toBe('http://100.125.91.51:48970/mcp')
     expect(httpTransportMock.options).toEqual({ requestInit: { headers: { Authorization: 'Bearer token' } } })
   })
 })

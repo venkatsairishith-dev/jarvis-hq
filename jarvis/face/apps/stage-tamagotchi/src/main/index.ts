@@ -32,15 +32,14 @@ import { createArtistryConfig } from './configs/artistry'
 import { createGlobalAppConfig } from './configs/global'
 import { createIOTraceHubConfig } from './configs/io-trace-hub'
 import { createIOTraceRecordingConfig } from './configs/io-trace-recording'
+import { installNetworkLock, lockGlobalFetch } from './jarvis/network-lock'
 import { emitAppBeforeQuit, emitAppWindowAllClosed } from './libs/bootkit/lifecycle'
 import { getRendererRoot, setElectronMainDirname } from './libs/electron/location'
 import { createI18n } from './libs/i18n'
 import { setupAppleSpeechTranscriptionService } from './services/airi/apple-speech-transcription'
 import { setupAppleVisionService } from './services/airi/apple-vision'
 import { setupServerChannel } from './services/airi/channel-server'
-import { setupComputerUse } from './services/airi/computer-use'
 import { setupGodotStageManager } from './services/airi/godot-stage'
-import { setupHomeAssistant } from './services/airi/home-assistant'
 import { setupBuiltInServer } from './services/airi/http-server'
 import { IOTraceHub } from './services/airi/io-trace-hub'
 import { registerIOTraceHub } from './services/airi/io-trace-hub/register'
@@ -48,7 +47,7 @@ import { IOTraceRecordingService } from './services/airi/io-trace-recording'
 import { setupMcpManager } from './services/airi/mcp-servers'
 import { setupExtensionHost } from './services/airi/plugins'
 import { setupArtistryBridge } from './services/airi/widgets/artistry-bridge'
-import { isExternallyUpdatedInstall, setupAutoUpdater } from './services/electron/auto-updater'
+import { setupAutoUpdater } from './services/electron/auto-updater'
 import { setupSherpawModelAssetsProtocol } from './services/electron/bundled-sherpaw-assets'
 import { setupGlobalShortcutService } from './services/electron/global-shortcut'
 import { setupPermissionHandlers } from './services/electron/media-permissions'
@@ -246,6 +245,12 @@ app.whenReady().then(async () => {
     return
   }
 
+  // JARVIS: the network lock goes on before any window or service can make a request.
+  const networkLog = useLogg('jarvis:network-lock').useGlobalConfig()
+  lockGlobalFetch(message => networkLog.warn(message))
+  installNetworkLock(session.defaultSession, message => networkLog.warn(message))
+  app.on('session-created', created => installNetworkLock(created, message => networkLog.warn(message)))
+
   setupSherpawModelAssetsProtocol(getRendererRoot)
   setupSherpawModelAssets(createContext(ipcMain).context)
   setupPermissionHandlers(session.defaultSession, hasSelectedScreenCaptureSource)
@@ -270,7 +275,8 @@ app.whenReady().then(async () => {
   const autoUpdater = injeca.provide('services:auto-updater', {
     dependsOn: { appConfig },
     build: ({ dependsOn }) => setupAutoUpdater({
-      enabled: !isExternallyUpdatedInstall(),
+      // JARVIS: the face is built from this repository, never replaced by AIRI's releases.
+      enabled: false,
       getStoredUpdateLane: () => dependsOn.appConfig.get()?.updateChannel,
       setStoredUpdateLane: (lane) => {
         const currentConfig = dependsOn.appConfig.get()
@@ -516,8 +522,8 @@ app.whenReady().then(async () => {
     dependsOn: { mainWindow, tray, serverChannel, airiHttpServer, godotStageManager, pluginHost, mcpManager, onboardingWindow: onboardingWindowManager, widgetsWindow: widgetsManager, spotlightWindow, artistryConfig },
     callback: async (deps) => {
       const { context } = createContext(ipcMain)
-      setupComputerUse(context)
-      setupHomeAssistant(context)
+      // JARVIS: AIRI's computer use and Home Assistant control act outside the kernel, so they are not started.
+      // Actions reach the PC only through the JARVIS tool server, where the kernel decides.
       await setupArtistryBridge({
         widgetsManager: deps.widgetsWindow,
         context,

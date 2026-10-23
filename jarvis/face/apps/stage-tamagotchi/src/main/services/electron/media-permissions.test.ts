@@ -328,7 +328,7 @@ describe('media permissions', () => {
     )).toBe(false)
   })
 
-  it('grants local AIRI pages access to HID devices through the device permission handler', () => {
+  it('grants local JARVIS pages access to HID devices through the device permission handler', () => {
     const targetSession = {
       setDevicePermissionHandler: vi.fn<Session['setDevicePermissionHandler']>(),
       setPermissionCheckHandler: vi.fn<Session['setPermissionCheckHandler']>(),
@@ -346,7 +346,7 @@ describe('media permissions', () => {
     expect(handler?.(createHIDPermissionDetails({ deviceType: 'usb' }))).toBe(false)
   })
 
-  it('allows HID permission checks only for local AIRI pages', () => {
+  it('allows HID permission checks only for local JARVIS pages', () => {
     expect(shouldGrantElectronPermission(
       localWebContents,
       'hid',
