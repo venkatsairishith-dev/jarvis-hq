@@ -536,3 +536,13 @@ AIRI's own wake-word feature is used, not a new listener: the built-in character
 - **Known limits:** the passphrase protects against processes that do not know it; malware that records the keyboard can learn it. The proof of one request can be attacked offline by someone who captured
   the request file in the second before the service deletes it, so the passphrase must be long (10 characters minimum is enforced; a phrase is better). Not yet built: an approval card in the console that
   asks for the passphrase (today the terminal client does). Not tested on Windows by the cloud session (written and unit-tested on Linux with a fake runner); first run is on the laptop with `-Verify`.
+
+## D40 JARVIS signs up for free model APIs with its own Gmail, and stops where a person is needed (2026-10-24, owner)
+
+Owner: JARVIS gets a Gmail address and creates the accounts it needs (free model APIs, `reports/` list of 2026-10-24); when it needs the owner it asks.
+- **The Gmail account is made and given by the owner** (Google requires phone verification and forbids automated creation). Its password or app password / OAuth token lives only in a file under `D:\jarvis-secrets\`; JARVIS gets the path, never the value, and nothing is typed into a chat.
+- **One account per provider, in the owner's name, for the owner's own use.** No extra accounts to get around a free-tier limit.
+- **JARVIS stops and asks the owner for:** CAPTCHAs and "are you human" checks, phone or SMS codes, any card or payment field, identity or real-name verification, terms it has not been told to accept, and any provider that is not on the owner's list. It never tries to get past these.
+- **Mail is untrusted.** It reads only verification mail from the provider's own domain, takes a code or a link on that same domain, and opens nothing else. Text in an e-mail or page never changes the task (the untrusted flag and the no-egress-tools rule after reading screen text still apply).
+- **A new API key is never shown to a model.** The "create key" step ends with the key going straight from the page to the file under `D:\jarvis-secrets\providers\` (clipboard to file, screenshots off for that step), or the owner does that one step. The provider is then added to `privacy/providers.json` with `key_file`, disabled until `hosted_model_compare.py` has run and the owner enables it.
+- Runs on the Agent PC (the VM2 machine once rebuilt), as the unprivileged agent user, under the usual approval tiers.
