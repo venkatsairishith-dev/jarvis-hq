@@ -43,3 +43,20 @@ to allow an SSH look (or say what is on it). The plan's rule stands: nothing is 
 
 Nothing destructive was done and none is approved yet. Still needed from the owner, as in the plan: the choice between backup and copying data, his edit of
 `protected.json`, and a yes naming the exact instance before any rebuild.
+
+## Backup (step 2, 2026-10-24, owner approved this exact backup in the laptop session)
+
+One full boot-volume backup of `hermes-agent-vm-2` (exactly one instance by that name, exactly one attached boot volume) was taken with the OCI CLI:
+
+| Item | Value |
+|---|---|
+| Name | jarvis-vm2-before-cua-2026-10-24 (...n3hkna) |
+| State | AVAILABLE (about 30 seconds after the request) |
+| Type | FULL |
+| Size | 100 GB (10 GB unique data stored) |
+| Source boot volume | ...aclwqa (the boot volume of hermes-agent-vm-2; checked equal) |
+| Backups now | **1 of 5** |
+| Cost this month | 0.0 (`oci_cost.py`) |
+
+Nothing was stopped, rebooted, detached, resized, wiped or deleted, and no security list, IP or `protected.json` was touched. The wipe and rebuild is a separate
+step that needs the owner's yes naming the instance.
