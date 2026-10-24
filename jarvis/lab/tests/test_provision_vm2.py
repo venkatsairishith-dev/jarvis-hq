@@ -109,3 +109,8 @@ def test_cua_service_is_installed_but_not_started_and_runs_as_the_agent_user():
 def test_cua_plan_mode_only_prints():
     r = subprocess.run(["bash", str(CUA_PATH), "--plan"], capture_output=True, text=True)
     assert r.returncode == 2 or "would download" in r.stdout
+
+
+def test_cua_update_check_is_switched_off_in_the_config_and_in_the_unit():
+    assert "config set update_check_enabled false" in CUA and "CUA_DRIVER_RS_UPDATE_CHECK=false" in CUA
+    assert "cua-driver update --apply" not in CUA and "check-update" not in re.sub(r"(?m)^\s*#.*$", "", CUA)   # the script never updates the driver by itself

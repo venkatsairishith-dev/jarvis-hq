@@ -62,6 +62,12 @@ if [ "$PLAN" = 1 ]; then echo "   would run as agent: cua-driver telemetry disab
   echo "$st" | grep -qi 'disabled' || { echo "telemetry is not shown as disabled: stopping, nothing else was run"; exit 3; }
 fi
 
+say "4b no update check: the driver looks for newer releases at start (vendor docs, cua.ai/docs/cua-driver/guides/operate); the telemetry switch does not cover it"
+if [ "$PLAN" = 1 ]; then echo "   would run as agent: cua-driver config set update_check_enabled false ; config get (reported, not fatal: the unit also sets CUA_DRIVER_RS_UPDATE_CHECK=false)"; else
+  sudo -u agent -H env -i HOME=/home/agent PATH=/usr/bin:/bin /usr/local/bin/cua-driver config set update_check_enabled false 2>&1 | head -5 || true
+  echo "   update_check_enabled now: $(sudo -u agent -H env -i HOME=/home/agent PATH=/usr/bin:/bin /usr/local/bin/cua-driver config get update_check_enabled 2>&1 | head -2 | tr '\n' ' ')"
+fi
+
 say "5 the service: installed, NOT enabled, NOT started"
 if [ "$PLAN" != 1 ]; then
   cat > /etc/systemd/system/cua-driver.service <<'UNIT'
@@ -71,8 +77,9 @@ After=jarvis-desktop.service
 Requires=jarvis-desktop.service
 [Service]
 User=agent
-Environment=HOME=/home/agent DISPLAY=:1
+Environment=HOME=/home/agent DISPLAY=:1 CUA_DRIVER_RS_UPDATE_CHECK=false
 ExecStartPre=/usr/local/bin/cua-driver telemetry disable
+ExecStartPre=-/usr/local/bin/cua-driver config set update_check_enabled false
 ExecStart=/usr/local/bin/cua-driver serve --permission-mode standard --no-overlay
 Restart=on-failure
 NoNewPrivileges=yes
