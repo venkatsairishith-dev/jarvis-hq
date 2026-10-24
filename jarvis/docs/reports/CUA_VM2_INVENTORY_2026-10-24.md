@@ -80,3 +80,40 @@ one attached boot volume (...aclwqa), the backup `jarvis-vm2-before-cua-2026-10-
 Not touched: hermes-agent-vm, any security list, VCN, subnet or IP. The owner deleted `D:\jarvis-secrets\protected.json` before the rebuild (the whole file, not only the
 vm-2 entries), so the protection of every resource it listed is off until it is recreated; hermes-agent-vm's entries should be restored. No login to the VM and nothing
 installed yet; the CUA install is the next step.
+
+## Free-limit check (2026-10-24, read-only: limits service, usage-api, SSH to hermes-agent-vm for four numbers)
+
+| Number | Value |
+|---|---|
+| A1 core limit in the tenancy (AD-1) | 250, used 3, available 247 |
+| A1 memory limit (GB) | 1666, used 18, available 1648 |
+| Usage now | hermes-agent-vm 2 OCPU / 12 GB + hermes-agent-vm-2 1 OCPU / 6 GB = 3 OCPU / 18 GB |
+| This month so far (usage-api) | Standard - A1: 1542.4 OCPU-hours; A1 memory: 9254.6 GB-hours; **every compute line costs 0**; month total 0.0 (`oci_cost.py` also 0.0) |
+
+What it means: the limits service shows the account's Pay-As-You-Go ceilings (250 / 1666), not the Always Free pool, so it cannot settle the 4 OCPU / 24 GB
+versus 2 / 12 question by itself. The evidence that does: the Always Free allowance is counted in hours (3,000 OCPU-hours and 18,000 GB-hours a month, which
+is 4 OCPU / 24 GB around the clock), and 3 OCPU / 18 GB all month is 2,232 OCPU-hours and 13,392 GB-hours, inside it, and Oracle billed 0 for the A1 lines on
+the servers' real running time. Nothing shows a 2 / 12 pool. The current 3 / 18 is not above the limit found. Account type (Always Free only versus upgraded) was not
+available from a read-only call and is not claimed.
+
+### Could hermes-agent-vm run on 1 OCPU / 6 GB? (measured over SSH, names and sizes only)
+
+- Memory: 11,927 MB total, **5,731 MB used**, 479 MB free, 5,944 MB buffers/cache, 6,195 MB available, no swap.
+- Biggest process: `llama-server` at about 6.4 GB resident (a second, small one 89 MB); `omniroute` 516 MB; `hermes` 307 MB and 173 MB; journal 131 MB; others under 125 MB.
+- Load average 0.00; uptime 16 days; disk 13 GB used of 96 GB; 41 services running.
+- Judgement: **it does not fit in 6 GB with a safety margin.** Used memory is already 5.7 GB, with the big model server on its own near 6 GB resident. Shrinking would
+  need the model server to be smaller or moved, or it would run out of memory. The CPU would be fine (load 0.00), memory is the limit.
+
+### Resize of hermes-agent-vm to 1 OCPU / 6 GB: steps and risks (written down, NOT run, needs the owner's yes naming hermes-agent-vm)
+
+1. Decide what happens to `llama-server` first (stop it, use a smaller model, or run it elsewhere); without that the VM is out of memory after the resize.
+2. Take a full boot-volume backup of hermes-agent-vm (uses 1 more of the 5 free backups: 2 of 5), wait for AVAILABLE.
+3. Stop the services in order: jarvis-llm-proxy, jarvis-kernel (audit chain stays valid), hermes agents, the Telegram bot, omniroute, llama-server; note their states.
+4. `oci compute instance update --instance-id <hermes-agent-vm> --shape-config '{"ocpus":1,"memoryInGBs":6}'`: for the A1 flex shape this restarts the instance
+   (a few minutes of downtime for the main server, the kernel and every agent).
+5. After RUNNING: check shape, public IP unchanged, Tailscale up, start services in reverse order, `live_check`, audit chain verify.
+6. Blockers and risks: the `protected.json` entry for hermes-agent-vm (the file was deleted on 2026-10-24; if it is recreated, the entry must be lifted for this one
+   step); out-of-memory kills if step 1 is skipped; downtime of the kernel; resizing back up needs free A1 capacity in the region.
+
+Recommendation: **do not shrink hermes-agent-vm.** The tenancy is inside the free hours at 3 / 18, it is billed 0, and the main server needs its memory. If the owner
+still wants it, do step 1 first and take the backup before anything else.
