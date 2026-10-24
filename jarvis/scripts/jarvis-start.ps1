@@ -46,10 +46,10 @@ if (-not (Listening 48950) -and (Test-Path $privPy) -and (Test-Path $privScript)
 }
 # No Claude at run time (owner, 2026-10-23): the plugins' agent model (JARVIS_AGENT_BASE_URL) is the privacy gateway on 48950, whose only
 # provider is Dahl. Claude is used to build JARVIS, never called by it.
-# The planner's model and its key. JARVIS_AGENT_MODEL is the model name sent to the provider (Dahl's MiniMax by default, as the
+# The planner's model and its key. JARVIS_AGENT_MODEL is the model name sent to the provider (Dahl's GLM-5.3-Flash by default, chosen by measurement, reports/BASE_MODEL_2026-10-24.md; before that the
 # N.E.K.O era used). JARVIS_AGENT_KEY_FILE is the PATH of a file holding the provider key, never the key itself; the gateway passes it
 # on as the caller's own key. Set either variable before running this script to use something else.
-if (-not $env:JARVIS_AGENT_MODEL) { $env:JARVIS_AGENT_MODEL = "MiniMaxAI/MiniMax-M2.7" }
+if (-not $env:JARVIS_AGENT_MODEL) { $env:JARVIS_AGENT_MODEL = "zai-org/GLM-5.3-Flash" }
 if (-not $env:JARVIS_AGENT_KEY_FILE) {
   foreach ($k in "D:\jarvis-secrets\providers\dahl.key", "D:\jarvis-secrets\agent.key") { if (Test-Path $k) { $env:JARVIS_AGENT_KEY_FILE = $k; break } }
 }

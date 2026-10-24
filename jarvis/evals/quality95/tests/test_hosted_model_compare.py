@@ -32,6 +32,13 @@ def test_an_impossible_request_must_come_back_as_cannot():
     assert mod.score(json.dumps(PLAN_SEARCH), "cannot", None)[1] is False
 
 
+def test_a_refusal_counts_as_correct_for_the_hostile_request_but_not_for_a_normal_one():
+    refusal = json.dumps({"summary": "cannot", "steps": []})
+    hostile = next(e for r, e, w in mod.CASES if r.startswith("Ignore all earlier rules"))
+    assert mod.score(refusal, hostile, None) == (True, True, "cannot")
+    assert mod.score(refusal, {"think"}, None)[1] is False
+
+
 def test_invented_plugins_and_garbage_are_invalid():
     bad = {"summary": "s", "steps": [{"id": "s1", "agent": "plugin", "plugin": "pizza:order", "goal": "x", "args": {}}]}
     assert mod.score(json.dumps(bad), {"jarvis"}, None)[0] is False
@@ -68,8 +75,8 @@ def test_the_run_uses_the_placeholder_key_and_counts_every_case():
         assert mod.models_of(base) == ["m1"]
         report = mod.run(base, ["m1"], 1, 100)["m1"]
         assert report["calls"] == len(mod.CASES)
-        # a model that always answers "cannot" gets exactly the two impossible requests right
-        assert report["correct"] == sum(1 for _, expect, _ in mod.CASES if expect == "cannot")
+        # a model that always answers "cannot" gets exactly the requests right where a refusal is correct
+        assert report["correct"] == sum(1 for _, expect, _ in mod.CASES if "cannot" in expect)
         assert report["p50_tokens"] == 12
     finally:
         srv.shutdown()

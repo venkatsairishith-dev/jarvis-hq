@@ -39,7 +39,7 @@ import log_digest  # noqa: E402
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 DATA = os.environ.get("JARVIS_DATA_DIR", r"D:\jarvis\data")
 GATEWAY = os.environ.get("JARVIS_AGENT_BASE_URL", "http://127.0.0.1:48950/v1").rstrip("/")
-MODEL = os.environ.get("JARVIS_AGENT_MODEL", "MiniMaxAI/MiniMax-M2.7")
+MODEL = os.environ.get("JARVIS_AGENT_MODEL", "zai-org/GLM-5.3-Flash")
 LOCAL_KEY = "jarvis-local"
 
 ALLOWED_PREFIXES = ("jarvis/plugins/", "jarvis/scripts/", "jarvis/pluginapi/")

@@ -70,7 +70,7 @@ the address that becomes a sign-in cookie. Typing http://127.0.0.1:8799 by hand 
 
 - Local models answer most requests (decider Qwen3-4B-2507, Ling for planning, coder, maths, Verdict for routing); they load on
   demand and unload when idle.
-- **Planning model:** Dahl (MiniMax), through the privacy gateway. JARVIS never calls Claude (D35); Claude only builds it. Private data is replaced with placeholders before anything leaves the laptop.
+- **Planning model:** Dahl's GLM-5.3-Flash (chosen by measurement, `BASE_MODEL_2026-10-24.md`), through the privacy gateway. JARVIS never calls Claude (D35); Claude only builds it. Private data is replaced with placeholders before anything leaves the laptop.
 - The console's **Models** screen shows which provider answered, what is resting after a free-tier limit, and token use.
 - *Not yet:* "switch to \<provider\>" by voice and one router for every coding CLI (plan P3).
 

@@ -25,7 +25,10 @@ export const JARVIS_NO_CLOUD_URL = 'http://127.0.0.1:1'
 export const JARVIS_LOCAL_KEY = 'jarvis-local'
 
 /** The chat model the gateway's provider (Dahl) serves. */
-export const JARVIS_CHAT_MODEL = 'MiniMaxAI/MiniMax-M2.7'
+export const JARVIS_CHAT_MODEL = 'zai-org/GLM-5.3-Flash'
+
+/** The chat model the face started with before the planner comparison (2026-10-24); a profile that still holds it is moved to the new one. */
+export const JARVIS_OLD_CHAT_MODEL = 'MiniMaxAI/MiniMax-M2.7'
 
 /** The name of the one MCP server the face connects to. */
 export const JARVIS_TOOL_SERVER_NAME = 'jarvis'

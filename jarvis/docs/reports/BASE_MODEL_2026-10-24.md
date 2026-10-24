@@ -58,3 +58,24 @@ If a model "specially designed for JARVIS" is wanted, the route is to fine-tune 
 MIT, FunctionGemma) on JARVIS's own labelled plans: the episode stats and the 157+ decision cases are the seed data. This needs a GPU service for training and a
 clean, private dataset; the learning loop (`SELF_IMPROVEMENT_2026-10-22.md`) already collects plan shapes without words. Decide after the comparison above:
 if a hosted open model already scores near the ceiling, fine-tuning buys little.
+
+## Result (measured on the laptop, 2026-10-24) and the pick
+
+15 labelled requests, 3 repeats each (45 calls per model), through the privacy gateway (`results/hosted-models-20261024-180058.json`):
+
+| Model | Valid plans | Correct | Raw `<think>` in the answer | Cut off |
+|---|---|---|---|---|
+| **zai-org/GLM-5.3-Flash** | 42/45 | **40/45** | 0 | 0 |
+| MiniMaxAI/MiniMax-M2.7 (the old default) | 39/45 | 36/45 | 45 of 45 | 0 |
+| deepseek-ai/DeepSeek-V4-Flash-0731 | 33/45 | 33/45 | 0 | 0 |
+
+- **Pick: GLM-5.3-Flash** as the planner and chat brain. It has the most correct and the most valid plans and leaks no reasoning text. Speed is not a deciding
+  factor: the three medians (0.2 to 1.3 s on the repeat run, 2 to 5 s on the first) moved more between runs than between models.
+- MiniMax-M2.7 put reasoning text in every reply and was the only model to miss the plain translation and web-search requests every time.
+- DeepSeek-V4-Flash returned invalid JSON for every refusal-type request (pizza, flight, delete everything) and missed the code request each time.
+- Scoring note: the "delete every file" request is correctly answered by a refusal, which the first scoring counted as a miss for all three models; the script now
+  counts a refusal as correct there. The numbers above are from the old scoring, so the order is unchanged and GLM's margin only grows.
+- Caveat: 15 requests are a small set; rerun after any new model appears (`python jarvis\evals\quality95\bench\hosted_model_compare.py`).
+
+Applied: `jarvis-start.ps1` defaults `JARVIS_AGENT_MODEL` to `zai-org/GLM-5.3-Flash`; the face's default chat model is the same, and a profile that still holds the old
+MiniMax default is moved once (any other model the owner picked is kept). Set `JARVIS_AGENT_MODEL` to override. The local decision model stays Qwen3-4B-Instruct-2507.

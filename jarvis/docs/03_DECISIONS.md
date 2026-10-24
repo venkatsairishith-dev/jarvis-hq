@@ -516,5 +516,5 @@ AIRI's own wake-word feature is used, not a new listener: the built-in character
   approvals, privacy, secrets or tests, stay small, and pass `git apply --check`. It is never applied by itself: `apply <id>` is the owner's promotion (new branch,
   patch, the tests of what it touched, no commit). The watchdog still restarts crashed services by itself. This keeps the five rules of the self-improvement plan.
 - **Base model:** no open model is built for JARVIS; the planner model is chosen with `bench/hosted_model_compare.py` (the real planner prompt and parser, 15 labelled
-  requests, every model the gateway lists). Two brains: a hosted open model for planning, and Qwen3-4B-Instruct-2507 as the local decision model (D30). Report:
+  requests, every model the gateway lists). Two brains: a hosted open model for planning, and Qwen3-4B-Instruct-2507 as the local decision model (D30). Measured 2026-10-24 (45 calls per model): GLM-5.3-Flash 40/45 correct, MiniMax-M2.7 36/45 (reasoning text in every reply), DeepSeek-V4-Flash 33/45; **GLM-5.3-Flash is now the default planner and chat model**. Report:
   `reports/BASE_MODEL_2026-10-24.md`. Fine-tuning a JARVIS-specific model is written down, not started.

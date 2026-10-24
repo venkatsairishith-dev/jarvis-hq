@@ -1,4 +1,4 @@
-import { JARVIS_CHAT_MODEL, JARVIS_ENDPOINTS, JARVIS_LOCAL_KEY, JARVIS_SPEECH_MODEL, JARVIS_SPEECH_VOICE } from '@proj-airi/stage-shared/jarvis'
+import { JARVIS_CHAT_MODEL, JARVIS_ENDPOINTS, JARVIS_LOCAL_KEY, JARVIS_OLD_CHAT_MODEL, JARVIS_SPEECH_MODEL, JARVIS_SPEECH_VOICE } from '@proj-airi/stage-shared/jarvis'
 
 import { useProviderConfigStore } from '../providers/config'
 import { useProviderStore } from '../providers/provider'
@@ -55,7 +55,7 @@ export async function configureJarvisDefaultsIfEmpty(): Promise<boolean> {
     consciousnessStore.activeModel = JARVIS_CHAT_MODEL
     changed = true
   }
-  else if (active === 'openai-compatible' && !consciousnessStore.activeModel) {
+  else if (active === 'openai-compatible' && (!consciousnessStore.activeModel || consciousnessStore.activeModel === JARVIS_OLD_CHAT_MODEL)) {
     consciousnessStore.activeModel = JARVIS_CHAT_MODEL
     changed = true
   }

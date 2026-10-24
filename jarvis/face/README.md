@@ -75,7 +75,7 @@ narrows them. Their results are cleaned before the face's model sees them.
 
 You type no key. The face sends the placeholder `jarvis-local`; the privacy gateway replaces it with the key in
 `D:\jarvis-secrets\providers\dahl.key` (the file must exist; `jarvis/privacy/providers.json` names it). The default chat model is
-`MiniMaxAI/MiniMax-M2.7`. A profile from an earlier build is repaired once at the first start. Speech needs no key.
+`zai-org/GLM-5.3-Flash`. A profile from an earlier build is repaired once at the first start. Speech needs no key.
 
 ## Security
 

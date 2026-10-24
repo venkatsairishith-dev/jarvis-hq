@@ -72,7 +72,7 @@ describe('jarvis provider defaults', () => {
   it('sends the placeholder key and the default chat model, so the owner types neither', async () => {
     await configureJarvisDefaultsIfEmpty()
     expect(useProviderConfigStore().providers['openai-compatible']?.config).toMatchObject({ apiKey: 'jarvis-local' })
-    expect(useConsciousnessStore().activeModel).toBe('MiniMaxAI/MiniMax-M2.7')
+    expect(useConsciousnessStore().activeModel).toBe('zai-org/GLM-5.3-Flash')
   })
 
   it('repairs a profile from an earlier build once: empty key, and chat pointed at a cloud provider JARVIS does not have', async () => {
@@ -84,7 +84,20 @@ describe('jarvis provider defaults', () => {
 
     expect(providerConfigStore.providers['openai-compatible']?.config).toMatchObject({ apiKey: 'jarvis-local' })
     expect(useConsciousnessStore().activeProvider).toBe('openai-compatible')
-    expect(useConsciousnessStore().activeModel).toBe('MiniMaxAI/MiniMax-M2.7')
+    expect(useConsciousnessStore().activeModel).toBe('zai-org/GLM-5.3-Flash')
     await expect(configureJarvisDefaultsIfEmpty()).resolves.toBe(false)
+  })
+
+  it('moves a profile that still holds the old default chat model to the new one, and leaves another choice alone', async () => {
+    const providerConfigStore = useProviderConfigStore()
+    await providerConfigStore.ensureProvider('openai-compatible', 'openai-compatible', { baseUrl: 'http://127.0.0.1:48950/v1/', apiKey: 'jarvis-local' })
+    useConsciousnessStore().activeProvider = 'openai-compatible'
+    useConsciousnessStore().activeModel = 'MiniMaxAI/MiniMax-M2.7'
+    await configureJarvisDefaultsIfEmpty()
+    expect(useConsciousnessStore().activeModel).toBe('zai-org/GLM-5.3-Flash')
+
+    useConsciousnessStore().activeModel = 'deepseek-ai/DeepSeek-V4-Flash-0731'
+    await configureJarvisDefaultsIfEmpty()
+    expect(useConsciousnessStore().activeModel).toBe('deepseek-ai/DeepSeek-V4-Flash-0731')
   })
 })
