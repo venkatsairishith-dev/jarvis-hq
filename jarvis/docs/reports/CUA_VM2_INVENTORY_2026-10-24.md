@@ -117,3 +117,39 @@ available from a read-only call and is not claimed.
 
 Recommendation: **do not shrink hermes-agent-vm.** The tenancy is inside the free hours at 3 / 18, it is billed 0, and the main server needs its memory. If the owner
 still wants it, do step 1 first and take the backup before anything else.
+
+### Free-limit check, addendum: hours used this month (read-only, 2026-10-24 16:26 UTC)
+
+usage-api, this month to date (568.4 of 744 hours elapsed; 175.6 hours left):
+
+| | Used so far | Cost |
+|---|---|---|
+| A1 OCPU hours | **1,546.2** | 0.0 (SGD line 0.0, USD line 0.0) |
+| A1 memory GB hours | **9,277.1** | 0.0 |
+
+- Oracle's Always Free reference page (read today) says all tenancies get the first **1,500 OCPU hours and 9,000 GB hours** a month free on VM.Standard.A1.Flex, "for Always
+  Free tenancies equivalent to 2 OCPUs and 12 GB", and that an upgraded account is charged only for usage above that. Oracle's Ampere pricing snippet (search result,
+  page itself returned 403) says 3,000 OCPU hours and 18,000 GB hours. The two Oracle pages disagree; I could not open the price list, so the dollar rates below are
+  NOT verified.
+- **The 1,500 / 9,000 pool is already used up** (1,546 and 9,277, so 46 OCPU-hours and 277 GB-hours over). The cloud estimate of about 1,400 / 8,500 was a little low. Cost
+  still shows 0.0, which fits either a 3,000 / 18,000 pool or billing that is not shown yet; I cannot tell which from the CLI.
+- Account type: `docs/05_OPERATIONS.md` calls it a Pay-As-You-Go account used only inside Always Free (so upgraded). The limits service (250 cores / 1,666 GB) agrees with
+  an upgraded tenancy. I found no read-only call that states the type, and I did not guess what Oracle does for a non-upgraded tenancy over its limit.
+
+Projection to 31 October 23:59 UTC if nothing changes (3 OCPU / 18 GB = 3 and 18 per hour):
+
+| Case | OCPU hours at month end | GB hours at month end | Over 1,500 / 9,000 by |
+|---|---|---|---|
+| (a) stay at 3 / 18 | 1,546 + 527 = about 2,073 | 9,277 + 3,161 = about 12,438 | 573 OCPU-h, 3,438 GB-h |
+| (b) hermes-agent-vm to 1 / 6 now (total 2 / 12) | 1,546 + 351 = about 1,897 | 9,277 + 2,107 = about 11,384 | 397 OCPU-h, 2,384 GB-h |
+
+Cost estimate (ESTIMATE ONLY, rates not verified: the only figures found are an old Arm Developer post, 2021, $0.01 per OCPU-hour and $0.0015 per GB-hour): (a) about
+$10.9, (b) about $7.5, and even a resize today does not bring October back under 1,500 / 9,000. If the real free pool is 3,000 / 18,000 the cost for both cases is 0.
+Not a quote; Oracle's invoice decides.
+
+Ways to stop adding hours without resizing (each needs the owner's yes naming the instance): stop hermes-agent-vm-2 until needed (its rebuild is done; a stopped
+instance uses no OCPU hours), or resize one of them. The resize plan for hermes-agent-vm is in the section above; it needs the memory step first.
+
+Recommendation: nothing has been billed, so do not panic, but because the account is upgraded and the pool is used, treat further A1 hours as potentially billable: the
+cheapest safe step today is to **stop hermes-agent-vm-2** (it has nothing running yet) until the CUA install is ready, and plan the 2 / 12 total for November 1 at
+the latest (it must include solving the main server's 5.7 GB memory use). That is the owner's decision.
