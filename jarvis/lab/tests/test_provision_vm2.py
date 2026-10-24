@@ -76,3 +76,35 @@ def test_tailscale_plan_mode_only_prints():
     assert r.returncode in (0, 2)
     if r.returncode == 0:
         assert "would fetch https://pkgs.tailscale.com" in r.stdout and "would run: systemctl enable --now tailscaled" in r.stdout
+
+
+# ---- cua-driver on the Agent PC VM
+CUA_PATH = Path(__file__).resolve().parents[1] / "deploy" / "provision_vm2_cua.sh"
+CUA = CUA_PATH.read_text(encoding="utf-8")
+
+
+def test_cua_script_pins_the_file_checks_two_hashes_and_does_not_pipe_to_a_shell():
+    assert subprocess.run(["bash", "-n", str(CUA_PATH)]).returncode == 0
+    assert 'PIN_SHA256="9db8b9084add57eb97be8164367b24b6be54ed4f3dc01213e64b72d7fc09fddb"' in CUA and "linux-arm64-binary.tar.gz" in CUA
+    assert 'grep -q "^$PIN_SHA256  $FILE' in CUA and "SHA256SUMS" in CUA and "stopping" in CUA
+    code = re.sub(r"(?m)^\s*#.*$", "", CUA)
+    assert not re.search(r"(curl|wget)[^\n|]*\|\s*(sudo\s+)?(ba)?sh", code) and "cua.ai/driver/install" not in code
+
+
+def test_cua_telemetry_is_blocked_and_disabled_before_the_driver_does_anything_else():
+    hosts, disable, doctor = CUA.index("jarvis-cua-telemetry-block"), CUA.index("/usr/local/bin/cua-driver telemetry disable"), CUA.index("DISPLAY=:1 /usr/local/bin/cua-driver doctor")
+    install = CUA.index('tar -xzf "$tmp/$FILE"')
+    assert hosts < install < disable < doctor                       # hosts blocked, then unpacked, then disabled, then anything else
+    assert "eu.i.posthog.com" in CUA and "telemetry status" in CUA and "grep -qi 'disabled'" in CUA
+    assert "ExecStartPre=/usr/local/bin/cua-driver telemetry disable" in CUA
+
+
+def test_cua_service_is_installed_but_not_started_and_runs_as_the_agent_user():
+    assert "User=agent" in CUA and "DISPLAY=:1" in CUA and "--permission-mode standard" in CUA
+    code = re.sub(r"(?m)^\s*#.*$", "", CUA)
+    assert not re.search(r"systemctl (enable|start)", code) and "--dangerously-bypass-approvals" not in CUA and "unrestricted" not in code
+
+
+def test_cua_plan_mode_only_prints():
+    r = subprocess.run(["bash", str(CUA_PATH), "--plan"], capture_output=True, text=True)
+    assert r.returncode == 2 or "would download" in r.stdout
