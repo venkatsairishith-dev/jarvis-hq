@@ -191,6 +191,17 @@ def test_a_people_only_answer_is_enough_by_default_but_not_when_places_must_be_h
     assert g.redact_requests[-1]["names"] is True
 
 
+def test_the_record_file_name_is_made_from_the_cleared_question_never_the_typed_one(monkeypatch, fake_gateway):
+    """The file name goes back in the tool result that the chat model reads, so it must not carry the typed name or number."""
+    fake_gateway()
+    from jarvis.plugins.research import core
+    saved = []
+    monkeypatch.setattr(core, "run", lambda question, **kw: {"notes": [], "record": {}, "spec": {"summary": "s", "sources": []}})
+    monkeypatch.setattr(r, "_save_record", lambda folder, question, payload: saved.append(question) or "record.json")
+    out, _ = run_entry(CANARY_Q)
+    assert saved and all("CANARY" not in q for q in saved), saved
+
+
 def test_the_writer_gets_the_question_as_it_was_cleared_never_as_typed():
     from jarvis.plugins.research import core
     prompts = []
