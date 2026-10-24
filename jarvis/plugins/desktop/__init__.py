@@ -566,6 +566,35 @@ class DesktopPlugin(PluginBase):
         body = {"op": "media"} if check == "media" else {"op": "diag", "check": check, "target": target}
         return await self._one(body, 90)
 
+    @plugin_entry(
+        id="whats_on_screen",
+        name=tr("entry.whats_on_screen.name", default="What is on the screen"),
+        description=tr("entry.whats_on_screen.description", default=(
+            "Which window is in front and which others are open right now (app name and window title only). Read-only. Use it when the "
+            "owner says 'this', 'what is that error' or 'look at my screen': it tells you WHICH app to look at. To read the window's text "
+            "call read_window_text with that app's process name; the text is released to the model only if the owner allowed screen text "
+            "and the privacy gateway cleared it. Window titles are cleaned; refuses nothing because it reads no content.")),
+        input_schema={"type": "object", "properties": {}},
+        timeout=60, llm_result_fields=["ok", "in_front", "windows", "count", "hint"],
+    )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    async def whats_on_screen(self, **_):
+        res = await self._one({"op": "windows"}, 30, "list windows")
+        if not isinstance(res, Ok):
+            return res
+        got = res.value
+        if not got.get("ok"):
+            return Err(SdkError("The PC could not list its windows right now."))
+        ws = [w for w in (got.get("windows") or []) if isinstance(w, dict) and not w.get("minimized")]
+        front = next((w for w in ws if w.get("foreground")), None)
+        row = lambda w: {"app": str(w.get("process") or "")[:40], "title": str(w.get("title") or "")[:120]}     # noqa: E731
+        others = [row(w) for w in ws if w is not front][:12]
+        out = {"ok": True, "count": len(ws), "in_front": row(front) if front else None, "windows": others}
+        out["hint"] = (f"To read what is in the front window, call read_window_text with app='{front.get('process')}'."
+                       if front and core.APP_PROCESS.match(str(front.get("process") or "")) else
+                       "No window is in front, or its app name is not usable; ask the owner which app they mean.")
+        return Ok(out)
+
     # ---------- perception beyond the accessibility tree: OCR of one window, and finding a label in it ----------
     @plugin_entry(
         id="read_window_text",

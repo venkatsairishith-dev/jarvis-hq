@@ -349,3 +349,28 @@ def test_the_activity_file_never_holds_a_file_name_or_a_secret(env):
     core.set_activity("failed", f"cannot open {C_PATH} with {C_KEY}")
     assert env.activity.exists() and leaked(env.activity.read_text(encoding="utf-8")) == []
     assert real is not None
+
+
+# ------------------------------------------------------------------ whats_on_screen
+def test_whats_on_screen_names_the_front_window_and_the_others_and_points_to_read_window_text(env, monkeypatch, caplog):
+    caplog.set_level(logging.DEBUG)
+    windows = [{"title": f"{C_FILE} - Excel", "process": "excel", "foreground": True, "minimized": False, "w": 100, "h": 100, "id": "w1"},
+               {"title": "Inbox", "process": "chrome", "foreground": False, "minimized": False, "w": 100, "h": 100, "id": "w2"},
+               {"title": "hidden", "process": "notepad", "foreground": False, "minimized": True, "w": 100, "h": 100, "id": "w3"}]
+    use(env, monkeypatch, {("windows", None): {"ok": True, "count": 3, "windows": windows}})
+    r = call("whats_on_screen")
+    v = r.value
+    assert v["in_front"]["app"] == "excel" and [w["app"] for w in v["windows"]] == ["chrome"] and v["count"] == 2
+    assert "read_window_text" in v["hint"] and "app='excel'" in v["hint"]
+    assert leaked(everything(env, r, caplog)) == []                      # a file name in the title is reduced to its class
+
+
+def test_whats_on_screen_with_nothing_in_front_asks_which_app(env, monkeypatch):
+    use(env, monkeypatch, {("windows", None): {"ok": True, "count": 0, "windows": []}})
+    v = call("whats_on_screen").value
+    assert v["in_front"] is None and "ask the owner" in v["hint"]
+
+
+def test_whats_on_screen_when_the_pc_cannot_list_windows_says_so(env, monkeypatch):
+    use(env, monkeypatch, {("windows", None): {"ok": False}})
+    assert "could not list" in str(call("whats_on_screen").error)
