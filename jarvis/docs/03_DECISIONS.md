@@ -518,3 +518,21 @@ AIRI's own wake-word feature is used, not a new listener: the built-in character
 - **Base model:** no open model is built for JARVIS; the planner model is chosen with `bench/hosted_model_compare.py` (the real planner prompt and parser, 15 labelled
   requests, every model the gateway lists). Two brains: a hosted open model for planning, and Qwen3-4B-Instruct-2507 as the local decision model (D30). Measured 2026-10-24 (45 calls per model): GLM-5.3-Flash 40/45 correct, MiniMax-M2.7 36/45 (reasoning text in every reply), DeepSeek-V4-Flash 33/45; **GLM-5.3-Flash is now the default planner and chat model**. Report:
   `reports/BASE_MODEL_2026-10-24.md`. Fine-tuning a JARVIS-specific model is written down, not started.
+
+## D39 One-click install, and "a second admin" means a narrow elevated service (2026-10-24, owner)
+
+- **One click:** `Install-JARVIS.cmd` (repository root) runs `scripts/Install-JARVIS.ps1`: checks, folders on D:, Python 3.11 and the four environments, the console UI, the essential pinned
+  models (checksums verified by `tools/fetch.py`), the face, start at login, then the admin service. Safe to run again. It never asks for, reads or prints a key: it only checks that the
+  key file and the kernel owner token exist and are not empty. `-Verify` checks an install, `-Uninstall` removes the start-at-login tasks and the admin service (data and models stay).
+- **"Second admin" is a service that can do only what the owner approved, not an admin account and not an admin shell.** `node/jarvis_node/adminsvc.py` runs elevated (scheduled task `JarvisAdmin`,
+  the owner's own account, highest privileges). It runs the typed verbs of `config/admin_verbs.json` through `adminctl.Broker`. A request runs only if (1) its proof matches the owner's **admin
+  passphrase** (typed at a terminal, `adminclient.py` refuses without one, so an agent or script cannot approve), (2) the verb is approved in the installed catalogue, (3) the values pass their types,
+  (4) it is under ten minutes old and never used, (5) the hard-deny list (Defender, UAC, firewall, boot, users, credentials, logs, shadow copies, disk wiping, encoded or downloaded commands) does not match.
+  Five wrong passphrases lock it for fifteen minutes. A verb whose command changes loses its approval at the next install.
+- **Why it cannot be hijacked by anything running as the owner:** the elevated code is a copy of three files in `C:\Program Files\JARVIS\admin` run by a machine-wide Python with `-I`; its catalogue, ledger,
+  transcript and key live in `C:\ProgramData\JARVIS\admin`; both are changeable by administrators only (checked by the installer after setting them), and the key sits in `private\`, unreadable by normal
+  processes. The only thing a normal process may do is drop a request in `inbox\`. This is the one deliberate use of `C:` (about 120 MB for the system Python plus the code): D: is writable by ordinary
+  programs, which would turn "admin" into "anything that runs as me".
+- **Known limits:** the passphrase protects against processes that do not know it; malware that records the keyboard can learn it. The proof of one request can be attacked offline by someone who captured
+  the request file in the second before the service deletes it, so the passphrase must be long (10 characters minimum is enforced; a phrase is better). Not yet built: an approval card in the console that
+  asks for the passphrase (today the terminal client does). Not tested on Windows by the cloud session (written and unit-tested on Linux with a fake runner); first run is on the laptop with `-Verify`.

@@ -436,3 +436,18 @@ and type the PIN there (6 to 64 characters; it is stored as a salted hash). The 
 - **Caretaker:** the dispatch text must match a fixed template (allow-list); see the README. Do not switch the caretaker on until a limited credential exists.
 - **Lab verdict isolation** (`jarvis/lab/lab_isolation.py`): delivered code runs as `jarvis-sandbox` (one process per test id), the verifier as `jarvis-verify`; `verified` needs mode `full` and the owner's statement `JARVIS_LAB_VERIFIER_TOOLS=sandboxed`; every other mode ends "completed, NOT verified". Create the two users on the lab box and copy `lab_isolation.py` next to `lab_runner.py` (README, "Deploying the isolation boundary").
 
+
+
+## One-click install and the admin service (added 2026-10-24, D39)
+
+**Install (Windows):** double-click `Install-JARVIS.cmd` in the repository root (or run `jarvis\scripts\Install-JARVIS.ps1`). Options: `-NoModels` (skip the model downloads), `-NoFace`, `-NoAdmin`, `-NoStart`,
+`-FaceInstaller <path>` (a face installer you built), `-Verify` (check, change nothing), `-ResetAdmin` (new admin passphrase and the verbs again), `-Uninstall`. By hand afterwards: copy your model key FILE to
+`D:\jarvis-secrets\providers\dahl.key` and the kernel owner token to `D:\jarvis-secrets\kernel\owner.token` (the installer lists what is missing, by name only).
+
+**Admin service:** `Install-JARVIS.ps1 -AdminOnly` (or the last step of the install) asks Windows for permission once, copies `adminctl.py`, `adminsvc.py` and `__init__.py` to
+`C:\Program Files\JARVIS\admin\jarvis_node`, closes the folders (administrators change, everyone reads, `private\` nobody but administrators), asks you to choose the admin passphrase and to approve the verbs
+one by one (all start off), and registers the task `JarvisAdmin`. Using it, as yourself in a terminal: `python -m jarvis_node.adminclient list`, then
+`python -m jarvis_node.adminclient run winget_install id=Git.Git` (from `jarvis\node`; it shows the plain-language card, asks you to type the verb name and the passphrase, and prints `verified` only when the
+read-only check confirmed the result). Status and audit: `C:\ProgramData\JARVIS\admin\transcript.jsonl` (one line per request with the exit codes), `adminsvc.py status`.
+Check by hand once after the install, in a normal (not elevated) PowerShell: `schtasks /Change /TN JarvisAdmin /DISABLE` must say access denied, and writing a file into `C:\Program Files\JARVIS\admin` must fail.
+Revoke at any time: `Install-JARVIS.ps1 -Uninstall`, or `Unregister-ScheduledTask JarvisAdmin` from an elevated window, or approve fewer verbs with `-ResetAdmin`.

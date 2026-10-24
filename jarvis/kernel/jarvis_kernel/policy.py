@@ -375,7 +375,7 @@ SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".clau
                      # Plan P1 step 9 (2026-10-22): the browser relay that decides which tabs an agent can drive.
                      "cdp_relay.py",
                      # Plan P4 step 5 (2026-10-24): the admin broker and the verbs the owner approved for it.
-                     "adminctl.py", "admin_verbs.json",
+                     "adminctl.py", "admin_verbs.json", "adminsvc.py", "adminclient.py", "install-jarvis.ps1", "install-jarvis.cmd",
                      # Plan P6 step 8 (2026-10-24): the checklist that decides whether agent work may move main.
                      "push_gate.py"}
 # Generic file names (a Django project has its own tasks.py and owner.py): RED only when the path is inside JARVIS's own

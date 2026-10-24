@@ -5,6 +5,12 @@ the build plan (`research-2026-10-22/JARVIS_FULL_INTEGRATION_PLAN.md`). How the 
 of your 21 handwritten items stands: `OWNER_NOTES_STATUS.md`. Technical detail lives in `05_OPERATIONS.md`, every file is
 explained in `FILE_MAP.md`, every model in `MODELS.md`.
 
+## 0. Install (new PC, or to repair this one)
+
+Double-click `Install-JARVIS.cmd` in the repository folder. It sets up everything on D:, installs the face, makes JARVIS start at login, and offers (one Windows permission prompt) the admin service. Run it again any time: it
+skips what is done. Then copy two FILES by hand (it lists them): your model key to `D:\jarvis-secrets\providers\dahl.key` and the kernel owner token to `D:\jarvis-secrets\kernel\owner.token`. Check: `Install-JARVIS.cmd -Verify`.
+"Second admin": JARVIS can do admin tasks on this PC only from the list you approve, each time with your admin passphrase (see `05_OPERATIONS.md`, "One-click install and the admin service"). Remove: `Install-JARVIS.cmd -Uninstall`.
+
 ## 1. What runs where
 
 | Where | What | Address |
