@@ -50,3 +50,29 @@ def test_the_hub_account_exists_before_lab_control_starts_and_rpcbind_is_off():
     assert TEXT.index("groupadd --system hub") < TEXT.index("enable --now jarvis-desktop.service jarvis-lab-control.service")
     assert "rpcbind" in TEXT and "disable --now" in TEXT
     assert "usermod" not in TEXT and "sudoers" not in TEXT
+
+
+# ---- Tailscale on the Agent PC VM
+TS = (Path(__file__).resolve().parents[1] / "deploy" / "provision_vm2_tailscale.sh").read_text(encoding="utf-8")
+
+
+def test_tailscale_script_is_valid_signed_apt_no_pipe_no_auto_login():
+    assert subprocess.run(["bash", "-n", str(Path(__file__).resolve().parents[1] / "deploy" / "provision_vm2_tailscale.sh")]).returncode == 0
+    assert "pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg" in TS and "tailscale-archive-keyring.gpg" in TS
+    assert not re.search(r"(curl|wget)[^\n|]*\|\s*(sudo\s+)?(ba)?sh", TS) and "install.sh" not in re.sub(r"(?m)^#.*$", "", TS)
+    code = re.sub(r"(?m)^\s*(#|echo|\").*$", "", TS)
+    assert not re.search(r"tailscale up|authkey|auth-key|--login", code)               # it prints the command, the owner runs it
+
+
+def test_tailscale_script_keeps_the_agent_accounts_off_the_tailnet_and_shields_the_vm():
+    for u in ("agent", "jarvis-sandbox", "jarvis-verify"):
+        assert u in TS
+    assert "100.64.0.0/10" in TS and "fd7a:115c:a1e0::/48" in TS and "--uid-owner" in TS and "-j REJECT" in TS
+    assert "--shields-up" in TS and "--accept-routes=false" in TS and "--ssh" not in TS
+
+
+def test_tailscale_plan_mode_only_prints():
+    r = subprocess.run(["bash", str(Path(__file__).resolve().parents[1] / "deploy" / "provision_vm2_tailscale.sh"), "--plan"], capture_output=True, text=True)
+    assert r.returncode in (0, 2)
+    if r.returncode == 0:
+        assert "would fetch https://pkgs.tailscale.com" in r.stdout and "would run: systemctl enable --now tailscaled" in r.stdout
