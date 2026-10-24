@@ -203,7 +203,8 @@ class ResearchPlugin(PluginBase):
                 made = deliver.make_report(out["spec"], open_after) if deliverable == "report" \
                     else deliver.make_presentation(core.to_deck(out["spec"]), open_after)
                 out["file"], out["qa_passed"], folder = made["file"], made["qa"]["passed"], made["folder"]
-            out["record_file"] = _save_record(folder, question, {**out, **record})
+            # The file name goes back in the result (the chat model reads it): slug the question as it left the PC, not the raw one.
+            out["record_file"] = _save_record(folder, redact(question) if redact else question, {**out, **record})
             out["summary"] = out["spec"]["summary"]
             out["sources"] = [f"[{s['id']}] {s['title']} — {s['url']}" for s in out["spec"]["sources"]]
             return out
