@@ -102,6 +102,7 @@ def test_cua_telemetry_is_blocked_and_disabled_before_the_driver_does_anything_e
 def test_cua_service_is_installed_but_not_started_and_runs_as_the_agent_user():
     assert "User=agent" in CUA and "DISPLAY=:1" in CUA and "--permission-mode standard" in CUA
     code = re.sub(r"(?m)^\s*#.*$", "", CUA)
+    assert "[Install]" in CUA                                       # without it the unit is "static" and the owner could never enable it
     assert not re.search(r"systemctl (enable|start)", code) and "--dangerously-bypass-approvals" not in CUA and "unrestricted" not in code
 
 
