@@ -275,3 +275,17 @@ Cloud commit 71881e5 added an `[Install]` section; the idempotent script was re-
 
 Note for the owner: on start the daemon printed "cua-driver v0.38.0 is available (you have v0.34.0). Update with: cua-driver update". So it does look for newer versions (an outbound request to the vendor at start); no
 update was run and the pinned 0.34.0 stays. If no outbound check is wanted, the allowed outbound hosts for the agent user need to exclude the vendor's update URL or the egress list must be checked.
+
+### Lab runner token on hermes-agent-vm-2 (2026-10-25, owner lifted the "never copy from the secrets folder" rule for this one file in the laptop session)
+
+The owner issued the token on the laptop (kernel token, lane `runner`, 43 bytes). The session checked only that the file exists and its size, never opened or printed it. It was transferred by path with scp to a temp file on the VM, installed
+as `/etc/jarvis-lab/runner.token` (root:root, mode 600, 43 bytes, same size) in `/etc/jarvis-lab` (root:root, 700), and the temp copy was shredded. No token text is in any file, log or report.
+
+| Check | Result |
+|---|---|
+| `check_lab_deploy.py` | RESULT: OK; the runner-token WARN is gone (now "OK ... root 600"); the other three WARN lines are unchanged (sandbox no login shell, verifier tools not sandboxed, user namespaces) |
+| `jarvis-lab-runner` | disabled and inactive; not started or enabled (the check does not require it; the owner decides) |
+| Kernel proxy on the main server | `jarvis-llm-proxy` active, listening on 100.125.91.51:8790 (tailnet address) and 127.0.0.1:8790; VM2 (user ubuntu) can open TCP 8790 and gets HTTP 404 on `/` (a live server, expected) |
+| Lock-down | the `agent` account is still blocked from reaching the tailnet (8790 closed for it) |
+
+Next (owner decision): start the lab runner on VM2 and see it report to the kernel; set `JARVIS_LAB_VERIFIER_TOOLS` only after the agent CLI's tool execution is confirmed to run as another user.
