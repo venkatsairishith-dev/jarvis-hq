@@ -80,6 +80,10 @@ def test_health_tcp_and_http_against_a_real_local_server():
         assert health.http_ok("127.0.0.1", port)           # 401 counts as up
         assert health.wait_healthy("http", "127.0.0.1", port, timeout_s=3)
     finally:
+        try:
+            srv.shutdown(socket.SHUT_RDWR)       # Linux keeps a listener alive while another thread sits in accept(); shutdown wakes it
+        except OSError:
+            pass
         srv.close()
     assert not health.tcp_ok("127.0.0.1", port)
     assert not health.wait_healthy("tcp", "127.0.0.1", port, timeout_s=0.5)
