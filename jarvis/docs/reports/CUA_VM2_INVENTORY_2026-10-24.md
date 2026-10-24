@@ -240,3 +240,21 @@ browser said success); a second command and link worked. A stray offline `jarvis
 
 Owner does in the Tailscale admin console: turn key expiry **off** for jarvis-vm2 (a server must not be logged out every few months); optionally add a tag and an ACL with no rule that has the VM as the source; remove a duplicate offline jarvis-vm2 entry if there is one.
 Left: cua-driver (vendor installer is a pipe to a shell, not run; plan in `01_RESEARCH_AUDIT.md`), the runner token.
+
+### cua-driver on hermes-agent-vm-2 (2026-10-24, owner said yes to this exact run after reading the plan)
+
+`provision_vm2_cua.sh` (cloud commit 3782a46) was copied alone; `--plan` read (hosts null route for the PostHog hosts, libxi6 and at-spi2-core, pinned linux-arm64 0.34.0 tarball
+checked against the pinned hash AND the vendor's SHA256SUMS, telemetry disabled as `agent`, service installed but not enabled, doctor read-only), then run. Exit 0, both hash checks passed.
+The local run of `jarvis/lab/tests/test_provision_vm2.py` failed 6 of 13 on the laptop only because `bash` there resolves to the empty WSL (no distribution installed), not because of the scripts.
+
+| Check | Result |
+|---|---|
+| `cua-driver telemetry status` | Telemetry: disabled (source: persisted); installation ID not created |
+| `cua-driver doctor` (as agent, DISPLAY=:1) | all [ok]: binary cua-driver 0.34.0 (aarch64-linux), install dir /opt/cua-driver/0.34.0, home /home/agent/.cua-driver, telemetry disabled, display server X11, X11 connection (4 visible top-level windows), AT-SPI reachable |
+| Does the arm64 build run | **yes** (vendor docs only mention x86_64; the binary runs and the doctor passes) |
+| `systemctl is-enabled cua-driver` | `static` (the unit has no [Install] section: it cannot be enabled with `systemctl enable`; it is not started at boot) |
+| `systemctl is-active cua-driver` | inactive |
+| /etc/hosts | one marked block null-routing the 5 PostHog hosts (0.0.0.0) |
+| Free memory | 3,897 MB total, 689 MB used, 3,207 MB available |
+
+Not done on purpose: the service was NOT enabled or started; the owner decides after reading doctor. Next: how the lab runs it for the Agent PC (a start line instead of `enable`), the runner token, the owner's tag/ACL and key-expiry choices in Tailscale.
