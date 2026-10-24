@@ -1,0 +1,41 @@
+{
+ "name": "input-validation-and-sanitization",
+ "staged_at": "2026-10-24T14:22:59",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/input-validation-and-sanitization",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when implementing any endpoint, form handler, CLI tool, or function that accepts external input. Validate and sanitize all untrusted data before processing \u2014 never assume input is safe.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 1008,
+   "sha256": "5be712146907fc6c322ee4269c9ac8b1f7ced2265e2f8b3cc7c534fcf397e8e8",
+   "git_blob": "5a49126af0463f782017f67afe423e10952bf187"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "26f52d25006764625222f55c3b7033a598656797887a146fd9872af194424e05"
+}

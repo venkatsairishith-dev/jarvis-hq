@@ -1,0 +1,41 @@
+{
+ "name": "avoid-acting-on-assumptions",
+ "staged_at": "2026-10-24T14:22:58",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/avoid-acting-on-assumptions",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Common mistake \u2014 proceeding with assumptions about ambiguous requirements instead of asking a clarifying question first. This skill reminds you to stop and ask before acting on uncertain interpretations.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 861,
+   "sha256": "77d9eb84c31b8df07eb334a47bbc356e7b55d1c5e06451319d51664e1c9c678a",
+   "git_blob": "025734cef649c47463366040a46dc07a59005535"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "ab217f455de15cbb6d8f76c208eab06c57143ee5c6e43913f8f76d5c1492317f"
+}

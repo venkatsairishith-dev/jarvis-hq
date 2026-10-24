@@ -1,0 +1,41 @@
+{
+ "name": "structured-step-by-step-reasoning",
+ "staged_at": "2026-10-24T14:23:01",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/structured-step-by-step-reasoning",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill for any problem that involves multiple steps, tradeoffs, or non-trivial logic. Think out loud before answering to improve accuracy and transparency. Apply whenever the answer is not immediately obvious.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 845,
+   "sha256": "70c9bf8fcf692e5536b5c281c9e4365bd4371f2c0023227edf17aad5b51c9cf5",
+   "git_blob": "beb609eb5540df2224c88b77ff926c5af3c6f532"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "cb933081248c7aea9d69037d1492785626ff3320d5dd7d328c0407e7b1d87347"
+}

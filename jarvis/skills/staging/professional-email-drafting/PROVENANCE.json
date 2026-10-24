@@ -1,0 +1,41 @@
+{
+ "name": "professional-email-drafting",
+ "staged_at": "2026-10-24T14:23:00",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/professional-email-drafting",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when drafting emails, Slack messages, announcements, or any external/internal communication. Apply professional structure and appropriate tone before writing any message.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 946,
+   "sha256": "1d4091dae45fce2201bcc3e5ed0d13fa25627109aab25fb2f3f24c96c3c2effa",
+   "git_blob": "d823015f612c9ba81c64a13b79f341939ca150b0"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "personal",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "a149607c8a02acd5e2a19aa00b8aba253e17944749c665d972ab48e024422277"
+}

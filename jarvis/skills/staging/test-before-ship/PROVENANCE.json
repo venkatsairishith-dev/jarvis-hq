@@ -1,0 +1,41 @@
+{
+ "name": "test-before-ship",
+ "staged_at": "2026-10-24T14:23:01",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/test-before-ship",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when implementing a new feature or fixing a bug. Write or update tests before marking the task done. Never consider code complete without verifying it works through automated tests.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 926,
+   "sha256": "64f7ecddfe11488fc7964a93d194a32906578de78ecd5c3911cb46f84bdd9e3a",
+   "git_blob": "3437e4e2111f96e51106faf95312fdc59c31aa02"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "testing",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "4c80ce6034a3e6967101242ab986723073b20c6fdb1e0a6e53c506cc0b19a2f3"
+}

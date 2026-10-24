@@ -1,0 +1,41 @@
+{
+ "name": "avoid-hallucinating-specifics",
+ "staged_at": "2026-10-24T14:22:58",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/avoid-hallucinating-specifics",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Common mistake \u2014 stating specific facts (API endpoints, library versions, config options, function signatures) with false confidence when uncertain. Always flag uncertainty rather than guessing specifics.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 910,
+   "sha256": "1e98934e674abaa39450814cc2b4fdfc1bafeba67c27f182a8e0760b4b0cbe44",
+   "git_blob": "f5ffa397a2de3b8d9a1e730b48746ac37e940814"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "15de97d70ac0bfb7b2928c8ebc6388617e1ef0d9bab016157d79ace9305288c5"
+}

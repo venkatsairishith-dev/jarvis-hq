@@ -1,0 +1,41 @@
+{
+ "name": "structured-logging-and-observability",
+ "staged_at": "2026-10-24T14:23:01",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/structured-logging-and-observability",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when building production services, pipelines, or automation that needs to be debugged, monitored, or audited. Add structured logs, metrics, and health checks before shipping any service.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 988,
+   "sha256": "e54b67465a4a58749e858b40ed813bf14fdb7e912233fc9a123ba15d20f9294b",
+   "git_blob": "8ce69a48fdcacd48363c6cb0bf4aa55ed177e5e8"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "testing",
+  "data_sensitivity": "personal",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "ca43703d193b2279e5b024412105c9651f959004dd839d0ad5d2515dbf5f9027"
+}

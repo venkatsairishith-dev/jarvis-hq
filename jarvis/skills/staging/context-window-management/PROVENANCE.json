@@ -1,0 +1,45 @@
+{
+ "name": "context-window-management",
+ "staged_at": "2026-10-24T14:22:58",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/context-window-management",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill in long conversations or multi-turn agentic sessions where context may be lost or the conversation is approaching token limits. Summarize, prioritize, and compact context proactively before it becomes a problem.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 1000,
+   "sha256": "1d6471a1fb6590abe0b970b4b5ffb328db78fc9806b1e93e0ec8684166ee898b",
+   "git_blob": "a966088238b0ae84546307610e1df78ad180df2a"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "memory": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [
+   "other"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "7408ef1bb760779c04f16c0ea67cf099053a6342fb4ade402fccff26a6039fbc"
+}

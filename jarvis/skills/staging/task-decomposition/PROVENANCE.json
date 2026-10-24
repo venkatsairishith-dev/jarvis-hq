@@ -1,0 +1,47 @@
+{
+ "name": "task-decomposition",
+ "staged_at": "2026-10-24T14:23:01",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/task-decomposition",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when a user presents a large, vague goal. Break it into concrete, ordered sub-tasks before starting any work. Apply whenever the request is larger than a single focused action.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 737,
+   "sha256": "8eb302c7cde4190395a7086248e35696208286253b0f8a5bdc7227d2f7fa5df5",
+   "git_blob": "5f5158d7d6ea5382f98799419844c935c93daed0"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "delegate_task": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "medium",
+  "reasons": [
+   "drives a browser or starts sub-agents"
+  ],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [
+   "agents"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "fdc9e07c735b64402a8dce8c421f797eca252582acd97d1430cd21d4ca1f05a5"
+}

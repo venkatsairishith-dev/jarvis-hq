@@ -1,0 +1,41 @@
+{
+ "name": "data-validation-first",
+ "staged_at": "2026-10-24T14:22:59",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/data-validation-first",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill before any data analysis, transformation, or modeling. Always inspect and validate the data before drawing conclusions or writing transformations.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 917,
+   "sha256": "61aec1fb47d0f89a5b147508f44bf2610e2e3ff519b7829e1552ee84283aaa95",
+   "git_blob": "b655c757e7727c4baa711fba1fa756fe07aeff3f"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "185173a250808c8ea1cf18fbdc5c34422d0b2e9be9ad1e4bafe12c9ce0bca642"
+}

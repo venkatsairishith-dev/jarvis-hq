@@ -1,0 +1,41 @@
+{
+ "name": "technical-writing-clarity",
+ "staged_at": "2026-10-24T14:23:01",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/technical-writing-clarity",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when writing documentation, READMEs, technical specs, runbooks, or any text that explains a system or process to other engineers. Apply before writing any developer-facing document.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 977,
+   "sha256": "661d7926b76978f9730af32f0765e6cc4fd3f7b039f388a05ac7866a5d097caf",
+   "git_blob": "ded209c784b49983ac55cea894b324621a866cb3"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "documentation",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "eb7559caa2ddf133174ae8b9981732c5b7f12d9a683c0c59225cd9dbacf21795"
+}

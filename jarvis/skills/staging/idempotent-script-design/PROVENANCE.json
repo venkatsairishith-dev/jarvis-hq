@@ -1,0 +1,45 @@
+{
+ "name": "idempotent-script-design",
+ "staged_at": "2026-10-24T14:22:59",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/idempotent-script-design",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when writing scripts, cron jobs, data pipelines, or any automated process that may be run multiple times. Design every operation to be safely re-runnable without side effects.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 996,
+   "sha256": "6e5312ebc0ada9cbfa952265d223b5a46917afb929921a11363537b5040b251e",
+   "git_blob": "cbae9186cf34aaadf93cc4ab1cfc662fc27acb29"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "write_file": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [
+   "files"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "383b3f5240f1f95051d1c32ac4ec0d4eb06e548cab81eb01bc62f78d9343a008"
+}

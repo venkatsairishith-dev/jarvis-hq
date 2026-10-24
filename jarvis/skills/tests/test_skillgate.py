@@ -96,3 +96,32 @@ class Gate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---- MetaClaw's skill bank (2026-10-24): same gate, a second pinned source ----
+def test_metaclaw_is_a_pinned_second_source_and_the_default_stays_hermes():
+    import skills.skillgate as G
+    assert G.SOURCES["hermes"] is G.SOURCE or G.SOURCES["hermes"]["repo"].endswith("hermes-agent")
+    m = G.SOURCES["metaclaw"]
+    assert m["repo"].endswith("aiming-lab/MetaClaw") and len(m["commit"]) == 40 and m["license"] == "MIT" and m["subdir"] == "memory_data/skills"
+
+
+def test_staged_metaclaw_skills_carry_provenance_and_nothing_is_active():
+    import json
+    import os
+    import skills.skillgate as G
+    staged = []
+    for n in sorted(os.listdir(G.STAGING)):
+        pj = os.path.join(G.STAGING, n, "PROVENANCE.json")
+        if os.path.isfile(pj):
+            d = json.load(open(pj, encoding="utf-8"))
+            if d["source"]["repo"].endswith("aiming-lab/MetaClaw"):
+                staged.append(d)
+    assert len(staged) == 36
+    assert all(d["source"]["commit"] == G.SOURCES["metaclaw"]["commit"] and d["source"]["license"] == "MIT" for d in staged)
+    assert all(not d["excluded"] and d["files"][0]["sha256"] for d in staged if d["risk"]["tier"] != "reject")
+    rejected = [d for d in staged if d["risk"]["tier"] == "reject"]
+    assert [d["name"] for d in rejected] == ["secrets-management"] and rejected[0]["files_kept"] is False   # a record only, no content
+    assert sorted(d["name"] for d in staged if d["risk"]["tier"] == "medium") == ["agent-task-handoff", "task-decomposition"]
+    active = json.load(open(G.ACTIVE, encoding="utf-8")) if os.path.isfile(G.ACTIVE) else {}
+    assert not any(d["name"] in json.dumps(active) for d in staged)                                          # staged is not activated

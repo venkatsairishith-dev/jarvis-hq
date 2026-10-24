@@ -1,0 +1,45 @@
+{
+ "name": "graceful-error-recovery",
+ "staged_at": "2026-10-24T14:22:59",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/graceful-error-recovery",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when a tool call, command, or API request fails. Diagnose the root cause systematically before retrying or changing approach. Do not retry the same failing call without first understanding why it failed.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 883,
+   "sha256": "ab70d1be3ba5f21b54c7973542f409c573c6bef7fd5f6e06fe3007675afb2f5f",
+   "git_blob": "cfc4cd52fa67e41f7cdb2f295cc9866f7c8e0091"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "read_file": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [
+   "files"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "b1dc457713b0839be5a2f8e388956c0a41726339ceaf72d7b16183d8427ef565"
+}

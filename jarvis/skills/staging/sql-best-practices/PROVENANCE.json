@@ -1,0 +1,41 @@
+{
+ "name": "sql-best-practices",
+ "staged_at": "2026-10-24T14:23:00",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/sql-best-practices",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when writing SQL queries \u2014 selects, joins, aggregations, window functions, or schema modifications. Apply whenever SQL is needed to ensure correctness, safety, and performance.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 941,
+   "sha256": "bb6818b4af1695afd12c8b1aa0c11d38b19a41a9b9ee009cd99036c9990a8671",
+   "git_blob": "86b0f31d72a57c7d624310229eabac0f0366910a"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "ef977b4cd38bee923c416a20d99a6be582f256fe17a0f2b2dff4240d775392c0"
+}

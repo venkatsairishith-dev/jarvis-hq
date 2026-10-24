@@ -38,6 +38,11 @@ from skills.vendor.openjarvis.tool_translator import ToolTranslator             
 
 SOURCE = {"repo": "https://github.com/NousResearch/hermes-agent", "commit": "818c13be1dc4fd28987e1e881a9408224afd4535",
           "root": r"D:\jarvis\research\hermes-agent-818c13be", "subdir": "optional-skills", "license": "MIT"}
+# Other pinned sources (2026-10-24, owner: "yes" to importing MetaClaw's built-in skill bank). Same gate, same checks: pick one with --source.
+# The root is a checkout of exactly that commit; JARVIS_SKILL_SOURCE_ROOT overrides it (tests, another PC).
+SOURCES = {"hermes": SOURCE,
+           "metaclaw": {"repo": "https://github.com/aiming-lab/MetaClaw", "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+                        "root": r"D:\jarvis\research\MetaClaw-922caf3a", "subdir": "memory_data/skills", "license": "MIT"}}
 STAGING = os.path.join(HERE, "staging")
 ACTIVE = os.path.join(HERE, "active.json")
 ALLOWLIST = os.path.join(HERE, "allowlist.json")
@@ -461,6 +466,7 @@ def main(argv=None):
         except AttributeError:
             pass
     ap = argparse.ArgumentParser(prog="skillgate")
+    ap.add_argument("--source", choices=sorted(SOURCES), default="hermes", help="which pinned skill source scan and stage read")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("scan")
     s = sub.add_parser("stage"); s.add_argument("rel")
@@ -469,6 +475,10 @@ def main(argv=None):
     ac = sub.add_parser("activate"); ac.add_argument("name"); ac.add_argument("--approval-id"); ac.add_argument("--no-smoke", action="store_true")
     sub.add_parser("status")
     a = ap.parse_args(argv)
+    if a.source != "hermes":
+        SOURCE.update(SOURCES[a.source])
+    if os.environ.get("JARVIS_SKILL_SOURCE_ROOT"):
+        SOURCE["root"] = os.environ["JARVIS_SKILL_SOURCE_ROOT"]
     return {"scan": cmd_scan, "stage": cmd_stage, "guard": cmd_guard, "activate": cmd_activate, "deactivate": cmd_deactivate,
             "status": cmd_status}[a.cmd](a) or 0
 

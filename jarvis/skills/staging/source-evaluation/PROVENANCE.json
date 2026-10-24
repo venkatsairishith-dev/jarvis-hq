@@ -1,0 +1,41 @@
+{
+ "name": "source-evaluation",
+ "staged_at": "2026-10-24T14:23:00",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/source-evaluation",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when presenting information from external sources, citing research, or answering factual questions. Assess source credibility and recency before relying on it.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 881,
+   "sha256": "f33bca8eefb504de84cfa2c088653d84b46eeaad4cfa148b6238e93536b4661a",
+   "git_blob": "1d5bee756bb975580a2fad2bbe32fd96d4a0949b"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "research",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "656edfed403f632e6bfa7851906e961ba2bd04d18c99c88c53489101e0b5be31"
+}

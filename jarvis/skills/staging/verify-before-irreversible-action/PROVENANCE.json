@@ -1,0 +1,41 @@
+{
+ "name": "verify-before-irreversible-action",
+ "staged_at": "2026-10-24T14:23:02",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/verify-before-irreversible-action",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill before taking any action that is hard to reverse \u2014 deleting files, overwriting data, sending messages, pushing to remote, modifying production systems. Always pause, state what you are about to do, and confirm before executing.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 927,
+   "sha256": "12f620061ba001da74bc0e8f55d73d60c39dcdb5eba7ea31b100457859d62067",
+   "git_blob": "60c79a329eab663643d5cc111ab75384342cd8f3"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "personal",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "9b0a89077a1dc655c3a19b5f01184e2a989a136d3e01ed91d8e935bf8f8e6f23"
+}

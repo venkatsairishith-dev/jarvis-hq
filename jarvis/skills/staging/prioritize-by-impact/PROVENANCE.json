@@ -1,0 +1,41 @@
+{
+ "name": "prioritize-by-impact",
+ "staged_at": "2026-10-24T14:23:00",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/prioritize-by-impact",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when the user has a list of tasks and needs help deciding what to do first. Rank by impact and urgency \u2014 not order of mention \u2014 and surface the highest-leverage work.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 809,
+   "sha256": "e55a48419896b175b71f41aab36d60af5ce7faecaa93d133d70fdc54bfc4f8ed",
+   "git_blob": "3a844fbf1b0e41f24d0d98c76588ec69a98f6966"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "c539e7951156ef9574ae9d80f7e205f9bd1e527a9b09327f793f376bb5348ad6"
+}

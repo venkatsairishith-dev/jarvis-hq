@@ -1,0 +1,41 @@
+{
+ "name": "robust-error-handling-in-scripts",
+ "staged_at": "2026-10-24T14:23:00",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/robust-error-handling-in-scripts",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when writing shell scripts, Python automation, or any unattended batch job. Ensure failures are detected, logged, and handled \u2014 never silently ignored.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 901,
+   "sha256": "baeb8f1179c00743e4a9bda204510d2d4442f0ff9c11b8805f7bd689c53a6fcd",
+   "git_blob": "c6991051febedc818346e1227da55a9752fce1f3"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "1f227a732ae1f99234ce25d8a8e4fbc37083779849bfd3b0337b569e77fe7f57"
+}

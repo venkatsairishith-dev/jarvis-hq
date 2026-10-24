@@ -1,0 +1,41 @@
+{
+ "name": "avoid-scope-creep",
+ "staged_at": "2026-10-24T14:22:58",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/avoid-scope-creep",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Common mistake \u2014 doing unrequested work (refactoring, adding extra features, cleaning up style) when the user asked for a specific, targeted change. Only change what was explicitly asked.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 841,
+   "sha256": "f19d5c754627beae0b5b3e57fe69b92ed1c7316f844369e2975a1b5934f13a4d",
+   "git_blob": "99f6fedd658dc2c2ed304c079b0dcae3dd5939a5"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "f6079fa2988ef0f36785415758b5a9a490c8f7018887ac151297649858bfe7d0"
+}

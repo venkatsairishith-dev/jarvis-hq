@@ -1,0 +1,41 @@
+{
+ "name": "uncertainty-acknowledgment",
+ "staged_at": "2026-10-24T14:23:01",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/uncertainty-acknowledgment",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when you are not sure about a fact, have outdated knowledge, or the question is contested. Explicitly communicate the level of confidence instead of asserting uncertain things as fact.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 832,
+   "sha256": "eb697721a938a70c06065ad222788b92e0bf46f0a12dac3f626029d02bcd9c04",
+   "git_blob": "09c96a64a9140c2e11dd3ac6e1cca7486f49fdd4"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "a6029b916ea526139e9824f229e4d02baff655724a24b021aff0974bf72ea99d"
+}

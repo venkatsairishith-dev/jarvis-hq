@@ -1,0 +1,46 @@
+{
+ "name": "structured-research-workflow",
+ "staged_at": "2026-10-24T14:23:01",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/structured-research-workflow",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when conducting research on a topic from scratch \u2014 literature review, competitive analysis, technical due diligence, or fact-finding. Apply before starting any open-ended research task.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 1010,
+   "sha256": "3ee1ab0459665a2ebffa39ca2b98a36cf06381a394a8f10fd56d8fa4de211be1",
+   "git_blob": "d05cd8faecfa3f7ea7e8c588c64de5fe6f89fbd5"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "read_file": "lab-native (its own sandbox computer)",
+  "write_file": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "research",
+  "data_sensitivity": "none",
+  "permissions": [
+   "files"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "4584df976682336f13da6ddf46dc13217451fd369be36012fa472cd72eddf33f"
+}

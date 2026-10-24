@@ -1,0 +1,41 @@
+{
+ "name": "structured-progress-update",
+ "staged_at": "2026-10-24T14:23:01",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/structured-progress-update",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when summarizing progress on an ongoing project or multi-step task. Give a clear, scannable status report whenever asked for an update or at the end of a work session.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 827,
+   "sha256": "0d5b3d30643534b93e45af43c7051bd0804b51e8a106d011055a47bbafe625c8",
+   "git_blob": "6177efd00b9a656f04487ab53e6bec384d57474b"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "0f6e5084b59d0883fa5505ea7f71391d02453e8515b23cf50d942958fb285d18"
+}

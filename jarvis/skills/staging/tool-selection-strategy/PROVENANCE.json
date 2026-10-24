@@ -1,0 +1,52 @@
+{
+ "name": "tool-selection-strategy",
+ "staged_at": "2026-10-24T14:23:01",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/tool-selection-strategy",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when deciding which tools to call in an agentic workflow. Always choose the minimal, most direct tool for each step and avoid redundant or speculative tool calls.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 1028,
+   "sha256": "8d921647376cd98b3d9b0126d6ad1ded694371602c5ac264c48c3c6be80b19d2",
+   "git_blob": "8292ee681f222a6557dc5bc643925b9beff57118"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "memory": "lab-native (its own sandbox computer)",
+  "patch": "lab-native (its own sandbox computer)",
+  "read_file": "lab-native (its own sandbox computer)",
+  "search_files": "lab-native (its own sandbox computer)",
+  "terminal": "lab-native (its own sandbox computer)",
+  "write_file": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [
+   "files",
+   "other",
+   "shell"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "594d28081e398b62b28cecf73a157464b44456e34f0d52e154921b3c404770b1"
+}

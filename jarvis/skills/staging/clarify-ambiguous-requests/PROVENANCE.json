@@ -1,0 +1,41 @@
+{
+ "name": "clarify-ambiguous-requests",
+ "staged_at": "2026-10-24T14:22:58",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/clarify-ambiguous-requests",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when the user's request is ambiguous, under-specified, or could be interpreted in multiple ways. If proceeding with a wrong assumption would waste significant work, always ask exactly one focused clarifying question before doing anything.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 864,
+   "sha256": "95c2e39958924c4e3a722aaf2ab9d1a72c3d1f9fd279142d89e8a4a703b0973b",
+   "git_blob": "6ee98703047fd17b70d1c87cb1e9a0e84a53d054"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "c1631f4ffa1e7b022e2b8102aaaad4105c8e197affcbe2e8e9ddecf6db319e9e"
+}

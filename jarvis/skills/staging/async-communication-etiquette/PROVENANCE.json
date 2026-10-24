@@ -1,0 +1,41 @@
+{
+ "name": "async-communication-etiquette",
+ "staged_at": "2026-10-24T14:22:57",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/async-communication-etiquette",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when writing messages in async channels (Slack, GitHub issues, email threads) where the reader may not have context and cannot ask follow-up questions immediately.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 897,
+   "sha256": "11363b14d751aa63981de6f85bd0c5075ffe9b96282bdb153cfe805d50a96209",
+   "git_blob": "b564a2b881fe8837562d0c3d386f68c3e5654735"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "personal",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "6f68ff8f2cfb91819a6a273a96fbc4bc6514c96b01692cc831feab993ecb014c"
+}

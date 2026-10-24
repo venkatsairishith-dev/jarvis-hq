@@ -1,0 +1,41 @@
+{
+ "name": "visualization-selection",
+ "staged_at": "2026-10-24T14:23:02",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/visualization-selection",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when creating charts, plots, or dashboards. Choose the visualization type that best communicates the data relationship before writing any plotting code.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 853,
+   "sha256": "52304cf11422680f61c554549337ffde0057b6efc50f3b018aa782e2126568b0",
+   "git_blob": "bb52c2ba143b3f2de47832f472f7aea72b831a22"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "f9d8bf4728c8ccd0c6fe3b0e00599e605f82d10cf1ce302b18d626bce92136da"
+}

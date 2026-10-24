@@ -1,0 +1,41 @@
+{
+ "name": "do-not-retry-without-diagnosis",
+ "staged_at": "2026-10-24T14:22:59",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/do-not-retry-without-diagnosis",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Common mistake \u2014 retrying the same failing command or API call without understanding why it failed. Always diagnose the root cause before retrying anything.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 763,
+   "sha256": "d2c1a25e8a05b203ab472078f8e7f78bd8cb117f51a1bf4bce5fbe2a3f1151b7",
+   "git_blob": "b08a63454ccb0efcefefc8f3531d1efb187c1d4b"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "9738657d0dc7f0cb9bc88b06354c75ff654bb9294573142b9c78ba44938d7c8f"
+}

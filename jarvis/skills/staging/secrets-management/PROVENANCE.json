@@ -1,0 +1,53 @@
+{
+ "name": "secrets-management",
+ "staged_at": "2026-10-24T14:23:00",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/secrets-management",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when handling API keys, passwords, tokens, private keys, or any sensitive credential. Never hardcode secrets in source code \u2014 apply this whenever the word \"key\", \"token\", \"password\", or \"secret\" appears in the task.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 984,
+   "sha256": "31022f24b891f35cf7fccf536259bf1e472e0fba39bb5d069627e48296a1864b",
+   "git_blob": "5aa57dd0d125711106553f153583acdae9873ea0"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [
+  "HashiCorp"
+ ],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "reject",
+  "reasons": [
+   "reject rules: secrets"
+  ],
+  "reject_findings": [
+   {
+    "rule": "secrets",
+    "file": "SKILL.md",
+    "line": 13,
+    "text": "4. Add `.env` and `*.pem` to `.gitignore` before the first commit."
+   }
+  ],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "failed"
+ },
+ "manifest_sha256": "9cfc82212ff81d05553dca23b6498420805be851093c49214281f4da5cb39ce2",
+ "files_kept": false
+}

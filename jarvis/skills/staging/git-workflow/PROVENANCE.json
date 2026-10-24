@@ -1,0 +1,45 @@
+{
+ "name": "git-workflow",
+ "staged_at": "2026-10-24T14:22:59",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/git-workflow",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when working with git \u2014 making commits, creating branches, resolving merge conflicts, opening pull requests, or reviewing diffs. Apply whenever the user asks about version control operations.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 940,
+   "sha256": "2e7cc0f350063e5b28ac2a96e916bad17f153f9ecf95a5f364bb0e8bbcf827b1",
+   "git_blob": "5820e48ef5cb2dca7f688a3e2835da86813370a5"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "write_file": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "code_review",
+  "data_sensitivity": "personal",
+  "permissions": [
+   "files"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "30d7f504bfa1bbaf2e0159132b3560daaf8eb44791b3fd9293a9781dbd5a1f8f"
+}

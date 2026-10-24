@@ -1,0 +1,43 @@
+{
+ "name": "secure-code-review",
+ "staged_at": "2026-10-24T14:23:00",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/secure-code-review",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when reviewing or writing code that handles user input, authentication, file I/O, network requests, or database queries. Always check for common security vulnerabilities before considering the code complete.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 996,
+   "sha256": "ecda98a8571759382918c12c301c636c107c5510a3c9bb2f3bf01f2f688b7247",
+   "git_blob": "3c1ae78d8a6102d1e25a31e8a222f53a6a596d9c"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [
+  "audit"
+ ],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "code_review",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "d787a4ddf9f740ace09c89d803d093c568fdb0898b21805a5c1765f55ceb6343"
+}

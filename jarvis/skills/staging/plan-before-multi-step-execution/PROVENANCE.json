@@ -1,0 +1,41 @@
+{
+ "name": "plan-before-multi-step-execution",
+ "staged_at": "2026-10-24T14:23:00",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/plan-before-multi-step-execution",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill before executing a sequence of 3 or more steps, especially when steps are irreversible or depend on each other. Write out the plan and verify it before starting execution.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 908,
+   "sha256": "a67008588a2a793ffe014d8cbd09e7a7e9d82f4867023aa9a8c8fa49839ff3b2",
+   "git_blob": "0628452496fdfb3879f2c7c8997442cfbdb353c4"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "76c5153a241cad79369f872db70973eda0f14370f2787a678b3c2bf7a8d2eb5c"
+}

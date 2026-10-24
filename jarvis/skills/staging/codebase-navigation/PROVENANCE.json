@@ -1,0 +1,45 @@
+{
+ "name": "codebase-navigation",
+ "staged_at": "2026-10-24T14:22:58",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/codebase-navigation",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when exploring an unfamiliar codebase, tracing code paths, or answering questions about how the system works. Read before writing, and build a mental model of the architecture before making changes.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 1145,
+   "sha256": "eef0a7e9b4259df4945ff78bf2c271280841d4b0f076d92ee75e9bb096b2a5cd",
+   "git_blob": "e728330e13fbf8af5276dd1285f3edcf2d3196fc"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "read_file": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [
+   "files"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "84399115fb922434604e3f0576720db0bbc67bca40417e2005ad3084e951f124"
+}

@@ -1,0 +1,41 @@
+{
+ "name": "audience-aware-communication",
+ "staged_at": "2026-10-24T14:22:58",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/audience-aware-communication",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when writing any explanation, documentation, or response that will be read by someone else. Match vocabulary, depth, and format to the audience's expertise level before writing.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 905,
+   "sha256": "d5e91f662a1ff850eddc49f5b5df295fba01035b44c75004255ced2bfd132bde",
+   "git_blob": "b7bded427427ca57dec3bb5bb5fcb940c04a9128"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "documentation",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "9d6a46b5f09b174fc9534ef3a21df0b685ee7ba88bce97cffdc552c923a77df2"
+}

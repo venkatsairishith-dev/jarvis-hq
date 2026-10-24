@@ -1,0 +1,47 @@
+{
+ "name": "agent-task-handoff",
+ "staged_at": "2026-10-24T14:22:57",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/agent-task-handoff",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when delegating a subtask to a sub-agent, spawning a parallel worker, or handing off work across sessions. Write a self-contained task description so the receiving agent needs no prior context.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 1033,
+   "sha256": "8686b5fdb224fce5e6d2be9c48cad02842ca0e4fba8e7156d2b9ced9be2208d9",
+   "git_blob": "ecdba5d0d119dc7cac91c6d9e5ce5454500d17d5"
+  }
+ ],
+ "excluded": [],
+ "tools": {
+  "delegate_task": "lab-native (its own sandbox computer)"
+ },
+ "unmapped_tool_like_names": [],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "medium",
+  "reasons": [
+   "drives a browser or starts sub-agents"
+  ],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [
+   "agents"
+  ],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "4f3250c25b367440f182a8fa4135d9e83c57413862daba97941f3b5271d284e4"
+}

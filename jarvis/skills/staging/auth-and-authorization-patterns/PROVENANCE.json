@@ -1,0 +1,43 @@
+{
+ "name": "auth-and-authorization-patterns",
+ "staged_at": "2026-10-24T14:22:58",
+ "source": {
+  "repo": "https://github.com/aiming-lab/MetaClaw",
+  "commit": "922caf3a1cd093fb316e95183a8acc8aa47b3b21",
+  "path": "memory_data/skills/auth-and-authorization-patterns",
+  "license": "MIT",
+  "license_source": "repository LICENSE"
+ },
+ "description": "Use this skill when implementing authentication (login, token issuance) or authorization (access control, permissions). Apply whenever the task involves login flows, JWT, OAuth2, session management, or RBAC.",
+ "version": "0.1.0",
+ "author": "",
+ "files": [
+  {
+   "path": "SKILL.md",
+   "bytes": 1144,
+   "sha256": "94970a377169ad58412b6687d95ee216ded5f6471e24347fba4e5271ad08d92f",
+   "git_blob": "92cf9a069658a5173799e50da8b0a8ef425bd1fc"
+  }
+ ],
+ "excluded": [],
+ "tools": {},
+ "unmapped_tool_like_names": [
+  "HttpOnly"
+ ],
+ "dependencies": [],
+ "capabilities_declared": [],
+ "risk": {
+  "tier": "low",
+  "reasons": [],
+  "reject_findings": [],
+  "medium_findings": [],
+  "purpose": "other",
+  "data_sensitivity": "none",
+  "permissions": [],
+  "scripts_referenced": false
+ },
+ "checks": {
+  "static": "passed"
+ },
+ "manifest_sha256": "ee8fcaa29430c5ca206ec7f9e4162d1bdc3bf485d087c7f365795cfac40c693c"
+}
