@@ -60,3 +60,23 @@ One full boot-volume backup of `hermes-agent-vm-2` (exactly one instance by that
 
 Nothing was stopped, rebooted, detached, resized, wiped or deleted, and no security list, IP or `protected.json` was touched. The wipe and rebuild is a separate
 step that needs the owner's yes naming the instance.
+
+## Rebuild (step 3, 2026-10-24 21:14 to 21:15 laptop time; owner confirmed by name: "rebuild hermes-agent-vm-2")
+
+`hermes-agent-vm-2` (...a56vja, exactly one match) was rebuilt **in place** with the OCI CLI (`compute instance update --source-details`: image
+`Canonical-Ubuntu-24.04-aarch64-2026.09.18-0` (...3nmlua), boot volume 100 GB, old boot volume not preserved). Guards that passed first: one instance by that name,
+one attached boot volume (...aclwqa), the backup `jarvis-vm2-before-cua-2026-10-24` (...n3hkna) AVAILABLE with that volume as its source.
+
+| Check | Result |
+|---|---|
+| Instance state | STOPPING, STOPPED, RUNNING again after about 90 seconds |
+| Shape | VM.Standard.A1.Flex, 1 OCPU / 6 GB, unchanged |
+| VNIC | the same one; it still has a public IP |
+| Boot volumes | new ...kvsrna (100 GB, AVAILABLE) for vm-2; hermes-agent-vm's ...idxkja (100 GB, AVAILABLE) untouched; the old ...aclwqa is TERMINATED. Still 2 x 100 GB in use |
+| Backup | jarvis-vm2-before-cua-2026-10-24 (...n3hkna) AVAILABLE, count 1 of 5 |
+| TCP port 22 from the laptop | reachable (plain connect, no login) |
+| Cost this month | 0.0 (`oci_cost.py`) |
+
+Not touched: hermes-agent-vm, any security list, VCN, subnet or IP. The owner deleted `D:\jarvis-secrets\protected.json` before the rebuild (the whole file, not only the
+vm-2 entries), so the protection of every resource it listed is off until it is recreated; hermes-agent-vm's entries should be restored. No login to the VM and nothing
+installed yet; the CUA install is the next step.
