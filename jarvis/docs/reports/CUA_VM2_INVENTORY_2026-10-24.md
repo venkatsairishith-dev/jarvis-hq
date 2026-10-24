@@ -153,3 +153,24 @@ instance uses no OCPU hours), or resize one of them. The resize plan for hermes-
 Recommendation: nothing has been billed, so do not panic, but because the account is upgraded and the pool is used, treat further A1 hours as potentially billable: the
 cheapest safe step today is to **stop hermes-agent-vm-2** (it has nothing running yet) until the CUA install is ready, and plan the 2 / 12 total for November 1 at
 the latest (it must include solving the main server's 5.7 GB memory use). That is the owner's decision.
+
+## Resize to 2 / 12 (2026-10-24 evening, owner approved each resize by name in the laptop session)
+
+| Step | Result |
+|---|---|
+| Split | hermes-agent-vm 1 OCPU / 8 GB, hermes-agent-vm-2 1 OCPU / 4 GB (total 2 OCPU / 12 GB, the free-only size) |
+| hermes-agent-vm-2 (...a56vja) | 6 GB to 4 GB, about 2 minutes (22:00), RUNNING, same VNIC and public IP, port 22 reachable |
+| Backup of the main server first | jarvis-main-before-resize-2026-10-24 (...qz72rq), FULL, AVAILABLE, source ...idxkja; backups now **2 of 5** |
+| Services stopped in order (all were enabled and active) | monit, jarvis-llm-proxy, jarvis-kernel, jarvis-hermes-gateway, jarvis-hermes-serve, jarvis-omniroute, jarvis-embed, jarvis-llm, jarvis-smokescreen; audit chain verified first (42,635 events ok) |
+| hermes-agent-vm (...s7e2rq) | 2 OCPU / 12 GB to 1 OCPU / 8 GB, 22:02 to 22:04 (about 2 minutes), same VNIC and public IP, Tailscale up |
+| After the restart | all ten services active again by themselves (enabled units), audit chain verifies (42,638 events), `live_check.py` 57 of 57 |
+| Memory afterwards | 7,913 MB total; right after boot 716 MB used; with the model loaded 4,520 MB used, 3,393 MB available, `llama-server` about 5.3 GB resident |
+| Limits service | A1 cores used **2** (248 available), memory used **12 GB** (1,654 available) |
+| usage-api COST | A1 lines still the month's earlier quantities (1,546 OCPU-h, 9,277 GB-h), amounts 0.0 SGD and 0.0 USD, total 0; the data lags, look again tomorrow for any October overage |
+
+Downtime of the main server (kernel, Telegram bot, Hermes): from the first service stop at 22:02:11 until the instance was back at about 22:04:30 and all services active: about 3 minutes.
+Unhealthy afterwards: nothing found. Nothing else on Oracle was changed (no security list, IP, VCN or subnet).
+
+`protected.json`: the owner deleted the file. A DRAFT with the ids (instances, VNICs, current boot volumes, VCN, subnet, default security list, last 6 characters shown here:
+s7e2rq, is26fa, idxkja, a56vja, k7goza, kvsrna, o75b7q, nxhbma, xmhemq) is at `D:\jarvis\cache\protected.draft.json`. It is a draft in my own guess of the structure; the owner reviews it and moves it
+into `D:\jarvis-secrets` himself.
