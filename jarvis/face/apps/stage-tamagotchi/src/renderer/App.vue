@@ -7,6 +7,7 @@ import { themeColorFromValue, useThemeColor } from '@proj-airi/stage-layouts/com
 import { artistrySyncConfig } from '@proj-airi/stage-shared'
 import { ToasterRoot } from '@proj-airi/stage-ui/components'
 import { updateModelAssetStatus, useInferencePreload } from '@proj-airi/stage-ui/composables'
+import { extractMessageText } from '@proj-airi/stage-ui/libs/chat-sync/wire-message'
 import { usePiniaSynced } from '@proj-airi/stage-ui/libs/pinia'
 import { initializeAnalytics } from '@proj-airi/stage-ui/libs/product-signals'
 import { isSherpawModelBundled, setSherpawModelAssetHost } from '@proj-airi/stage-ui/libs/providers/providers/sherpaw/model-assets'
@@ -70,6 +71,7 @@ import { electronPluginToolsChanged } from '../shared/eventa/plugin/tools'
 import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
 import { initializeIOTraceHubBridge } from './bridges/io-trace-hub'
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
+import { conversationTurns, createMemorySaver, memoryEnabled } from './composables/use-jarvis-memory'
 import { createSpokenPoller, proactiveEnabled } from './composables/use-jarvis-spoken'
 import { useLanguage } from './composables/use-language'
 import { useFullscreenStore } from './stores/fullscreen'
@@ -378,6 +380,17 @@ let lastOwnerActivity = 0
 function markOwnerActive() {
   lastOwnerActivity = Date.now()
 }
+// Memory across days (main window only): after 10 quiet minutes the last turns go to the tool server, which keeps a few bullets in the vault.
+const memorySaver = fullStageRuntime
+  ? createMemorySaver({
+      turns: () => conversationTurns(chatSessionForSpoken.getSessionMessages(chatSessionForSpoken.activeSessionId).map(m => ({ role: m.role, text: extractMessageText(m) }))),
+      save: turns => callMcpTool({ name: 'jarvis::jarvis_remember_chat', arguments: { turns } }),
+      busy: () => chatStore.activeTurns.length > 0,
+      lastOwnerActivity: () => lastOwnerActivity,
+      enabled: () => memoryEnabled(globalThis.localStorage),
+      onError: error => console.warn('[JARVIS] memory save failed:', error),
+    })
+  : null
 const spokenPoller = fullStageRuntime
   ? createSpokenPoller({
       call: name => callMcpTool({ name }),
@@ -432,6 +445,7 @@ onMounted(async () => {
     for (const type of ['keydown', 'pointerdown'])
       window.addEventListener(type, markOwnerActive, { passive: true })
     spokenPoller.start()
+    memorySaver?.start()
   }
 })
 
@@ -445,6 +459,7 @@ watch(themeColorsHueDynamic, () => {
 
 onUnmounted(() => {
   spokenPoller?.stop()
+  memorySaver?.stop()
   for (const type of ['keydown', 'pointerdown'])
     window.removeEventListener(type, markOwnerActive)
   stopIOTraceHubBridge()

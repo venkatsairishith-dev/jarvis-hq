@@ -117,6 +117,28 @@ def test_jarvis_spoken_hands_out_one_cleaned_notice_and_is_only_there_when_the_h
     assert '"count": 0' in str(asyncio.run(server.call_tool("jarvis_spoken", {}))) or "'count': 0" in str(asyncio.run(server.call_tool("jarvis_spoken", {})))
 
 
+def test_memory_tools_exist_only_with_a_memory_and_pass_turns_and_days_through():
+    class Mem:
+        def __init__(self):
+            self.seen = []
+
+        def recall(self, days):
+            self.seen.append(("recall", days))
+            return "Remembered from earlier conversations: 2026-10-23: Exam on Friday."
+
+        def remember(self, turns):
+            self.seen.append(("remember", len(turns)))
+            return {"saved": 2}
+    mem = Mem()
+    server = F.build_server(tools(FakeClient()), memory=mem)
+    names = {t.name for t in asyncio.run(server.list_tools())}
+    assert {"jarvis_recall", "jarvis_remember_chat"} <= names
+    assert not {"jarvis_recall", "jarvis_remember_chat"} & {t.name for t in asyncio.run(F.build_server(tools(FakeClient())).list_tools())}
+    assert "Exam on Friday" in str(asyncio.run(server.call_tool("jarvis_recall", {"days": 2})))
+    assert "saved" in str(asyncio.run(server.call_tool("jarvis_remember_chat", {"turns": [{"role": "user", "text": "hi"}]})))
+    assert mem.seen == [("recall", 2), ("remember", 1)]
+
+
 # ---- end to end: MCP client -> face tool server (real HTTP) -> fake console (real HTTP) -----------------------------------------
 
 def free_port():
