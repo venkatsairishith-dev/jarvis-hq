@@ -221,3 +221,22 @@ for real. It is idempotent and finished `RESULT: OK`.
 | Free memory | 3,897 MB total, 640 MB used, 1,082 MB free, 3,256 MB available |
 
 Not done on purpose: cua-driver (the vendor installer is a pipe to a shell; plan in `01_RESEARCH_AUDIT.md`), Tailscale (owner runs `sudo tailscale up`), the runner token, anything on Oracle or hermes-agent-vm.
+
+### Tailscale on hermes-agent-vm-2 (2026-10-24, owner logged in himself)
+
+`provision_vm2_tailscale.sh` (cloud commit eba8883 or newer) was copied alone, its `--plan` read (Tailscale's own signed repo `pkgs.tailscale.com/stable/ubuntu noble`, the firewall unit, nothing else), then run.
+Tailscale 1.104.2 installed from that repo. `sudo tailscale up --hostname=jarvis-vm2 --shields-up --accept-dns=false --accept-routes=false` (no --ssh, no auth key) printed a login link that was shown only to
+the owner in the laptop session (not written to any file; the temporary log files on the VM were deleted). The first link failed on the VM side (`http 410: auth path not found` although the
+browser said success); a second command and link worked. A stray offline `jarvis-vm2` entry may exist in the Tailscale admin console from the first try.
+
+| Check | Result |
+|---|---|
+| `tailscale status` | jarvis-vm2 online in the owner's tailnet (same tailnet as jarvis-vm-a, the main server) |
+| `tailscale ip -4` | 100.79.254.82 |
+| tailscaled, jarvis-agent-firewall | both active |
+| Ping to the main server (100.125.91.51) as user ubuntu | works (61 ms) |
+| Same ping as user `agent` | **fails** (blocked by the firewall unit) |
+| shields-up | on (no other tailnet device can open connections to the VM) |
+
+Owner does in the Tailscale admin console: turn key expiry **off** for jarvis-vm2 (a server must not be logged out every few months); optionally add a tag and an ACL with no rule that has the VM as the source; remove a duplicate offline jarvis-vm2 entry if there is one.
+Left: cua-driver (vendor installer is a pipe to a shell, not run; plan in `01_RESEARCH_AUDIT.md`), the runner token.
