@@ -79,6 +79,8 @@ NoNewPrivileges=yes
 PrivateTmp=no
 ProtectSystem=strict
 ReadWritePaths=/home/agent
+[Install]
+WantedBy=multi-user.target
 # the owner starts it by hand after reading `cua-driver doctor`: systemctl enable --now cua-driver
 UNIT
   systemctl daemon-reload
