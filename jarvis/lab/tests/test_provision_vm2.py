@@ -42,3 +42,11 @@ def test_plan_mode_only_prints_what_it_would_run():
         return
     assert r.returncode == 0 and "would run: apt-get install" in r.stdout and "would run: ufw --force enable" in r.stdout
     assert "Mozilla key fingerprint mismatch" not in r.stdout
+
+
+def test_the_hub_account_exists_before_lab_control_starts_and_rpcbind_is_off():
+    # first real run: lab_control chowns its socket to group hub and crash-looped because nothing created it
+    assert "groupadd --system hub" in TEXT and "--shell /usr/sbin/nologin hub" in TEXT
+    assert TEXT.index("groupadd --system hub") < TEXT.index("enable --now jarvis-desktop.service jarvis-lab-control.service")
+    assert "rpcbind" in TEXT and "disable --now" in TEXT
+    assert "usermod" not in TEXT and "sudoers" not in TEXT

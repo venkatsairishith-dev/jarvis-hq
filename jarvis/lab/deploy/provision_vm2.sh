@@ -50,6 +50,11 @@ for u in agent jarvis-sandbox jarvis-verify; do
   run chmod 0700 "/home/$u"
 done
 
+# The take-control socket (lab_control.py) is owned root:hub, so the group hub must exist. `hub` is the account the take-control hub (Caddy) will
+# run as later: a system account, no login, no sudo, not the agent. Found missing on the first real run (2026-10-24): lab-control crash-looped.
+getent group hub >/dev/null || run groupadd --system hub
+id hub >/dev/null 2>&1 || run useradd --system --gid hub --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin hub
+
 say "4 the desktop :1 as the agent user, VNC bound to 127.0.0.1 only"
 if [ "$PLAN" != 1 ]; then
   cat > /etc/systemd/system/jarvis-desktop.service <<'UNIT'
@@ -78,7 +83,9 @@ for s in jarvis-lab-control.service jarvis-lab-runner.service jarvis-hub-outputs
   [ -f "$HERE/$s" ] && run install -o root -g root -m 0644 "$HERE/$s" "/etc/systemd/system/$s"
 done
 
-say "6 firewall (SSH in only) and unattended security updates"
+say "6 firewall (SSH in only), no rpcbind, unattended security updates"
+# Ubuntu listens on port 111 (rpcbind) by default; nothing here needs it, and the firewall is not the only line of defence.
+for u in rpcbind.socket rpcbind.service; do systemctl list-unit-files "$u" >/dev/null 2>&1 && run systemctl disable --now "$u" || true; done
 run ufw default deny incoming
 run ufw default allow outgoing
 run ufw allow 22/tcp
