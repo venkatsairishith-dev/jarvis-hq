@@ -204,3 +204,20 @@ doc says "pinned through Hermes's package manager". A Linux arm64 build of 0.21.
 
 **By hand / next:** (1) fix the `hub` group gap (`groupadd hub` before starting jarvis-lab-control, decide who is in it) and decide about rpcbind; (2) the owner runs `sudo tailscale up` on
 the VM and logs in; (3) check the cua-driver arm64 build, store the runner token.
+
+### Fixed provision script applied (2026-10-24 17:19 UTC)
+
+Cloud fix `d4736e2` (system group and account `hub`, no login, no sudo; rpcbind disabled) was copied alone to the VM (`provision_vm2.sh` only; the other lab files were already in
+/opt/jarvis-hub), `--plan` was read (it showed `groupadd --system hub`, `useradd ... --shell /usr/sbin/nologin hub`, `systemctl disable --now rpcbind.socket / rpcbind.service`), then run
+for real. It is idempotent and finished `RESULT: OK`.
+
+| Check | Result |
+|---|---|
+| jarvis-lab-control, jarvis-desktop | both **active**; lab-control up since 17:19:14, `NRestarts` 228 before and 228 after 45 seconds (that number is left from the earlier crash loop; it no longer grows) |
+| Listening | 22 on all addresses (IPv4 and IPv6); VNC 5901 on 127.0.0.1 and ::1 only; port 111 **gone** |
+| `hub` | uid 997, gid 988, shell /usr/sbin/nologin, not allowed to run sudo |
+| Lab socket | `/run/jarvis-lab/control.sock`, owner root, group hub, mode `srw-rw----` (0660) |
+| check_lab_deploy.py | RESULT: OK; the same four WARN lines as before (sandbox user has no login shell, `/etc/jarvis-lab/runner.token` not found, verifier tools not sandboxed, sandbox user can create user namespaces); no FAIL |
+| Free memory | 3,897 MB total, 640 MB used, 1,082 MB free, 3,256 MB available |
+
+Not done on purpose: cua-driver (the vendor installer is a pipe to a shell; plan in `01_RESEARCH_AUDIT.md`), Tailscale (owner runs `sudo tailscale up`), the runner token, anything on Oracle or hermes-agent-vm.
