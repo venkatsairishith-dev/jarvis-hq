@@ -35,6 +35,7 @@
     "@pixi/core": "catalog:",
     "@pixi/extensions": "catalog:",
     "@pixi/sprite": "catalog:",
+    "@pixi/unsafe-eval": "catalog:",
     "@proj-airi/stage-shared": "workspace:^",
     "@proj-airi/ui": "workspace:^",
     "culori": "catalog:",

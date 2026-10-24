@@ -94,6 +94,8 @@ pnpm -F @proj-airi/stage-ui exec vitest run           card gate, memory proposal
 pnpm run build                                        build, then verify the pinned downloads
 pnpm -F @proj-airi/stage-tamagotchi run check:csp     injection attempts against the content policy (Chromium)
 pnpm -F @proj-airi/stage-tamagotchi run check:launch  start the real app for 45 s; fails on any outside call
+pnpm -F @proj-airi/stage-tamagotchi run check:render  start the real app and list every console error and policy refusal in every window;
+                                                      fails when the policy broke something (the Live2D stage once failed on 'unsafe-eval')
 python -m pytest jarvis/bridge/test_face_tools.py     the tool server and its refusals
 ```
 

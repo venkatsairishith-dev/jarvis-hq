@@ -88,6 +88,7 @@ pnpm -F @proj-airi/stage-tamagotchi exec vitest run
 pnpm -F @proj-airi/stage-ui exec vitest run
 pnpm -F @proj-airi/stage-tamagotchi run check:csp      # injection attempts against the content policy (Chromium)
 pnpm -F @proj-airi/stage-tamagotchi run check:launch   # the real app for 45 s under a virtual display (Linux)
+pnpm -F @proj-airi/stage-tamagotchi run check:render   # the real app: every console error and policy refusal in every window (Windows or Linux)
 python -m pytest jarvis/bridge/test_face_tools.py jarvis/tools/test_face_guard.py
 ```
 

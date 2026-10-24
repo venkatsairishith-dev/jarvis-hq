@@ -14,6 +14,7 @@ import { TickerPlugin } from '@pixi/ticker'
 import { onMounted, onUnmounted, shallowRef, useTemplateRef, watch } from 'vue'
 
 import { ScreenAmbientLightFilter } from '../../filters/screen-ambient-light'
+import '../../utils/pixi-no-eval'
 import { ambientLightTestCard, drawAmbientLightTestCard } from '../../utils/ambient-light-test-card'
 
 const props = defineProps<{

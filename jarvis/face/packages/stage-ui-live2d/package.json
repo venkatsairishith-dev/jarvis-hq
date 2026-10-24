@@ -60,6 +60,7 @@
     "@pixi/settings": "catalog:",
     "@pixi/sprite": "catalog:",
     "@pixi/ticker": "catalog:",
+    "@pixi/unsafe-eval": "catalog:",
     "@pixi/utils": "catalog:",
     "@proj-airi/core-character": "workspace:^",
     "@proj-airi/model-driver-magic-live2d": "workspace:^",

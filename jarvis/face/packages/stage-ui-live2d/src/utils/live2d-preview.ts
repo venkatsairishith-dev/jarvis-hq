@@ -4,6 +4,7 @@ import { Application } from '@pixi/app'
 import { extensions } from '@pixi/extensions'
 import { Ticker, TickerPlugin } from '@pixi/ticker'
 import { Live2DFactory, Live2DModel } from 'pixi-live2d-display/cubism4'
+import './pixi-no-eval'
 
 /**
  * Render a Live2D zip/file to an offscreen canvas and return a padded preview data URL.

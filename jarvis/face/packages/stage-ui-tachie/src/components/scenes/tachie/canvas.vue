@@ -5,6 +5,7 @@ import { extensions } from '@pixi/extensions'
 import { Sprite } from '@pixi/sprite'
 import { coverRect } from '@proj-airi/stage-shared'
 import { onMounted, onUnmounted, shallowRef, useTemplateRef, watch } from 'vue'
+import './pixi-no-eval'
 
 const props = withDefaults(defineProps<{
   width: number
