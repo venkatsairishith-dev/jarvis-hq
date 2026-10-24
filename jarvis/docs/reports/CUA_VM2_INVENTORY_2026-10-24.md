@@ -174,3 +174,33 @@ Unhealthy afterwards: nothing found. Nothing else on Oracle was changed (no secu
 `protected.json`: the owner deleted the file. A DRAFT with the ids (instances, VNICs, current boot volumes, VCN, subnet, default security list, last 6 characters shown here:
 s7e2rq, is26fa, idxkja, a56vja, k7goza, kvsrna, o75b7q, nxhbma, xmhemq) is at `D:\jarvis\cache\protected.draft.json`. It is a draft in my own guess of the structure; the owner reviews it and moves it
 into `D:\jarvis-secrets` himself.
+
+## Agent PC install on hermes-agent-vm-2 (2026-10-24 evening; owner said in the laptop session: "reset whole server new one" and confirmed a rebuild with a new key)
+
+**Second rebuild (22:22 to 22:24):** the SSH key the owner thought was on the VM was not known to the session, so hermes-agent-vm-2 (...a56vja, 1 OCPU / 4 GB, empty) was rebuilt in
+place again with a NEW key pair made on the laptop (private key in `D:\jarvis\keys-vm2`, ACL: the owner and SYSTEM only; only the public key went into the VM's metadata,
+appended to the existing key). Same image, 100 GB, no preserved old volume (new boot volume ...uu6crq; ...kvsrna terminated), same shape, VNIC and public IP, port 22 reachable.
+The VM's host key changed with each reinstall: the stale `known_hosts` line for this IP was removed, the new ED25519 fingerprint
+`SHA256:rrtQzyvrq3SWX4XTZhnkMw96A2Pb2nPZHt17blPYWTU` was shown to the owner and accepted on first connect. Backups: still 2 of 5. hermes-agent-vm untouched.
+
+**Read-only look:** aarch64, Ubuntu 24.04.5 LTS, disk 96 GB (2 GB used), RAM 3,897 MB, user ubuntu with sudo.
+
+**Provisioning:** only the 8 lab files were copied to /tmp/jarvis-lab (no key, token or config). `provision_vm2.sh --plan` was read, then run for real
+(the first attempt stopped on a held apt lock from the first boot; the second ran clean). The Mozilla key fingerprint check passed (script step 2 completed).
+
+| Check | Result |
+|---|---|
+| jarvis-desktop | active |
+| jarvis-lab-control | **crash-looping**: `lab_control.py` line 410 `grp.getgrnam("hub")` fails with KeyError, the group `hub` does not exist; `provision_vm2.sh` does not create it (gap in the script, not fixed here) |
+| Listening sockets | 22 on all addresses; VNC 5901 on 127.0.0.1 and ::1 only; **111 (rpcbind) on 0.0.0.0** (Ubuntu default, blocked by the firewall; needs `systemctl disable --now rpcbind rpcbind.socket` or accept) |
+| ufw | active, 22/tcp only (IPv4 and IPv6), default deny incoming |
+| Users agent, jarvis-sandbox, jarvis-verify | exist, each its own group, no sudo |
+| Firefox | Mozilla build 158.0.1 from /usr/lib/firefox (apt repo), no snap installed |
+| check_lab_deploy.py | RESULT: OK. WARN: sandbox user has no login shell; runner token not found (expected, not created); verifier tools not sandboxed (JARVIS_LAB_VERIFIER_TOOLS unset); sandbox user can create user namespaces |
+| Free memory after the install | 3,897 MB total, 682 MB used, 1,081 MB free, 3,214 MB available |
+
+**cua-driver:** not installed (as instructed). The WSL box that had it is gone (`wsl -l` shows no distributions), so how it was installed could not be read; the architecture
+doc says "pinned through Hermes's package manager". A Linux arm64 build of 0.21.0 was not checked online here.
+
+**By hand / next:** (1) fix the `hub` group gap (`groupadd hub` before starting jarvis-lab-control, decide who is in it) and decide about rpcbind; (2) the owner runs `sudo tailscale up` on
+the VM and logs in; (3) check the cua-driver arm64 build, store the runner token.
