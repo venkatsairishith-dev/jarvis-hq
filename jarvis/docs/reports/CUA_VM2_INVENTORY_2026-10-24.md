@@ -258,3 +258,20 @@ The local run of `jarvis/lab/tests/test_provision_vm2.py` failed 6 of 13 on the 
 | Free memory | 3,897 MB total, 689 MB used, 3,207 MB available |
 
 Not done on purpose: the service was NOT enabled or started; the owner decides after reading doctor. Next: how the lab runs it for the Agent PC (a start line instead of `enable`), the runner token, the owner's tag/ACL and key-expiry choices in Tailscale.
+
+### cua-driver service started on hermes-agent-vm-2 (2026-10-24 17:51 UTC, owner said yes in the laptop session)
+
+Cloud commit 71881e5 added an `[Install]` section; the idempotent script was re-run (hashes re-checked, hosts block unchanged, unit rewritten): `is-enabled` read **disabled** (no longer `static`). The unit runs as `agent`:
+`cua-driver telemetry disable` before start, then `cua-driver serve --permission-mode standard --no-overlay`, after `jarvis-desktop.service`, `Restart=on-failure`. Then `systemctl enable --now cua-driver`.
+
+| Check | Result |
+|---|---|
+| is-enabled / is-active | enabled / active; NRestarts 0 |
+| Listeners | no new TCP listener (diff of `ss -ltn` before and after is empty); the driver listens on a unix socket only: `/home/agent/.cache/cua-driver/cua-driver.sock` |
+| Connections | no TCP connection by the driver at the time of the check; no connection to PostHog |
+| Telemetry | `Telemetry: disabled (source: persisted)` |
+| Other services | jarvis-lab-control, jarvis-desktop, tailscaled, jarvis-agent-firewall all active |
+| Memory | 3,897 MB total, 676 MB used, 3,220 MB available |
+
+Note for the owner: on start the daemon printed "cua-driver v0.38.0 is available (you have v0.34.0). Update with: cua-driver update". So it does look for newer versions (an outbound request to the vendor at start); no
+update was run and the pinned 0.34.0 stays. If no outbound check is wanted, the allowed outbound hosts for the agent user need to exclude the vendor's update URL or the egress list must be checked.
