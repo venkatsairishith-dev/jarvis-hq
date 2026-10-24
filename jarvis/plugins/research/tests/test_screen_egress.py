@@ -45,7 +45,7 @@ def test_a_question_that_holds_screen_text_leaves_for_search_only_as_the_gateway
     g = gateway()
     monkeypatch.setattr(r, "_plan", lambda s, u: json.dumps({"queries": ["what does this letter mean"]}))
     out, searched = run_entry(QUESTION)                  # later steps fail in this sandbox; only what was searched matters here
-    assert g.redact_requests and g.redact_requests[0]["names"] is True
+    assert g.redact_requests and g.redact_requests[0]["names"] == "people"
     assert searched and all(leaked(a) == [] for _, a in searched), searched
 
 

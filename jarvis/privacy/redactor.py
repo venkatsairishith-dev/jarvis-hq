@@ -41,6 +41,7 @@ PII_LABELS = {"password": "PASSWORD", "username": "USERNAME", "bank account numb
               "credit card number": "CREDIT_CARD", "passport number": "PASSPORT", "driver's license number": "DRIVING_LICENCE",
               "one-time code": "OTP", "api key": "API_KEY", "street address": "ADDRESS"}
 NAME_ENTITIES = ["PERSON", "LOCATION"]
+PEOPLE_ENTITIES = ["PERSON"]                         # names="people": people only (a public search query may keep a city or a country)
 PLACEHOLDER = re.compile(r"\[([A-Z_]+)_(\d+)\]")
 
 # "my password is X", "pwd: X", "PIN = 1234", "otp 482913", "api key: X" -> only X is private
@@ -247,12 +248,12 @@ class Redactor:
         if not text or not text.strip():
             return []
         deep = deep and self.model is not None
-        names = self.names if names is None else bool(names)       # names=True: also people and places, for this call only
+        names = self.names if names is None else (names if names == "people" else bool(names))   # True: also people and places; "people": people only; for this call only
         hit = self._cache.get((text, deep, names))
         if hit is not None:
             return hit
         unreachable_before = self.stats["jev_unreachable"]
-        entities = self.entities if names == self.names else BASE_ENTITIES + CUSTOM_ENTITIES + (NAME_ENTITIES if names else [])
+        entities = self.entities if names == self.names else BASE_ENTITIES + CUSTOM_ENTITIES + (PEOPLE_ENTITIES if names == "people" else NAME_ENTITIES if names else [])
         results = self.engine.analyze(text=text, language="en", entities=entities, score_threshold=self.threshold)
         if deep:
             results = results + self._model_spans(text)   # overlaps with pattern hits are resolved below

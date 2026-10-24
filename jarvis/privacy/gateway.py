@@ -22,7 +22,7 @@ Fail closed (audit M3): with the PII model (GLiNER-PII) missing, serve()/main() 
 message, and /health says ready=false, public_egress=false, degraded=["pii_model_missing"]. A detector error also means 503 and
 nothing is forwarded, and no request text is ever put in a log or an error. Set JARVIS_PRIVACY_REQUIRE_DEEP=0 to accept the
 pattern-only pass (the owner's choice; /health still lists it). POST /redact {"text":..., "names": true} also hides people and
-places for that call and answers with what was really active ("names", "deep", "ready").
+places for that call ("names": "people": people only) and answers with what was really active ("names", "deep", "ready").
 
 The Authorization header is passed through untouched and never stored or logged. Logs hold counts by kind, never values.
 """
@@ -443,10 +443,12 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     return self._json(400, {"error": {"message": "send {\"text\": ...}"}})
                 # "names": true also hides people and places for this call (the research plugin asks for it); the answer says
                 # what was really active, so the caller can refuse a preview that was weaker than it needed.
-                want_names = isinstance(req, dict) and req.get("names") is True
+                # "names": "people" hides people only, so a public search query may keep a city or a country (private values and
+                # addresses are still caught by the patterns and the PII model).
+                want_names = (req.get("names") if isinstance(req, dict) and req.get("names") in (True, "people") else False)
                 m = Mapping()
                 try:
-                    out = red.redact(str(text), m, True, names=True) if want_names else red.redact(str(text), m)
+                    out = red.redact(str(text), m, True, names=want_names) if want_names else red.redact(str(text), m)
                 except Exception:                                   # noqa: BLE001 - never echo the text or the error
                     with _lock:
                         STATS["errors"] += 1

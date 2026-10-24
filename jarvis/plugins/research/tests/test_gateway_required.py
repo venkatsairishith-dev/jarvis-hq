@@ -148,7 +148,7 @@ def test_a_ready_gateway_means_the_question_is_searched_only_as_the_gateway_clea
     g = fake_gateway()
     monkeypatch.setattr(r, "_plan", lambda s, u: json.dumps({"queries": ["which clinic for chest pain"]}))
     out, searched = run_entry(CANARY_Q)                # later steps fail in this sandbox; only what was searched matters here
-    assert g.redact_requests and g.redact_requests[0]["names"] is True       # the plugin asks for names and places to be hidden
+    assert g.redact_requests and g.redact_requests[0]["names"] == "people"    # the plugin asks for people to be hidden (places only with JARVIS_RESEARCH_HIDE_PLACES=1)
     assert searched and all("CANARY" not in json.dumps(a) for _, a in searched), searched
 
 
@@ -179,6 +179,16 @@ def test_a_redact_answer_that_does_not_confirm_names_and_the_model_is_refused(mo
     out, searched = run_entry(CANARY_Q)
     assert isinstance(out, Err) and searched == [] and len(g.redact_requests) == 1
     assert "CANARY" not in str(out.error)
+
+
+def test_a_people_only_answer_is_enough_by_default_but_not_when_places_must_be_hidden(monkeypatch, fake_gateway):
+    g = fake_gateway(redact_extra={"names": "people", "deep": True, "ready": True})
+    monkeypatch.delenv("JARVIS_RESEARCH_HIDE_PLACES", raising=False)
+    assert isinstance(r._redact(CANARY_Q), str) and g.redact_requests[-1]["names"] == "people"
+    monkeypatch.setenv("JARVIS_RESEARCH_HIDE_PLACES", "1")
+    with pytest.raises(r.ResearchError):
+        r._redact(CANARY_Q)
+    assert g.redact_requests[-1]["names"] is True
 
 
 def test_the_writer_gets_the_question_as_it_was_cleared_never_as_typed():
@@ -250,11 +260,23 @@ class TestRealGateway:
     """The REAL gateway code and the REAL Presidio + spaCy name recogniser behind the plugin's HTTP calls (no fake gateway).
     Only the GLiNER model is a labelled stub. Run: PYTHONPATH=<presidio+spacy dir> python -m pytest this file."""
 
-    def test_names_and_places_are_hidden_by_the_real_redactor_without_JARVIS_PRIVACY_NAMES(self, monkeypatch):
+    def test_people_are_hidden_but_places_kept_by_the_real_redactor_without_JARVIS_PRIVACY_NAMES(self, monkeypatch):
         monkeypatch.delenv("JARVIS_PRIVACY_NAMES", raising=False)
+        monkeypatch.delenv("JARVIS_RESEARCH_HIDE_PLACES", raising=False)
         srv = real_gateway(monkeypatch, NoEntityModel())
         try:
             assert r._gateway_up() is True
+            out = r._redact("John Smith flew to Paris with a fever")
+            assert "John Smith" not in out and "Paris" in out and "fever" in out
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_places_are_hidden_too_with_JARVIS_RESEARCH_HIDE_PLACES(self, monkeypatch):
+        monkeypatch.delenv("JARVIS_PRIVACY_NAMES", raising=False)
+        monkeypatch.setenv("JARVIS_RESEARCH_HIDE_PLACES", "1")
+        srv = real_gateway(monkeypatch, NoEntityModel())
+        try:
             out = r._redact("John Smith flew to Paris with a fever")
             assert "John Smith" not in out and "Paris" not in out and "fever" in out
         finally:

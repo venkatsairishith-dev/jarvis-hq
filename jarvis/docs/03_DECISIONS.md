@@ -500,3 +500,7 @@ Each item below was a real fault or gap seen against the live system, not a theo
 ## D35 JARVIS never calls Claude (2026-10-23, owner)
 
 Claude builds JARVIS and nothing else. The planner gateway (port 48952), the Claude adapter (`privacy/claude_adapter.py`) and `providers.planner.json` are removed; the plugins' agent model is the privacy gateway on 48950 whose only provider is Dahl (the caller's own key), and `load_providers` drops any `anthropic` entry a providers file might still carry. The Agent SDK builder (`jarvis/sdk_builder`) stays: it is a build tool, not a run-time provider. This supersedes the 2026-10-22 exception that let the planner use the Anthropic API credit until 2026-10-31.
+
+## D36 Public search queries keep places, hide people (2026-10-24, owner delegated)
+
+The research plugin used to hide people and places in every search query, which broke ordinary questions ("capital of Australia" became "What is the capital of and when was it founded?" and returned Canada). The gateway's `/redact` now takes `"names": "people"`: people are replaced, a city or a country stays, and private values, addresses and phone numbers are still caught by the patterns and the PII model. The research plugin asks for "people" by default; `JARVIS_RESEARCH_HIDE_PLACES=1` asks for people and places again. A gateway that does not confirm at least what was asked for, or whose PII model is not loaded, is still refused (nothing is searched).

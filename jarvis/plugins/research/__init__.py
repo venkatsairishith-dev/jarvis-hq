@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import urllib.request
 
 from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_plugin, plugin_entry, tr
@@ -54,11 +55,18 @@ def _gateway_up() -> bool:
     return _gateway_state()[0]
 
 
+def _names_mode():
+    """What the search query hides besides private values: people only (a city or a country in a public query is how a question
+    like 'capital of Australia' stays answerable); JARVIS_RESEARCH_HIDE_PLACES=1 hides places too (D36)."""
+    return True if os.environ.get("JARVIS_RESEARCH_HIDE_PLACES", "0") == "1" else "people"
+
+
 def _redact(text: str) -> str:
-    """The question with private details AND names and places replaced, from the privacy gateway. Any failure refuses the run
+    """The question with private details AND names (and, with JARVIS_RESEARCH_HIDE_PLACES=1, places) replaced, from the privacy gateway. Any failure refuses the run
     (fail closed): a question the gateway could not check is never searched as typed. The gateway's answer must itself say
     that names redaction and the PII model were active for this call; an older or weaker gateway is refused."""
-    req = urllib.request.Request(GATEWAY_REDACT, data=json.dumps({"text": text, "names": True}).encode(),
+    mode = _names_mode()
+    req = urllib.request.Request(GATEWAY_REDACT, data=json.dumps({"text": text, "names": mode}).encode(),
                                  headers={"Content-Type": "application/json"})
     try:
         with loopback_http.urlopen(req, timeout=60) as r:
@@ -68,7 +76,9 @@ def _redact(text: str) -> str:
         raise ResearchError(f"The privacy gateway could not check the question ({type(e).__name__}), so nothing was searched.") from None
     if not isinstance(out, str) or not isinstance(answer, dict):
         raise ResearchError("The privacy gateway gave an unusable answer, so nothing was searched.")
-    if answer.get("names") is not True or answer.get("deep") is not True or answer.get("ready") is False:
+    said = answer.get("names")
+    names_ok = said is True or (mode == "people" and said == "people")      # "people" was asked for: people-only or stronger
+    if not names_ok or answer.get("deep") is not True or answer.get("ready") is False:
         raise ResearchError(NOT_READY.format(why="names or the PII model were not active for this check"))
     return out
 
