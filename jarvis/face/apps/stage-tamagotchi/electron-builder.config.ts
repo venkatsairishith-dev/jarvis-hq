@@ -133,7 +133,8 @@ export default {
     deleteAppDataOnUninstall: false,
     oneClick: false,
     allowToChangeInstallationDirectory: true,
-    runAfterFinish: true,
+    // JARVIS: the installer never starts the face by itself (a silent install used to launch it, microphone permissions included).
+    runAfterFinish: false,
   },
   mac: {
     entitlements: 'build/entitlements.mac.plist',

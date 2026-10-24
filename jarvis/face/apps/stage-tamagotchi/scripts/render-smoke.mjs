@@ -22,7 +22,7 @@ const found = []
 const watch = (page, label) => {
   page.on('console', async (message) => {
     if (/DataCloneError/.test(message.text()) && process.env.SMOKE_STACKS)
-      console.log('STACK', (await message.args()[0]?.evaluate(error => error?.stack).catch(() => '')) ?? '')
+      for (const arg of message.args()) console.log('ARG', String(await arg.evaluate(v => (v && v.stack) || (typeof v === 'object' ? Object.prototype.toString.call(v) : String(v))).catch(() => '')).slice(0, 1500))
     const text = message.text()
     if (message.type() === 'error' || /Refused to|unsafe-eval|Content Security Policy/i.test(text))
       found.push(`${label} console.${message.type()}: ${text.slice(0, 300).replace(/\s+/g, ' ')} @ ${message.location().url.split('/').pop()}:${message.location().lineNumber}`)
@@ -30,7 +30,10 @@ const watch = (page, label) => {
   page.on('pageerror', error => found.push(`${label} pageerror: ${String(error.stack ?? error).slice(0, 300).replace(/\s+/g, ' ')}`))
   page.on('requestfailed', request => found.push(`${label} request failed: ${request.url().slice(0, 120)} (${request.failure()?.errorText})`))
 }
-const launched = await electron.launch({ args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', `--user-data-dir=${userData}`, 'out/main/index.js'], cwd: app })
+// A shell that sets ELECTRON_RUN_AS_NODE (VS Code does) would start Electron as plain Node and the app would not open.
+const env = { ...process.env }
+delete env.ELECTRON_RUN_AS_NODE
+const launched = await electron.launch({ env, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', `--user-data-dir=${userData}`, 'out/main/index.js'], cwd: app })
 launched.windows().forEach((page, i) => watch(page, `window${i}`))
 launched.on('window', page => watch(page, `window:${page.url().slice(-40)}`))
 await new Promise(done => setTimeout(done, seconds * 1000))
