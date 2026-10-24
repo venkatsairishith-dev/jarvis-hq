@@ -559,3 +559,14 @@ Owner: JARVIS gets a Gmail address and creates the accounts it needs (free model
 
 - **Memory:** after 10 quiet minutes (and at least 4 new turns) the face's main window sends the last 40 turns to the tool server (`jarvis_remember_chat`). `muse/chat_memory.py` scrubs secrets from them, has the hosted model summarise through the privacy gateway into at most 6 plain bullets, drops the whole summary if a bullet still looks like a secret, and appends the bullets to `<vault>/daily/<date>-chat.md` (agents write only daily/, inbox/, decisions/). Nothing verbatim is stored. The JARVIS card tells the character to call `jarvis_recall` once at the start of a conversation; it returns the last 3 days of bullets labelled as data about the owner. Off switches: `localStorage['jarvis:memory'] = 'off'`, or start the tool server without `--vault`. JARVIS's own notices (D41) are not conversation and are never summarised. Not done: letting the owner edit or delete a remembered line from the face (today: edit the note in the vault).
 - **Screen:** the desktop plugin got `whats_on_screen` (which window is in front, which others are open: app name and cleaned title, nothing else), pointing to the existing `read_window_text` for the text, which still reaches the model only when the owner allowed screen text and the privacy gateway cleared it. Already there and reused: OCR, `find_on_screen`, accessibility snapshots, the sensitive-window refusals. Not done: camera/room awareness, and live (continuous) screen watching. UNVERIFIED on real hardware like the other screen entries: tested against the fake console only.
+
+## D43 Iron Man list: status and what is held (2026-10-24, owner: "hold 4 and 6 and continue all other")
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Proactive JARVIS | Built (D41): heartbeat, `jarvis_spoken`, face poller. Needs the face rebuilt on the laptop. |
+| 2 | Real conversation | Barge-in and wake words are the face's own (voice activity plugin); short spoken replies are in the card; cross-day memory built (D42). Speed (a faster voice pipeline) is measured, not built. |
+| 3 | Eyes on the screen | `whats_on_screen` added to the existing screen entries (D42). Camera and continuous watching not built. |
+| 4 | Hands on your machines (phone, tablet, home devices) | **Held by the owner.** The Agent PC on VM2 (CUA plan) is a separate approved job. |
+| 5 | Builds things and shows them | Already there: `deliverables` makes decks and PDF reports with checks, opens them, presents slideshows; code goes through the lab agents and the push gate. Not built: a preview panel inside the face (a visual job to do with the owner looking at the screen). |
+| 6 | The look (hologram interface, overlay) | **Held by the owner.** |
