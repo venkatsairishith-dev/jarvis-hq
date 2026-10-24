@@ -508,3 +508,13 @@ The research plugin used to hide people and places in every search query, which 
 ## D37 Wake words "Hey JARVIS" and "JARVIS" (2026-10-24, owner)
 
 AIRI's own wake-word feature is used, not a new listener: the built-in character card carries two wake words with pronunciations in the tokens of the bundled keyword model (a built-in card stored earlier gets them once). The microphone input mode now starts as `wake-word`, so speech is not processed until a wake word is heard; the owner can switch to always-on or push-to-talk in Hearing settings. This closes the open wake-word question from D34.
+
+## D38 JARVIS repairs its own errors by proposing, and the brain is chosen by measurement (2026-10-24, owner)
+
+- **Self-repair:** `jarvis/scripts/self_repair.py` reads the day's top errors and the watchdog's status, asks a model through the privacy gateway (never Claude), and
+  saves a **proposal** (cause, fix in words, and a patch only when the cause is clear). A patch must touch only plugins, scripts or pluginapi, never the kernel,
+  approvals, privacy, secrets or tests, stay small, and pass `git apply --check`. It is never applied by itself: `apply <id>` is the owner's promotion (new branch,
+  patch, the tests of what it touched, no commit). The watchdog still restarts crashed services by itself. This keeps the five rules of the self-improvement plan.
+- **Base model:** no open model is built for JARVIS; the planner model is chosen with `bench/hosted_model_compare.py` (the real planner prompt and parser, 15 labelled
+  requests, every model the gateway lists). Two brains: a hosted open model for planning, and Qwen3-4B-Instruct-2507 as the local decision model (D30). Report:
+  `reports/BASE_MODEL_2026-10-24.md`. Fine-tuning a JARVIS-specific model is written down, not started.

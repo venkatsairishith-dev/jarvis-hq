@@ -24,13 +24,9 @@ def fold(msg: str) -> str:
     return msg[:160]
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--since", default="00:00")
-    ap.add_argument("--top", type=int, default=25)
-    ap.add_argument("--day", default=datetime.date.today().strftime("%Y%m%d"))
-    a = ap.parse_args()
-    day = f"{a.day[:4]}-{a.day[4:6]}-{a.day[6:]}"
+def collect(day: str, since: str = "00:00"):
+    """(counts, first, last, example) of the warnings and errors of one day (YYYYMMDD) since HH:MM, keyed by (level, component, folded message)."""
+    iso = f"{day[:4]}-{day[4:6]}-{day[6:]}"
     counts = collections.Counter()
     first, last, example = {}, {}, {}
     for path in glob.glob(os.path.join(DATA, "logs", "**", "*.log"), recursive=True):
@@ -38,7 +34,7 @@ def main():
             written = datetime.date.fromtimestamp(os.path.getmtime(path)).strftime("%Y%m%d")
         except OSError:
             continue
-        if a.day not in os.path.basename(path) and written < a.day:        # a file with the day in its name, or written since that day
+        if day not in os.path.basename(path) and written < day:            # a file with the day in its name, or written since that day
             continue
         comp = os.path.basename(path).replace(".log", "")
         try:
@@ -47,13 +43,24 @@ def main():
             continue
         for ln in lines:
             m = LINE.match(ln)
-            if not m or m.group(1) != day or m.group(2)[:5] < a.since:
+            if not m or m.group(1) != iso or m.group(2)[:5] < since:
                 continue
             key = (m.group(4), comp[:34], fold(m.group(5)))
             counts[key] += 1
             first.setdefault(key, m.group(2))
             last[key] = m.group(2)
             example.setdefault(key, m.group(5)[:200])
+    return counts, first, last, example
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--since", default="00:00")
+    ap.add_argument("--top", type=int, default=25)
+    ap.add_argument("--day", default=datetime.date.today().strftime("%Y%m%d"))
+    a = ap.parse_args()
+    day = f"{a.day[:4]}-{a.day[4:6]}-{a.day[6:]}"
+    counts, first, last, example = collect(a.day, a.since)
     print(f"{sum(counts.values())} warnings/errors, {len(counts)} distinct, {day} since {a.since}")
     for (level, comp, msg), n in counts.most_common(a.top):
         k = (level, comp, msg)
