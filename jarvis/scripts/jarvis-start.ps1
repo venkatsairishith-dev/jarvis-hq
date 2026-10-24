@@ -10,10 +10,17 @@ param(
   [string]$Venv = "D:\jarvis\tools\agent-venv",
   [string]$Data = "D:\jarvis\data",
   [string]$Vault = "D:\jarvis\vault",
-  [string]$Face = "$env:LOCALAPPDATA\Programs\JARVIS\JARVIS.exe",   # the installed face (jarvis\face: pnpm run build:win)
+  [string]$Face = "",              # the installed face (jarvis\face: pnpm run build:win); empty = look in the usual places
   [switch]$NoFace                  # start the services only
 )
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+# Where the face is installed: -Face, then $env:JARVIS_FACE_EXE, then the usual places (the installer lets the owner pick the folder).
+if (-not $Face) {
+  $candidates = @($env:JARVIS_FACE_EXE, 'D:\APPS\jarvis\jarvis.exe', "$env:LOCALAPPDATA\Programs\JARVIS\JARVIS.exe", "$env:LOCALAPPDATA\Programs\jarvis\jarvis.exe", "$env:ProgramFiles\JARVIS\JARVIS.exe") | Where-Object { $_ }
+  $Face = ($candidates | Where-Object { Test-Path $_ } | Select-Object -First 1)
+  if (-not $Face) { $Face = 'D:\APPS\jarvis\jarvis.exe' }
+}
+
 $py   = Join-Path $Venv "Scripts\python.exe"
 $logs = Join-Path $Data "logs"
 if (-not (Test-Path $py)) { throw "Python environment not found: $py (see the setup note at the top of this script)" }
@@ -106,7 +113,7 @@ if (-not (Listening 48970)) {
 }
 $node = try { (Get-ScheduledTask JarvisNode -ErrorAction Stop).State } catch { "task not found" }
 $faceState = if ($NoFace) { "not started (-NoFace)" } elseif (-not (Test-Path $Face)) { "not installed ($Face; build it in jarvis\face)" }
-             elseif (Get-Process -Name "JARVIS" -ErrorAction SilentlyContinue) { "already running" }
+             elseif (Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Face)) -ErrorAction SilentlyContinue) { "already running" }
              else { Start-Process $Face; "started" }
 
 "repo   : $repo"
