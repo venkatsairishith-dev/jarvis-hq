@@ -73,8 +73,9 @@ The tool server also offers every entry of the JARVIS plugins (`jarvis/plugins`)
 `jarvis_messages` tool for what plugins say on their own. `--plugins none` turns the plugins off, `--plugins research,doc_tools`
 narrows them. Their results are cleaned before the face's model sees them.
 
-In the face, open Settings > Providers > OpenAI Compatible and paste the provider key the gateway forwards (it stays on this
-PC, in the face's own settings). Speech needs no key.
+You type no key. The face sends the placeholder `jarvis-local`; the privacy gateway replaces it with the key in
+`D:\jarvis-secrets\providers\dahl.key` (the file must exist; `jarvis/privacy/providers.json` names it). The default chat model is
+`MiniMaxAI/MiniMax-M2.7`. A profile from an earlier build is repaired once at the first start. Speech needs no key.
 
 ## Security
 

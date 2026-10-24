@@ -348,6 +348,76 @@ class MissingPiiModelFailsClosed(unittest.TestCase):
         self.assertIn("ModuleNotFoundError", proc.stderr)
 
 
+class AuthRecorder(BaseHTTPRequestHandler):
+    seen: list = []
+
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers["Content-Length"]))
+        AuthRecorder.seen.append(self.headers.get("Authorization"))
+        raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+
+class FirstProviderKeyFile(unittest.TestCase):
+    """The face sends the placeholder "jarvis-local" (or nothing): the first provider's key file is used. A real key passes through."""
+
+    def setUp(self):
+        import tempfile
+        gateway._keys.clear()
+        AuthRecorder.seen = []
+        self.up = ThreadingHTTPServer(("127.0.0.1", 0), AuthRecorder)
+        threading.Thread(target=self.up.serve_forever, daemon=True).start()
+        self.secret_dir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.secret_dir, "providers"))
+        with open(os.path.join(self.secret_dir, "providers", "first.key"), "w") as f:
+            f.write("first-test-key")                            # made-up test value
+        self._old_root = gateway.SECRET_ROOT
+        gateway.SECRET_ROOT = self.secret_dir
+        provs = [{"name": "first", "base_url": f"http://127.0.0.1:{self.up.server_address[1]}/v1", "key": "from_request", "key_file": "providers/first.key"}]
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 10)
+        handler.log_message = lambda *a, **k: None
+        self.gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        self.gw.daemon_threads = True
+        threading.Thread(target=self.gw.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.gw.server_address[1]}/v1/chat/completions"
+
+    def tearDown(self):
+        gateway.SECRET_ROOT = self._old_root
+        gateway._keys.clear()
+        for s in (self.gw, self.up):
+            s.shutdown()
+            s.server_close()
+
+    def call(self, auth):
+        headers = {"Content-Type": "application/json"}
+        if auth is not None:
+            headers["Authorization"] = auth
+        req = urllib.request.Request(self.url, data=json.dumps({"model": "m", "messages": [{"role": "user", "content": "hello"}]}).encode(), headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status
+
+    def test_the_placeholder_and_no_key_get_the_key_file(self):
+        self.assertEqual(self.call("Bearer jarvis-local"), 200)
+        self.assertEqual(self.call(None), 200)
+        self.assertEqual(AuthRecorder.seen, ["Bearer first-test-key", "Bearer first-test-key"])
+
+    def test_a_callers_own_key_passes_through_untouched(self):
+        self.assertEqual(self.call("Bearer caller-key"), 200)
+        self.assertEqual(AuthRecorder.seen, ["Bearer caller-key"])
+
+    def test_a_missing_key_file_leaves_the_request_as_it_came(self):
+        os.remove(os.path.join(self.secret_dir, "providers", "first.key"))
+        self.assertEqual(self.call("Bearer jarvis-local"), 200)
+        self.assertEqual(AuthRecorder.seen, ["Bearer jarvis-local"])
+
+
 class ClaudeIsNeverAProvider(unittest.TestCase):
     """Owner, 2026-10-23 (D35): JARVIS never calls Claude. An 'anthropic' entry in a providers file is dropped, even a preferred one."""
 

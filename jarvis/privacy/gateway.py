@@ -43,6 +43,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from redactor import Mapping, Redactor, StreamRestorer, restore  # noqa: E402
 
 DEFAULT_UPSTREAM = os.environ.get("JARVIS_PRIVACY_UPSTREAM", "https://inference.dahl.global/v1")
+# The face sends this placeholder instead of a key; the gateway then uses the first provider's key file (set "key_file" on it).
+LOCAL_KEY_TOKEN = "jarvis-local"
 PASS_HEADERS = ("authorization", "content-type", "accept", "user-agent", "openai-organization", "openai-project")
 MAX_BODY = 32 * 1024 * 1024
 _lock = threading.Lock()
@@ -507,6 +509,15 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 headers["Content-Type"] = "application/json"
             # Fallback only for model calls; the first provider always gets the caller's own key and model.
             first_own = providers[0]
+            # A caller that sends no key, or the placeholder "jarvis-local" (the face does), gets the first provider's key file.
+            # The gateway listens on loopback only, and the key never leaves it except to the provider.
+            if first_own.get("key_file"):
+                auth_name = next((k for k in headers if k.lower() == "authorization"), None)
+                sent = (headers.get(auth_name) or "").strip() if auth_name else ""
+                if not sent or sent.split()[-1] == LOCAL_KEY_TOKEN:
+                    own_key = read_key(first_own)
+                    if own_key:
+                        headers[auth_name or "Authorization"] = f"Bearer {own_key}"
             chain = providers if (raw is not None and self._path() in ("/chat/completions", "/completions")) else [first_own]
             now = time.time()
             chain = [p for p in chain if p is first_own or _cooldown.get(p["name"], 0) <= now]
@@ -535,7 +546,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                         tried.append(f"{prov['name']}: HTTP {e.code}")
                         e.close()
                         continue
-                    used = [read_key(q) for q in chain[:i + 1] if q is not first_own and q.get("key_file")]   # every fallback key read so far
+                    used = [read_key(q) for q in chain[:i + 1] if q.get("key_file")]   # every key file read so far, the first provider's too
                     payload = scrub_keys(e.read(), used)
                     self.send_response(e.code)
                     self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))

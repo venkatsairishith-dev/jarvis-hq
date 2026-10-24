@@ -1,7 +1,10 @@
 import type { WebFontMeta } from '@unocss/preset-web-fonts'
 import type { Preset, PresetOrFactoryAwaitable } from 'unocss'
 
+import { readdirSync, readFileSync } from 'node:fs'
 import { setDefaultAutoSelectFamilyAttemptTimeout } from 'node:net'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { createExternalPackageIconLoader } from '@iconify/utils/lib/loader/external-pkg'
 import { presetChromatic } from '@proj-airi/unocss-preset-chromatic'
@@ -78,6 +81,41 @@ export function safelistSettingsEntryIcons(): string[] {
     'i-solar:box-minimalistic-bold-duotone',
     'i-solar:filters-bold-duotone',
   ]
+}
+
+/**
+ * JARVIS: every icon class that appears as a string anywhere in the app's source.
+ *
+ * UnoCSS builds an icon's CSS only when it finds the class name while it scans files. The provider list names its logos in
+ * data (`icon: 'i-lobe-icons:openrouter'`), and the scan missed 50 of the 53 of them in this workspace, so the Providers page
+ * showed cards without logos. Scanning the source here and safelisting what it finds does not depend on what the scan reaches.
+ */
+export function safelistIconsFoundInSource(): string[] {
+  // Tests never look at the icons, and generating them all made the test runner run out of memory.
+  if (process.env.VITEST)
+    return []
+  const root = dirname(fileURLToPath(import.meta.url))
+  const pattern = /\bi-(?:lobe-icons|simple-icons|iconify-meteocons|mingcute|solar|tabler|ph|lucide|carbon|eos-icons|svg-spinners|vscode-icons):[\w-]+/g
+  const found = new Set<string>()
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === 'out' || entry.name === 'dist' || entry.name.startsWith('.'))
+        continue
+      const path = join(dir, entry.name)
+      if (entry.isDirectory())
+        walk(path)
+      else if (/\.(?:vue|ts|tsx|js|mjs)$/.test(entry.name) && !/\.(?:test|browser\.test|spec)\./.test(entry.name))
+        for (const match of readFileSync(path, 'utf8').matchAll(pattern))
+          found.add(match[0])
+    }
+  }
+  for (const top of ['packages', 'apps']) {
+    try {
+      walk(join(root, top))
+    }
+    catch {}
+  }
+  return [...found]
 }
 
 export function presetWebFontsFonts(provider: 'fontsource' | 'none'): Record<string, string | WebFontMeta | (string | WebFontMeta)[]> {
@@ -170,6 +208,7 @@ export function sharedUnoConfig() {
       ...'prose prose-sm m-auto text-left'.split(' '),
       ...safelistAllPrimaryBackgrounds(),
       ...safelistSettingsEntryIcons(),
+      ...safelistIconsFoundInSource(),
     ],
     // hyoban/unocss-preset-shadcn: Use shadcn ui with UnoCSS
     // https://github.com/hyoban/unocss-preset-shadcn

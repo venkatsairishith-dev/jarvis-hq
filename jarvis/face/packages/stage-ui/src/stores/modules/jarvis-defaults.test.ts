@@ -68,4 +68,23 @@ describe('jarvis provider defaults', () => {
     expect(useSpeechStore().activeSpeechProvider).toBe('kokoro-local')
     await expect(configureJarvisDefaultsIfEmpty()).resolves.toBe(false)
   })
+
+  it('sends the placeholder key and the default chat model, so the owner types neither', async () => {
+    await configureJarvisDefaultsIfEmpty()
+    expect(useProviderConfigStore().providers['openai-compatible']?.config).toMatchObject({ apiKey: 'jarvis-local' })
+    expect(useConsciousnessStore().activeModel).toBe('MiniMaxAI/MiniMax-M2.7')
+  })
+
+  it('repairs a profile from an earlier build once: empty key, and chat pointed at a cloud provider JARVIS does not have', async () => {
+    const providerConfigStore = useProviderConfigStore()
+    await providerConfigStore.ensureProvider('openai-compatible', 'openai-compatible', { baseUrl: 'http://127.0.0.1:48950/v1/', apiKey: '' })
+    useConsciousnessStore().activeProvider = 'official-provider'
+
+    await expect(configureJarvisDefaultsIfEmpty()).resolves.toBe(true)
+
+    expect(providerConfigStore.providers['openai-compatible']?.config).toMatchObject({ apiKey: 'jarvis-local' })
+    expect(useConsciousnessStore().activeProvider).toBe('openai-compatible')
+    expect(useConsciousnessStore().activeModel).toBe('MiniMaxAI/MiniMax-M2.7')
+    await expect(configureJarvisDefaultsIfEmpty()).resolves.toBe(false)
+  })
 })

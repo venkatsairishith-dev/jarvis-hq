@@ -13,7 +13,7 @@ dialogs:
     official:
       title: AIRI Official Provider
     title: Welcome to JARVIS!
-    description: JARVIS starts on the privacy gateway and the local speech server. Add your provider key to begin.
+    description: "JARVIS starts on the privacy gateway and the local speech server. Nothing to set up. Close this window and say Hey JARVIS."
     selectProvider: Choose an AI Provider
     configureProvider: Configure {provider}
     apiKey: API Key

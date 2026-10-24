@@ -18,6 +18,15 @@ export const JARVIS_ENDPOINTS = {
  */
 export const JARVIS_NO_CLOUD_URL = 'http://127.0.0.1:1'
 
+/**
+ * What the face sends as the provider key. The privacy gateway swaps it for the key in `D:\jarvis-secrets\providers\dahl.key`,
+ * so the face never holds a provider key and the owner types none.
+ */
+export const JARVIS_LOCAL_KEY = 'jarvis-local'
+
+/** The chat model the gateway's provider (Dahl) serves. */
+export const JARVIS_CHAT_MODEL = 'MiniMaxAI/MiniMax-M2.7'
+
 /** The name of the one MCP server the face connects to. */
 export const JARVIS_TOOL_SERVER_NAME = 'jarvis'
 

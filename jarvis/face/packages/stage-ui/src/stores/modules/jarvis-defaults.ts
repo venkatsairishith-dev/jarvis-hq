@@ -1,4 +1,4 @@
-import { JARVIS_ENDPOINTS, JARVIS_SPEECH_MODEL, JARVIS_SPEECH_VOICE } from '@proj-airi/stage-shared/jarvis'
+import { JARVIS_CHAT_MODEL, JARVIS_ENDPOINTS, JARVIS_LOCAL_KEY, JARVIS_SPEECH_MODEL, JARVIS_SPEECH_VOICE } from '@proj-airi/stage-shared/jarvis'
 
 import { useProviderConfigStore } from '../providers/config'
 import { useProviderStore } from '../providers/provider'
@@ -9,11 +9,11 @@ import { useSpeechStore } from './speech'
 /**
  * The providers the face starts with. Each one is a JARVIS service on this PC.
  *
- * Chat uses the privacy gateway, which forwards the caller's own provider key; the owner types that key once in the
- * provider settings (it is stored by the face on this PC, never in the repository). Speech needs no key.
+ * Chat uses the privacy gateway. The face sends the placeholder key `jarvis-local` and the gateway adds the provider key from
+ * its own key file, so the owner types no key. Speech needs no key.
  */
 export const jarvisProviderDefaults = [
-  { id: 'openai-compatible', config: { baseUrl: JARVIS_ENDPOINTS.chat, apiKey: '' } },
+  { id: 'openai-compatible', config: { baseUrl: JARVIS_ENDPOINTS.chat, apiKey: JARVIS_LOCAL_KEY } },
   { id: 'openai-compatible-audio-speech', config: { baseUrl: JARVIS_ENDPOINTS.speech, apiKey: '' } },
   { id: 'openai-compatible-audio-transcription', config: { baseUrl: JARVIS_ENDPOINTS.speech, apiKey: '' } },
 ] as const
@@ -42,9 +42,21 @@ export async function configureJarvisDefaultsIfEmpty(): Promise<boolean> {
     changed = true
   }
 
-  if (!consciousnessStore.activeProvider) {
-    // The model stays empty: the owner picks one the gateway's provider offers.
+  // A profile from an earlier build: the chat provider has no key, or chat points at a cloud provider that JARVIS does not
+  // have (it can only fail with "Failed to fetch"). Repair it once; a provider the owner chose themselves is left alone.
+  const chatConfig = providerConfigStore.getProviderConfig('openai-compatible')
+  if (chatConfig && chatConfig.baseUrl === JARVIS_ENDPOINTS.chat && !chatConfig.apiKey) {
+    await providerConfigStore.updateProviderConfig('openai-compatible', { ...chatConfig, apiKey: JARVIS_LOCAL_KEY }, 'configured')
+    changed = true
+  }
+  const active = consciousnessStore.activeProvider
+  if (!active || active.startsWith('official-provider')) {
     consciousnessStore.activeProvider = 'openai-compatible'
+    consciousnessStore.activeModel = JARVIS_CHAT_MODEL
+    changed = true
+  }
+  else if (active === 'openai-compatible' && !consciousnessStore.activeModel) {
+    consciousnessStore.activeModel = JARVIS_CHAT_MODEL
     changed = true
   }
 

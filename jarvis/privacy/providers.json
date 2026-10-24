@@ -2,7 +2,8 @@
   "_note": "Public model providers the privacy gateway may use, in order. Every request is redacted first. The first entry uses the caller's own key (the Dahl key the caller sends). A fallback needs enabled=true, a model, and a key FILE NAME under D:\\jarvis-secrets (the key itself never goes in this file). Free tiers change: check the provider's current terms (jarvis/docs/reports/evidence/06-models-hardware-providers.md section 9). Gemini's free tier is excluded for personal data (its terms allow training on it).",
   "cooldown_seconds": 60,
   "providers": [
-    {"name": "dahl", "base_url": "https://inference.dahl.global/v1", "enabled": true, "key": "from_request"},
+    {"name": "dahl", "base_url": "https://inference.dahl.global/v1", "enabled": true, "key": "from_request", "key_file": "providers/dahl.key",
+     "_note": "A caller that sends its own key gets that key through (the plugins do). A caller that sends none, or the placeholder jarvis-local (the face does), gets the key in D:\\jarvis-secrets\\providers\\dahl.key; if that file is missing the request goes out as it came and Dahl answers 401."},
     {"name": "groq", "base_url": "https://api.groq.com/openai/v1", "enabled": true, "key_file": "providers/groq.key", "model": "openai/gpt-oss-120b",
      "_note": "Owner's first fallback (2026-10-16). Inactive until D:\\jarvis-secrets\\providers\\groq.key exists (skipped as 'no key file'). Base-plan limits on Groq's docs (2026-10-16): 30 requests/min, 1,000/day, 8K tokens/min for this model; over the limit Groq answers 429 (the gateway then moves on), it does not bill."},
     {"name": "openrouter", "base_url": "https://openrouter.ai/api/v1", "enabled": false, "key_file": "providers/openrouter.key", "model": ""},
