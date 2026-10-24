@@ -100,6 +100,23 @@ def test_no_tool_can_approve_or_change_policy():
     assert not any(w in n for n in names for w in ("approve", "deny", "kill", "policy", "pin"))
 
 
+def test_jarvis_spoken_hands_out_one_cleaned_notice_and_is_only_there_when_the_heartbeat_is():
+    class Spoken:
+        def __init__(self):
+            self.rows = [{"urgency": "normal", "text": "1 task is waiting for your approval in the console."}]
+
+        def take(self, n):
+            out, self.rows = self.rows[:n], self.rows[n:]
+            return out
+    sp = Spoken()
+    server = F.build_server(tools(FakeClient()), spoken=sp)
+    assert "jarvis_spoken" in {t.name for t in asyncio.run(server.list_tools())}
+    assert "jarvis_spoken" not in {t.name for t in asyncio.run(F.build_server(tools(FakeClient())).list_tools())}
+    first = asyncio.run(server.call_tool("jarvis_spoken", {}))
+    assert "waiting for your approval" in str(first) and "1" in str(first)
+    assert '"count": 0' in str(asyncio.run(server.call_tool("jarvis_spoken", {}))) or "'count': 0" in str(asyncio.run(server.call_tool("jarvis_spoken", {})))
+
+
 # ---- end to end: MCP client -> face tool server (real HTTP) -> fake console (real HTTP) -----------------------------------------
 
 def free_port():

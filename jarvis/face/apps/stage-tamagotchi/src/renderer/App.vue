@@ -13,6 +13,7 @@ import { isSherpawModelBundled, setSherpawModelAssetHost } from '@proj-airi/stag
 import { useAuthStore } from '@proj-airi/stage-ui/stores/auth'
 import { useCharacterOrchestratorStore } from '@proj-airi/stage-ui/stores/character'
 import { useChatStore } from '@proj-airi/stage-ui/stores/chat'
+import { useChatSessionStore } from '@proj-airi/stage-ui/stores/chat/session-store'
 import { usePluginHostInspectorStore } from '@proj-airi/stage-ui/stores/devtools/plugin-host-debug'
 import { useDisplayModelsStore } from '@proj-airi/stage-ui/stores/display-models'
 import { useModsServerChannelStore } from '@proj-airi/stage-ui/stores/mods/api/channel-server'
@@ -42,6 +43,7 @@ import {
   electronGetServerChannelConfig,
   electronGodotStageGetStatus,
   electronGodotStageStatusChanged,
+  electronMcpCallTool,
   electronSettingsNavigate,
   i18nGetLocale,
   i18nSetLocale,
@@ -68,6 +70,7 @@ import { electronPluginToolsChanged } from '../shared/eventa/plugin/tools'
 import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
 import { initializeIOTraceHubBridge } from './bridges/io-trace-hub'
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
+import { createSpokenPoller, proactiveEnabled } from './composables/use-jarvis-spoken'
 import { useLanguage } from './composables/use-language'
 import { useFullscreenStore } from './stores/fullscreen'
 import { useServerChannelSettingsStore } from './stores/settings/server-channel'
@@ -110,6 +113,8 @@ const setLocale = useElectronEventaInvoke(i18nSetLocale)
 const windowContext = resolveRendererWindowContext()
 const initialRoutePath = resolveInitialRendererRoutePath(route.path)
 const chatStore = useChatStore()
+const chatSessionForSpoken = useChatSessionStore()
+const callMcpTool = useElectronEventaInvoke(electronMcpCallTool)
 const builtinToolsStore = useTamagotchiBuiltinToolsStore()
 const mcpToolsStore = useTamagotchiMcpToolsStore()
 const pluginToolsStore = useTamagotchiPluginToolsStore()
@@ -367,6 +372,23 @@ const chatStreamView = !fullStageRuntime && (initialRoutePath === '/chat' || isF
 
 const { restore: restoreLocale } = useLanguage(language, getMainLocale, setLocale)
 
+// JARVIS speaks first (main stage window only): the character says short notices from the tool server, never while the owner types
+// or an answer runs. Framed as information, no tools. Off switch: localStorage 'jarvis:proactive' = 'off'.
+let lastOwnerActivity = 0
+function markOwnerActive() {
+  lastOwnerActivity = Date.now()
+}
+const spokenPoller = fullStageRuntime
+  ? createSpokenPoller({
+      call: name => callMcpTool({ name }),
+      say: text => chatStore.send({ sessionId: chatSessionForSpoken.activeSessionId, text, tools: [] }),
+      busy: () => chatStore.activeTurns.length > 0,
+      lastOwnerActivity: () => lastOwnerActivity,
+      enabled: () => proactiveEnabled(globalThis.localStorage),
+      onError: error => console.warn('[JARVIS] proactive poll failed:', error),
+    })
+  : null
+
 const { updateThemeColor } = useThemeColor(themeColorFromValue({ light: 'rgb(255 255 255)', dark: 'rgb(18 18 18)' }))
 watch(dark, () => updateThemeColor(), { immediate: true })
 watch(route, () => updateThemeColor(), { immediate: true })
@@ -405,6 +427,12 @@ onMounted(async () => {
 
   await fullStageRuntime?.initialize()
   await chatStreamView?.initializeStreamView()
+
+  if (spokenPoller) {
+    for (const type of ['keydown', 'pointerdown'])
+      window.addEventListener(type, markOwnerActive, { passive: true })
+    spokenPoller.start()
+  }
 })
 
 watch(themeColorsHue, () => {
@@ -416,6 +444,9 @@ watch(themeColorsHueDynamic, () => {
 }, { immediate: true })
 
 onUnmounted(() => {
+  spokenPoller?.stop()
+  for (const type of ['keydown', 'pointerdown'])
+    window.removeEventListener(type, markOwnerActive)
   stopIOTraceHubBridge()
   stopModelAssetStatus()
   stopLeadershipListener?.()
