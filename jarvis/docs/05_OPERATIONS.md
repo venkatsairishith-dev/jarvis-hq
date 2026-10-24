@@ -21,7 +21,7 @@
 5. Re-list and show the result. Never touch anything outside the named compartment.
 
 ### Cost check (reusable)
-After each phase: Cost Analysis for the month, per service, must be $0. Billing data lags a day. Record the result in the daily note.
+After each phase: Cost Analysis for the month, per service, must be $0. Billing data lags a day, so $0 alone does not prove free: also run `python jarvis/scripts/oci_free_pool.py` with this month's A1 usage in hours and the sizes now running (the free pool is 2 OCPU / 12 GB, 200 GB storage, 5 backups, read from Oracle's page on 2026-10-24; D44). Record the result in the daily note.
 
 ## Storage (Windows)
 D: is NTFS, 75 GB, for every local AI file. C: has about 53 GB free and stays clean. Before and after every big download, record free space. Redirect before downloading: `OLLAMA_MODELS`, `HF_HOME`, pip cache, npm cache, TEMP. Installers and logs that land on C: are noted and trimmed. The OCI CLI lives in D:\jarvis\tools\oci-venv (0.8 GB).
@@ -451,3 +451,5 @@ one by one (all start off), and registers the task `JarvisAdmin`. Using it, as y
 read-only check confirmed the result). Status and audit: `C:\ProgramData\JARVIS\admin\transcript.jsonl` (one line per request with the exit codes), `adminsvc.py status`.
 Check by hand once after the install, in a normal (not elevated) PowerShell: `schtasks /Change /TN JarvisAdmin /DISABLE` must say access denied, and writing a file into `C:\Program Files\JARVIS\admin` must fail.
 Revoke at any time: `Install-JARVIS.ps1 -Uninstall`, or `Unregister-ScheduledTask JarvisAdmin` from an elevated window, or approve fewer verbs with `-ResetAdmin`.
+
+**Agent PC on VM2 (prepared 2026-10-24, not yet run):** after the rebuild of hermes-agent-vm-2 (Ubuntu 24.04), copy `jarvis/lab` to the VM and run `sudo bash lab/deploy/provision_vm2.sh --plan` (prints only), then without `--plan`. It installs XFCE on display :1 with VNC bound to 127.0.0.1, xdotool and xwd, Firefox from Mozilla's signed repository (key fingerprint checked), the three lab users, the lab services root-owned, a firewall that allows SSH only, and unattended security updates, then runs `check_lab_deploy.py`. Left for hand work: `tailscale up` (you log in), cua-driver (check its Linux arm64 build first) and the runner token.

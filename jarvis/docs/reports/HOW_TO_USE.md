@@ -164,3 +164,12 @@ The face can reach only this PC and your tailnet. To let it download AIRI's on-d
 See the plan's phases P1 to P10: one supervisor for all processes, the Hermes safety hook, the router inside JARVIS, PC power with
 undo and a PIN-gated admin broker, learned skills, coding agents with tested pushes, the openmuse features (watches, PDF forms,
 Gmail/Calendar with review, finance), the tray app, "Hey Jarvis" and a JARVIS personality, phone approvals, and one installer.
+
+
+## 11. New on 2026-10-24: what JARVIS does by itself, and how to switch it off
+
+- **It speaks first** (D41): a morning greeting, "a task is waiting for your approval", a service it could not restart, a meeting in 5 to 30 minutes. Quiet from 22:00 to 07:00. **Quiet now:** create an empty file `D:\jarvis\data\muse\dnd` (delete it to hear JARVIS again). **Off completely:** start the tool server with `--no-heartbeat`, or in the face's developer console `localStorage.setItem('jarvis:proactive', 'off')`.
+- **It remembers across days** (D42): after 10 quiet minutes the chat is boiled down to a few bullets in `D:\jarvis\vault\daily\<date>-chat.md`. Read, edit or delete that note like any other. **Off:** `localStorage.setItem('jarvis:memory', 'off')`.
+- **"What is on my screen?"**: ask JARVIS; it names the window in front and the others, and reads one window's text only if you allowed screen text.
+- **Free model accounts** (D40): put the JARVIS Gmail's app password in `D:\jarvis-secrets\mail\gmail.app-password` and `{"user": "...@gmail.com"}` in `mail\gmail.json`; JARVIS then signs up to Groq, Cloudflare and Z AI, and stops to ask you at every CAPTCHA, phone or card step. Keys land in `D:\jarvis-secrets\providers\<name>.key`.
+- **The admin service** (D39): `Install-JARVIS.cmd`; you approve each admin verb and type your admin passphrase for every request.

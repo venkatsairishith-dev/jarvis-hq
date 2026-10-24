@@ -30,6 +30,14 @@ export const JARVIS_CHAT_MODEL = 'zai-org/GLM-5.3-Flash'
 /** The chat model the face started with before the planner comparison (2026-10-24); a profile that still holds it is moved to the new one. */
 export const JARVIS_OLD_CHAT_MODEL = 'MiniMaxAI/MiniMax-M2.7'
 
+/**
+ * Providers that exist only for the cloud account AIRI sells (its "Official Provider" for chat, speech and vision). JARVIS has no cloud account,
+ * so listing them offers a card that can only fail; the provider list leaves them out.
+ */
+export function isCloudOnlyProviderId(id: string): boolean {
+  return /^(?:vision-)?official-provider/.test(id)
+}
+
 /** The name of the one MCP server the face connects to. */
 export const JARVIS_TOOL_SERVER_NAME = 'jarvis'
 
