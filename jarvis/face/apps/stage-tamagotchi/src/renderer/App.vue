@@ -302,6 +302,9 @@ function createFullStageRuntime() {
         await removeAuthenticationProviderConfiguration()
       // JARVIS: empty chat, hearing and speech settings start on the privacy gateway and the local speech server.
       await configureJarvisDefaultsIfEmpty()
+      // JARVIS has no account and nothing to set up: the welcome dialog (sign in / choose a provider) is never needed.
+      if (!onboardingStore.hasCompletedSetup)
+        onboardingStore.closeAfterAuthentication()
 
       await displayModelsStore.loadDisplayModelsFromIndexedDB()
       await settingsStore.initializeStageModel()

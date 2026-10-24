@@ -238,3 +238,25 @@ Written by the cloud session from the code on branch `claude/implementation-plan
 
 ## Update 2026-10-23: rows about N.E.K.O
 The rows above that name N.E.K.O components (its plugin SDK and host, memory server, `SherpaWakeWordDetector`, browser-use, `app_launcher`, `mcp_adapter`, the Tauri shell, its card manager and persona presets) describe the base JARVIS used until 2026-10-23. Since then: the face is **Project AIRI** (MIT, imported as JARVIS's own code); the plugin host is `jarvis/pluginapi` (own code: a small decorator API, a loader for `plugin.toml`, MCP tool registration; kept as own code because the ten existing plugins and their ~1,900 tests use exactly this call pattern (decorators, lifecycle, timers, calls between plugins), so replacing the host alone preserved them; AIRI's plugin SDK is tied to its own server channel and would have meant rewriting every plugin); `web_search` is own code with page parsers adapted from N.E.K.O's Apache-2.0 plugin (credited in `NOTICE`); browser-use, the wake listener and the widget are removed (D33, D34). Reuse-first still holds: every other component in the registry stays.
+
+## MetaClaw and the OpenJarvis quickstart (checked 2026-10-24, owner asked "can we use them")
+Both were read from their public pages only (README / quickstart page). Nothing was installed or run.
+
+**OpenJarvis (open-jarvis/OpenJarvis, Stanford, Apache-2.0, about 12k stars, 1,293 commits, no tagged releases listed).** The 2026-10-10 compatibility report above stands: improve JARVIS, never replace it.
+- The quickstart is `curl -fsSL https://open-jarvis.github.io/OpenJarvis/install.sh | bash` (Windows: `irm https://open-jarvis.github.io/OpenJarvis/install.ps1 | iex`), then `jarvis init`, `jarvis ask`, `jarvis serve` (an OpenAI-compatible API on :8000), `jarvis model`.
+  **Do not run it on the laptop**: the script comes from the docs site, not from a pinned commit; it installs uv, a venv, Ollama and a starter model; its README names no versions, and it describes no permission model for tools or agents ("code execution, file I/O, and shell access" in a preset). The 10-10 report found the runtime pulls in telemetry (posthog), a Rust extension and a Telegram library.
+- Its command is also called `jarvis`, which would collide with ours.
+- Its five parts (model/hardware choice, engines, agents, tools and memory, learning) overlap what JARVIS already has behind the kernel's approvals. Its learning loop is described only as "improves models using local trace data"; the one concrete command is `jarvis optimize skills --policy dspy`, which the 10-10 report already rejected (writes overlays automatically).
+- **Use:** as a read-only reference and, if wanted, a trial **inside the lab VM** (never the laptop) pinned to a commit. Already reused: skill parser/types/tool translator (vendored), context-length helpers, the trace and eval patterns.
+
+**MetaClaw (aiming-lab/MetaClaw, MIT, about 3.5k stars, v0.4.1 in April 2026).** A local proxy between an agent and its model that injects skills and memory into every turn, writes new skills from finished sessions, and can fine-tune LoRA weights from live conversations (RL).
+- Fits: it works with any OpenAI-compatible client, names Hermes among supported agents, and its skills-only mode needs only an OpenAI-compatible endpoint (our gateway on 48950 qualifies).
+- **Does not fit as it is:**
+  1. It changes the prompt and writes skills **automatically**; our rule is propose, test, owner promotes, with one-step rollback (`SELF_IMPROVEMENT_2026-10-22.md`).
+  2. It keeps its own memory in `~/.metaclaw/memory`; ours is the vault, and agents write only inbox/, daily/, decisions/.
+  3. Its RL mode trains on **cloud** backends (Tinker, MinT, Weaver) with conversation data: private text would leave the PC. Not allowed.
+  4. Its `start` edits the agent's config files and restarts services, installs a WeChat plugin when enabled, and reads Google Calendar when that option is on. No threat model is documented.
+  5. Sitting in front of the gateway it would see text before redaction; behind it, it would see only redacted text and learn from placeholders.
+- **Use, safely:** (a) its **built-in skill bank** (`memory_data/skills/`, about 40 `SKILL.md` files, MIT) can be imported through our existing gate (`skills/skillgate.py`: staged, hashed, owner promotes), which is the part of MetaClaw that fits without running it; (b) its idea of running learning updates only in idle windows is worth copying into our weekly lab tasks; (c) a skills-only trial in the lab VM on synthetic data, with its output turned into **proposals**, never live skills. Not recommended on the laptop or on private data.
+
+**Decision:** do not install either on the laptop. Next step if the owner wants one: import MetaClaw's skill bank through the skill gate (a small, reversible job), and keep OpenJarvis as reference.
