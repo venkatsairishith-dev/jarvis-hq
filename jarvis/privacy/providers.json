@@ -7,6 +7,8 @@
     {"name": "groq", "base_url": "https://api.groq.com/openai/v1", "enabled": true, "key_file": "providers/groq.key", "model": "openai/gpt-oss-120b",
      "_note": "Owner's first fallback (2026-10-16). Inactive until D:\\jarvis-secrets\\providers\\groq.key exists (skipped as 'no key file'). Base-plan limits on Groq's docs (2026-10-16): 30 requests/min, 1,000/day, 8K tokens/min for this model; over the limit Groq answers 429 (the gateway then moves on), it does not bill."},
     {"name": "openrouter", "base_url": "https://openrouter.ai/api/v1", "enabled": false, "key_file": "providers/openrouter.key", "model": ""},
-    {"name": "cloudflare", "base_url": "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1", "enabled": false, "key_file": "providers/cloudflare.key", "model": ""}
+    {"name": "cloudflare", "base_url": "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1", "enabled": false, "key_file": "providers/cloudflare.key", "model": ""},
+    {"name": "zai", "base_url": "https://api.z.ai/api/paas/v4", "enabled": false, "key_file": "providers/zai.key", "model": "glm-4.7-flash",
+     "_note": "Z AI free GLM-4.7-Flash, 1 request at a time (checked 2026-10-24). Off until the key file exists, the terms were read (free-tier training is not confirmed) and hosted_model_compare.py has run."}
   ]
 }

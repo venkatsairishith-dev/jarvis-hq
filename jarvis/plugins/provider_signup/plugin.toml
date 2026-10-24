@@ -1,0 +1,11 @@
+[plugin]
+id = "provider_signup"
+name = "Provider signup helper"
+description = "Helps JARVIS get its own free model-API accounts with its own Gmail: what is missing, the steps and where the owner is needed, and the verification mail (code or same-site link only). Never shows a key."
+version = "0.1.0"
+type = "plugin"
+entry = "jarvis.plugins.provider_signup:ProviderSignupPlugin"
+
+[plugin_runtime]
+enabled = true
+auto_start = true
