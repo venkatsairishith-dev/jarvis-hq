@@ -330,7 +330,7 @@ export const useHearingStore = defineStore('hearing-store', () => {
   const activeTranscriptionModel = useLocalStorageManualReset('settings/hearing/active-model', '', persistenceOptions)
   const activeCustomModelName = useLocalStorageManualReset('settings/hearing/active-custom-model', '', persistenceOptions)
   const transcriptionModelSearchQuery = refManualReset<string>('')
-  const inputMode = useLocalStorageManualReset<HearingInputMode>('settings/hearing/input-mode', 'always-on', persistenceOptions)
+  const inputMode = useLocalStorageManualReset<HearingInputMode>('settings/hearing/input-mode', 'wake-word', persistenceOptions)   // JARVIS: only "Hey JARVIS" / "JARVIS" starts an input; nothing is heard until then
   const autoSendEnabled = useLocalStorageManualReset<boolean>('settings/hearing/auto-send-enabled', false, persistenceOptions)
   const autoSendDelay = useLocalStorageManualReset<number>('settings/hearing/auto-send-delay', 2000, persistenceOptions) // Default 2 seconds
   const confidenceThreshold = useLocalStorageManualReset<number>('settings/hearing/confidence-threshold', CONFIDENCE_THRESHOLD_DISABLED, persistenceOptions)

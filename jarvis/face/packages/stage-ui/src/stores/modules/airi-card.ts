@@ -8,6 +8,7 @@ import type { Live2DControlPolicy } from '@proj-airi/stage-ui-live2d/types/avata
 
 import type { DocumentFields, DocumentSnapshot, DocumentSyncClient, LocalDocumentChanges } from '../../libs/document-sync'
 import type { CardModuleDefaults } from '../../services/airi-card-modules'
+import type { WakeWord } from '../../libs/voice/wake-words'
 import type { AiriCard, AiriExtension } from '../../types/airiCard'
 import type { CharacterAvatarModelReference } from '../../types/avatar-model'
 
@@ -35,6 +36,7 @@ import { createDocumentSyncClient, syncedValues, synchronize } from '../../libs/
 import { CHARACTER_CARD_SYNC_FLAG } from '../../libs/feature-flags'
 import { captureAnalyticsEvent } from '../../libs/product-signals'
 import { SERVER_URL } from '../../libs/server'
+import { JARVIS_WAKE_WORDS } from '../../libs/voice/jarvis-wake-words'
 import { wakeWordSchema } from '../../libs/voice/wake-words'
 import { resolveModuleSelection } from '../../services/airi-card-modules'
 import { createAvatarModelReference } from '../../services/avatar-model'
@@ -813,6 +815,8 @@ export const useAiriCardStore = defineStore('airi-card', () => {
           vision: { provider: '', model: '' },
         },
         agents: {},
+        // "Hey JARVIS" and "JARVIS" wake the built-in character.
+        wakeWords: structuredClone(JARVIS_WAKE_WORDS) as WakeWord[],
       },
     },
   }))
@@ -1206,6 +1210,16 @@ export const useAiriCardStore = defineStore('airi-card', () => {
             avatarModels: structuredClone(toRaw(builtInCard.value.extensions.airi.avatarModels)),
           },
         },
+      })
+    }
+
+    // JARVIS: a built-in card stored before wake words existed gets "Hey JARVIS" and "JARVIS" once. A card that already has
+    // a wake word list (even an empty one the owner chose) is left alone.
+    const storedDefault = toRaw(cards.value.get('default'))
+    if (storedDefault && storedDefault.extensions.airi.wakeWords === undefined) {
+      cards.value.set('default', {
+        ...storedDefault,
+        extensions: { ...storedDefault.extensions, airi: { ...storedDefault.extensions.airi, wakeWords: structuredClone(JARVIS_WAKE_WORDS) as WakeWord[] } },
       })
     }
 

@@ -504,3 +504,7 @@ Claude builds JARVIS and nothing else. The planner gateway (port 48952), the Cla
 ## D36 Public search queries keep places, hide people (2026-10-24, owner delegated)
 
 The research plugin used to hide people and places in every search query, which broke ordinary questions ("capital of Australia" became "What is the capital of and when was it founded?" and returned Canada). The gateway's `/redact` now takes `"names": "people"`: people are replaced, a city or a country stays, and private values, addresses and phone numbers are still caught by the patterns and the PII model. The research plugin asks for "people" by default; `JARVIS_RESEARCH_HIDE_PLACES=1` asks for people and places again. A gateway that does not confirm at least what was asked for, or whose PII model is not loaded, is still refused (nothing is searched).
+
+## D37 Wake words "Hey JARVIS" and "JARVIS" (2026-10-24, owner)
+
+AIRI's own wake-word feature is used, not a new listener: the built-in character card carries two wake words with pronunciations in the tokens of the bundled keyword model (a built-in card stored earlier gets them once). The microphone input mode now starts as `wake-word`, so speech is not processed until a wake word is heard; the owner can switch to always-on or push-to-talk in Hearing settings. This closes the open wake-word question from D34.
