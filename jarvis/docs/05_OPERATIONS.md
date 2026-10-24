@@ -21,7 +21,7 @@
 5. Re-list and show the result. Never touch anything outside the named compartment.
 
 ### Cost check (reusable)
-After each phase: Cost Analysis for the month, per service, must be $0. Billing data lags a day. Record the result in the daily note.
+After each phase: Cost Analysis for the month, per service, must be $0. Billing data lags a day, so $0 alone does not prove free: also run `python jarvis/scripts/oci_free_pool.py` with this month's A1 usage in hours and the sizes now running (the free pool is 2 OCPU / 12 GB, 200 GB storage, 5 backups, read from Oracle's page on 2026-10-24; D44). Record the result in the daily note.
 
 ## Storage (Windows)
 D: is NTFS, 75 GB, for every local AI file. C: has about 53 GB free and stays clean. Before and after every big download, record free space. Redirect before downloading: `OLLAMA_MODELS`, `HF_HOME`, pip cache, npm cache, TEMP. Installers and logs that land on C: are noted and trimmed. The OCI CLI lives in D:\jarvis\tools\oci-venv (0.8 GB).
