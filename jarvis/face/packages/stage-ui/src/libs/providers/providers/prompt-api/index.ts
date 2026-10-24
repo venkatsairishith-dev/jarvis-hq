@@ -24,7 +24,7 @@ export const providerPromptAPICompatible = defineProvider<OpenAICompatibleConfig
   descriptionLocalize: ({ t }) => t('settings.pages.providers.provider.prompt-api.description'),
   tasks: ['chat'],
   icon: 'i-simple-icons:googlechrome',
-  iconColor: 'i-logos:chrome',
+  iconColor: 'i-simple-icons:googlechrome',
 
   createProviderConfig: () => openAICompatibleConfigSchema,
   createProvider() {

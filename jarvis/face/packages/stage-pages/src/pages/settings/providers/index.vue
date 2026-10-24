@@ -3,6 +3,7 @@ import type { ProviderDeployment, ProviderPricing } from '@proj-airi/stage-ui/li
 import type { Ref } from 'vue'
 
 import { isCustomProvidersDisabled } from '@proj-airi/stage-shared'
+import { isCloudOnlyProviderId } from '@proj-airi/stage-shared/jarvis'
 import { IconStatusItem, RippleGrid } from '@proj-airi/stage-ui/components'
 import { useAnalytics } from '@proj-airi/stage-ui/composables'
 import { useRippleGridState } from '@proj-airi/stage-ui/composables/use-ripple-grid-state'
@@ -176,7 +177,7 @@ const providerBlocks = computed(() => {
     .map((block) => {
       const filteredProviders = block.providersRef.value
         .filter((p) => {
-          if (p.id === 'speech-noop')
+          if (p.id === 'speech-noop' || isCloudOnlyProviderId(p.id))
             return false
           if (filterPricing.value !== 'all' && p.pricing !== filterPricing.value)
             return false
