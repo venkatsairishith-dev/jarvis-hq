@@ -318,3 +318,20 @@ Owner chose the existing owner route `POST owner/agents/test` as the trivial tas
 
 So no agent definition `lab-smoke-test` was created, `jarvis-lab-runner` was not started (still disabled and inactive), no task was made, and nothing on the main server was called. Installing an agent CLI means a model credential on the VM
 (the plan says the VM gets no model key, Telegram token or kernel database) and the lab Hermes install, which is a separate owner decision: which agent CLI, from where (pinned), and which model access (through the privacy gateway or the kernel's llm-proxy over the tailnet, never a key file on the VM).
+
+### Lab agent installed on hermes-agent-vm-2 (2026-10-25, owner said yes in the laptop session after reading the plan)
+
+`provision_vm2_agent.sh` (pinned: uv 0.13.5, Hermes Agent v0.21.6 at commit 818c13be, Python 3.14.7, three hash-pinned patched wheels) ran clean on the second attempt. First attempt: `uv sync --no-editable` failed because Hermes refuses a built wheel
+("Building wheels or sdists for hermes-agent is not supported"); the main server also uses an editable install, so the flag was removed (the source is root-owned, so the agent still cannot change it). Everything is idempotent.
+
+| Check | Result |
+|---|---|
+| `hermes --version` as `agent` and as `jarvis-verify` | Hermes Agent (2026.9.24), install directory /opt/hermes-agent/src, method git |
+| Agent writes to the install | refused (Permission denied on /opt/hermes-agent/src and /venv); /opt/hermes-agent is root:root 755 |
+| Patched wheels | httpcore2 2.12.0, httpx2 2.12.0, PyJWT 2.13.0 replaced by 2.14.0 (as on the main server) |
+| Configs | `~/.hermes/config.yaml` for agent and jarvis-verify, mode 0600 in their own homes; model base URL http://127.0.0.1:18790/v1, dummy key `jarvis-local`, no real key on the VM |
+| Model forwarder | installed (`/opt/jarvis-hub/model_forwarder.py`, unit file), **not enabled or started**: no `/etc/jarvis-lab/model.token` yet |
+| Listeners | unchanged (22, VNC on loopback, tailscale's own ports); nothing on 18790 yet |
+| Services | jarvis-lab-control, jarvis-desktop, cua-driver active; free memory 3,180 MB available of 3,897 MB |
+
+Left: the owner makes the kernel token (public lane, like the lab agents) and it is copied by path to /etc/jarvis-lab/model.token (root 600); then `systemctl enable --now jarvis-model-forwarder`, the runner start and the smoke test (`agents/test`).

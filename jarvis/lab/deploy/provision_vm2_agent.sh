@@ -64,11 +64,11 @@ fi
 say "4 Python ${PY_VERSION} (uv's own managed build) and the upstream uv.lock, hash-checked by uv, no source builds"
 if [ "$PLAN" = 1 ]; then
   echo "   would run: UV_PYTHON_INSTALL_DIR=/opt/uv/python uv python install ${PY_VERSION}"
-  echo "   would run: UV_PROJECT_ENVIRONMENT=$OPT/venv uv sync --frozen --no-dev --no-editable --python ${PY_VERSION} --no-build  (in $OPT/src; fails rather than building anything from source)"
+  echo "   would run: UV_PROJECT_ENVIRONMENT=$OPT/venv uv sync --frozen --no-dev --python ${PY_VERSION} --no-build  (in $OPT/src; fails rather than building anything from source)"
 else
   export UV_PYTHON_INSTALL_DIR=/opt/uv/python UV_CACHE_DIR=/var/cache/jarvis-uv UV_PYTHON_DOWNLOADS=manual
   /usr/local/bin/uv python install "${PY_VERSION}"
-  ( cd "$OPT/src" && UV_PROJECT_ENVIRONMENT="$OPT/venv" /usr/local/bin/uv sync --frozen --no-dev --no-editable --python "${PY_VERSION}" --no-build )
+  ( cd "$OPT/src" && UV_PROJECT_ENVIRONMENT="$OPT/venv" /usr/local/bin/uv sync --frozen --no-dev --python "${PY_VERSION}" --no-build )
   chown -R root:root /opt/uv/python "$OPT"; chmod -R go-w /opt/uv/python "$OPT"
 fi
 
