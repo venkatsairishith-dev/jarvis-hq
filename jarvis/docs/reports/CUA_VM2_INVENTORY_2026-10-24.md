@@ -289,3 +289,19 @@ as `/etc/jarvis-lab/runner.token` (root:root, mode 600, 43 bytes, same size) in 
 | Lock-down | the `agent` account is still blocked from reaching the tailnet (8790 closed for it) |
 
 Next (owner decision): start the lab runner on VM2 and see it report to the kernel; set `JARVIS_LAB_VERIFIER_TOOLS` only after the agent CLI's tool execution is confirmed to run as another user.
+
+### Update check off, and the trivial lab task (2026-10-25, laptop session)
+
+**A. Update check.** Cloud commit 5c2c66d (`provision_vm2_cua.sh`) was copied alone, `--plan` read, then run (idempotent). Result on cua-driver **0.34.0**:
+
+| Check | Result |
+|---|---|
+| `cua-driver config set update_check_enabled false` | **does not exist in 0.34**: "Unknown config key: update_check_enabled"; the available keys are capture_mode, max_image_dimension, version, platform, agent_cursor.enabled, cursor.motion.* (the script reports this as not fatal) |
+| Unit environment `CUA_DRIVER_RS_UPDATE_CHECK=false` | set in the unit (`systemctl show -p Environment`) |
+| After `systemctl restart cua-driver` | active, NRestarts 0, "listening on /home/agent/.cache/cua-driver/cua-driver.sock"; the "v0.38.0 is available" banner is **gone** (1 line in the 17:51 start, 0 lines since the restart at 19:57:01), so the environment variable works on 0.34 even though the config key does not |
+| Connections | no TCP connection by cua-driver (`ss -tnp`), telemetry still disabled, jarvis-lab-control active |
+
+**B. One trivial lab task: not run; what is missing.** The owner said yes (laptop session). Before starting anything on VM2 the session looked for the simple documented path and found none that is safe to use as is: `demo.py` does not use the kernel (it runs agents locally in the WSL-era box); tasks reach the lab only through an
+agent's `lab_work` action (agent token, lane private or public) or the owner plane's `agents/test` and `project_fix`; there is no single CLI like "submit this lab task". Using it would mean minting an agent token on the main server or driving the
+owner plane by hand, which is improvising on the main server. So `jarvis-lab-runner` was **not** started (still disabled and inactive), no task was created, and the main server was not touched.
+What would settle it: a small documented command (for example `python -m jarvis_kernel lab-task --text ... --criteria ...` or an owner-plane route that creates a lab task with a runner-lane job), or the owner choosing the agent-definition test (`POST owner/agents/test`) as the trivial task.
