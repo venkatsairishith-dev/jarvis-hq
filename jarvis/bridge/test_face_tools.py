@@ -96,7 +96,7 @@ def test_results_are_cleaned_before_a_model_sees_them():
 def test_no_tool_can_approve_or_change_policy():
     server = F.build_server(tools(FakeClient()))
     names = sorted(t.name for t in asyncio.run(server.list_tools()))
-    assert names == ["jarvis_cancel", "jarvis_do", "jarvis_ready", "jarvis_task_result", "jarvis_waiting"]
+    assert names == ["jarvis_cancel", "jarvis_do", "jarvis_ready", "jarvis_status", "jarvis_task_result", "jarvis_waiting"]
     assert not any(w in n for n in names for w in ("approve", "deny", "kill", "policy", "pin"))
 
 
@@ -115,6 +115,69 @@ def test_jarvis_spoken_hands_out_one_cleaned_notice_and_is_only_there_when_the_h
     first = asyncio.run(server.call_tool("jarvis_spoken", {}))
     assert "waiting for your approval" in str(first) and "1" in str(first)
     assert '"count": 0' in str(asyncio.run(server.call_tool("jarvis_spoken", {}))) or "'count': 0" in str(asyncio.run(server.call_tool("jarvis_spoken", {})))
+
+
+def _ops_file(tmp_path, ops, busy=True, at=1000.0):
+    p = tmp_path / "pc_operations.json"
+    p.write_text(json.dumps({"at": at, "pid": 1, "busy": busy, "operations": ops, "approvals_pending": 0, "alerts": []}), encoding="utf-8")
+    return p
+
+
+def test_pc_operations_are_read_as_content_free_facts(tmp_path):
+    ops = [{"id": "single:open notepad", "kind": "single:open notepad", "state": "running", "age_s": 4.2},
+           {"id": "task-ab12", "kind": "task", "state": "running", "age_s": 71.9},
+           {"id": "check_pc-1", "kind": "check_pc", "state": "running", "age_s": 300}]
+    got = F.read_pc_operations(_ops_file(tmp_path, ops), now=1005.0)
+    assert got == {"pc_busy": True, "pc_kind": "task", "pc_age_s": 71, "pc_stopping": False, "pc_ops": 3}
+    assert "notepad" not in json.dumps(got), "the id of a single action can hold the task text and is never passed on"
+    only_action = F.read_pc_operations(_ops_file(tmp_path, ops[:1]), now=1005.0)
+    assert only_action["pc_kind"] == "action"
+    stopping = F.read_pc_operations(_ops_file(tmp_path, [{**ops[1], "state": "stopping"}]), now=1005.0)
+    assert stopping["pc_busy"] is True and stopping["pc_stopping"] is True
+
+
+def test_pc_operations_missing_stale_idle_or_broken_all_mean_not_busy(tmp_path):
+    idle = {"pc_busy": False, "pc_kind": "none", "pc_age_s": 0, "pc_stopping": False, "pc_ops": 0}
+    busy_ops = [{"id": "t", "kind": "task", "state": "running", "age_s": 9}]
+    assert F.read_pc_operations(tmp_path / "nope.json", now=1.0) == idle
+    assert F.read_pc_operations(_ops_file(tmp_path, busy_ops), now=1000.0 + F.PC_OPS_STALE_S + 1) == idle, "the plugin stopped refreshing it"
+    assert F.read_pc_operations(_ops_file(tmp_path, [], busy=False), now=1001.0) == idle
+    assert F.read_pc_operations(_ops_file(tmp_path, [{"id": "t", "kind": "task", "state": "finished", "age_s": 9}]), now=1001.0) == idle
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert F.read_pc_operations(bad, now=1.0) == idle
+    bad.write_text('["a list"]', encoding="utf-8")
+    assert F.read_pc_operations(bad, now=1.0) == idle
+
+
+def test_jarvis_status_is_content_free_and_degrades_to_down(tmp_path):
+    import time as _t
+    p = _ops_file(tmp_path, [{"id": "single:send mail to bob@example.com", "kind": "single:send mail to bob@example.com", "state": "running", "age_s": 12}], at=_t.time())
+    c = FakeClient()
+    t = F.FaceTools(client_factory=lambda: c, console=CONSOLE, pc_ops_path=p, unread=lambda: 3)
+    up = asyncio.run(t.status())
+    assert up == {"ok": True, "console_up": True, "kernel_up": True, "kill_switch_on": False, "console_busy": False, "approvals_waiting": 1,
+                  "messages_unread": 3, "pc_busy": True, "pc_kind": "action", "pc_age_s": 12, "pc_stopping": False, "pc_ops": 1}
+    assert "bob" not in json.dumps(up) and "a1" not in json.dumps(up) and "email send" not in json.dumps(up), "no id, title or text"
+    down = asyncio.run(F.FaceTools(client_factory=lambda: FakeClient(fail="console down"), console=CONSOLE, pc_ops_path=tmp_path / "none.json").status())
+    assert down["ok"] is False and down["console_up"] is False and down["kernel_up"] is False and down["pc_busy"] is False
+    assert "console down" not in json.dumps(down)
+
+    class Killed(FakeClient):
+        async def status(self):
+            return {"console": True, "kernel_reachable": True, "kernel_authorized": True, "kill_switch_on": True, "busy": True}
+    k = asyncio.run(F.FaceTools(client_factory=lambda: Killed(), console=CONSOLE, pc_ops_path=tmp_path / "none.json").status())
+    assert k["kill_switch_on"] is True and k["kernel_up"] is True and k["console_busy"] is True
+
+
+def test_jarvis_status_is_a_registered_read_only_tool(tmp_path):
+    t = tools(FakeClient())
+    t.pc_ops_path = tmp_path / "none.json"
+    server = F.build_server(t)
+    listed = {x.name: x for x in asyncio.run(server.list_tools())}
+    assert "jarvis_status" in listed and listed["jarvis_status"].annotations.read_only_hint is True
+    out = str(asyncio.run(server.call_tool("jarvis_status", {})))
+    assert "kernel_up" in out and "messages_unread" in out
 
 
 def test_memory_tools_exist_only_with_a_memory_and_pass_turns_and_days_through():

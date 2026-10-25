@@ -38,6 +38,7 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { toast, Toaster } from 'vue-sonner'
 
+import JarvisHud from './components/hud/JarvisHud.vue'
 import ResizeHandler from './components/ResizeHandler.vue'
 
 import {
@@ -71,6 +72,7 @@ import { electronPluginToolsChanged } from '../shared/eventa/plugin/tools'
 import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
 import { initializeIOTraceHubBridge } from './bridges/io-trace-hub'
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
+import { useJarvisHud } from './composables/use-jarvis-hud'
 import { conversationTurns, createMemorySaver, memoryEnabled } from './composables/use-jarvis-memory'
 import { createSpokenPoller, proactiveEnabled } from './composables/use-jarvis-spoken'
 import { useLanguage } from './composables/use-language'
@@ -373,6 +375,8 @@ const chatStreamView = !fullStageRuntime && (initialRoutePath === '/chat' || isF
   : null
 
 const { restore: restoreLocale } = useLanguage(language, getMainLocale, setLocale)
+// JARVIS HUD (state ring and status strip, main stage window only; setting: Settings > System > General).
+const { visible: hudVisible } = useJarvisHud()
 
 // JARVIS speaks first (main stage window only): the character says short notices from the tool server, never while the owner types
 // or an answer runs. Framed as information, no tools. Off switch: localStorage 'jarvis:proactive' = 'off'.
@@ -477,6 +481,7 @@ onUnmounted(() => {
   </ToasterRoot>
   <ResizeHandler v-if="!isSpotlightWindow && !isFloatingChatWindow && !mainWindowFullscreen" />
   <RouterView />
+  <JarvisHud v-if="hudVisible" />
 </template>
 
 <style>

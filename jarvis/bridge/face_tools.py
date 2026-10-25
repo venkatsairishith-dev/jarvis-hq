@@ -11,6 +11,8 @@ Tools:
   jarvis_task_result     running, done or failed; the reply text only when JARVIS_BRIDGE_SPEAK_REPLY is on (it can be private)
   jarvis_cancel          cancel one command this face handed over (not the kill switch)
   jarvis_waiting         what is waiting for the owner's PIN (no parameters, which can hold private text)
+  jarvis_status          content-free status for the face's HUD: kernel up/down, kill switch, whether a PC task runs (kind and age
+                         only), how many approvals wait and how many plugin messages are unread. No ids, titles or text.
     jarvis_messages        what plugins said on their own (a long task finished, a question for the owner); read once
   <plugin>__<entry>      every entry of the JARVIS plugins in jarvis/plugins (research, deliverables, doc_tools, learn_vault,
                          workbench, local_team, desktop, main_agent, web_search), run by jarvis/pluginapi; --plugins narrows them
@@ -28,7 +30,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +44,7 @@ DEFAULT_PORT = 48970
 HOST = "127.0.0.1"
 SOURCE = "face"
 REPLY_CHARS = 1200
+PC_OPS_STALE_S = 30.0                        # pc_operations.json is rewritten every 5 s while the desktop plugin runs; older = its process is gone
 PLUGINS_NOT_EXPOSED = {"jarvis_bridge"}      # its tasks are the jarvis_* tools above
 INSTRUCTIONS = ("JARVIS's own tools. jarvis_do hands JARVIS a task; the JARVIS kernel decides what may run and asks the owner for "
                 "the PIN when an action is risky, so a task can wait for approval. You cannot approve anything and must never say "
@@ -57,13 +62,62 @@ def _cleaner():
     return clean_result
 
 
+def _pc_kind(kind) -> str:
+    """The registry's operation kind as one fixed word. The kind of a single action carries what it does ("single:open notepad"), so it is never passed on."""
+    k = str(kind or "")
+    if k in ("task", "mission"):
+        return k
+    if k.startswith("single:"):
+        return "action"
+    if k == "agent-step":
+        return "step"
+    return "check" if k else "other"
+
+
+def read_pc_operations(path=None, now=None) -> dict:
+    """What the desktop plugin's registry snapshot (plugins/pc_operations.json) says, as content-free facts.
+
+    Busy exactly while the plugin says so and keeps refreshing the file. A missing, unreadable or stale file is "not busy" (the plugin
+    process is gone or never ran), never an error. Only a count, a kind word and the age leave: not the operation ids (they can hold the
+    task text), not the last note, not the alerts.
+    """
+    if path is None:
+        from jarvis.pluginapi.paths import data_dir
+        path = data_dir() / "plugins" / "pc_operations.json"
+    now = time.time() if now is None else now
+    idle = {"pc_busy": False, "pc_kind": "none", "pc_age_s": 0, "pc_stopping": False, "pc_ops": 0}
+    try:
+        snap = json.loads(path.read_text(encoding="utf-8"))
+        at = float(snap["at"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return idle
+    if now - at > PC_OPS_STALE_S or not snap.get("busy"):
+        return idle
+    ops = [o for o in snap.get("operations") or [] if isinstance(o, dict) and o.get("state") in ("running", "stopping", "stuck")]
+    if not ops:
+        return idle
+    # the one that matters most: a task or mission over a single action over a read-only check; the oldest of those
+    rank = {"task": 0, "mission": 0, "action": 1, "step": 2, "check": 3, "other": 4}
+
+    def age_of(o) -> float:
+        try:
+            return max(0.0, float(o.get("age_s") or 0))
+        except (TypeError, ValueError):
+            return 0.0
+    main = min(ops, key=lambda o: (rank[_pc_kind(o.get("kind"))], -age_of(o)))
+    return {"pc_busy": True, "pc_kind": _pc_kind(main.get("kind")), "pc_age_s": int(age_of(main)),
+            "pc_stopping": any(o.get("state") in ("stopping", "stuck") for o in ops), "pc_ops": len(ops)}
+
+
 class FaceTools:
     """The tools as plain async functions; `build_server` only registers them. `client_factory` returns a JarvisClient."""
 
-    def __init__(self, client_factory=None, console=None, clean=None):
+    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None):
         self.console = console or _load_console_client()
         self.client_factory = client_factory or (lambda: self.console.JarvisClient())
         self.clean = clean or _cleaner()
+        self.pc_ops_path = pc_ops_path
+        self.unread = unread            # () -> int: plugin messages not yet read (build_server sets it when plugins run)
 
     def _out(self, value: dict) -> dict:
         return self.clean(value)
@@ -88,6 +142,28 @@ class FaceTools:
         else:
             message = "JARVIS is ready."
         return self._out({"ready": bool(ready), "busy": s["busy"], "message": message})
+
+    async def status(self) -> dict:
+        """Content-free status for the face's HUD. Booleans, counts, ages and one fixed word: no ids, titles, names or text."""
+        client = self.client_factory()
+        out: dict[str, Any] = {"ok": True, "console_up": False, "kernel_up": False, "kill_switch_on": False, "console_busy": False,
+                               "approvals_waiting": 0, "messages_unread": 0}
+        try:
+            s = await client.status()
+            out.update(console_up=True, kernel_up=bool(s.get("kernel_reachable") and s.get("kernel_authorized")),
+                       kill_switch_on=bool(s.get("kill_switch_on")), console_busy=bool(s.get("busy")))
+            try:
+                out["approvals_waiting"] = len(await client.approvals())
+            except self.console.BridgeError:
+                pass                                                     # the status above stands; the count stays 0
+        except self.console.BridgeError:
+            out["ok"] = False                                            # the console does not answer: down, as far as the face can tell
+        try:
+            out["messages_unread"] = max(0, int(self.unread())) if self.unread else 0
+        except Exception:                                                # noqa: BLE001 - a broken counter must not hide the rest
+            pass
+        out.update(await asyncio.to_thread(read_pc_operations, self.pc_ops_path))
+        return self._out(out)
 
     async def do(self, task: str) -> dict:
         try:
@@ -174,7 +250,14 @@ def build_server(tools: FaceTools, views=None, port: int = DEFAULT_PORT, host=No
     async def jarvis_waiting() -> dict:
         return await tools.waiting()
 
+    @server.tool(name="jarvis_status", description=("Content-free status of JARVIS for the face's own display: whether the kernel is up, the kill switch, whether a "
+                                                    "task is running on the PC (its kind and age, never its text), and how many approvals and plugin messages are waiting."),
+                 annotations=look)
+    async def jarvis_status() -> dict:
+        return await tools.status()
+
     if host is not None:
+        tools.unread = lambda: len(host.outbox.unread())
         from jarvis.pluginapi.host import register_tools
         register_tools(server, host, exclude=PLUGINS_NOT_EXPOSED, clean=tools.clean)
 
