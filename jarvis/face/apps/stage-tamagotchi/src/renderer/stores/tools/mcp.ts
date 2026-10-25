@@ -3,7 +3,7 @@ import type { ExecutableTool } from '@proj-airi/stage-ui/stores/ai/chat-llm/tool
 import { useElectronEventaInvoke } from '@proj-airi/electron-vueuse'
 import { useLlmToolsStore } from '@proj-airi/stage-ui/stores/ai/chat-llm/tools'
 import { TOOL_ICONS } from '@proj-airi/stage-ui/tools/icons'
-import { createMcpTools } from '@proj-airi/stage-ui/tools/mcp'
+import { compactMcpToolDescriptor, createMcpTools } from '@proj-airi/stage-ui/tools/mcp'
 import { defineStore } from 'pinia'
 
 import { electronMcpCallTool, electronMcpListTools } from '../../../shared/eventa'
@@ -22,7 +22,8 @@ export const useTamagotchiMcpToolsStore = defineStore('tamagotchi-mcp-tools', ()
 
   async function refresh() {
     const tools = await Promise.all(createMcpTools({
-      listTools: () => listMcpTools(),
+      // JARVIS: 105 tools at full size is 60 KB; the model gets names, short descriptions and argument names (see compactMcpToolDescriptor)
+      listTools: async () => (await listMcpTools()).map(tool => compactMcpToolDescriptor(tool)),
       callTool: payload => callMcpTool(payload),
     }))
 

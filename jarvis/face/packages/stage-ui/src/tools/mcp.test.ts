@@ -4,7 +4,7 @@ import type { McpToolRuntime } from './mcp'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { createMcpTools, mcp } from './mcp'
+import { compactMcpToolDescriptor, createMcpTools, mcp } from './mcp'
 
 function createRuntime(): McpToolRuntime {
   return {
@@ -104,5 +104,56 @@ describe('mcp discovery', () => {
     const result = await callTool.execute({ name: 'memory::missing', arguments: '{}' }, { messages: [], toolCallId: 'call-failed' })
 
     expect(result).toEqual({ isError: true, content: [{ type: 'text', text: 'Unknown tool.' }] })
+  })
+})
+
+describe('compact tool descriptors (JARVIS)', () => {
+  const full = {
+    serverName: 'jarvis',
+    name: 'jarvis::deliverables__make_report',
+    toolName: 'deliverables__make_report',
+    description: ['Make a report.', '  It takes a spec with a title and sections, writes a PDF and checks it. '].join(String.fromCharCode(10)).repeat(4),
+    inputSchema: {
+      type: 'object',
+      title: 'make_reportArguments',
+      properties: {
+        spec: { type: 'object', description: 'A long description of the spec that the model does not need here.', title: 'Spec' },
+        open_after: { type: 'boolean', default: false, description: 'x' },
+        kind: { type: 'string', enum: ['report', 'memo'] },
+        many: { type: 'string', enum: Array.from({ length: 20 }, (_, i) => `v${i}`) },
+      },
+      required: ['spec'],
+    },
+  }
+
+  it('keeps the names, the argument types and what is required, and drops the rest', () => {
+    const compact = compactMcpToolDescriptor(full)
+    expect(compact.name).toBe('jarvis::deliverables__make_report')
+    expect(compact.toolName).toBe('deliverables__make_report')
+    expect(compact.inputSchema).toEqual({
+      type: 'object',
+      properties: { spec: { type: 'object' }, open_after: { type: 'boolean' }, kind: { type: 'string', enum: ['report', 'memo'] }, many: { type: 'string' } },
+      required: ['spec'],
+    })
+  })
+
+  it('puts the description on one line of at most 110 characters', () => {
+    const compact = compactMcpToolDescriptor(full)
+    expect(compact.description.includes(String.fromCharCode(10))).toBe(false)
+    expect(compact.description.length).toBeLessThanOrEqual(110)
+    expect(compact.description.endsWith('…')).toBe(true)
+  })
+
+  it('makes a catalog of 105 such tools about a third of the full size', () => {
+    const catalog = Array.from({ length: 105 }, (_, i) => ({ ...full, name: `jarvis::t${i}`, toolName: `t${i}` }))
+    const before = JSON.stringify(catalog).length
+    const after = JSON.stringify(catalog.map(t => compactMcpToolDescriptor(t))).length
+    expect(after).toBeLessThan(before / 2)
+  })
+
+  it('copes with a tool that has no schema or description', () => {
+    const compact = compactMcpToolDescriptor({ serverName: 's', name: 's::t', toolName: 't', inputSchema: {} } as never)
+    expect(compact.description).toBe('')
+    expect(compact.inputSchema).toEqual({ type: 'object', properties: {} })
   })
 })

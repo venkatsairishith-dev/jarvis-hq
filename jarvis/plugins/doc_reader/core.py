@@ -383,3 +383,121 @@ def read_document(path_str: Any, max_pages: Any = None, *, transcribe: Transcrib
     if sentence:
         out["notes"] = [sentence] + notes
     return out
+
+
+# ---------------------------------------------------------------- the total of an invoice, found here and shown on screen
+# Asked "what is the total?" the model must not need the page text (it stays on this PC unless the owner allows screen text). So the reader finds the
+# total itself, with fixed rules over the cleaned page text, draws it on a small card in the deliverables folder (the face's Preview panel opens it) and
+# tells the model only THAT it is on screen. Never the amount, never any other value of the page.
+TOTAL_LABELS = (          # (priority, label pattern): the highest priority found wins; the last one on the last page among equals
+    (5, r"grand\s+total"),
+    (4, r"total\s+(?:amount\s+)?due|amount\s+due|balance\s+due|total\s+payable|amount\s+payable|net\s+payable|pay\s+this\s+amount"),
+    (3, r"invoice\s+total|total\s+amount|total\s+invoice|total\s+to\s+pay|total\s+charges?"),
+    (2, r"total"),
+)
+NOT_A_TOTAL = re.compile(r"(?i)sub\s*-?\s*total|total\s+(?:before|excl|exclud|ex\b|net\b)|total\s+(?:tax|vat|gst|discount|qty|quantity|items?|weight|hours?)|tax\s+total|total\s+savings|previous\s+balance")
+AMOUNT = re.compile(r"(?<![\w.,])(?:(?P<pre>[$€£₹¥]|USD|EUR|GBP|INR|Rs\.?)\s*)?(?P<num>\d{1,3}(?:[ ,.]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?:\s*(?P<post>USD|EUR|GBP|INR|Rs\.?|[$€£₹¥]))?(?![\w%])")
+CURRENCY_WORDS = {"$": "USD", "€": "EUR", "£": "GBP", "₹": "INR", "¥": "JPY", "rs": "INR", "rs.": "INR"}
+
+
+def _table_text(page: str) -> str:
+    """A page the model returned as an HTML table, as plain lines: cells joined by ' | ', one line per row, no tags."""
+    page = re.sub(r"(?i)</t[dh]>\s*", " | ", page)
+    page = re.sub(r"(?i)</tr>|<br\s*/?>|</p>|</div>", "\n", page)
+    page = re.sub(r"<[^>\n]{1,200}>", " ", page)
+    return page.replace("&amp;", "&").replace("&nbsp;", " ")
+
+
+def _normalise_number(raw: str) -> str | None:
+    """'1,234.56' / '1.234,56' / '1 234,56' / '325.89' -> '1234.56'; None when it is not a plain amount."""
+    s = raw.strip()
+    if not re.fullmatch(r"\d[\d ,.]*", s):
+        return None
+    seps = [m.start() for m in re.finditer(r"[,.]", s)]
+    if not seps:
+        return s.replace(" ", "")
+    last = seps[-1]
+    tail = s[last + 1:]
+    if len(tail) in (1, 2):                                   # the last separator is the decimal point
+        whole, frac = s[:last], tail
+    else:                                                     # three digits after it: a thousands separator, no fraction
+        whole, frac = s, ""
+    whole = re.sub(r"[ ,.]", "", whole)
+    return f"{whole}.{frac}" if frac else whole
+
+
+def find_total(page_texts: list[str]) -> dict[str, str] | None:
+    """The invoice total in the cleaned page texts: {"label", "amount", "currency"} or None. Only a line that names a total gives an amount; a sub-total, a tax
+    line, a percentage or a quantity never does. Several candidates: the strongest label, then the last one in the document."""
+    best: tuple[int, int, int, dict[str, str]] | None = None
+    for page_no, page in enumerate(page_texts):
+        for line_no, line in enumerate(_table_text(page).splitlines()):
+            line = line.strip(" |\t")
+            if not line or NOT_A_TOTAL.search(line):
+                continue
+            for priority, pattern in TOTAL_LABELS:
+                m = re.search(r"(?i)\b(" + pattern + r")\b[^\d$€£₹¥\n]{0,25}", line)
+                if not m:
+                    continue
+                rest = line[m.end(1):]
+                amounts = list(AMOUNT.finditer(rest))
+                if not amounts:
+                    break
+                a = amounts[-1] if "|" in rest else amounts[0]          # in a table row the amount is the last cell, in a sentence the first number
+                number = _normalise_number(a.group("num"))
+                if number is None or float(number) <= 0:
+                    break
+                cur_raw = (a.group("pre") or a.group("post") or "").strip().lower()
+                currency = CURRENCY_WORDS.get(cur_raw, cur_raw.upper())
+                label = re.sub(r"\s+", " ", m.group(1)).strip()
+                cand = (priority, page_no, line_no, {"label": label[:1].upper() + label[1:], "amount": number, "currency": currency})
+                if best is None or cand[:3] >= best[:3]:
+                    best = cand
+                break
+    return best[3] if best else None
+
+
+def total_card_png(total: dict[str, str]) -> bytes:
+    """A small picture of the total for the face's Preview panel (drawn here, no network)."""
+    from PIL import Image, ImageDraw, ImageFont
+    fonts = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+
+    def font(name: str, size: int):
+        for candidate in (os.path.join(fonts, name), name, "DejaVuSans.ttf"):
+            try:
+                return ImageFont.truetype(candidate, size)
+            except OSError:
+                continue
+        return ImageFont.load_default()
+    img = Image.new("RGB", (720, 300), "#ffffff")
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, 719, 12], fill="#2563eb")
+    d.text((40, 40), "Invoice total", font=font("arial.ttf", 30), fill="#475569")
+    d.text((40, 100), f"{total['amount']} {total['currency']}".strip(), font=font("arialbd.ttf", 84), fill="#0f172a")
+    d.text((40, 220), f"from the line \"{total['label']}\"", font=font("arial.ttf", 26), fill="#475569")
+    d.text((40, 258), "Read on this PC. Nothing was sent to any model.", font=font("arial.ttf", 20), fill="#94a3b8")
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _deliverables_root() -> Path:
+    try:
+        from jarvis.plugins.deliverables import tools
+        return Path(tools.OUT_ROOT)
+    except Exception:                                          # noqa: BLE001 - the same setting the deliverables plugin reads
+        return Path(os.environ.get("DELIVERABLES_OUT_DIR", r"D:\jarvis\outputs\deliverables"))
+
+
+def write_total_card(total: dict[str, str], out_root: "str | os.PathLike | None" = None, clock: Callable[[], float] = time.time) -> Path:
+    """Put the card in a new folder of the deliverables folder, the way the deliverables plugin leaves a finished piece (picture, spec.json with the title, qa.json
+    last), so the Preview panel lists it and opens it by itself. Returns the folder."""
+    root = Path(out_root) if out_root else _deliverables_root()
+    folder = root / (time.strftime("%Y%m%d-%H%M%S", time.localtime(clock())) + "-invoice-total")
+    folder.mkdir(parents=True, exist_ok=False)
+    png = folder / "invoice-total.png"
+    png.write_bytes(total_card_png(total))
+    (folder / "spec.json").write_text(json.dumps({"title": "Invoice total"}), encoding="utf-8")
+    (folder / "qa.json").write_text(json.dumps({"file": str(png), "folder": str(folder), "kind": "image",
+                                                "qa": {"passed": True, "checks": {"drawn_locally": True}, "warnings": [], "counts": {}}}), encoding="utf-8")
+    return folder
