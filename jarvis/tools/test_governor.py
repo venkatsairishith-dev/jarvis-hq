@@ -198,7 +198,7 @@ def test_every_jarvis_process_gets_low_priority_ecoqos_and_the_job():
     limits, name = win.jobs[0]
     assert len(win.jobs) == 1 and name.startswith("Local\\")
     assert limits.cpu_percent == 20.0 and limits.kill_on_close is False and limits.throttle         # closing the governor's handle must not kill JARVIS
-    assert limits.job_memory_bytes == BUD.job_mem_bytes > BUD.ram_mb * 1024 * 1024               # backstop a little above the RAM budget
+    assert not limits.job_memory_bytes                                                            # no hard memory ceiling by default
     assert e.apply({300: "face", 431: "llama-server"})["new"] == 0                                # each pid once
     assert sum(1 for k, _ in logs if k == "enforce") == 3
 

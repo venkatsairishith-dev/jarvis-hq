@@ -28,7 +28,9 @@ def test_the_default_numbers_are_the_owners():
     assert b.ram_mb == 6554 and abs(b.ram_mb - 0.2 * b.machine_ram_mb) < 1      # 20% of 32 GB = 6.4 GB
     assert b.threads == 3 and b.threads / b.machine_threads * 100 <= b.cpu_pct   # 3 of 16 threads = 18.75%
     assert abs(b.cpu_threads_equiv - 3.2) < 1e-9
-    assert b.job_mem_bytes == int(6554 * 1.25 * 1024 * 1024) and b.job_mem_bytes > b.ram_mb * 1024 * 1024
+    assert b.job_mem_bytes == 0                                  # the hard committed-memory ceiling is OFF until measured live
+    on = budget.Budget(job_mem_factor=1.25)
+    assert on.job_mem_bytes == int(6554 * 1.25 * 1024 * 1024) > on.ram_mb * 1024 * 1024
 
 
 def test_overrides_env_beats_json_beats_defaults(tmp_path):

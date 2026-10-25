@@ -35,7 +35,7 @@ class Budget:
     threads: int = 3                # llama-server -t (3 of 16 threads is 18.75%, just under cpu_pct)
     window_s: int = 60              # averaging window for the CPU verdict
     over_grace_s: int = 20          # the governor acts when over budget for longer than this
-    job_mem_factor: float = 1.25    # Job Object memory backstop = ram_mb * factor (committed bytes; a GUESS to verify live)
+    job_mem_factor: float = 0.0     # Job Object hard memory ceiling = ram_mb * factor (committed bytes). OFF (0) until measured live: committed != working set and a hard cap can kill Electron or a model load. Set e.g. 1.5 to turn on.
     machine_threads: int = MACHINE_THREADS
     machine_ram_mb: int = MACHINE_RAM_MB
     notes: tuple = field(default=(), compare=False)   # problems found in the overrides
