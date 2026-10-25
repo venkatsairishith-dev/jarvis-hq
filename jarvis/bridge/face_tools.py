@@ -12,6 +12,9 @@ Tools:
   jarvis_cancel          cancel one command this face handed over (not the kill switch)
   jarvis_waiting         what is waiting for the owner's PIN (no parameters, which can hold private text)
     jarvis_messages        what plugins said on their own (a long task finished, a question for the owner); read once
+    jarvis_show            put one of the things JARVIS made (deck, report, image, note) in the face's Preview panel ("show me the Q3 deck")
+    jarvis_outputs, jarvis_output_get, jarvis_preview_wanted
+                           the Preview panel's own reads of the deliverables folder (jarvis/bridge/output_preview.py); not for the chat model
   <plugin>__<entry>      every entry of the JARVIS plugins in jarvis/plugins (research, deliverables, doc_tools, learn_vault,
                          workbench, local_team, desktop, main_agent, web_search), run by jarvis/pluginapi; --plugins narrows them
   plus the read-only views of jarvis/bridge/readonly_mcp.py when --data is given
@@ -143,7 +146,7 @@ class FaceTools:
                           "message": "Only the owner approves, with the PIN in the JARVIS console."})
 
 
-def build_server(tools: FaceTools, views=None, port: int = DEFAULT_PORT, host=None, spoken=None, memory=None):
+def build_server(tools: FaceTools, views=None, port: int = DEFAULT_PORT, host=None, spoken=None, memory=None, outputs=None):
     from mcp.server.mcpserver import MCPServer
     from mcp_types import ToolAnnotations
 
@@ -207,6 +210,35 @@ def build_server(tools: FaceTools, views=None, port: int = DEFAULT_PORT, host=No
         async def jarvis_remember_chat(turns: list[dict]) -> dict:
             return tools._out(await asyncio.to_thread(memory.remember, turns))
 
+    if outputs is not None:
+        # "Show me X": the chat model calls jarvis_show, which queues one item and answers in a sentence. The face's Preview panel then
+        # lists, opens and pages through the deliverables folder with the three panel tools. Those return file content for the panel
+        # (not cleaned like plugin results, which would hide the names and text it must show), and only from inside the deliverables
+        # folder, so their descriptions tell the model to leave them alone.
+        @server.tool(name="jarvis_show", description=("Show the owner something JARVIS made (a deck, a PDF report, an image, a note) in the face's Preview "
+                                                     "panel. Pass the owner's words, for example 'the latest deck' or 'the Hyderabad flights report'. Returns one "
+                                                     "sentence and no content."),
+                     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False))
+        async def jarvis_show(what: str = "latest") -> dict:
+            return tools._out(await asyncio.to_thread(outputs.show, str(what)[:200]))
+
+        @server.tool(name="jarvis_outputs", description=("FOR THE FACE'S PREVIEW PANEL ONLY, do not call: the newest things JARVIS made, with title, kind, size "
+                                                        "and whether their checks passed. Use jarvis_show to show the owner something."), annotations=look)
+        async def jarvis_outputs(limit: int = 12) -> dict:
+            return await asyncio.to_thread(outputs.list, limit)
+
+        @server.tool(name="jarvis_output_get", description=("FOR THE FACE'S PREVIEW PANEL ONLY, do not call: one thing JARVIS made, ready to display (image, page, "
+                                                           "text or HTML source), by id from jarvis_outputs. Only files inside the deliverables folder."), annotations=look)
+        async def jarvis_output_get(id: str, page: int = 0, thumbs: bool = False) -> dict:
+            return await asyncio.to_thread(outputs.get, id, page, bool(thumbs))
+
+        @server.tool(name="jarvis_preview_wanted", description=("FOR THE FACE'S PREVIEW PANEL ONLY, do not call: ids that jarvis_show queued for the panel, and "
+                                                               "deliverables that just finished; each is returned once."),
+                     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False))
+        async def jarvis_preview_wanted() -> dict:
+            ids = outputs.take_wanted()
+            return {"count": len(ids), "ids": ids}
+
     if views is not None:
         from jarvis.bridge.readonly_mcp import add_read_tools
         add_read_tools(server, views)
@@ -237,7 +269,11 @@ async def _serve(args, views) -> None:
         if args.vault:
             from jarvis.muse.chat_memory import Memory
             memory = Memory(args.vault)
-        server = build_server(FaceTools(), views, args.port, host, spoken, memory)
+        outputs = None
+        if not args.no_preview:
+            from jarvis.bridge.output_preview import OutputPreview
+            outputs = OutputPreview(args.outputs)
+        server = build_server(FaceTools(), views, args.port, host, spoken, memory, outputs)
         await server.run_streamable_http_async(host=HOST, port=args.port, transport_security=transport_security(args.port))
     finally:
         if host is not None:
@@ -250,6 +286,8 @@ def main(argv=None) -> int:
     ap.add_argument("--plugins", default="all", help="all (default), none, or a comma separated list of plugin ids")
     ap.add_argument("--data", help="folder for the read-only views (tasks.db, inbox.jsonl, watches.json, ideas.json)")
     ap.add_argument("--vault")
+    ap.add_argument("--outputs", help="the deliverables folder the Preview panel may show (default: the deliverables plugin's output folder)")
+    ap.add_argument("--no-preview", action="store_true", help="do not offer the Preview panel's tools (jarvis_show and friends)")
     ap.add_argument("--no-heartbeat", action="store_true", help="do not let JARVIS speak first (jarvis_spoken)")
     args = ap.parse_args(argv)
     import logging

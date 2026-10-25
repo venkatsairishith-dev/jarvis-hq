@@ -38,6 +38,7 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { toast, Toaster } from 'vue-sonner'
 
+import PreviewHost from './components/PreviewHost.vue'
 import ResizeHandler from './components/ResizeHandler.vue'
 
 import {
@@ -477,6 +478,7 @@ onUnmounted(() => {
   </ToasterRoot>
   <ResizeHandler v-if="!isSpotlightWindow && !isFloatingChatWindow && !mainWindowFullscreen" />
   <RouterView />
+  <PreviewHost v-if="fullStageRuntime" />
 </template>
 
 <style>
