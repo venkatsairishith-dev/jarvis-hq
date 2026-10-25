@@ -56,9 +56,15 @@ function isListed(host: string, allowHosts: string[]): boolean {
   })
 }
 
+/**
+ * Hosts the face's own weather card needs (owner, 2026-10-25: "tell me the weather in Paris" failed because this lock refused them). A request carries
+ * only a city name and coordinates, no key and nothing private. Source: https://open-meteo.com/en/docs
+ */
+export const BUILT_IN_ALLOW_HOSTS = ['api.open-meteo.com', 'geocoding-api.open-meteo.com']
+
 /** True when the face may talk to `host` (a name or an address, with or without IPv6 brackets). */
 export function isAllowedHost(host: string, allowHosts: string[] = parseAllowHosts(env.JARVIS_FACE_ALLOW_HOSTS)): boolean {
-  return isLoopback(host) || isTailnet(host) || isListed(host, allowHosts)
+  return isLoopback(host) || isTailnet(host) || isListed(host, BUILT_IN_ALLOW_HOSTS) || isListed(host, allowHosts)
 }
 
 /** True when the face may open `url`. A URL that cannot be parsed is refused. */

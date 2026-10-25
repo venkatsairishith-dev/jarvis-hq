@@ -159,6 +159,10 @@ def _brief(res: dict) -> dict:
     for k in ("approval_id", "how", "reason", "level"):
         if res.get(k):
             out[k] = res[k]
+    if out["ok"] and r.get("verified") == "unconfirmed":
+        # owner, 2026-10-25: "Calculator is open on screen" was said while it was not. A launch whose window was not seen is not a success the model may report.
+        out["ok"] = False
+        out["error"] = str(r.get("note") or "launched, but no matching window appeared in time; it is NOT confirmed open")
     return screen_text.sanitize_meta(out)
 
 
@@ -537,7 +541,7 @@ class DesktopPlugin(PluginBase):
             "target": {"type": "string", "description": "Start-menu app name for open_app; otherwise 'process|element' or 'process|x,y'"},
             "text": {"type": "string", "description": "Text to type, the key (e.g. ctrl+s, enter, playpause), or up/down"},
             "approval_id": {"type": "string"}}, "required": ["action", "target"]},
-        timeout=360, llm_result_fields=["state", "ok", "opened", "done", "verified", "window", "error", "approval_id", "how"],
+        timeout=360, llm_result_fields=["state", "ok", "opened", "done", "verified", "window", "note", "error", "approval_id", "how"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def run_pc_action(self, action: str = "", target: str = "", text: str = "", approval_id: str = "", **_):
