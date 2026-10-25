@@ -313,3 +313,22 @@ Next step (a measurement, nothing adopted): run LFM2.5-8B-A1B and Granite-4.0-H-
 Design note: JARVIS's safety is in the kernel's policy, approvals and kill switch (D27), not in the model's refusals, so a strictly uncensored LOCAL model fits. It also follows injected instructions more readily than an aligned one, so the kernel gate and the untrusted-text rules stay exactly as they are, and an uncensored model gets no new authority (it still only proposes; the kernel decides).
 
 Our own check before adopting anything: measure refusals ourselves on a public refusal set (keyword match on the answer, outputs discarded), run the 70 PC-decision cases and the tool-call cases against the ORIGINAL and the uncensored variant of the same model, and record RAM, CPU and speed.
+
+**Uncensored MoE models for this laptop: detailed list with ESTIMATED speed (2026-10-25; owner: "detail list of models with uncensored model and actual tokens on the laptop, guess it, mainly MoE only").** Sizes and licences are from the Hugging Face API and cards read today; refusal and KL numbers are the authors' own. **Speeds are estimates, not measurements.**
+
+How the speed is guessed: decoding on this laptop (i9-9980HK, dual-channel DDR4, Radeon Pro 5500M 4 GB) is limited by memory bandwidth, so tokens/s is roughly 23 GB/s divided by the bytes of ACTIVE weights read per token (about 0.6 GB per billion active parameters at Q4_K_M). The one measured anchor in this repo: Ling-3.0-tiny (1.3B active) runs 31 tokens/s with 16 expert layers on the CPU and 27 tokens/s with all experts on the CPU (llama-server, 2026-10-15). With the processor limited to 4 of 8 threads expect about 75-85% of the full-thread speed. Prompt processing (prefill) is guessed at 100-250 tokens/s. The laptop session replaces every guess with a measurement.
+
+| Model (uncensored variant) | Total / active | Q4_K_M file | RAM while loaded | Guess: tokens/s, 8 threads (4 threads) | Published refusals / drift | Licence | JARVIS fit |
+|---|---|---|---|---|---|---|---|
+| Ling-3.0-tiny-heretic (mradermacher quants of trohrbaugh) | 7.9B / 1.3B | 4.82 GB | ~5.5 GB | 27-31 (20-24) | 97 -> 1/100, KL 0.0381 | MIT | Lead: same speed as the Ling already installed, strict uncensored, tiny drift |
+| Ling-3.0-tiny-Uncensored-Abliterated (Securelayer7) | 7.9B / 1.3B | 4.82 GB | ~5.5 GB | 27-31 (20-24) | 35 -> 8/100, KL 0.046 | MIT | Fallback: weaker removal |
+| LFM2.5-8B-A1B-Uncensored-Gaston | 8.5B / 1.5B | 5.16 GB | ~5.8 GB | 22-28 (17-22) | 1/100 AdvBench (author's claim) | LFM 1.0 | Tool-call template bug in llama.cpp (PR 23826) |
+| LFM2.5-8B-A1B-Hermes-Agentic-Coder-Abliterated-v3 (DuoNeural) | 8.5B / 1.5B | 5.16 GB | ~5.8 GB | 22-28 (17-22) | no refusal number; its own table covers tool-call scenarios | Apache-2.0 (card) | Tool-schema tuned, to test; code/agent bias |
+| Huihui-granite-4.0-h-tiny-abliterated | 6.9B / 1.0B | 4.23 GB | ~4.8 GB | 28-38 (21-29) | none published | Apache-2.0 | Lightest, 12 languages, native tool calls; Mamba kernels on CPU may be slower than the formula |
+| Huihui-MoE-5B-A1.7B-abliterated | 5.2B / 1.7B | 3.20 GB | ~3.8 GB | 20-25 (15-19) | none published | Apache-2.0 | 2025 Qwen3-based merge, weak quality |
+| Huihui-MoE-1.2B-A0.6B | 1.3B / 0.6B | 0.80 GB | ~1.3 GB | 50-70 (40-55) | none published | Apache-2.0 | Tiny router/helper only |
+| Huihui-Ling-mini-2.0-abliterated | 16.3B / 1.4B | 9.91 GB | ~10.5 GB | 24-29 (18-22) | none published | Apache-2.0 | Disk too tight (8 GB free) |
+| LFM2.5-24B-A2B Uncensored / Heretic | 24.0B / 2.45B | 14.5-15.4 GB | ~16 GB | 11-15 (8-11) | EN 96.3 -> 1.2% (AtomicChat), MMLU -0.62 (OS-Software) | LFM 1.0 | Best on paper; no disk, heavy RAM: skip |
+| gpt-oss-20b-abliterated | 20.9B / 3.6B | 15.8 GB | ~16 GB | 8-11 (6-8) | none published | Apache-2.0 | No disk, heavy: skip |
+
+Left out on purpose: Marco-Nano and EuroMoE (not uncensored), Qwen3.5-35B-A3B and SmallThinker-21B-A3B (3B active and 20 GB+ files), Ling-3.0-flash (127B).
