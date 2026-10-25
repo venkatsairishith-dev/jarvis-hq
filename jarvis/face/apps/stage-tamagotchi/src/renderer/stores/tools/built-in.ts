@@ -12,13 +12,14 @@ import { widgetsTools } from './builtin/widgets'
 /** JARVIS: AIRI's computer use is removed; actions on the PC go through the JARVIS tool server and the kernel. */
 export const computerUseToolReferences = [] satisfies ChatToolReference[]
 
+// JARVIS: a chat request carries the weather tool only. `stage_widgets` (2.5 KB) and `image_journal` (1.8 KB) stay registered
+// for an explicit selection, but no JARVIS goal needs them and each cost bytes in every request (2026-10-25: the request was
+// 40 KB). The forecast card in the chat is drawn from the `get_weather` result itself (`InteractiveArea.vue`, toolCallWidgets).
 export const widgetToolReferences = [
-  { name: 'stage_widgets' },
   { name: 'get_weather' },
 ] satisfies ChatToolReference[]
 
 export const artistryToolReferences = [
-  { name: 'image_journal' },
   ...widgetToolReferences,
 ] satisfies ChatToolReference[]
 

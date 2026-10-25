@@ -30,16 +30,25 @@ export interface ResolveLlmToolsOptions {
    */
   builtInTools?: ToolSource
   /**
+   * JARVIS: offers AIRI's own module tools when `debugTools` or `sparkCommandTools` are not injected. Off by default.
+   * `builtIn_emitSparkCommand` (6 KB) sends a command to AIRI modules that JARVIS does not run, and models picked it for
+   * goals that are JARVIS tasks (2026-10-25, MiniMax). The debug random-number tool cost another 0.9 KB. Neither is in a
+   * JARVIS request unless a caller sets this.
+   *
+   * @default false
+   */
+  airiModuleTools?: boolean
+  /**
    * Debug tools exposed to the LLM.
    *
-   * @default debug()
+   * @default debug() when {@link airiModuleTools} is on, otherwise none
    */
   debugTools?: ToolSource
   /**
    * Spark command tools. Supplying this also avoids creating the mods server
    * channel store.
    *
-   * @default createSparkCommandTool(...)
+   * @default createSparkCommandTool(...) when {@link airiModuleTools} is on, otherwise none
    */
   sparkCommandTools?: ToolSource
   /**
@@ -104,9 +113,11 @@ async function resolveActiveTools(activeTools?: Tool[]): Promise<Tool[]> {
   return useLlmToolsStore().activeTools
 }
 
-async function resolveSparkCommandTools(sparkCommandTools?: ToolSource): Promise<Tool[]> {
+async function resolveSparkCommandTools(sparkCommandTools: ToolSource | undefined, airiModuleTools: boolean): Promise<Tool[]> {
   if (sparkCommandTools != null)
     return resolveToolSource(sparkCommandTools)
+  if (!airiModuleTools)
+    return []
 
   const modsServerChannelStore = useModsServerChannelStore()
   const sendSparkCommand = (command: WebSocketEvents['spark:command']) => {
@@ -161,8 +172,8 @@ export async function resolveLlmTools(options: ResolveLlmToolsOptions = {}): Pro
     customTools,
   ] = await Promise.all([
     resolveToolSource(options.builtInTools ?? mcp),
-    resolveToolSource(options.debugTools ?? debug),
-    resolveSparkCommandTools(options.sparkCommandTools),
+    resolveToolSource(options.debugTools ?? (options.airiModuleTools ? debug : [])),
+    resolveSparkCommandTools(options.sparkCommandTools, options.airiModuleTools === true),
     resolveWebSearchTools(options.webSearchTools),
     resolveCustomTools(options.customTools),
   ])

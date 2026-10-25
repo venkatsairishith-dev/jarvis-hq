@@ -209,6 +209,7 @@ describe('resolveLlmTools', () => {
         webSearchTools: [],
         customTools: [],
         activeTools: [],
+        airiModuleTools: true,
       })
       const tool = tools.find(candidate => toolNameFrom(candidate) === 'builtIn_emitSparkCommand')
       if (!tool)
@@ -216,6 +217,14 @@ describe('resolveLlmTools', () => {
 
       return tool
     }
+
+    // JARVIS: neither AIRI's spark command tool nor its debug tool is in a request unless a caller asks for them.
+    it('does not offer the spark command or debug tools by default', async () => {
+      const tools = await resolveLlmTools({ builtInTools: [], webSearchTools: [], customTools: [], activeTools: [] })
+
+      expect(tools.map(toolNameFrom)).toEqual([])
+      expect(useModsServerChannelStoreMock).not.toHaveBeenCalled()
+    })
 
     it('omits destinations from the emitted event so the server broadcasts', async () => {
       const tool = await resolveSparkCommandTool()

@@ -221,7 +221,8 @@ describe('isToolRelatedError', () => {
     const firstCallTools = streamTextMock.mock.calls[0]?.[0]?.tools
     expect(Array.isArray(firstCallTools)).toBe(true)
     expect(mcpMock).toHaveBeenCalledTimes(1)
-    expect(debugMock).toHaveBeenCalledTimes(1)
+    // JARVIS: the debug tools are not offered unless a caller passes them.
+    expect(debugMock).not.toHaveBeenCalled()
     expect(firstCallTools?.map(toolNameFrom)).toContain('custom-tool')
     expect(firstCallTools?.map(toolNameFrom)).toContain('runtime_play_chess_match')
 
@@ -310,7 +311,8 @@ describe('isToolRelatedError', () => {
     })
 
     expect(streamTextMock.mock.calls[0]?.[0]?.tools?.map(toolNameFrom)).toContain('custom-tool')
-    expect(streamTextMock.mock.calls[0]?.[0]?.tools?.map(toolNameFrom)).toContain('builtIn_emitSparkCommand')
+    // JARVIS: AIRI's spark command tool is not offered.
+    expect(streamTextMock.mock.calls[0]?.[0]?.tools?.map(toolNameFrom)).not.toContain('builtIn_emitSparkCommand')
   })
 
   it('merges runtime-registered tools from the llm-tools store into the builtin tool resolver', async () => {

@@ -10,6 +10,7 @@ import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import pytest
 
@@ -455,6 +456,12 @@ def test_the_chat_list_has_only_what_a_chat_goal_needs_and_is_under_12_kb(chat_s
     assert "desktop__do_goal" in names and "PIN" in next(t for t in listed if t.name == "desktop__do_goal").description
     assert all(t.annotations is None and t.output_schema is None for t in listed), "no annotations or output schemas in the compact list"
     assert all('"title"' not in json.dumps(t.input_schema) for t in listed), "no pydantic titles"
+
+
+def test_the_face_request_budget_test_uses_the_current_chat_tool_names():
+    """The face's request-size test (stage-ui `request-budget.test.ts`) replays a snapshot of this list; it must name the same tools."""
+    snapshot = Path(__file__).resolve().parents[1] / "face" / "packages" / "stage-ui" / "src" / "stores" / "chat" / "request-budget.mcp-tools.json"
+    assert {t["name"] for t in json.loads(snapshot.read_text(encoding="utf-8"))} == set(F.CHAT_TOOLS), "regenerate the snapshot (see the comment in request-budget.test.ts)"
 
 
 def test_what_a_call_needs_survives_the_shortening(chat_stack):
