@@ -95,7 +95,11 @@ def _split(target: str):
 
 
 def _run(script, env):
-    from . import runtime                                  # stoppable: a cancelled job kills this PowerShell
+    from . import runtime, windowpick                      # stoppable: a cancelled job kills this PowerShell
+    env = dict(env)
+    if env.get("JARVIS_UI_PROC") and "JARVIS_UI_HWND" not in env:
+        # which window: one shared rule (windowpick.py); a read may take the front or newest of several, a change never guesses
+        env.update(windowpick.pick_env(env["JARVIS_UI_PROC"], mutating=script not in READ_ONLY))     # raises SeveralWindowsSayWhich for an ambiguous change
     r = runtime.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], timeout=30, env={**runtime.safe_environ(), **env})
     if r.returncode:
         # Only fixed reason codes raised by our own scripts are passed on; other error text could contain screen content.
@@ -111,7 +115,9 @@ def launch(target, params):
     exe = LAUNCH_ALLOWLIST.get(target.strip().lower())
     if not exe:
         raise ValueError("app not in the launch allowlist")
-    subprocess.Popen([exe], close_fds=True)
+    from . import windowpick
+    # remember the window this launch creates: it is the only one of its kind JARVIS may later type into when the owner has others open
+    windowpick.launch_and_record(os.path.splitext(exe)[0], lambda: subprocess.Popen([exe], close_fds=True))
 
 
 def click(target, params):
@@ -296,7 +302,9 @@ def _window_state(op):
 # The window a "process|..." target means. A modern (UWP) app's window belongs to ApplicationFrameHost, not to the app's
 # own process, so when no process of that name owns a window, a frame window titled with the name is used (one only).
 PICK = r"""
-$p = Get-Process -Name $env:JARVIS_UI_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if ($env:JARVIS_UI_HWND) { $p = [pscustomobject]@{ Id = [int]$env:JARVIS_UI_PID; MainWindowHandle = [IntPtr][int64]$env:JARVIS_UI_HWND } }   # chosen by windowpick.py
+if (-not $p) {
+  $p = Get-Process -Name $env:JARVIS_UI_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1 }
 if (-not $p) {
   Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
   $AE = [System.Windows.Automation.AutomationElement]
@@ -310,6 +318,7 @@ if (-not $p) { throw 'no window' }
 """
 FIND, CLICK, TYPE, READBACK, FOCUS, KEY, SCROLL, CLICK_AT, WINDOW_STATE = (
     s.replace("__PICK__", PICK) for s in (FIND, CLICK, TYPE, READBACK, FOCUS, KEY, SCROLL, CLICK_AT, WINDOW_STATE))
+READ_ONLY = {FIND, READBACK}                  # every other script changes something (focus included: a focus on a guessed window would aim the next keystroke)
 
 BACKEND = {"launch": launch, "click": click, "type": type_text, "focus": focus, "key": key, "scroll": scroll, "click_at": click_at,
            "minimize": _window_state("minimize"), "maximize": _window_state("maximize"), "restore": _window_state("restore")}

@@ -89,7 +89,9 @@ def capture(proc: str, scale: int = 2) -> tuple[str, dict]:
     sweep_local()
     os.makedirs(local_result_dir(), exist_ok=True)       # the folder is not made by anything else on a fresh layout: PowerShell's Save then fails ("capture failed")
     path = os.path.join(local_result_dir(), f"window-{secrets.token_hex(4)}.png")
-    r = runtime.powershell(CAPTURE.replace("__PICK__", _pick()), {"JARVIS_UI_PROC": proc, "JARVIS_PNG": path, "JARVIS_SCALE": str(int(scale))}, 30)
+    from . import windowpick                                # a read: the window in front, else the newest of several; never a guess for a change
+    r = runtime.powershell(CAPTURE.replace("__PICK__", _pick()), {"JARVIS_UI_PROC": proc, "JARVIS_PNG": path, "JARVIS_SCALE": str(int(scale)),
+                                                                  **windowpick.pick_env(proc, mutating=False)}, 30)
     if r.returncode or not os.path.isfile(path):
         msg = "no window" if "no window" in (r.stderr or "") else ("window is minimized" if "minimized" in (r.stderr or "") else "capture failed")
         raise VisionError(msg)

@@ -27,6 +27,7 @@ def test_capture_makes_the_local_only_folder_before_the_screenshot_is_saved(tmp_
 
     monkeypatch.setattr(vision.runtime, "powershell", fake_powershell)
     monkeypatch.setattr(vision, "_pick", lambda: "")
+    monkeypatch.setattr("jarvis_node.windowpick.pick_env", lambda proc, mutating: {})     # the window choice has its own tests (test_windowpick.py)
     path, size = vision.capture("notepad")
     assert seen["dir_existed"] and os.path.isfile(path) and size["width"] == 10
     assert os.path.dirname(path) == str(tmp_path / "outputs" / "local-only") or os.path.realpath(os.path.dirname(path)) == os.path.realpath(tmp_path / "outputs" / "local-only")
