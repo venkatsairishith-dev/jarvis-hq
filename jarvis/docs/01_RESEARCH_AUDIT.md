@@ -332,3 +332,15 @@ How the speed is guessed: decoding on this laptop (i9-9980HK, dual-channel DDR4,
 | gpt-oss-20b-abliterated | 20.9B / 3.6B | 15.8 GB | ~16 GB | 8-11 (6-8) | none published | Apache-2.0 | No disk, heavy: skip |
 
 Left out on purpose: Marco-Nano and EuroMoE (not uncensored), Qwen3.5-35B-A3B and SmallThinker-21B-A3B (3B active and 20 GB+ files), Ling-3.0-flash (127B).
+
+## Footprint budget: custom code against existing projects (2026-10-25, D50)
+
+| Custom code | What it does | Existing project / OS feature used | Why not just that |
+|---|---|---|---|
+| `supervisor/budget.py` | the budget numbers and the D:-only environment in one module | none (plain constants and a function) | a few dozen lines; the point is one source for the scripts, the manifest and the face |
+| `supervisor/jobobject.py` (extended) | CPU rate hard cap, memory ceiling, BELOW_NORMAL, EcoQoS, suspend/resume through ctypes | Windows Job Objects, `SetPriorityClass`, `SetProcessInformation`, `NtSuspendProcess` (the OS's own API); the file already existed (kill-on-close) | psutil can set the priority class but not job limits or EcoQoS; no wrapper library was added for six calls |
+| `tools/footprint.py` | finds JARVIS processes, sums CPU/RAM/GPU/disk against the budget, lists JARVIS files outside D: | psutil (already in agent-venv), PowerShell/CIM `Win32_Process` and the "GPU Process Memory" counters | Task Manager and Resource Monitor show per process, not per JARVIS component or against a budget |
+| `tools/governor.py` | adopts running JARVIS processes into a capped job; the soft ladder (unload, fewer threads, duty-cycle) | llama-swap's `ttl`, unload endpoint and groups (its own); the Job Object above | llama-swap only knows its own models, not the face, node and Python services |
+| `face/.../main/jarvis/storage-lock.ts` | `app.setPath` for userData, sessionData, temp, logs, crashDumps under D: | Electron's `app.setPath` / `--user-data-dir` | one small module so it can be tested without Electron |
+
+Not adopted, not read today: Process Lasso (proprietary), Docker/WSL resource limits (a virtual disk on a drive with 8 GB free).

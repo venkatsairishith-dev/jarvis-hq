@@ -358,6 +358,20 @@ def watchdog():
     check("watchdog: nothing it gave up on", not st.get("gave_up_on"), str(st.get("gave_up_on") or "none"))
 
 
+def footprint():
+    """D50: JARVIS is inside the owner's budget (20% of the laptop, D: only) right now, and the governor that enforces it is running."""
+    from jarvis.tools import footprint as fp
+    rep = fp.report_once(4.0)
+    by = {v["metric"]: v for v in rep["verdicts"]}
+    for metric, label in (("cpu", "CPU"), ("ram", "RAM"), ("vram", "GPU memory")):
+        v = by[metric]
+        check(f"footprint: {label} within the budget", v["status"] in ("OK", "N/A"), f"{v['value']} / {v['limit']} {v['unit']} ({v['status']})")
+    o = by.get("outside_d")
+    check("footprint: no JARVIS file outside D:", bool(o) and o["status"] != "OVER", o["note"] if o else "no scan")
+    gov = any(c["name"] == "governor" for c in rep["components"])
+    check("footprint: the governor is running (priority, EcoQoS, job cap)", gov, "governor.py started by jarvis-start.ps1" if gov else "not running")
+
+
 def jarvis():
     code, h = jget("http://127.0.0.1:8799/api/health", headers=control_auth.headers_for("console"))
     k = (h or {}).get("kernel", {})
@@ -414,6 +428,7 @@ def main() -> int:
         guard("model path", model_path)
     guard("robustness", robustness)
     guard("watchdog", watchdog)
+    guard("footprint", footprint)
     guard("JARVIS", jarvis)
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)} of {len(RESULTS)} checks passed" + (f"; FAILED: {failed}" if failed else ""))

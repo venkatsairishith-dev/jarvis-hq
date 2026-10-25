@@ -7,7 +7,9 @@ logLevel: info
 macros:
   # llama.cpp b11714 is the next build (2026-10-17: same accuracy, JSON validity and speed as b11669 on the Linux test
   # server; jarvis/tools/jarvis.lock.json). Switch these paths to b11714 only after it is fetched and smoke-tested here.
-  server: D:\jarvis\tools\llama.cpp\b11669\cpu\llama-server.exe --host 127.0.0.1 --port ${PORT} --jinja --no-webui -np 1
+  # D50 footprint budget (owner, 2026-10-25: JARVIS may use 20% of the laptop): -t 2 caps llama-server at 2 threads (20% of this profile's machine, never more
+  # than 3 of 16), one model loaded at a time (swap group), models unload after 120 s idle. The governor may lower -t for the next load (jarvis/tools/governor.py).
+  server: D:\jarvis\tools\llama.cpp\b11669\cpu\llama-server.exe --host 127.0.0.1 --port ${PORT} --jinja --no-webui -np 1 -t 2
   models: D:\jarvis\models\llm
 
 models:
@@ -15,15 +17,15 @@ models:
   qwen3.5-2b:
     cmd: ${server} -m ${models}\Qwen3.5-2B-Q4_K_M.gguf -c 8192
     aliases: [general, local-general]
-    ttl: 300
+    ttl: 120
   qwen-coder-1.5b:
     cmd: ${server} -m ${models}\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf -c 4096
     aliases: [code, local-code]
-    ttl: 300
+    ttl: 120
   qwen-math-1.5b:
     cmd: ${server} -m ${models}\Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf -c 4096
     aliases: [math, maths, local-math]
-    ttl: 300
+    ttl: 120
 
   # PC-task decision model: the alias "decider" (jarvis/plugins/desktop/decide.py DEFAULT_MODEL). It was missing from this
   # profile, so on this hardware every PC task fell back to "no plan" (MEM-M5, 2026-10-18).
@@ -34,7 +36,7 @@ models:
   decider-qwen3-1.7b:
     cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-1.7B-Q4_K_M.gguf -c 4096
     aliases: [decider]
-    ttl: 300
+    ttl: 120
   # Vision (alias vision-ground, jarvis_node/vision.py) is deliberately NOT defined for cpu8: UI-Venus-1.5-2B plus its
   # projector is about 2.1 GB of files and a CPU-only run on 8 GB RAM would starve the PC the owner is using. With no
   # "vision-ground" alias llama-swap refuses the request and jarvis_node/vision.py reports "the local vision model did not
@@ -44,7 +46,7 @@ models:
   lightonocr-docreader:
     aliases: [docreader, ocr-docs]
     cmd: ${server} -m D:\jarvis\models\gguf\lightonocr-3-0.8b\LightOnOCR-3-0.8B.Q4_K_M.gguf --mmproj D:\jarvis\models\gguf\lightonocr-3-0.8b\LightOnOCR-3-0.8B.mmproj-f16.gguf -c 4096
-    ttl: 300
+    ttl: 120
 
 groups:
   one-at-a-time:

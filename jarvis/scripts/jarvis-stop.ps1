@@ -13,6 +13,7 @@ StopMatching "face tool server" { param($p) $p.CommandLine -like "*jarvis.bridge
 StopMatching "watch runner"     { param($p) $p.CommandLine -match 'jarvis\.muse\.runner' }
 StopMatching "speech server"    { param($p) $p.CommandLine -like "*local_speech_server.py*" }
 StopMatching "privacy gateway"  { param($p) $p.CommandLine -like "*privacy*gateway.py*" }
+StopMatching "footprint governor" { param($p) $p.CommandLine -match 'tools[\\/]governor\.py' }   # its job caps stay on the running processes
 foreach ($p in (Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like "D:\jarvis\tools\llama-swap\*" -or $_.ExecutablePath -like "D:\jarvis\tools\llama.cpp\*llama-server.exe" })) {
   try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; "stopped local model process pid " + $p.ProcessId; $stopped++ } catch { }
 }

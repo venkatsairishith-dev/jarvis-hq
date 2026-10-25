@@ -1,6 +1,6 @@
 # Local models for JARVIS, served by llama-swap (MIT, github.com/mostlygeek/llama-swap) over llama.cpp's llama-server.
 # Windows. One OpenAI-compatible endpoint, http://127.0.0.1:8080/v1, where the "model" field picks the specialist.
-# A model loads only when it is asked for and unloads after `ttl` idle seconds, so an idle laptop holds none of them.
+# A model loads only when it is asked for and unloads after `ttl` idle seconds (120 since D50, so RAM comes back quickly), so an idle laptop holds none of them.
 # Weights: D:\jarvis\models\llm (fetched and SHA-256 checked by jarvis\scripts\fetch_models.py).
 # GPU: AMD Radeon Pro 5500M, 4 GB, through llama.cpp's Vulkan build. Started by jarvis\scripts\local-models.ps1.
 healthCheckTimeout: 180
@@ -11,7 +11,9 @@ macros:
   # server; jarvis/tools/jarvis.lock.json). Switch these paths to b11714 only after it is fetched and smoke-tested here.
   # -fa off: flash attention on Vulkan gives garbage after the first token on this GPU (RDNA1), measured 2026-10-15
   # ("Paris" then "GGGG..."); with it off the output matches the CPU build. llama-bench speeds below were measured with it off.
-  server: D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe --host 127.0.0.1 --port ${PORT} --jinja --no-webui -fa off
+  # D50 footprint budget (owner, 2026-10-25: JARVIS may use 20% of the laptop): -t 3 caps llama-server at 3 threads (20% of this profile's machine, never more
+  # than 3 of 16), one model loaded at a time (swap group), models unload after 120 s idle. The governor may lower -t for the next load (jarvis/tools/governor.py).
+  server: D:\jarvis\tools\llama.cpp\b11669\vulkan\llama-server.exe --host 127.0.0.1 --port ${PORT} --jinja --no-webui -fa off -t 3
   models: D:\jarvis\models\llm
 
 models:
@@ -22,36 +24,39 @@ models:
   ling-tiny:
     cmd: ${server} -m ${models}\Ling-3.0-tiny-Q4_K_M.gguf -ngl 99 --n-cpu-moe 16 -c 8192 -np 1
     aliases: [general, local-general, decider-ling]
-    ttl: 300
+    ttl: 120
   # Code: Qwen2.5-Coder 1.5B Instruct (Apache-2.0)
   qwen-coder-1.5b:
     cmd: ${server} -m ${models}\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf -ngl 99 -c 8192 -np 1
     aliases: [code, local-code]
-    ttl: 300
+    ttl: 120
   # Maths: Qwen2.5-Math 1.5B Instruct (Apache-2.0)
   qwen-math-1.5b:
     cmd: ${server} -m ${models}\Qwen2.5-Math-1.5B-Instruct-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
     aliases: [math, maths, local-math]
-    ttl: 300
+    ttl: 120
   # PC-task decision model candidates (2026-10-16, jarvis/evals/pc_control/eval_decision.py). "decider" is the chosen one.
   decider-qwen3-1.7b:
     cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-1.7B-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
-    ttl: 300
+    ttl: 120
+  # VRAM budget (D50, owner 2026-10-25: 2048 MB of the 4 GB card for ALL of JARVIS): the two Qwen3-4B deciders below put the whole model on the GPU
+  # with -ngl 99, about 2.6 GB (figure given by the owner's session, not measured by this change), which is OVER that budget: footprint.py reports OVER
+  # while one is loaded. Option, not applied (the model files and the measured 3.3 s stay as they are): fewer GPU layers (-ngl N, N found by measuring).
   decider-qwen3-4b:
     cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-4B-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
-    ttl: 300
+    ttl: 120
   # the chosen decision model (PC_CONTROL_BENCHMARK.md): 92.9% dev, 3.3 s median on this GPU
   decider-qwen3-4b-2507:
     aliases: [decider]
     cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-4B-Instruct-2507-Q4_K_M.gguf -ngl 99 -c 2048 -np 1
-    ttl: 300
+    ttl: 120
   # Vision for one window (jarvis/node/jarvis_node/vision.py; QUALITY_95_RESEARCH.md section 6), used only when OCR cannot
   # name the thing: UI-Venus-1.5-2B (grounding specialist, ScreenSpot-V2 92.8) + its F16 projector (never BF16 on RDNA1).
   # 1024 image tokens fail on this GPU ("failed to process mtmd chunk", measured 2026-10-16); 512 on the GPU worked once, then failed when the owner's apps held more VRAM: the projector runs on the CPU (reliable; vision is the last rung after UI Automation and OCR).
   vision-ui-venus-2b:
     aliases: [vision-ground, vision]
     cmd: ${server} -m D:\jarvis\models\gguf\ui-venus-1.5-2b\UI-Venus-1.5-2B-Q4_K_M.gguf --mmproj D:\jarvis\models\gguf\ui-venus-1.5-2b\mmproj-F16.gguf -ngl 99 -c 4096 -np 1 --no-mmproj-offload --image-min-tokens 512 --image-max-tokens 512
-    ttl: 300
+    ttl: 120
   # Read my documents (jarvis/plugins/doc_reader; D48): LightOnOCR-3-0.8B (Apache-2.0) Q4_K_M + its F16 projector, English only, both
   # pinned in jarvis.lock.json (~0.7 GB). Measured on this laptop on the CPU (-ngl 0, so the 4 GB GPU stays with the other models; the
   # projector on the CPU too): 4 to 11 s a page (jarvis/evals/quality95/results/lightonocr-*.json). -c 4096: a page drawn at 1540 px is
@@ -60,7 +65,7 @@ models:
   lightonocr-docreader:
     aliases: [docreader, ocr-docs]
     cmd: ${server} -m D:\jarvis\models\gguf\lightonocr-3-0.8b\LightOnOCR-3-0.8B.Q4_K_M.gguf --mmproj D:\jarvis\models\gguf\lightonocr-3-0.8b\LightOnOCR-3-0.8B.mmproj-f16.gguf -ngl 0 --no-mmproj-offload -c 4096 -np 1
-    ttl: 300
+    ttl: 120
   # No separate router model: the generalist routes (one grammar-limited word, thinking off). SmolLM2-360M was tried and
   # dropped: 203 tokens/s, but it sorted only 5-6 of 12 requests correctly (jarvis/plugins/local_team/core.py).
 

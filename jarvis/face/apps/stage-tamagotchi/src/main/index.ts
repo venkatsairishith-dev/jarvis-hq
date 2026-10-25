@@ -8,6 +8,7 @@ import type { WorkspaceWindowManager } from './windows/workspace'
 
 import process, { env, platform } from 'node:process'
 
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -34,6 +35,7 @@ import { createIOTraceHubConfig } from './configs/io-trace-hub'
 import { createIOTraceRecordingConfig } from './configs/io-trace-recording'
 import { installNetworkLock, lockGlobalFetch } from './jarvis/network-lock'
 import { applyChromiumLock, lockNodeSockets } from './jarvis/socket-lock'
+import { applyStorageLock } from './jarvis/storage-lock'
 import { emitAppBeforeQuit, emitAppWindowAllClosed } from './libs/bootkit/lifecycle'
 import { getRendererRoot, setElectronMainDirname } from './libs/electron/location'
 import { createI18n } from './libs/i18n'
@@ -93,8 +95,13 @@ setupDebugger()
 
 const log = useLogg('main').useGlobalConfig()
 
+// JARVIS: everything the face writes stays on the D: drive (owner, 2026-10-25). On Windows this sets userData, sessionData, temp, logs and
+// crashDumps under D:\jarvis before anything reads them; elsewhere it does nothing and the old APP_USER_DATA_PATH rule below applies.
+// The network lock above is untouched.
+const jarvisStorage = applyStorageLock(app, env, message => console.warn(message), { driveExists: drive => existsSync(drive) })
+
 const appUserDataPath = env.APP_USER_DATA_PATH?.trim()
-if (appUserDataPath) {
+if (appUserDataPath && !jarvisStorage) {
   app.setPath('userData', appUserDataPath)
 }
 

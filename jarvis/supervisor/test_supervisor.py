@@ -159,5 +159,6 @@ def test_laptop_manifest_parses_is_loopback_only_and_matches_jarvis_start():
     for c in comps:
         assert str(c.port) in start, f"{c.name}: port {c.port} not in jarvis-start.ps1"
     env = next(c for c in comps if c.name == "face-tools").env
+    start += (HERE.parent / "scripts" / "d-env.ps1").read_text(encoding="utf-8")          # jarvis-start.ps1 dot-sources it (D50: temp and caches on D:)
     for k in env:
         assert k in start, f"{k} is not set by jarvis-start.ps1"

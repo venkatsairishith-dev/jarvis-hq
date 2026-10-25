@@ -4,7 +4,8 @@ A manifest is a JSON object {"components": [ {...}, ... ]}. Each component:
     name        unique, [a-z0-9_-]+
     argv        list of strings, the command (no shell)
     cwd         optional working directory
-    env         optional plain settings; a value that looks like a secret is refused (use "file:<name>" references)
+    env         optional plain settings; a value that looks like a secret is refused (use "file:<name>" references); a data/cache
+                path (TEMP, HF_HOME, JARVIS_DATA_DIR ... see budget.STORAGE_VARS) that is not on D: is refused (D50)
     bind        optional {"host": "...", "port": N}: checked with binds.assert_bind (loopback, or listed in "allowed_hosts")
     health      optional {"kind": "tcp"|"http", "path": "/health", "timeout_s": 30}: always against the bind address
     depends_on  optional list of component names that must be healthy first
@@ -18,9 +19,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 try:                                    # imported as a package (jarvis.supervisor) or from this folder (tests)
-    from . import binds, render
+    from . import binds, budget, render
 except ImportError:                     # pragma: no cover
     import binds  # type: ignore
+    import budget  # type: ignore
     import render  # type: ignore
 
 NAME = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -56,6 +58,9 @@ def _component(raw: dict, allowed_hosts: tuple[str, ...]) -> Component:
     for k, v in env.items():
         if render.looks_secret(v):
             raise ManifestError(f"{name}: env {k} looks like a secret; use a file: reference")
+    bad = budget.storage_problems(env)
+    if bad:
+        raise ManifestError(f"{name}: env not on the D: drive (D50): " + "; ".join(bad))
     c = Component(name=name, argv=argv, cwd=raw.get("cwd"), env=env, depends_on=list(raw.get("depends_on") or []))
     bind = raw.get("bind")
     if bind:

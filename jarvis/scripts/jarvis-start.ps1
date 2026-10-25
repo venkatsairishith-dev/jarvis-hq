@@ -23,6 +23,8 @@ if (-not $Face) {
 
 $py   = Join-Path $Venv "Scripts\python.exe"
 $logs = Join-Path $Data "logs"
+# D50 (owner, 2026-10-25: "for storage use only the D: drive"): refuse to start when a configured path is not on D:. One line, paths only.
+foreach ($p in @($Venv, $Data, $Vault)) { if ($p -notmatch '^[dD]:\\') { throw "JARVIS: refusing to start, not on the D: drive: $p" } }
 if (-not (Test-Path $py)) { throw "Python environment not found: $py (see the setup note at the top of this script)" }
 New-Item -ItemType Directory $logs -Force | Out-Null
 $env:JARVIS_DATA_DIR = $Data
@@ -31,6 +33,9 @@ $env:PYTHONUTF8 = "1"
 $env:HF_HOME = "D:\jarvis\cache\hf"          # local speech-recognition model weights stay on D:
 $env:HF_HUB_DISABLE_TELEMETRY = "1"
 . (Join-Path $PSScriptRoot "d-env.ps1")        # TEMP, TMP and every cache on D: (owner rule)
+foreach ($n in 'JARVIS_DATA_DIR','TEMP','TMP','HF_HOME','PIP_CACHE_DIR','UV_CACHE_DIR','npm_config_cache','PLAYWRIGHT_BROWSERS_PATH') {
+  $v = [Environment]::GetEnvironmentVariable($n, 'Process'); if ($v -and $v -notmatch '^[dD]:\\') { throw "JARVIS: refusing to start, $n is not on the D: drive: $v" }
+}
 & (Join-Path $PSScriptRoot "start-verdict.ps1") | Out-Null      # the Jev decision model (OpenJev Verdict, CPU, 127.0.0.1:8091); idempotent
 
 function Listening($port) { [bool](Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) }
@@ -111,10 +116,16 @@ if (-not (Listening 48970)) {
     -RedirectStandardOutput "$logs\face-tools.out.log" -RedirectStandardError "$logs\face-tools.err.log" | Out-Null
   foreach ($i in 1..40) { if (Listening 48970) { break }; Start-Sleep 1 }
 }
+# Footprint governor (D50: JARVIS may use 20% of the laptop): BELOW_NORMAL + EcoQoS for every JARVIS process, one Job Object with the CPU hard cap and a
+# memory backstop, and a soft loop that unloads idle models when the total is over budget. One copy only (it refuses a second). Log: data\logs\governor.jsonl.
+$govScript = Join-Path $PSScriptRoot "..\tools\governor.py"
+if ((Test-Path $govScript) -and -not (Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'tools[\\/]governor\.py' })) {
+  Start-Process $py -ArgumentList (Resolve-Path $govScript).Path -WorkingDirectory $repo -WindowStyle Hidden -RedirectStandardError "$logs\governor.err.log" | Out-Null
+}
 $node = try { (Get-ScheduledTask JarvisNode -ErrorAction Stop).State } catch { "task not found" }
 $faceState = if ($NoFace) { "not started (-NoFace)" } elseif (-not (Test-Path $Face)) { "not installed ($Face; build it in jarvis\face)" }
              elseif (Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Face)) -ErrorAction SilentlyContinue) { "already running" }
-             else { Start-Process $Face; "started" }
+             else { Start-Process $Face -ArgumentList "--user-data-dir=$($env:APP_USER_DATA_PATH)"; "started" }
 
 "repo   : $repo"
 "tools  48970: " + (Listening 48970) + "   (the face's tool server: JARVIS tasks and the plugins)"
