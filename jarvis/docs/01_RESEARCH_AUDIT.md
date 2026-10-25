@@ -298,3 +298,18 @@ Laptop: i9-9980HK 8c/16t, 32 GB RAM, Radeon Pro 5500M 4 GB (Vulkan, llama.cpp b1
 Too many active parameters for the ask: Qwen3.5-35B-A3B (3B active), SmallThinker-21B-A3B, Nemotron-3.5-Lightning 30B-A3B. Too big in total: Ling-3.0-flash (127B, 78 GB).
 
 Next step (a measurement, nothing adopted): run LFM2.5-8B-A1B and Granite-4.0-H-Tiny through the same 70 PC-decision cases and tool-call cases that chose Qwen3-4B-Instruct-2507 (70/70, 0.97 s p50), next to Ling-3.0-tiny, and record accuracy, JSON validity, tokens per second and RAM. LFM2.5-24B-A2B only after disk space is made (it would be the strongest local planner by the card, but it reasons at length, so it would be slow here).
+
+**Uncensored variants of those models, checked against the published measurements (2026-10-25; owner: "only prefer uncensored models, strict uncensored", "great for JARVIS, not too much load").** The numbers below are the authors' own measurements from their model cards (refusals counted on a public harmful-prompt set, KL divergence against the original model's answers: lower KL means less damage to the model). They are real measurements but not ours yet.
+
+| Variant | Method | Refusals (original -> variant) | KL divergence | Notes |
+|---|---|---|---|---|
+| **trohrbaugh/Ling-3.0-tiny-heretic** (MIT; quants: mradermacher/Ling-3.0-tiny-heretic-GGUF, Q4_K_M 4.82 GB) | Heretic (directional ablation, optimised for low refusals and low KL) | **97/100 -> 1/100** | **0.0381** | Same architecture, size and speed as the Ling-3.0-tiny already on this laptop (31 tokens/s, 1.3B active): strict uncensoring with almost no drift. **Best candidate.** |
+| Securelayer7/Ling-3.0-tiny-Uncensored-Abliterated (MIT) | Heretic | 35/100 -> 8/100 | 0.046 | Weaker removal than the one above. |
+| gaston-parravicini/LFM2.5-8B-A1B-Uncensored-Gaston-GGUF (LFM licence) | refusal-direction projection | 1/100 on AdvBench (author's claim, no KL or MMLU in the card) | not published | The card itself warns of a **llama.cpp chat-template bug that breaks tool calling for LFM2.5** (upstream PR #23826): a real drawback for JARVIS. |
+| saidutta69/LFM2.5-8B-A1B-heretic (LFM licence) | Heretic v1.4.0 | 90/100 -> 28/100 | 0.1649 | Not strict (28 refusals left), more drift. |
+| huihui-ai Huihui-LFM2.5-8B-A1B-abliterated, Huihui-granite-4.0-h-tiny-abliterated | "crude proof-of-concept" abliteration | no numbers | no numbers | Unmeasured: needs our own test. |
+| OS-Software/LFM2.5-24B-A2B-Uncensored-Heretic and AtomicChat/LFM2.5-24B-A2B-Uncensored | Heretic / projection | EN refusals 96.3% -> 1.2% (AtomicChat), MMLU -0.62 points (OS-Software) | published | Strongest card data, but 14.5 GB: no disk on this laptop. |
+
+Design note: JARVIS's safety is in the kernel's policy, approvals and kill switch (D27), not in the model's refusals, so a strictly uncensored LOCAL model fits. It also follows injected instructions more readily than an aligned one, so the kernel gate and the untrusted-text rules stay exactly as they are, and an uncensored model gets no new authority (it still only proposes; the kernel decides).
+
+Our own check before adopting anything: measure refusals ourselves on a public refusal set (keyword match on the answer, outputs discarded), run the 70 PC-decision cases and the tool-call cases against the ORIGINAL and the uncensored variant of the same model, and record RAM, CPU and speed.
