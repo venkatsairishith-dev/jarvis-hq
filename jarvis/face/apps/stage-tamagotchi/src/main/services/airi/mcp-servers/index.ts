@@ -74,6 +74,9 @@ const defaultMcpConfig: ElectronMcpConfigFile = {
 const toolNameSeparator = '::'
 const mcpRequestTimeoutMsec = 10_000
 const mcpRequestMaxTotalTimeoutMsec = 15_000
+/** A tool CALL may take long: reading a scanned page is 10 to 26 s, a deck or a report longer. At 15 s the face gave up on `doc_reader__read_document` while it was still reading and the
+ *  chat model fell back to other tools in a loop (found live, 2026-10-25). Listing and connecting keep the short limits above. The plugin entries carry their own, longer, limits. */
+const mcpToolCallTimeoutMsec = 180_000
 const mcpTestStderrMaxChars = 16_000
 /** A server that does not answer `initialize` in this time counts as down (the SDK default is 60 s). */
 const mcpConnectTimeoutMsec = 8_000
@@ -548,8 +551,8 @@ export function createMcpManager(): McpManager {
       name,
       arguments: payload.arguments ?? {},
     }, undefined, {
-      timeout: mcpRequestTimeoutMsec,
-      maxTotalTimeout: mcpRequestMaxTotalTimeoutMsec,
+      timeout: mcpToolCallTimeoutMsec,
+      maxTotalTimeout: mcpToolCallTimeoutMsec,
     }))
 
     let result

@@ -1,0 +1,641 @@
+{
+ "date": "2026-10-25",
+ "protocol": "jarvis/evals/onscreen_bench/PROTOCOL.md",
+ "how": "A clean chat per run (stored chat deleted, face restarted), the goal typed into the face chat box, the gateway pinned to one provider with no failover (pin file D:\\jarvis\\cache\\gateway-pin.txt through JARVIS_GATEWAY_PIN_FILE, because the secrets folder is not writable from the test session).",
+ "candidates_not_run": {
+  "cerebras": "no providers\\cerebras.key: the pinned request answered 502 'no key file'",
+  "local Ling-heretic / Granite abliterated": "not installed on this laptop (no local-chat alias in llama-swap.yaml); the installed Ling-3.0-tiny was not asked to run the face's 40 KB request"
+ },
+ "runs": [
+  {
+   "model": "dahl-glm",
+   "goal_no": 2,
+   "goal": "What is on my screen right now?",
+   "done": 0,
+   "score": {
+    "tool_rounds": 3,
+    "seconds": 66.1,
+    "http_errors": [
+     429
+    ],
+    "wrong_tools": [
+     "builtIn_mcpCallTool -> jarvis::front_windows"
+    ],
+    "calls": [
+     "builtIn_mcpListTools",
+     "builtIn_mcpCallTool -> jarvis::front_windows"
+    ],
+    "on_screen_errors": [
+     "Remote sent 429 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40,
+     48,
+     49
+    ],
+    "chat_tail": "JARVIS | 10:11 PM | What is on my screen right now? | 2-hit combo | Core System | Remote sent 429 response | Show details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-glm",
+   "goal_no": 1,
+   "goal": "Open Notepad and write a shopping list: milk, eggs, bread, rice.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 3,
+    "seconds": 68.1,
+    "http_errors": [
+     429
+    ],
+    "wrong_tools": [
+     "builtIn_mcpCallTool -> jarvis::start_task"
+    ],
+    "calls": [
+     "builtIn_mcpListTools",
+     "builtIn_mcpCallTool -> jarvis::start_task"
+    ],
+    "on_screen_errors": [
+     "Remote sent 429 response",
+     "Remote sent 429 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40,
+     48,
+     49
+    ],
+    "chat_tail": ".global/account \u2014 $0.03 per 1M tokens (in + out + cached) on any model. Retry after Retry-After, or switch model. Other models available now: MiniMaxAI/MiniMax-M2.7, deepseek-ai/DeepSeek-V4-Flash-0731. You can switch to one of them.\",\"type\":\"rate_limit_error\"}} | Hide details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-glm",
+   "goal_no": 3,
+   "goal": "Make a 3-slide deck about our week and show it to me.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 4,
+    "seconds": 48.1,
+    "http_errors": [
+     429,
+     429,
+     429,
+     429
+    ],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [
+     "Remote sent 429 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40,
+     40,
+     40,
+     40
+    ],
+    "chat_tail": "JARVIS | 10:14 PM | Make a 3-slide deck about our week and show it to me. | Core System | Remote sent 429 response | Show details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-glm",
+   "goal_no": 4,
+   "goal": "Read the invoice invoice-2026-0522.png in the invoice-test folder of my JARVIS outputs and tell me the total.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 7,
+    "seconds": 170.1,
+    "http_errors": [
+     429,
+     429,
+     429,
+     429
+    ],
+    "wrong_tools": [],
+    "calls": [
+     "builtIn_mcpListTools",
+     "builtIn_mcpCallTool -> jarvis::doc_reader__read_document",
+     "builtIn_mcpCallTool -> jarvis::doc_reader__recent_files",
+     "builtIn_mcpCallTool -> jarvis::doc_reader__recent_files",
+     "builtIn_mcpCallTool -> jarvis::doc_reader__recent_files",
+     "builtIn_mcpCallTool -> jarvis::doc_reader__recent_files",
+     "builtIn_searchIcons",
+     "builtIn_searchIcons"
+    ],
+    "on_screen_errors": [
+     "Remote sent 429 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     41,
+     41,
+     48,
+     49,
+     8,
+     8,
+     50,
+     51,
+     53,
+     9,
+     8
+    ],
+    "chat_tail": "voice-test folder of my JARVIS outputs and tell me the total. | On it \u2014 reading the invoice now, a page takes a moment. | 3-hit combo | The reader needs a full path. Let me look in the usual output folders. | 3-hit combo | Core System | Remote sent 429 response | Show details | Replying to | Message",
+    "timed_out": true
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-glm",
+   "goal_no": 5,
+   "goal": "Two things at once: open Calculator and also tell me the weather in Paris.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 3,
+    "seconds": 124.1,
+    "http_errors": [
+     429
+    ],
+    "wrong_tools": [
+     "stage_widgets"
+    ],
+    "calls": [
+     "stage_widgets",
+     "get_weather",
+     "get_weather",
+     "builtIn_searchIcons",
+     "builtIn_searchIcons"
+    ],
+    "on_screen_errors": [
+     "didn't finish"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40,
+     42,
+     8,
+     42,
+     10
+    ],
+    "chat_tail": "t combo, 1 missed | The Calculator is open on screen. The weather lookup failed, let me try that again. | Get weather didn't finish | Calculator is open. The Paris weather service failed twice, so I have no weather to report \u2014 I won't guess. You can ask me to try again later. | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-minimax",
+   "goal_no": 1,
+   "goal": "Open Notepad and write a shopping list: milk, eggs, bread, rice.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 1,
+    "seconds": 44.1,
+    "http_errors": [],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [],
+    "first_request_messages": 2,
+    "request_kb": [
+     40
+    ],
+    "chat_tail": "JARVIS | 10:23 PM | Open Notepad and write a shopping list: milk, eggs, bread, rice. | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-minimax",
+   "goal_no": 2,
+   "goal": "What is on my screen right now?",
+   "done": 0,
+   "score": {
+    "tool_rounds": 1,
+    "seconds": 34.2,
+    "http_errors": [],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [],
+    "first_request_messages": 2,
+    "request_kb": [
+     40
+    ],
+    "chat_tail": "JARVIS | 10:24 PM | What is on my screen right now? | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-minimax-dump",
+   "goal_no": 1,
+   "goal": "Open Notepad and write a shopping list: milk, eggs, bread, rice.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 2,
+    "seconds": 50.2,
+    "http_errors": [],
+    "wrong_tools": [
+     "builtIn_emitSparkCommand"
+    ],
+    "calls": [
+     "builtIn_emitSparkCommand"
+    ],
+    "on_screen_errors": [],
+    "first_request_messages": 2,
+    "request_kb": [
+     40,
+     42,
+     8
+    ],
+    "chat_tail": "JARVIS | 10:26 PM | Open Notepad and write a shopping list: milk, eggs, bread, rice. | Emit spark command | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-minimax",
+   "goal_no": 3,
+   "goal": "Make a 3-slide deck about our week and show it to me.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 2,
+    "seconds": 110.2,
+    "http_errors": [],
+    "wrong_tools": [
+     "builtIn_emitSparkCommand",
+     "builtIn_emitSparkCommand"
+    ],
+    "calls": [
+     "builtIn_emitSparkCommand",
+     "builtIn_emitSparkCommand"
+    ],
+    "on_screen_errors": [],
+    "first_request_messages": 2,
+    "request_kb": [
+     40,
+     43,
+     8
+    ],
+    "chat_tail": "JARVIS | 10:28 PM | Make a 3-slide deck about our week and show it to me. | 2-hit combo | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-minimax",
+   "goal_no": 4,
+   "goal": "Read the invoice invoice-2026-0522.png in the invoice-test folder of my JARVIS outputs and tell me the total.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 1,
+    "seconds": 32.2,
+    "http_errors": [],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [],
+    "first_request_messages": 2,
+    "request_kb": [
+     41
+    ],
+    "chat_tail": "JARVIS | 10:30 PM | Read the invoice invoice-2026-0522.png in the invoice-test folder of my JARVIS outputs and tell me the total. | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-minimax",
+   "goal_no": 5,
+   "goal": null,
+   "done": 0,
+   "score": null,
+   "raw_error": "the test driver crashed before the run (face not ready); repeated below"
+  },
+  {
+   "model": "groq-gpt-oss-120b",
+   "goal_no": 1,
+   "goal": "Open Notepad and write a shopping list: milk, eggs, bread, rice.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 1,
+    "seconds": 26.1,
+    "http_errors": [
+     413
+    ],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [
+     "Remote sent 413 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40
+    ],
+    "chat_tail": "JARVIS | 10:48 PM | Open Notepad and write a shopping list: milk, eggs, bread, rice. | Core System | Remote sent 413 response | Show details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "groq-gpt-oss-120b",
+   "goal_no": 2,
+   "goal": "What is on my screen right now?",
+   "done": 0,
+   "score": {
+    "tool_rounds": 1,
+    "seconds": 26.1,
+    "http_errors": [
+     413
+    ],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [
+     "Remote sent 413 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40
+    ],
+    "chat_tail": "JARVIS | 10:50 PM | What is on my screen right now? | Core System | Remote sent 413 response | Show details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "groq-gpt-oss-120b",
+   "goal_no": 3,
+   "goal": "Make a 3-slide deck about our week and show it to me.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 1,
+    "seconds": 26.1,
+    "http_errors": [
+     413
+    ],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [
+     "Remote sent 413 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40
+    ],
+    "chat_tail": "JARVIS | 10:51 PM | Make a 3-slide deck about our week and show it to me. | Core System | Remote sent 413 response | Show details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "groq-gpt-oss-120b",
+   "goal_no": 4,
+   "goal": "Read the invoice invoice-2026-0522.png in the invoice-test folder of my JARVIS outputs and tell me the total.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 1,
+    "seconds": 26.1,
+    "http_errors": [
+     413
+    ],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [
+     "Remote sent 413 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     41
+    ],
+    "chat_tail": "JARVIS | 10:52 PM | Read the invoice invoice-2026-0522.png in the invoice-test folder of my JARVIS outputs and tell me the total. | Core System | Remote sent 413 response | Show details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "groq-gpt-oss-120b",
+   "goal_no": 5,
+   "goal": "Two things at once: open Calculator and also tell me the weather in Paris.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 1,
+    "seconds": 26.1,
+    "http_errors": [
+     413
+    ],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [
+     "Remote sent 413 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40
+    ],
+    "chat_tail": "JARVIS | 10:53 PM | Two things at once: open Calculator and also tell me the weather in Paris. | Core System | Remote sent 413 response | Show details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "cerebras-gpt-oss-120b",
+   "goal_no": 3,
+   "goal": "Make a 3-slide deck about our week and show it to me.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 4,
+    "seconds": 48.1,
+    "http_errors": [
+     502,
+     502,
+     502,
+     502
+    ],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [
+     "Remote sent 502 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40,
+     40,
+     40,
+     40
+    ],
+    "chat_tail": "JARVIS | 10:54 PM | Make a 3-slide deck about our week and show it to me. | Core System | Remote sent 502 response: {\"error\": {\"message\": \"no model provider answered: cerebras: no key file\"}} | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-minimax",
+   "goal_no": 5,
+   "goal": "Two things at once: open Calculator and also tell me the weather in Paris.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 2,
+    "seconds": 82.1,
+    "http_errors": [],
+    "wrong_tools": [
+     "builtIn_emitSparkCommand"
+    ],
+    "calls": [
+     "get_weather",
+     "builtIn_emitSparkCommand"
+    ],
+    "on_screen_errors": [],
+    "first_request_messages": 2,
+    "request_kb": [
+     40,
+     41,
+     8
+    ],
+    "chat_tail": "JARVIS | 10:56 PM | Two things at once: open Calculator and also tell me the weather in Paris. | 2-hit combo, 1 missed | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-glm-repeat",
+   "goal_no": 3,
+   "goal": "Make a 3-slide deck about our week and show it to me.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 3,
+    "seconds": 146.1,
+    "http_errors": [
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429
+    ],
+    "wrong_tools": [],
+    "calls": [
+     "builtIn_mcpListTools",
+     "builtIn_readMemory",
+     "builtIn_mcpCallTool -> jarvis::jarvis_tasks",
+     "builtIn_mcpCallTool -> jarvis::jarvis_recall"
+    ],
+    "on_screen_errors": [
+     "Remote sent 429 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     40,
+     49,
+     8,
+     8,
+     52,
+     8,
+     9,
+     8,
+     8,
+     9,
+     8,
+     8,
+     9,
+     8,
+     9
+    ],
+    "chat_tail": "JARVIS | 10:58 PM | Make a 3-slide deck about our week and show it to me. | On it \u2014 I'll pull this week's tasks and notes first, then assemble the deck from real facts. | 4-hit combo | Core System | Remote sent 429 response | Show details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  },
+  {
+   "model": "dahl-glm-timeoutfix",
+   "goal_no": 4,
+   "goal": "Read the invoice invoice-2026-0522.png in the invoice-test folder of my JARVIS outputs and tell me the total.",
+   "done": 0,
+   "score": {
+    "tool_rounds": 4,
+    "seconds": 48.1,
+    "http_errors": [
+     429,
+     429,
+     429,
+     429
+    ],
+    "wrong_tools": [],
+    "calls": [],
+    "on_screen_errors": [
+     "Remote sent 429 response"
+    ],
+    "first_request_messages": 2,
+    "request_kb": [
+     41,
+     41,
+     41,
+     41
+    ],
+    "chat_tail": "JARVIS | 11:04 PM | Read the invoice invoice-2026-0522.png in the invoice-test folder of my JARVIS outputs and tell me the total. | Core System | Remote sent 429 response | Show details | Replying to | Message",
+    "timed_out": false
+   },
+   "raw_error": null
+  }
+ ],
+ "summary": {
+  "dahl-glm": {
+   "runs": 6,
+   "goals_done": 0,
+   "http_error_responses": 24,
+   "wrong_tool_calls": 3,
+   "median_seconds": 124.1
+  },
+  "dahl-minimax": {
+   "runs": 7,
+   "goals_done": 0,
+   "http_error_responses": 0,
+   "wrong_tool_calls": 4,
+   "median_seconds": 50.2
+  },
+  "groq-gpt-oss-120b": {
+   "runs": 5,
+   "goals_done": 0,
+   "http_error_responses": 5,
+   "wrong_tool_calls": 0,
+   "median_seconds": 26.1
+  },
+  "cerebras-gpt-oss-120b": {
+   "runs": 1,
+   "goals_done": 0,
+   "http_error_responses": 4,
+   "wrong_tool_calls": 0,
+   "median_seconds": 48.1
+  },
+  "dahl-glm-timeoutfix": {
+   "runs": 1,
+   "goals_done": 0,
+   "http_error_responses": 4,
+   "wrong_tool_calls": 0,
+   "median_seconds": 48.1
+  }
+ },
+ "decision": {
+  "protocol_pick": "no model finished any of the five goals on screen (0 done everywhere), so the protocol's tie-breaks decide: fewest errors would be MiniMax (0 HTTP errors), but its runs were empty answers or the wrong tool (builtIn_emitSparkCommand), so that is not a usable pick.",
+  "what_the_runs_show": {
+   "dahl GLM-5.3-Flash": "the only model that used the right tool names and the new persona (jarvis_tasks, jarvis_recall, doc_reader); every failure was Dahl's own capacity limit (HTTP 429 model_concurrency: 'paid accounts are admitted first'), 24 of them, and one run took 7 rounds; 70-170 s per goal",
+   "dahl MiniMax-M2.7": "no HTTP errors, 30-110 s, but empty replies or builtIn_emitSparkCommand (a spark-command tool that is not the task) on 7 of 7 runs",
+   "groq gpt-oss-120b": "HTTP 413 on every goal: the face's request is 40 KB (about 10,000 tokens) and Groq's free tier takes 8,000 in all; it stays the private lane's model for the small Hermes prompt",
+   "cerebras": "not benchmarked: no key file",
+   "local": "Ling-heretic and Granite abliterated are not installed"
+  },
+  "provider_order": "unchanged: dahl first (the face's model, GLM-5.3-Flash), then the fallbacks in the gateway order, local last. MiniMax is not set first because it did not use tools in the face.",
+  "followups": [
+   "the face sends a second request of 8 KB next to every turn; with Dahl's concurrency cap it doubles the 429s",
+   "a model that follows the tool list in the face is the open problem: try Cerebras once its key exists (room for the 40 KB request: 30K tokens a minute)"
+  ]
+ }
+}

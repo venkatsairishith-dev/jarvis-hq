@@ -235,6 +235,7 @@ describe('createMcpManager', () => {
       expect(await manager.callTool({ name: 'jarvis::jarvis_ready', arguments: {} })).toEqual({ content: [{ type: 'text', text: 'ready' }] })
       expect(clientMocks.connect).toHaveBeenCalledTimes(2)
       expect(clientMocks.callTool).toHaveBeenCalledTimes(2)
+      expect(clientMocks.callTool).toHaveBeenLastCalledWith({ name: 'jarvis_ready', arguments: {} }, undefined, { timeout: 180_000, maxTotalTimeout: 180_000 })   // a tool call may take as long as reading a page
     })
 
     it('is not retried for ever: a second failure is reported', async () => {
