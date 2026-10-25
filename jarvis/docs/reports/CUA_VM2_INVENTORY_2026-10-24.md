@@ -376,3 +376,19 @@ What is left: the verifier's long prompt gets no usable reply from the model ("N
 (`agent_model_call` events for the lab lane) and either raise the lab lane's output budget or pick a non-reasoning model for the verifier. The agent's two runs for today are used (max_runs_per_day 2).
 
 **State now.** `jarvis-lab-runner` stopped (inactive, disabled); no process left for jarvis-sandbox, jarvis-verify or agent; cua-driver, lab-control, the desktop, the forwarder and tailscaled active; free memory 3,181 MB available. The throw-away agent `lab-smoke-test` still exists (state active) and needs the owner's confirm to terminate.
+
+### Verifier diagnosis and a passing smoke test (2026-10-25, laptop session; owner approved the lane switch)
+
+**Why the verifier got "No reply".** Not the VM2 path: a replay through the forwarder as `agent` (stream=true, a tool defined) returned 70 whole SSE chunks, the tool call, usage and `[DONE]`. The kernel's `agent_model_call` events for the lab lane show every big Hermes prompt (about 11,000 tokens, 14 tools) answered by `dahl-minimax` (MiniMax-M2.7, the public lane's
+first provider; the other providers are skipped as too small for 11k-token prompts) with 100 to 500 completion tokens, and Hermes' own log says "Thinking-only response (no visible content)" then "Empty response (no content or reasoning)" three times: the model's answer is an unclosed `<think>` block with no visible text, which Hermes counts as empty.
+Same model, same effect as the earlier benchmark (reasoning text in every MiniMax answer; GLM-5.3-Flash and DeepSeek never leak it).
+
+**Fix (reversible, audited).** With the owner's yes the item-19 owner switch set the public lane to prefer `dahl-glm` (GLM-5.3-Flash). **Previous state of that lane: preferred = dahl-minimax, set by the agent `memtest` on 2026-10-09** (a stale test preference). `POST owner/models/switch {lane: public, provider: auto}` returns the lane to the plain order (dahl-minimax first).
+
+**Result (agent `lab-smoke-test-2`, `agents/test`, budget raised to 900 s; the 600 s budget ran out in the first try because two worker attempts take about 2.5 minutes each).** Task a32573829e2b: worker exit 0 in 152 s, the independent check ran as `jarvis-verify` through the root-owned CLI path, both criteria MET, 1 file delivered to the laptop
+(`D:\jarvis\outputs\task-a32573829e2b\hello.txt`, 25 characters, confirmed by the laptop). Final state "completed, NOT verified: no runnable tests were delivered, so only the verifier's own opinion backs it" (the runner marks "verified" only when delivered tests run, which this trivial task has none of; this is the designed outcome).
+An earlier try with the new model failed only on a runner integrity rule (the worker's EVIDENCE.md named the absolute lab path), which the agent instruction now forbids.
+
+**Cleanup.** `jarvis-lab-runner` stopped (inactive, disabled); no leftover processes for jarvis-sandbox, jarvis-verify or agent; both throw-away agents terminated (`lab-smoke-test`, `lab-smoke-test-2`); cua-driver, lab-control, the desktop and the forwarder active. The lane stays on dahl-glm until the owner or the cloud session changes it.
+
+**The WSL lab runner (cloud question):** retired. `wsl -l` lists no distribution, the task `JarvisLab` and the folder `D:\jarvis-lab` are gone (moved to `D:\jarvis-trash\2026-10-23`), and no `lab_runner` process runs on the laptop. Re-issuing `lab-runner` voided nothing that was live; VM2 is the only runner. No further tokens were issued.
