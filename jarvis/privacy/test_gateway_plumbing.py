@@ -324,7 +324,7 @@ class LocalModelIsTheLastResort(unittest.TestCase):
     """2026-10-25 (owner: use the local uncensored MoE; the online providers are managed by the gateway): the last link of the chain is a model on this PC
     (llama-swap on loopback), marked "local": true, with no key. Every online provider resting or refusing means the answer comes from the laptop."""
 
-    def start(self, local_flag=True, local_url=None):
+    def start(self, local_flag=True, local_url=None, first_code=429, first_msg="busy"):
         seen = {"first": 0, "local": 0, "local_auth": None}
 
         def handler_for(name, code):
@@ -337,7 +337,7 @@ class LocalModelIsTheLastResort(unittest.TestCase):
                     seen[name] += 1
                     if name == "local":
                         seen["local_auth"] = self.headers.get("Authorization")
-                    raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": name}}]} if code == 200 else {"error": {"message": "busy"}}).encode()
+                    raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": name}}]} if code == 200 else {"error": {"message": first_msg if name == "first" else "busy"}}).encode()
                     self.send_response(code)
                     self.send_header("Content-Type", "application/json")
                     self.send_header("Content-Length", str(len(raw)))
@@ -345,7 +345,7 @@ class LocalModelIsTheLastResort(unittest.TestCase):
                     self.wfile.write(raw)
             return H
         servers = []
-        for name, code in (("first", 429), ("local", 200)):
+        for name, code in (("first", first_code), ("local", 200)):
             sv = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(name, code))
             threading.Thread(target=sv.serve_forever, daemon=True).start()
             servers.append(sv)
@@ -383,6 +383,18 @@ class LocalModelIsTheLastResort(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual((seen["first"], seen["local"]), (1, 1))
         self.assertIsNone(seen["local_auth"])                                # no key and no caller placeholder went to the local server
+
+    def test_a_400_about_bad_tool_json_moves_on_to_the_next_provider(self):
+        base, seen, names = self.start(first_code=400, first_msg="Unterminated string starting at: line 1 column 812")
+        code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(code, 200)
+        self.assertEqual((seen["first"], seen["local"]), (1, 1))
+
+    def test_any_other_400_is_still_the_callers_answer(self):
+        base, seen, names = self.start(first_code=400, first_msg="model not found")
+        code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(code, 400)
+        self.assertEqual(seen["local"], 0)
 
     def test_a_provider_not_on_loopback_is_never_treated_as_local(self):
         base, seen, names = self.start(local_url="http://203.0.113.5:8080/v1")

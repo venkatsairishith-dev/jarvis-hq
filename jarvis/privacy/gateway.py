@@ -467,6 +467,7 @@ class SseRestorer:
 PROVIDERS_FILE = os.environ.get("JARVIS_PRIVACY_PROVIDERS", os.path.join(os.path.dirname(os.path.abspath(__file__)), "providers.json"))
 SECRET_ROOT = os.environ.get("JARVIS_SECRET_REF_ROOTS", r"D:\jarvis-secrets").split(os.pathsep)[0]
 RETRY_CODES = (429, 500, 502, 503, 504, 520, 522, 524)
+BAD_TOOL_JSON = re.compile(r"unterminated string|invalid json|json.{0,40}(parse|decode)|tool_calls?", re.I)   # a provider's 400 about a tool-call body
 _cooldown: dict[str, float] = {}
 _keys: dict[str, str] = {}
 
@@ -723,8 +724,16 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                         tried.append(f"{prov['name']}: HTTP {e.code}")
                         e.close()
                         continue
+                    err_body = None
+                    if e.code == 400 and not last:
+                        # Dahl answered 400 "Unterminated string" to a tool-call body (face goal d, 2026-10-25): the next provider reads the same request fine.
+                        err_body = e.read()
+                        if BAD_TOOL_JSON.search(err_body[:2000].decode("utf-8", "replace")):
+                            tried.append(f"{prov['name']}: HTTP 400 bad tool JSON")
+                            e.close()
+                            continue
                     used = [read_key(q) for q in chain[:i + 1] if q.get("key_file")]   # every key file read so far, the first provider's too
-                    payload = scrub_keys(e.read(), used)
+                    payload = scrub_keys(err_body if err_body is not None else e.read(), used)
                     self.send_response(e.code)
                     self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
                     self.send_header("Content-Length", str(len(payload)))
