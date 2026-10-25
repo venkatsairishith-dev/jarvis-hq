@@ -1257,6 +1257,33 @@ export const useAiriCardStore = defineStore('airi-card', () => {
       })
     }
 
+    // JARVIS: the persona is shipped with the build. A built-in card saved by an older build keeps that build's persona (a longer one,
+    // with routing the tools no longer have), so once for each shipped persona the card takes the new text. Remembered by the text itself.
+    try {
+      const shipped = builtInCard.value.description
+      const current = toRaw(cards.value.get('default'))
+      if (shipped && current && globalThis.localStorage && globalThis.localStorage.getItem('jarvis/shipped-persona') !== shipped) {
+        // The saved widget instruction (about 0.5 KB of every request) tells the model to use a widget tool the chat no longer offers.
+        const artistry = current.extensions.airi.modules.artistry
+        const clearWidgets = typeof artistry?.widgetInstruction === 'string' && artistry.widgetInstruction.length > 0
+        if (current.description !== shipped || clearWidgets) {
+          cards.value.set('default', {
+            ...current,
+            description: shipped,
+            extensions: {
+              ...current.extensions,
+              airi: {
+                ...current.extensions.airi,
+                modules: { ...current.extensions.airi.modules, ...(clearWidgets && artistry ? { artistry: { ...artistry, widgetInstruction: '' } } : {}) },
+              },
+            },
+          })
+        }
+        globalThis.localStorage.setItem('jarvis/shipped-persona', shipped)
+      }
+    }
+    catch {}
+
     // NOTICE:
     // Up to v0.12.0-beta.5 the Stage model was also stored in `settings/stage/model`.
     // PR #2458 stopped reading it, so an upgrade showed the bundled preset.

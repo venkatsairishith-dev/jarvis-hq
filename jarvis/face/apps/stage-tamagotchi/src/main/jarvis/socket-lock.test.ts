@@ -39,7 +39,7 @@ describe('socket lock: reading connect and listen arguments', () => {
 
   it('blocks name resolution except for this PC and the owner list, and WebRTC UDP', () => {
     const switches = Object.fromEntries(chromiumLockSwitches(['huggingface.co']))
-    expect(switches['host-resolver-rules']).toBe('MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE *.localhost, EXCLUDE 127.0.0.1, EXCLUDE huggingface.co')
+    expect(switches['host-resolver-rules']).toBe('MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE *.localhost, EXCLUDE 127.0.0.1, EXCLUDE api.open-meteo.com, EXCLUDE geocoding-api.open-meteo.com, EXCLUDE huggingface.co')
     expect(switches['force-webrtc-ip-handling-policy']).toBe('disable_non_proxied_udp')
   })
 })

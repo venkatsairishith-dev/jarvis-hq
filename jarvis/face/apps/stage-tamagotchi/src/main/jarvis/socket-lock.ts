@@ -2,7 +2,7 @@ import net from 'node:net'
 
 import { env } from 'node:process'
 
-import { isAllowedHost, parseAllowHosts } from './network-lock'
+import { BUILT_IN_ALLOW_HOSTS, isAllowedHost, parseAllowHosts } from './network-lock'
 
 /**
  * The lower half of the face's network lock (network-lock.ts is the upper half, for requests that Chromium and `fetch` make).
@@ -106,7 +106,8 @@ export function lockNodeSockets(log: (message: string) => void = () => {}): void
  * JARVIS_FACE_ALLOW_HOSTS (a `.ts.net` name can also be a public Funnel address, so none is allowed by default).
  */
 export function chromiumLockSwitches(allowHosts: string[] = parseAllowHosts(env.JARVIS_FACE_ALLOW_HOSTS)): Array<[string, string]> {
-  const exclude = ['localhost', '*.localhost', '127.0.0.1', ...allowHosts].map(host => `EXCLUDE ${host}`)
+  // JARVIS: the weather card's hosts are resolved too; without them "Failed to fetch" was all the owner saw (2026-10-26).
+  const exclude = ['localhost', '*.localhost', '127.0.0.1', ...BUILT_IN_ALLOW_HOSTS, ...allowHosts].map(host => `EXCLUDE ${host}`)
   return [
     ['host-resolver-rules', ['MAP * ~NOTFOUND', ...exclude].join(', ')],
     ['force-webrtc-ip-handling-policy', 'disable_non_proxied_udp'],

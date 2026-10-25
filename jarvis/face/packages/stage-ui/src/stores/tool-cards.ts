@@ -316,6 +316,15 @@ export const useToolCardsStore = defineStore('tool-cards', () => {
   // Off, the chat makes no cards and shows every call as it is. The saved cards stay for when it is on again.
   // JARVIS: off by default. A card is a second chat-model request of about 8 KB, once for each new tool, and it ran
   // beside the turn on the same rate limit (2026-10-25).
+  // JARVIS: a profile saved by an older build keeps the old "on" values and so keeps paying for the cards. Once, those two are set off.
+  try {
+    if (globalThis.localStorage && globalThis.localStorage.getItem('jarvis/lean-defaults') !== '1') {
+      globalThis.localStorage.setItem('settings/tool-cards/enabled', 'false')
+      globalThis.localStorage.setItem('settings/tool-cards/reply-cards', 'false')
+      globalThis.localStorage.setItem('jarvis/lean-defaults', '1')
+    }
+  }
+  catch {}
   const enabled = useLocalStorageManualReset<boolean>('settings/tool-cards/enabled', false)
   // Off, the chat model gets no card tool in the owner's chat, so it answers in text. Cards in old replies still show.
   // JARVIS: off by default. The card tool and the icon search cost 2.9 KB of tools and 0.6 KB of prompt in every request.

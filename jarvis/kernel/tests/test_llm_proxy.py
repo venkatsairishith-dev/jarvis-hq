@@ -11,8 +11,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(HERE, ".."))
 from jarvis_kernel.gateway import Provider
-from jarvis_kernel.llm_proxy import MAX_OUT_TOKENS, PER_MINUTE, make_handler
+from jarvis_kernel.llm_proxy import MAX_OUT_TOKENS, PER_MINUTE, make_handler as _make_handler
 from jarvis_kernel.store import Kernel
+
+
+def make_handler(*args, **kwargs):
+    """The hold-and-retry on a short 429 rest sleeps up to 70 s three times; these tests have no use for the wait (the fake clock does not move either)."""
+    kwargs.setdefault("sleep", lambda seconds: None)
+    return _make_handler(*args, **kwargs)
 
 TOOL_REPLY = {"id": "x", "object": "chat.completion", "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {
     "role": "assistant", "content": None, "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "search", "arguments": "{\"q\": \"weather\"}"}}]}}]}
