@@ -165,6 +165,22 @@ describe('card inheritance with real module stores', () => {
     expect(cards.getCard(id)?.extensions).toMatchObject(extensions)
   })
 
+  it('JARVIS: takes the runtime selection over where the saved character defaults were captured empty, and never overwrites a chosen provider', async () => {
+    const consciousness = useConsciousnessStore()
+    const cards = useAiriCardStore()
+    await cards.initialize()                                                       // a fresh profile: the runtime stores are still empty, so the defaults are too
+    expect(cards.getModules('default').consciousness).toEqual({ provider: '', model: '' })
+    consciousness.activeProvider = 'openai-compatible'                             // what configureJarvisDefaultsIfEmpty writes a moment later
+    consciousness.activeModel = 'jarvis-model'
+    expect(await cards.adoptRuntimeDefaultsWhereEmpty()).toBe(true)
+    expect(cards.getModules('default').consciousness).toEqual({ provider: 'openai-compatible', model: 'jarvis-model' })
+    expect(await cards.adoptRuntimeDefaultsWhereEmpty()).toBe(false)               // nothing left to adopt
+    consciousness.activeProvider = 'other-provider'
+    consciousness.activeModel = 'other-model'
+    expect(await cards.adoptRuntimeDefaultsWhereEmpty()).toBe(false)               // a default that holds a provider is left alone
+    expect(cards.moduleDefaults?.consciousness).toEqual({ provider: 'openai-compatible', model: 'jarvis-model' })
+  })
+
   it('does not restore a removed provider from saved defaults', async () => {
     const consciousness = useConsciousnessStore()
     consciousness.activeProvider = 'removed-provider'

@@ -35,7 +35,7 @@ mcp = MCPServer("jarvis")
 # tools an owner command used in the kernel's audit log (Hermes: pc open/list, task create/get/update/dispatch, output save) plus pc_action and open_file,
 # which the owner's typed commands reach; the connector tools, show_output, models_status and switch_model are left out (the console has its own model
 # switch), and two long descriptions are shorter. Nothing is removed from "owner" or "lab".
-COMPACT_TOOLS = {"save_output", "pc_action", "open_app", "open_folder", "open_file", "list_folder", "task_start", "task_update", "task_get", "lab_work"}
+COMPACT_TOOLS = {"save_output", "pc_action", "open_app", "open_folder", "open_file", "list_folder", "list_windows", "task_start", "task_update", "task_get", "lab_work"}
 COMPACT_DESC = {
     "lab_work": (
         "Send a task's hands-on work (code, tests, web, files) to the lab ONCE; an independent check verifies every criterion and failures are repaired. "
@@ -200,7 +200,7 @@ def connector_result(job: str) -> str:
 
 @tool("lab", "owner")
 def pc_action(op: str, target: str, text: str = "", approval_id: str = "", task_id: str = "") -> str:
-    r"""Act on the owner's PC: op launch (notepad, calc, mspaint), click or type; target 'app|element'. Every action needs the owner's approval: the first call returns an approval_id; the owner approves at the kernel console; then repeat the same call with that approval_id. Password managers, banking and wallets are refused."""
+    r"""Act on the owner's PC: op click or type (also focus, key, scroll); target 'app|element'. To OPEN an app use open_app, which needs no approval. Every action needs the owner's approval: the first call returns an approval_id; the owner approves at the kernel console; then repeat the same call with that approval_id. Password managers, banking and wallets are refused."""
     _log("pc_action", f"{op} {target}" + (" (approved)" if approval_id else ""))
     r = _act("ui", op, target, {**({"text": text} if text else {}), **({"task": task_id} if task_id else {})}, approval_id)
     if r.get("status") == "queued":
@@ -240,6 +240,22 @@ def open_file(folder: str, path: str, approval_id: str = "") -> str:
 def list_folder(folder: str, path: str = "") -> str:
     r"""List one of the owner's folders (Downloads, Documents, Desktop, Pictures, Videos, Music), newest first, up to 200 entries. Use it when unsure of a name."""
     return _pc("list_folder", folder, path)
+
+
+@tool("owner")
+def list_windows() -> str:
+    r"""What is on the owner's screen: their open windows now (title, app, size) and which one is in front. Read-only; use it for "what's on my screen" before anything else."""
+    _log("list_windows")
+    r = _act("ui", "list_windows", "windows")
+    return _say(_outcome("list_windows", _wait(r["job"])) if r.get("status") == "queued" else r)
+
+
+@tool("owner")
+def read_window(app: str) -> str:
+    r"""The names and values of what one open window shows (its controls and text), app = its process name such as notepad or chrome. Read-only; call list_windows first for the names."""
+    _log("read_window", app)
+    r = _act("ui", "snapshot", app)
+    return _say(_outcome("read_window", _wait(r["job"])) if r.get("status") == "queued" else r)
 
 
 @tool("owner")

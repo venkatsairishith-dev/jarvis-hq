@@ -139,25 +139,36 @@ def _scalar_ok(v, types) -> bool:
 PLAIN_KEY = re.compile(r"[a-z][a-z0-9_]{0,40}")
 
 
-def _key(k, red, m: Mapping):
+# Tool-definition identifiers (2026-10-25). The names of tools and of their arguments, and the argument names listed under "required", are written by the
+# app that offers the tool, not by the owner. Redacting them broke every tool call of the face: builtIn_mcpListTools became [API_KEY_1] (a mixed-case
+# word looks like a key), call_icon became [USERNAME_2], location became [API_KEY_5], and the model could not name a tool it was given. A name is kept
+# only inside tools / functions / tool_choice / function_call / a tool call, and only when it is a plain identifier (no space, "@", digit first);
+# a message's own "name" (a speaker) and every description, default and example are still redacted.
+IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")      # letters, digits, underscore only: no hyphen, dot, space or "@", so a value built from private text does not pass
+IDENT_KEYS = {"name", "required"}
+
+
+def _key(k, red, m: Mapping, ident: bool = False):
     """A JSON object key. Plain lower-case schema words (type, properties, description, city_name ...) stay as they are; any other
     key (capitals, spaces, dashes, digits first, Indic script, a long value used as a name) is text a caller may have built from
     private data, so it gets the same deep pass as a value. The reply's placeholders are restored, keys in tool-call arguments too."""
     if not isinstance(k, str):
         raise GatewayRefusal("the request holds a value the gateway cannot check, so it was not forwarded")
-    return k if PLAIN_KEY.fullmatch(k) else _kept(red, k, m)
+    return k if (PLAIN_KEY.fullmatch(k) or (ident and IDENTIFIER.fullmatch(k))) else _kept(red, k, m)
 
 
-def _tree(value, red, m: Mapping, depth: int = 0, key: str = ""):
+def _tree(value, red, m: Mapping, depth: int = 0, key: str = "", ident: bool = False):
     """Every string inside a JSON value redacted (deep); numbers, booleans and null kept; keys kept."""
     if depth > MAX_DEPTH:
         raise GatewayRefusal("the request is nested too deeply to be checked, so it was not forwarded")
     if isinstance(value, str):
-        return value if key in SCHEMA_WORDS else _kept(red, value, m)
+        if key in SCHEMA_WORDS or (ident and key in IDENT_KEYS and IDENTIFIER.fullmatch(value)):
+            return value
+        return _kept(red, value, m)
     if isinstance(value, list):
-        return [_tree(v, red, m, depth + 1, key) for v in value]
+        return [_tree(v, red, m, depth + 1, key, ident) for v in value]
     if isinstance(value, dict):
-        return {_key(k, red, m): _tree(v, red, m, depth + 1, k if isinstance(k, str) else "") for k, v in value.items()}
+        return {_key(k, red, m, ident): _tree(v, red, m, depth + 1, k if isinstance(k, str) else "", ident) for k, v in value.items()}
     if value is None or isinstance(value, (bool, int, float)):
         return value
     raise GatewayRefusal("the request holds a value the gateway cannot check, so it was not forwarded")
@@ -195,7 +206,7 @@ def _redact_message(msg, red: Redactor, m: Mapping):
         out["content"] = redact_content(msg["content"], red, m, deep=True)
     for k in MESSAGE_TEXT_KEYS:                                 # name, tool_call_id, reasoning text, refusal, legacy function_call
         if k in msg and msg[k] is not None:
-            out[k] = _tree(msg[k], red, m, key=k)
+            out[k] = _tree(msg[k], red, m, key=k, ident=(k == "function_call"))
     if isinstance(msg.get("tool_calls"), list):
         calls = []
         for c in msg["tool_calls"]:
@@ -203,7 +214,7 @@ def _redact_message(msg, red: Redactor, m: Mapping):
                 raise GatewayRefusal("a tool call has an unknown shape, so the request was not forwarded")
             fn = c.get("function")
             calls.append({"id": _tree(c.get("id"), red, m), "type": "function",
-                          "function": _tree(fn if isinstance(fn, dict) else {}, red, m, key="function")})
+                          "function": _tree(fn if isinstance(fn, dict) else {}, red, m, key="function", ident=True)})
         out["tool_calls"] = calls
     # anything else on the message (an audio reply, annotations, a field not known here) is not forwarded
     return out
@@ -241,7 +252,7 @@ def redact_body(body: dict, red: Redactor, m: Mapping) -> dict:
                 raise GatewayRefusal(f"{k} has an unexpected value, so the request was not forwarded")
             out[k] = v
         elif k in TEXT_FIELDS:
-            out[k] = _tree(v, red, m, key=k)
+            out[k] = _tree(v, red, m, key=k, ident=k in ("tools", "functions", "function_call", "tool_choice"))
         elif k == "stream_options":
             out[k] = {a: b for a, b in v.items() if a == "include_usage" and isinstance(b, bool)} if isinstance(v, dict) else {}
         elif k in SCALARS:
@@ -521,6 +532,10 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             chain = providers if (raw is not None and self._path() in ("/chat/completions", "/completions")) else [first_own]
             now = time.time()
             chain = [p for p in chain if p is first_own or _cooldown.get(p["name"], 0) <= now]
+            # A fallback with a token limit of its own (Groq's free tier: 8000 tokens a minute for input and answer) is skipped for a request it cannot take: its
+            # "413 request too large" would hide the first provider's real answer (busy), and the face showed "Remote sent 413 response" (2026-10-25).
+            est = (len(raw) // 4 + 1024) if raw is not None else 0
+            chain = [p for p in chain if p is first_own or not p.get("max_total_tokens") or est <= int(p["max_total_tokens"])]
             tried = []
             for i, prov in enumerate(chain):
                 last = i == len(chain) - 1

@@ -316,15 +316,29 @@ class P(unittest.TestCase):
     def test_a_free_provider_too_small_for_the_agents_requests_does_not_count_as_available(self):
         limited, limited_url = upstream("limited", self.seen, status=429, err_body=b'{"error": {"message": "limit"}}')
         self.servers.append(limited)
-        small = Provider("small", "private", self.up_url, self.keyf, ["any"], default_model="m", max_total_tokens=8000, priority=1)
+        small = Provider("small", "private", self.up_url, self.keyf, ["any"], default_model="m", max_total_tokens=4000, priority=1)
         big = Provider("big", "private", limited_url, self.keyf, ["any"], default_model="m", priority=2)
         H, tokens = make_handler(self.k, [small, big], clock=lambda: self.now[0])
         s = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=s.serve_forever, daemon=True).start(); self.servers.append(s)
         self.url = f"http://127.0.0.1:{s.server_address[1]}"; self.tok = tokens.issue("hermes")
-        big_request = {"model": "x", "messages": [{"role": "user", "content": "word " * 9000}]}     # about 11k tokens: only `big` fits
+        big_request = {"model": "x", "messages": [{"role": "user", "content": "word " * 9000}]}     # about 11k tokens: only `big` fits (`small` takes 4000 in all)
         with self.assertRaises(urllib.error.HTTPError):
             self.call(big_request)
-        self.assertGreater(H.owner_plane.lane_wait("private"), 0)       # `small` is idle, but a 10k-token command cannot use it
+        self.assertGreater(H.owner_plane.lane_wait("private"), 0)       # `small` is idle, but an owner command (about 6k tokens) cannot use it
+
+    def test_a_groq_sized_provider_that_is_idle_means_an_owner_command_can_run(self):
+        """2026-10-25: the gate assumed a 12k-token command, so the only provider it counted was OpenRouter's free model, which was always
+        resting: every owner command was refused while Groq (8000 tokens in all) could take the ~5.7k-token request."""
+        limited, limited_url = upstream("limited", self.seen, status=429, err_body=b'{"error": {"message": "limit"}}')
+        self.servers.append(limited)
+        groq = Provider("groq", "private", self.up_url, self.keyf, ["any"], default_model="m", max_total_tokens=8000, priority=1)
+        big = Provider("big", "private", limited_url, self.keyf, ["any"], default_model="m", priority=2)
+        H, tokens = make_handler(self.k, [groq, big], clock=lambda: self.now[0])
+        s = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=s.serve_forever, daemon=True).start(); self.servers.append(s)
+        self.url = f"http://127.0.0.1:{s.server_address[1]}"; self.tok = tokens.issue("hermes")
+        with self.assertRaises(urllib.error.HTTPError):
+            self.call({"model": "x", "messages": [{"role": "user", "content": "word " * 9000}]})      # only `big` fits this one: it is now resting
+        self.assertEqual(H.owner_plane.lane_wait("private"), 0)         # a normal owner command goes to `groq`, which is idle
 
     def test_kill_switch_and_rate_limit(self):
         self.proxy([self.good()])
