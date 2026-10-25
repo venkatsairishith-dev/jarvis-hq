@@ -185,7 +185,8 @@
 .jhud-seg-task[data-busy='true'] { color: var(--jhud-amber); }
 .jhud-seg-model { --n: 13; flex: 1 1 auto; color: var(--jhud-dim); }
 .jhud-seg-notices { --n: 5; color: var(--jhud-dim); padding-right: 0; }
-.jhud-seg-notices svg { vertical-align: -1px; margin-right: 3px; }
+/* the page's reset makes every svg a block: inline, so the bell and its count share one line (they stacked in the real 252 x 336 window) */
+.jhud-seg-notices svg { display: inline-block; vertical-align: -1px; margin-right: 3px; }
 .jhud-seg-notices:not([data-count='0']) { color: var(--jhud-text); }
 .jhud-seg-notices[data-approval='true'] { color: var(--jhud-amber); }
 
