@@ -1,0 +1,16 @@
+[plugin]
+id = "doc_reader"
+name = "Document Reader"
+description = "Read a scanned document, a PDF without a text layer or a picture of a page (English) with a local OCR model (LightOnOCR through llama-server). Only the one file the owner names; secrets, card numbers and real IBANs are removed from the text; nothing leaves this PC."
+short_description = "Read scanned invoices, PDFs and page pictures locally."
+keywords = [
+    "ocr", "scan", "scanned", "invoice", "receipt", "read document", "read pdf", "picture of a page", "photo of a document", "image to text"
+]
+version = "0.1.0"
+type = "plugin"
+entry = "jarvis.plugins.doc_reader:DocReaderPlugin"
+
+
+[plugin_runtime]
+enabled = true
+auto_start = true

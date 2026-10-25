@@ -17,8 +17,8 @@ Tools:
     jarvis_show            put one of the things JARVIS made (deck, report, image, note) in the face's Preview panel ("show me the Q3 deck")
     jarvis_outputs, jarvis_output_get, jarvis_preview_wanted
                            the Preview panel's own reads of the deliverables folder (jarvis/bridge/output_preview.py); not for the chat model
-  <plugin>__<entry>      every entry of the JARVIS plugins in jarvis/plugins (research, deliverables, doc_tools, learn_vault,
-                         workbench, local_team, desktop, main_agent, web_search), run by jarvis/pluginapi; --plugins narrows them
+  <plugin>__<entry>      every entry of the JARVIS plugins in jarvis/plugins (research, deliverables, doc_tools, doc_reader,
+                         learn_vault, workbench, local_team, desktop, main_agent, web_search), run by jarvis/pluginapi; --plugins narrows them
   plus the read-only views of jarvis/bridge/readonly_mcp.py when --data is given
 
 Every string in a result is cleaned for a model (jarvis/plugins/_shared/screen_text.clean_result) before it leaves, because the

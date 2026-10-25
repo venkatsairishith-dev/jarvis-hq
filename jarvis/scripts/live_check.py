@@ -157,6 +157,7 @@ EXPECTED = {
     "jarvis_bridge": {"delegate_task", "task_result", "jarvis_status", "pending_approvals", "connector_overview"},
     "main_agent": {"plan_task", "run_task", "resume_run", "run_status", "stop_task"},
     "doc_tools": {"read_document", "write_document", "list_outputs"},
+    "doc_reader": {"read_document"},
     "learn_vault": {"vault_status", "list_notes", "read_note", "search_notes", "save_note", "record_progress", "get_progress"},
     "local_team": {"ask_local", "solve_with_team", "team_status"},
     "deliverables": {"make_presentation", "make_report", "open_output", "show_in_folder", "start_slideshow", "regenerate",

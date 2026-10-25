@@ -2618,5 +2618,43 @@
    "MCP client (HTTP only)"
   ],
   "evidence": "Licences: AIRI code MIT; packages/font-departure-mono SIL OFL 1.1; the Live2D Cubism core and sample avatars are downloaded at build under their own terms and not stored. Reviewed 2026-10-23: removed OpenPanel analytics, auto-updater and AIRI release feed, account sign-in, computer use (@auv-js), Home Assistant control, stdio MCP servers, the Spine Runtimes (need a Spine Editor licence) and 10 non-English interface languages; added a network lock (loopback, tailnet, owner-listed hosts). GHSA-9832-f8jx-hw6f fixed upstream in v0.7.2-beta.3. Test suites match the unchanged import apart from tests removed with their code."
+ },
+ {
+  "name": "LightOnOCR-3-0.8B GGUF + mmproj F16 (document reading)",
+  "category": "model",
+  "upstream_url": "https://huggingface.co/mradermacher/LightOnOCR-3-0.8B-GGUF (GGUF, rev d7699238); base model https://huggingface.co/lightonai/LightOnOCR-3-0.8B",
+  "licence": "Apache-2.0 (base model and GGUF repo card)",
+  "pinned_version": "GGUF by mradermacher, commit d7699238; sha256 of both files in jarvis/tools/jarvis.lock.json",
+  "pin_location": [
+   "jarvis/tools/jarvis.lock.json",
+   "jarvis/local_models/llama-swap.yaml"
+  ],
+  "integration": "downloaded model weights",
+  "machine": "laptop",
+  "jarvis_files": [
+   "jarvis/plugins/doc_reader/core.py",
+   "jarvis/local_models/llama-swap.yaml"
+  ],
+  "features_used": [
+   "transcription of a page image through llama-server's multimodal path (English only)"
+  ],
+  "unused_features": [
+   {
+    "feature": "grounding prompt (blocks with bounding boxes)",
+    "evidence": "https://huggingface.co/lightonai/LightOnOCR-3-0.8B (model card, prompt modes)"
+   },
+   {
+    "feature": "Hindi and other languages (not tested, not needed)",
+    "evidence": "jarvis/docs/03_DECISIONS.md D48"
+   }
+  ],
+  "size_class": "small (0.7 GB)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Both files pinned with the Hugging Face lfs sha256 (read 2026-10-25; not downloaded here).",
+  "evidence": [
+   "jarvis/docs/01_RESEARCH_AUDIT.md (LightOnOCR row)",
+   "jarvis/evals/quality95/results/lightonocr-20261025-174505.json",
+   "jarvis/tools/jarvis.lock.json"
+  ]
  }
 ]

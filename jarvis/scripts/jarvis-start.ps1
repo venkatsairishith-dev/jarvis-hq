@@ -104,7 +104,7 @@ if (Listening 8799) {
   } catch { $jarvis = "console listening but not answering" }
 }
 # The tool server for the face (127.0.0.1:48970/mcp): jarvis_do / jarvis_task_result / ... and every entry of the plugins in
-# jarvis\plugins (research, deliverables, doc_tools, learn_vault, workbench, local_team, desktop, main_agent, web_search),
+# jarvis\plugins (research, deliverables, doc_tools, doc_reader, learn_vault, workbench, local_team, desktop, main_agent, web_search),
 # plus the read-only views of the data folder. Start it after the console: its tools call the console.
 if (-not (Listening 48970)) {
   Start-Process $py -ArgumentList '-m', 'jarvis.bridge.face_tools', '--data', $muse, '--vault', $Vault -WorkingDirectory $repo -WindowStyle Hidden `
