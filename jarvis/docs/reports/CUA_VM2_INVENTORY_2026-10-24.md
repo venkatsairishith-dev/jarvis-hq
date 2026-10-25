@@ -392,3 +392,33 @@ An earlier try with the new model failed only on a runner integrity rule (the wo
 **Cleanup.** `jarvis-lab-runner` stopped (inactive, disabled); no leftover processes for jarvis-sandbox, jarvis-verify or agent; both throw-away agents terminated (`lab-smoke-test`, `lab-smoke-test-2`); cua-driver, lab-control, the desktop and the forwarder active. The lane stays on dahl-glm until the owner or the cloud session changes it.
 
 **The WSL lab runner (cloud question):** retired. `wsl -l` lists no distribution, the task `JarvisLab` and the folder `D:\jarvis-lab` are gone (moved to `D:\jarvis-trash\2026-10-23`), and no `lab_runner` process runs on the laptop. Re-issuing `lab-runner` voided nothing that was live; VM2 is the only runner. No further tokens were issued.
+
+### Part 3: face rollout and the real-laptop battery (2026-10-25, laptop session; owner approved running it unattended and allowed the microphone for the test)
+
+**A. Face rollout.** Backup of the installed face: `D:\jarvis\backup\face-install-20261025-1503` (607 MB). `jarvis/laptop` merged with the cloud branch (70e22e9), `pnpm install --frozen-lockfile`, `build:win` 2m16s, verify-downloads `ok` x5, installer 235,777,412 bytes; `render-smoke` ok ("no policy problems", 3 other messages: a Pinia-sync "disposed before the RPC completed" noise from the window closing). Silent install over D:\APPS\jarvis (app.asar hash equal to the build; the installer did not launch the face); the bridge (face_tools) was restarted with `jarvis-start.ps1`, which started the face.
+| Check | Result |
+|---|---|
+| jarvis_status | ok, console_up true, kernel_up true, kill switch off |
+| jarvis_spoken, jarvis_recall, jarvis_outputs, jarvis_preview_wanted, jarvis_notices | all answer (empty lists where nothing happened yet) |
+| HUD in the real Electron window (screenshot of the face window only) | ring leaves OFFLINE: strip reads "STANDBY, 15:11, KERNEL UP, ID..." (cut off at the right edge of a 900 px window); at the default 252 x 336 px window only the ring and a green dot fit |
+| Preview panel | works in Electron: "jarvis_show" opened it inside the face window showing "Smoke test report, PDF, 48 KB, page 1 of 3, checks passed" with prev/next arrows. In the default small window the layout is cramped (title cut to "Smo...", no page image or thumbnails visible). A made-up traversal id was refused ("that path is not inside the deliverables folder"). |
+| Hostile file names in the output folder | `.hidden.pdf` and `run me.bat` are not listed; names with `;`, `&`, `$()` and long names are listed as plain text. **Found: a direction-override character (U+202E) passed into the title.** Fixed (titles drop bidi, zero-width and control characters) with a test. |
+| Click-through | not tested live (a click on the HUD could land on one of the owner's windows). Static: `hud-tokens.css` sets `pointer-events: none` on the layer. |
+| HUD z-order against the model | the ring sits above the model's top area without covering the character in the screenshot; not measured further |
+
+**B. SEE.** `whats_on_screen` works and returns cleaned titles ("<a .txt file> - Notep", an e-mail address shown as "[email]"); it lists the owner's windows by title only, nothing read. `read_window_text app=notepad` first failed with "capture failed": the node's `outputs\local-only` folder did not exist on the new layout. **Fixed** (the capture makes the folder; test added) and the node restarted from `D:\jarvis\hq`. Then it works on my window: ok, 9 lines, `removed: provider_key, key_assignment`; with the default flag off none of the screen text goes to a model at all (only the line count). Direct test of the cleaner on my fake text: `password: hunter2`, `api_key = sk-...`, the card number and the cvv were removed; **an IBAN-form bank account was NOT removed**. **Fixed** (mod-97 checked, so a made-up "GB00FAKE..." stays and a real IBAN goes; test added). With the flag on, the privacy gateway also hides names (it turned "JARVIS" into a placeholder: over-redaction, no leak).
+Not done: a Chrome tab and a PDF viewer for OCR, because Chrome and the viewer would share windows with the owner's own (reading them was not allowed).
+
+**C. CONTROL** (only windows I opened; a Notepad with `battery.txt` and a Chrome tab; the owner's `rishi-laptop.conf` Notepad and other windows untouched):
+| Action | Result |
+|---|---|
+| open Notepad + type a line | worked: focus, then type, my window shows `*battery.txt` (the owner's Notepad title unchanged). Note: the node picks the FIRST process of that name, not the foreground one; with two Notepads the target was mine only because it has the lower PID |
+| minimize / restore / maximize / restore my window | worked |
+| open a harmless site in the owner's Chrome | worked (a window titled "Example Domain" appeared) but the tool reported `verified: unconfirmed` ("no Chrome window was seen to change within 8 s"); `list_browser_profiles` returns no profile. Not closed: the same first-process rule could close one of the owner's tabs |
+| play and pause a YouTube video | failed: "Playwright MCP is not installed or unreadable ... JARVIS starts only the pinned 0.0.83" (not installed, not changed). `check_pc media`: "unreadable media state" |
+| volume down then up | worked (two media keys, net zero) |
+| new File Explorer window on D:\jarvis\outputs (via `run_pc_task`) | failed at step 3: "was sent to open, but no window showing it was seen"; no new Explorer window |
+| screenshot of my window through `jarvis_do` | task c-de74d8ecbb7a still "running" after 3 minutes (not waiting for an approval); not finished |
+| read-only PC checks | disk and processes worked (C: 53.1 GB free of 176; **D: 12.9 GB free of 75**) |
+
+**D. Fixes (all with tests, in `jarvis/laptop`):** preview titles lose bidi/zero-width/control characters; window capture creates `outputs\local-only`; the screen-text cleaner removes real IBANs. Not fixed: the node's "first process of that name" window pick (design change); Playwright MCP for YouTube (needs an install the owner has not approved); Explorer folder open; the small-window layout of the HUD strip and the Preview panel.
