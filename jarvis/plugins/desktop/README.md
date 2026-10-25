@@ -131,3 +131,36 @@ only safe-to-teach tools (open app/site/file, play media, window, press key, rea
 gate. Requests that look private (an address, a long number, password/token/key/pin/otp/card ...) or contain a line break are never taught. At most 3 examples per proposal, one proposal a day, never one
 already taught or already proposed. It cannot promote: only you do, after the regression gate passed for that exact file.
 `python -m plugin.plugins.desktop.skills candidates` lists them; `... propose-mined` stages one version. Tests: `tests/test_learn.py` (23, each rule checked by mutation).
+
+
+## Where a goal goes (audit 2026-10-25, D51) and the split
+**The path a goal took before this change, file by file.** The face's chat model calls the MCP tool `jarvis_do(task)`.
+1. `jarvis/bridge/face_tools.py` `FaceTools.do` -> `JarvisClient.delegate` (`jarvis/plugins/jarvis_bridge/client.py`): `POST /api/owner/command {text, source: "face"}` to the console on 127.0.0.1:8799.
+2. The console forwards it to the kernel's owner plane: `jarvis/kernel/jarvis_kernel/owner.py` `Owner.command` scrubs it, checks the kill switch and the provider rest, records it (`owner_commands`, audit) and
+   hands it to `self.hermes` (the Hermes agent on the SERVER) in `_run`.
+3. On the server, Hermes (an online model, through the privacy gateway chain) both REASONS and FORMS every tool call (`pc_action`, ...). A malformed tool-call JSON (HTTP 400), a PIN-gated choice, or no view of the screen
+   are failures of that model doing the executor's job.
+4. Each tool call comes back to the kernel as a job: `Owner.pc` (`owner.py`) validates it against `jobs.py` (PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS) and policy (D27), and the laptop node (`jarvis/node/jarvis_node`: `ui.py`, `vision.py`, `jobs.py`) only RUNS
+   the job and reports what it observed.
+So no code on the laptop was ever asked "what is the goal": the local executors below were reachable only by the owner's own `run_pc_task` call or a main_agent plan, never from `jarvis_do`.
+
+**What the laptop already had:** `decide.py` (the small local model turns a request into steps with a grammar, rules resolve the names), `coordinator.py` (the PC lock, runs and verifies each step; `Coordinator.run(request, plan=None)`),
+`missions.py` (durable multi-phase), `node/.../vision.py` + `ui.py` (accessibility tree, then OCR, then the local vision model), `plugins/doc_reader` (LightOnOCR), `plugins/main_agent/planner.py` (`parse_plan` against a catalogue).
+
+**The split (`goal.py`, entry `desktop:do_goal`, in the chat tool list as `desktop__do_goal`):**
+1. `plan_messages` asks the privacy gateway (`http://127.0.0.1:48950/v1/chat/completions`, header `X-Jarvis-Route: online` so the gateway does not answer it with the local model first) for a JSON plan: at most 6 short steps, each with a goal sentence and a one-line
+   success check, naming only executors of the catalogue. The request is messages only: no `tools`, no `tool_choice`, no image, no stream; the gateway redacts it as for every online call. The online model writes no tool name and no argument.
+2. `planner.parse_plan` validates the plan against the catalogue (`pc`, `screen_read`, `screen_locate`, `doc_read`, `deliverable_list`, `deliverable_open`, plus `recall` and `tasks` when the face lent them). Arguments the model wrote anyway are dropped.
+3. Each step runs in order, locally. `pc`: `decide.decide` (alias of task kind `ui_decide`) makes the exact steps and `DesktopPlugin._run_task` runs them through the coordinator, so the PC lock, verification and the kernel's gate apply as for `run_pc_task`.
+   Other executors: a grammar-forced pick of the arguments by the `chat_simple` specialist (a `path` must be one the owner wrote), then the plugin entry (`read_window_text`, `find_on_screen`, `doc_reader:read_document`, `deliverables:*`).
+4. A step the kernel gates (`waiting_for_permission`, or an approval message from a helper) stops the goal: the later steps show `not_run`, the answer names the approval, and the owner approves with the PIN and asks again.
+   A failed step also stops the goal. The plan's success check is reported as a note next to what the executor observed (`verified`), never in place of it.
+5. The model for each kind of work comes from `jarvis/config/specialists.json` (`plugins/_shared/specialists.py`: kind -> alias, fallback alias, max tokens; `reason` = the online provider). A missing file means built-in defaults; a wrong file is an error;
+   aliases the llama-swap file does not define yet are listed by `specialists.not_installed()` (today `local-chat`), not failed. Today `ui_decide` is passed to the decider and its fallback is tried when the first does not answer; `doc_reader` and `vision.py` still
+   hard-code their alias and a test checks that the table and those constants name the same model.
+6. **Fallback:** if the gateway is not ready, the online call fails (HTTP error, 400 bad tool JSON, timeout), or the plan is unusable (not JSON, 0 or more than 6 steps, an executor that does not exist), the local model plans the whole goal alone (`decide.py`, as
+   `run_pc_task`) and the result says `planned_by: local_alone` with a `reason`.
+7. **Flag:** `plan_online_execute_local` in `[config]` of this plugin's `plugin.toml` (default true); `JARVIS_PLAN_ONLINE_EXECUTE_LOCAL=0` turns it off for a run. Off: step 6 directly, no online request.
+Privacy: the goal is secret-scrubbed, then redacted by the gateway. No window text, screenshot or document text goes online: the plan is made once, from the goal, and nothing the executors read is sent back (the answer is built on the laptop). Helper text stays in the
+step's `result`, which `screen_text.cleaned` releases only under the screen-text rule; the `summary` never carries it.
+Not done here: the server's Hermes and the kernel are unchanged (`jarvis_do` still reaches Hermes for everything that is not a PC, screen or document goal); the chat model picks `desktop__do_goal` for those from its description.
