@@ -282,3 +282,21 @@ def test_what_was_made_long_ago_or_with_auto_off_is_not_announced(root):
     off._baseline = 0
     assert off.take_wanted() == []
     assert started.take_wanted() != [], "the same folder is new for a view that started before it"
+
+
+def test_a_title_has_no_direction_override_zero_width_or_control_characters(root):
+    # found on the real laptop: a file named "invoice<RLO>gpj.exe.pdf" was listed with the override in its title (it would read as "invoiceexe.jpg")
+    RLO, ZWSP, LRI, BEL = chr(0x202E), chr(0x200B), chr(0x2066), chr(7)
+    hostile = root / "20261025-000000-hostile"
+    hostile.mkdir()
+    main = "invoice" + RLO + "gpj.exe.pdf"
+    (hostile / main).write_bytes(_pdf())
+    (hostile / "spec.json").write_text(json.dumps({"title": "Q4" + RLO + " plan" + ZWSP + BEL + " final" + LRI}), encoding="utf-8")
+    (hostile / "qa.json").write_text(json.dumps({"file": str(hostile / main), "kind": "pdf", "qa": {"passed": True}}), encoding="utf-8")
+    titles = [i["title"] for i in P.OutputPreview(root).list()["items"]]
+    assert "Q4 plan final" in titles
+    only = root / "20261025-000001-name-only"
+    only.mkdir()
+    (only / ("evil" + RLO + "gpj.exe.pdf")).write_bytes(_pdf())
+    titles = [i["title"] for i in P.OutputPreview(root).list()["items"]]
+    assert len(titles) >= 2 and not any(P.INVISIBLE.search(t) for t in titles), titles

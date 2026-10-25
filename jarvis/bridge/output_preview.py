@@ -75,6 +75,15 @@ MAGIC = {".png": (b"\x89PNG\r\n\x1a\n",), ".jpg": (b"\xff\xd8\xff",), ".jpeg": (
 # A name that looks like it holds credentials is neither listed nor opened, whatever is inside.
 SECRET_NAME = re.compile(r"(?i)(secret|passw|credential|token|private|apikey|api[_-]?key|\.env|id_rsa|id_ed25519|\.pem$|\.key$|"
                          r"\.pfx$|\.p12$|\.kdbx$|\.keystore$|\.npmrc$|\.netrc$|\.htpasswd$|\.jks$)")
+# Text that is shown to the owner (a title, a name) must not carry direction overrides, zero-width or control characters: "invoice<RLO>gpj.exe" reads
+# as "invoiceexe.jpg" (found on the real laptop, 2026-10-25).
+INVISIBLE = re.compile("[\\x00-\\x1f\\x7f-\\x9f\\u00ad\\u061c\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]")
+
+
+def clean_title(text: str, limit: int = 120) -> str:
+    return " ".join(INVISIBLE.sub(" ", str(text or "")).split())[:limit]
+
+
 STOP = {"the", "a", "an", "my", "me", "show", "open", "display", "view", "see", "please", "preview", "panel", "that", "this", "of",
         "to", "in", "on", "for", "and", "it", "up", "you", "can", "could", "latest", "last", "newest", "recent", "latest", "new", "one", "file", "things"}
 KIND_WORDS = {"deck": "deck", "decks": "deck", "slides": "deck", "slide": "deck", "presentation": "deck", "pptx": "deck",
@@ -231,8 +240,7 @@ class OutputPreview:
     def _spec_title(self, folder: Path) -> str | None:
         try:
             data = json.loads(_read_regular(folder / "spec.json", SPEC_MAX).decode("utf-8"))
-            title = str(data.get("title") or "").strip()
-            return " ".join(title.split())[:120] or None
+            return clean_title(data.get("title")) or None
         except (PreviewError, ValueError, AttributeError, UnicodeDecodeError):
             return None
 
@@ -259,7 +267,7 @@ class OutputPreview:
             family, mime, _ = classify(path.name)
         except PreviewError:
             return None
-        item: dict[str, Any] = {"id": encode_id(rel), "title": title or path.stem.replace("-", " ").replace("_", " ").strip().capitalize() or path.name,
+        item: dict[str, Any] = {"id": encode_id(rel), "title": clean_title(title or path.stem.replace("-", " ").replace("_", " ").strip().capitalize() or path.name),
                                 "kind": family, "mime": mime, "size": st.st_size, "modified": int(st.st_mtime), "passed": None, "pages": None}
         if main and qa is not None:
             try:
