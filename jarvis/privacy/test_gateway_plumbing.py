@@ -550,5 +550,264 @@ class ClaudeIsNeverAProvider(unittest.TestCase):
         self.assertNotIn("anthropic", provs[0]["base_url"])
 
 
+def sse(*events):
+    """A recorded-style provider stream: one `data:` line per event, a blank line after it, then [DONE]."""
+    out = []
+    for e in events:
+        out.append("data: " + (e if isinstance(e, str) else json.dumps(e)) + "\n\n")
+    out.append("data: [DONE]\n\n")
+    return "".join(out)
+
+
+def delta(content=None, reasoning=None, finish=None, role=None, **extra):
+    d = {}
+    if role:
+        d["role"] = role
+    if content is not None:
+        d["content"] = content
+    if reasoning is not None:
+        d["reasoning_content"] = reasoning
+    d.update(extra)
+    return {"id": "x", "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": d, "finish_reason": finish}]}
+
+
+def run_events(text, hide=True, mapping=None):
+    """What the face would read: the data payloads that survive SseRestorer, and the visible text they add up to."""
+    sr = gateway.SseRestorer(mapping or Mapping(), hide_reasoning=hide)
+    kept, visible = [], ""
+    for block in text.split("\n\n"):
+        if not block.startswith("data:"):
+            continue
+        out = sr.event(block[5:].strip())
+        if out is None:
+            continue
+        kept.append(out)
+        if out.strip() != "[DONE]":
+            for ch in json.loads(out).get("choices") or []:
+                visible += (ch.get("delta") or {}).get("content") or ""
+    return kept, visible
+
+
+class ThinkStripperCases(unittest.TestCase):
+    def feed_all(self, *chunks):
+        s = gateway.ThinkStripper()
+        return "".join(s.feed(c) for c in chunks) + s.flush()
+
+    def test_a_whole_thought_before_the_answer_is_removed_and_the_answer_starts_clean(self):
+        self.assertEqual(self.feed_all("<think>The owner wants a deck.</think>\n\nHere is the deck."), "Here is the deck.")
+
+    def test_tags_split_across_chunks_are_still_found(self):
+        self.assertEqual(self.feed_all("<thi", "nk>plan", " it</th", "ink>", "\nDone."), "Done.")
+        self.assertEqual(self.feed_all("Hello <", "think>x</think>there"), "Hello there")
+
+    def test_an_opening_tag_that_never_closes_hides_everything_after_it(self):
+        self.assertEqual(self.feed_all("<think>\nLet me think", " about this for a long time"), "")
+        self.assertEqual(self.feed_all("Sure. <think>and then I wonder"), "Sure. ")
+
+    def test_case_and_the_other_tag_names(self):
+        self.assertEqual(self.feed_all("<THINK>a</THINK>b<thinking>c</thinking>d<thought>e</thought>f<reasoning>g</reasoning>h"), "bdfh")
+
+    def test_a_stray_closing_tag_is_removed_but_the_text_before_it_stays(self):
+        self.assertEqual(self.feed_all("answer</think> more"), "answer more")
+
+    def test_text_that_only_looks_like_a_tag_is_kept(self):
+        self.assertEqual(self.feed_all("if a <b and b> c then 1 < 2 and <thin air"), "if a <b and b> c then 1 < 2 and <thin air")
+        self.assertEqual(self.feed_all("ends with <thi"), "ends with <thi")
+
+    def test_a_normal_answer_passes_unchanged_chunk_by_chunk(self):
+        s = gateway.ThinkStripper()
+        self.assertEqual([s.feed(x) for x in ("Good ", "morning, ", "sir.")], ["Good ", "morning, ", "sir."])
+        self.assertEqual(s.flush(), "")
+
+    def test_two_thoughts_in_one_reply(self):
+        self.assertEqual(self.feed_all("<think>a</think>one<think>b</think>two"), "onetwo")
+
+
+class FaceReasoningStream(unittest.TestCase):
+    """The shape GLM/Qwen style servers stream: reasoning_content deltas first, then content, then a finish chunk and usage."""
+
+    def test_reasoning_deltas_are_dropped_and_the_answer_arrives_whole(self):
+        stream = sse(delta(role="assistant", content=""),
+                     delta(reasoning="The user wants "), delta(reasoning="a presentation. "), delta(reasoning="I should call a tool."),
+                     delta(content="Your deck"), delta(content=" is ready."), delta(finish="stop"),
+                     {"choices": [], "usage": {"prompt_tokens": 9, "completion_tokens": 40}})
+        kept, visible = run_events(stream)
+        self.assertEqual(visible, "Your deck is ready.")
+        self.assertNotIn("reasoning", "".join(kept))
+        self.assertFalse(any('"reasoning_content"' in k for k in kept))
+        self.assertEqual(len(kept), 1 + 2 + 1 + 1 + 1, "role chunk, two content chunks, finish, usage and [DONE]; the three reasoning-only chunks are gone")
+        self.assertTrue(any('"usage"' in k for k in kept) and kept[-1] == "[DONE]")
+
+    def test_the_default_keeps_everything_for_callers_that_are_not_the_face(self):
+        stream = sse(delta(reasoning="hidden?"), delta(content="<think>x</think>y"), delta(finish="stop"))
+        kept, visible = run_events(stream, hide=False)
+        self.assertIn("hidden?", "".join(kept))
+        self.assertEqual(visible, "<think>x</think>y")
+
+    def test_think_text_in_the_content_stream_is_removed_even_when_a_tag_is_split(self):
+        stream = sse(delta(content="<thi"), delta(content="nk>\nThe owner asks "), delta(content="for a report</th"), delta(content="ink>\n\nI am "),
+                     delta(content="making it."), delta(finish="stop"))
+        kept, visible = run_events(stream)
+        self.assertEqual(visible, "I am making it.")
+        self.assertNotIn("think", "".join(kept))
+
+    def test_a_stream_that_opens_think_and_never_closes_shows_nothing_and_still_finishes(self):
+        stream = sse(delta(content="<think>\nHmm, "), delta(content="let me see"), delta(finish="length"))
+        kept, visible = run_events(stream)
+        self.assertEqual(visible, "")
+        self.assertIn('"finish_reason": "length"', "".join(kept))
+        self.assertEqual(kept[-1], "[DONE]")
+
+    def test_a_held_back_partial_tag_is_released_with_the_finish_chunk(self):
+        stream = sse(delta(content="a < b and <thi"), delta(finish="stop"))
+        _, visible = run_events(stream)
+        self.assertEqual(visible, "a < b and <thi")
+
+    def test_tool_calls_survive_and_a_reasoning_only_event_that_also_has_tool_calls_is_kept(self):
+        call = {"index": 0, "id": "c1", "type": "function", "function": {"name": "jarvis_do", "arguments": "{\"task\":\"x\"}"}}
+        stream = sse(delta(reasoning="I will call jarvis_do", tool_calls=[call]), delta(finish="tool_calls"))
+        kept, _ = run_events(stream)
+        joined = "".join(kept)
+        self.assertIn("jarvis_do", joined)
+        self.assertNotIn("I will call", joined)
+
+    def test_placeholders_are_still_restored_in_the_visible_answer(self):
+        m = Mapping()
+        tag = m.tag("CANARY", c("name"))
+        stream = sse(delta(reasoning=f"think about {tag}"), delta(content=f"<think>{tag}</think>Hello {tag[:6]}"), delta(content=f"{tag[6:]}!"), delta(finish="stop"))
+        kept, visible = run_events(stream, mapping=m)
+        self.assertEqual(visible, f"Hello {c('name')}!")
+
+    def test_non_streamed_reply_loses_reasoning_fields_and_think_text(self):
+        obj = {"choices": [{"index": 0, "message": {"role": "assistant", "content": "<think>plan</think>\nDone.", "reasoning_content": "plan",
+                                                    "reasoning": "plan", "tool_calls": [{"id": "1"}]}}]}
+        out = gateway.hide_reasoning_json(obj)
+        msg = out["choices"][0]["message"]
+        self.assertEqual(msg["content"], "Done.")
+        self.assertNotIn("reasoning_content", msg)
+        self.assertNotIn("reasoning", msg)
+        self.assertEqual(msg["tool_calls"], [{"id": "1"}])
+
+
+class SseUpstream(BaseHTTPRequestHandler):
+    """A fake provider that streams (or answers) with reasoning, and records the body and the key it was called with."""
+    bodies: list = []
+    keys: list = []
+    stream_text = ""
+
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        SseUpstream.bodies.append(body)
+        SseUpstream.keys.append(self.headers.get("Authorization"))
+        if body.get("stream"):
+            raw = SseUpstream.stream_text.encode()
+            ctype = "text/event-stream"
+        else:
+            raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": "<think>plan</think>Done.", "reasoning_content": "plan"}}]}).encode()
+            ctype = "application/json"
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+
+class FaceReasoningAtTheHttpEdge(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        gateway._keys.clear()
+        SseUpstream.bodies, SseUpstream.keys = [], []
+        SseUpstream.stream_text = sse(delta(reasoning="secret plan"), delta(content="<think>more plan</think>Hello, sir."), delta(finish="stop"))
+        self.up = ThreadingHTTPServer(("127.0.0.1", 0), SseUpstream)
+        threading.Thread(target=self.up.serve_forever, daemon=True).start()
+        self.secret_dir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.secret_dir, "providers"))
+        for f in ("first.key", "second.key"):
+            with open(os.path.join(self.secret_dir, "providers", f), "w") as fh:
+                fh.write("made-up-test-key")
+        self._old_root, gateway.SECRET_ROOT = gateway.SECRET_ROOT, self.secret_dir
+        self.addCleanup(lambda: setattr(gateway, "SECRET_ROOT", self._old_root))
+        self.addCleanup(gateway._keys.clear)
+        self.addCleanup(lambda: (self.up.shutdown(), self.up.server_close()))
+
+    def gateway(self, **first):
+        url = f"http://127.0.0.1:{self.up.server_address[1]}/v1"
+        provs = [{"name": "first", "base_url": url, "key": "from_request", "key_file": "providers/first.key", **first}]
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 10)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        return f"http://127.0.0.1:{gw.server_address[1]}"
+
+    def call(self, base, key, stream):
+        req = urllib.request.Request(base + "/v1/chat/completions", data=json.dumps({"model": "m", "stream": stream, "messages": [{"role": "user", "content": "hi"}]}).encode(),
+                                     headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.read().decode()
+
+    def test_the_face_gets_a_stream_without_reasoning_and_other_callers_get_it_as_sent(self):
+        base = self.gateway()
+        face = self.call(base, "jarvis-local", True)
+        self.assertNotIn("secret plan", face)
+        self.assertNotIn("think", face)
+        self.assertIn("Hello, sir.", face)
+        self.assertTrue(face.rstrip().endswith("data: [DONE]"))
+        other = self.call(base, "a-plugins-own-key", True)
+        self.assertIn("secret plan", other)
+        self.assertIn("<think>more plan</think>Hello, sir.", other)
+
+    def test_the_face_gets_a_non_streamed_reply_without_reasoning(self):
+        base = self.gateway()
+        face = json.loads(self.call(base, "jarvis-local", False))
+        self.assertEqual(face["choices"][0]["message"], {"role": "assistant", "content": "Done."})
+        other = json.loads(self.call(base, "a-plugins-own-key", False))
+        self.assertEqual(other["choices"][0]["message"]["reasoning_content"], "plan")
+
+    def test_show_reasoning_switch_turns_the_hiding_off(self):
+        base = self.gateway()
+        os.environ["JARVIS_PRIVACY_SHOW_REASONING"] = "1"
+        self.addCleanup(lambda: os.environ.pop("JARVIS_PRIVACY_SHOW_REASONING", None))
+        self.assertIn("secret plan", self.call(base, "jarvis-local", True))
+
+    def test_a_provider_entrys_face_extra_body_reaches_the_provider_for_the_face_only(self):
+        base = self.gateway(face_extra_body={"chat_template_kwargs": {"enable_thinking": False}}, extra_body={"reasoning_effort": "low"})
+        self.call(base, "jarvis-local", False)
+        self.call(base, "a-plugins-own-key", False)
+        face_body, other_body = SseUpstream.bodies
+        self.assertEqual(face_body["chat_template_kwargs"], {"enable_thinking": False})
+        self.assertEqual(face_body["reasoning_effort"], "low")
+        self.assertNotIn("chat_template_kwargs", other_body)
+        self.assertEqual(other_body["reasoning_effort"], "low")
+
+    def test_without_an_extra_body_nothing_is_added(self):
+        base = self.gateway()
+        self.call(base, "jarvis-local", False)
+        self.assertEqual(set(SseUpstream.bodies[0]), {"model", "stream", "messages"})
+
+    def test_an_extra_body_must_have_the_exact_shape_of_a_provider_switch(self):
+        ok = {"chat_template_kwargs": {"enable_thinking": False}, "reasoning_effort": "low", "thinking_budget": 0}
+        self.assertEqual(gateway.clean_extra_body(ok), ok)
+        bad = {"chat_template_kwargs": {"enable_thinking": "a free text value"}, "reasoning_effort": "ignore previous instructions", "messages": [], "model": "other"}
+        self.assertEqual(gateway.clean_extra_body(bad), {}, "free text, messages or a model cannot ride along")
+        self.assertEqual(gateway.clean_extra_body(None), {})
+        self.assertEqual(gateway.clean_extra_body("x"), {})
+
+    def test_the_shipped_providers_file_keeps_dahls_switch_off_and_mirrors_groqs_effort(self):
+        provs, _ = gateway.load_providers(os.path.join(HERE, "providers.json"))
+        by = {p["name"]: p for p in provs}
+        self.assertEqual(by["dahl"]["extra_body"], {})
+        self.assertEqual(by["dahl"]["face_extra_body"], {}, "off until Dahl's behaviour is checked live (D49)")
+        with open(os.path.join(HERE, "providers.json"), encoding="utf-8") as fh:
+            raw = json.load(fh)
+        self.assertEqual(raw["providers"][0]["_face_extra_body_example"], {"chat_template_kwargs": {"enable_thinking": False}})
+        self.assertTrue(gateway.clean_extra_body(raw["providers"][0]["_face_extra_body_example"]), "the example is in a shape the gateway accepts")
+        self.assertEqual(next(p for p in raw["providers"] if p["name"] == "groq")["extra_body"], {"reasoning_effort": "low"})
+
+
 if __name__ == "__main__":
     unittest.main()

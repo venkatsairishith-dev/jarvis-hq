@@ -24,6 +24,12 @@ nothing is forwarded, and no request text is ever put in a log or an error. Set 
 pattern-only pass (the owner's choice; /health still lists it). POST /redact {"text":..., "names": true} also hides people and
 places for that call ("names": "people": people only) and answers with what was really active ("names", "deep", "ready").
 
+The face's reasoning stays out of its chat (D49): a request that carries the face's placeholder key ("jarvis-local") gets a reply
+without `reasoning_content` / `reasoning` deltas and without <think>...</think> text (also one that opens and never closes), because
+the face would show it to the owner, sometimes for minutes. Other callers get the reply as the provider sent it. A provider entry in
+providers.json may carry `extra_body` (switches added to every request it receives) and `face_extra_body` (added only for the face),
+for example {"chat_template_kwargs": {"enable_thinking": false}}; they must have the exact shape of the provider switches above.
+
 The Authorization header is passed through untouched and never stored or logged. Logs hold counts by kind, never values.
 """
 from __future__ import annotations
@@ -47,6 +53,7 @@ DEFAULT_UPSTREAM = os.environ.get("JARVIS_PRIVACY_UPSTREAM", "https://inference.
 LOCAL_KEY_TOKEN = "jarvis-local"
 PASS_HEADERS = ("authorization", "content-type", "accept", "user-agent", "openai-organization", "openai-project")
 MAX_BODY = 32 * 1024 * 1024
+STREAM_KEEPALIVE_S = 15.0           # while only reasoning arrives (and is hidden), an SSE comment goes out at this interval
 _lock = threading.Lock()
 STATS = {"requests": 0, "redacted": {}, "errors": 0, "started": time.time(), "inflight": 0, "last_call_end": 0.0}
 
@@ -280,37 +287,151 @@ def restore_json(obj, m: Mapping):
     return obj
 
 
+HIDDEN_FIELDS = ("reasoning_content", "reasoning", "reasoning_details")
+_THINK_NAMES = ("think", "thinking", "thought", "reasoning")
+_THINK_OPEN = re.compile(r"<(?:think|thinking|thought|reasoning)>", re.I)
+_THINK_CLOSE = re.compile(r"</(?:think|thinking|thought|reasoning)>", re.I)
+_OPEN_TAGS = tuple(f"<{n}>" for n in _THINK_NAMES)
+_CLOSE_TAGS = tuple(f"</{n}>" for n in _THINK_NAMES)
+
+
+class ThinkStripper:
+    """Removes <think>...</think> (also <thinking>, <thought>, <reasoning>) from streamed text, wherever the tags are split.
+
+    Text inside a tag pair is dropped, and so is everything after an opening tag that never closes (the stream ended inside it).
+    A stray closing tag is removed on its own. Spaces and newlines right after a closing tag are dropped, so the answer starts clean.
+    A text that holds only the end of the thought (the model's template already opened it) cannot be told apart from an answer and is
+    left alone.
+    """
+
+    def __init__(self):
+        self.buf, self.inside, self.trim = "", False, False
+
+    def _held(self, text: str, tags: tuple) -> int:
+        """Length of the end of `text` that could still become one of `tags` (so it is kept back, not emitted)."""
+        cut = text.rfind("<")
+        if cut < 0:
+            return 0
+        tail = text[cut:].lower()
+        return len(tail) if any(t.startswith(tail) and t != tail for t in tags) else 0
+
+    def _visible(self, text: str) -> str:
+        if self.trim and text:
+            text = text.lstrip()
+            if text:
+                self.trim = False
+        return text
+
+    def feed(self, text: str) -> str:
+        self.buf += text
+        out = []
+        while True:
+            if self.inside:
+                m = _THINK_CLOSE.search(self.buf)
+                if m:
+                    self.buf, self.inside, self.trim = self.buf[m.end():], False, True
+                    continue
+                keep = self._held(self.buf, _CLOSE_TAGS)
+                self.buf = self.buf[len(self.buf) - keep:] if keep else ""
+                break
+            o, c = _THINK_OPEN.search(self.buf), _THINK_CLOSE.search(self.buf)
+            hit = min((x for x in (o, c) if x), key=lambda x: x.start(), default=None)
+            if hit is None:
+                keep = self._held(self.buf, _OPEN_TAGS + _CLOSE_TAGS)
+                out.append(self._visible(self.buf[:len(self.buf) - keep]))
+                self.buf = self.buf[len(self.buf) - keep:] if keep else ""
+                break
+            out.append(self._visible(self.buf[:hit.start()]))
+            self.buf = self.buf[hit.end():]
+            if hit is o:
+                self.inside = True            # a stray closing tag is just removed
+        return "".join(out)
+
+    def flush(self) -> str:
+        rest, self.buf = ("" if self.inside else self.buf), ""
+        return self._visible(rest)
+
+
+def strip_think(text: str) -> str:
+    s = ThinkStripper()
+    return s.feed(text) + s.flush()
+
+
+def hide_reasoning_json(obj):
+    """A non-streamed reply without the model's reasoning: the reasoning fields and any <think> text in the content."""
+    if isinstance(obj, dict):
+        for ch in obj.get("choices") or []:
+            if not isinstance(ch, dict):
+                continue
+            for part in (ch.get("message"), ch.get("delta")):
+                if isinstance(part, dict):
+                    for k in HIDDEN_FIELDS:
+                        part.pop(k, None)
+                    if isinstance(part.get("content"), str):
+                        part["content"] = strip_think(part["content"])
+            if isinstance(ch.get("text"), str):                       # the completions API
+                ch["text"] = strip_think(ch["text"])
+    return obj
+
+
 class SseRestorer:
-    """Restores placeholders inside streamed chat deltas. One StreamRestorer per (choice, field)."""
+    """Restores placeholders inside streamed chat deltas. One StreamRestorer per (choice, field).
+
+    With `hide_reasoning` (the face's requests) the reasoning fields are dropped and <think> text is stripped from the content before
+    it is restored; an event that carried only reasoning is dropped (`event` returns None)."""
 
     FIELDS = ("content", "reasoning_content", "reasoning")
 
-    def __init__(self, m: Mapping):
-        self.m, self.parts = m, {}
+    def __init__(self, m: Mapping, hide_reasoning: bool = False):
+        self.m, self.parts, self.hide, self.strippers = m, {}, hide_reasoning, {}
 
     def _r(self, key):
         if key not in self.parts:
             self.parts[key] = StreamRestorer(self.m)
         return self.parts[key]
 
-    def event(self, data: str) -> str:
-        if data.strip() == "[DONE]" or not self.m.to_value:
+    def _s(self, i) -> ThinkStripper:
+        if i not in self.strippers:
+            self.strippers[i] = ThinkStripper()
+        return self.strippers[i]
+
+    def event(self, data: str):
+        if data.strip() == "[DONE]" or (not self.m.to_value and not self.hide):
             return data
         try:
             ev = json.loads(data)
         except ValueError:
-            return restore(data, self.m)
+            return restore(data, self.m) if self.m.to_value else data
+        if not isinstance(ev, dict):
+            return data
+        removed = False
         for ch in ev.get("choices") or []:
             i = ch.get("index", 0)
             d = ch.get("delta") or {}
-            for f in self.FIELDS:
-                if isinstance(d.get(f), str):
-                    d[f] = self._r((i, f)).feed(d[f])
-            for tc in d.get("tool_calls") or []:
-                fn = tc.get("function") or {}
-                if isinstance(fn.get("arguments"), str):
-                    fn["arguments"] = self._r((i, "tool", tc.get("index", 0))).feed(fn["arguments"])
+            if self.hide:
+                for f in HIDDEN_FIELDS:
+                    if f in d:
+                        d.pop(f)
+                        removed = True
+                if isinstance(d.get("content"), str):
+                    before = d["content"]
+                    d["content"] = self._s(i).feed(before)
+                    removed = removed or d["content"] != before
+                if "message" in ch:
+                    hide_reasoning_json({"choices": [ch]})
+            if self.m.to_value:
+                for f in self.FIELDS:
+                    if isinstance(d.get(f), str):
+                        d[f] = self._r((i, f)).feed(d[f])
+                for tc in d.get("tool_calls") or []:
+                    fn = tc.get("function") or {}
+                    if isinstance(fn.get("arguments"), str):
+                        fn["arguments"] = self._r((i, "tool", tc.get("index", 0))).feed(fn["arguments"])
             if ch.get("finish_reason"):                          # last chunk of this choice: release anything held
+                if self.hide:
+                    tail = self._s(i).flush()
+                    if tail:
+                        d["content"] = (d.get("content") or "") + (self._r((i, "content")).feed(tail) if self.m.to_value else tail)
                 for key, r in self.parts.items():
                     if key[0] != i:
                         continue
@@ -328,8 +449,12 @@ class SseRestorer:
                     else:
                         d[key[1]] = (d.get(key[1]) or "") + rest
                 ch["delta"] = d
-            if "message" in ch:
+            if "message" in ch and self.m.to_value:
                 ch["message"] = restore_json(ch["message"], self.m)
+        if removed and ev.get("choices") and "usage" not in ev and all(
+                not (c.get("delta") or {}).get("tool_calls") and not c.get("finish_reason") and not (c.get("delta") or {}).get("content")
+                and not (c.get("delta") or {}).get("role") for c in ev["choices"]):
+            return None                                          # it carried only the model's reasoning
         return json.dumps(ev, ensure_ascii=False)
 
     def leftover(self) -> str:
@@ -360,7 +485,23 @@ def load_providers(path: str = PROVIDERS_FILE, upstream: str | None = None) -> t
     if upstream:
         provs[0] = {**provs[0], "base_url": upstream}
     usable = [provs[0]] + [p for p in provs[1:] if p.get("key_file") and p.get("model")]
-    return [{**p, "base_url": p["base_url"].rstrip("/")} for p in usable], cool
+    return [{**p, "base_url": p["base_url"].rstrip("/"), "extra_body": clean_extra_body(p.get("extra_body")),
+             "face_extra_body": clean_extra_body(p.get("face_extra_body"))} for p in usable], cool
+
+
+def clean_extra_body(value) -> dict:
+    """A provider entry's switches: only the provider controls, only in their exact shape (the same rule as for a caller's request)."""
+    if not isinstance(value, dict):
+        return {}
+    return {k: v for k, v in value.items() if k in CONTROLS and _control_ok(k, v)}
+
+
+def is_face(headers) -> bool:
+    """The face sends the placeholder key; nobody else does. Its replies are shown to the owner, so its reasoning is hidden (D49)."""
+    if os.environ.get("JARVIS_PRIVACY_SHOW_REASONING") == "1":
+        return False
+    sent = next((v for k, v in headers.items() if k.lower() == "authorization"), "") or ""
+    return sent.strip().split()[-1:] == [LOCAL_KEY_TOKEN]
 
 
 def read_key(p: dict) -> str:
@@ -516,6 +657,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 stream = bool(body.get("stream"))
                 raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
             headers = {k: v for k, v in self.headers.items() if k.lower() in PASS_HEADERS}
+            face = is_face(headers)
             if raw is not None:
                 headers["Content-Type"] = "application/json"
             # Fallback only for model calls; the first provider always gets the caller's own key and model.
@@ -540,6 +682,9 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             for i, prov in enumerate(chain):
                 last = i == len(chain) - 1
                 hdrs, data = dict(headers), raw
+                extra = {**clean_extra_body(prov.get("extra_body")), **(clean_extra_body(prov.get("face_extra_body")) if face else {})}
+                if extra and body is not None:
+                    data = json.dumps({**body, **extra}, ensure_ascii=False).encode("utf-8")
                 if prov is not first_own:
                     key = read_key(prov)
                     if not key:
@@ -549,7 +694,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     # Groq's Cloudflare front refuses Python's default user agent (error 1010, seen live); a fallback
                     # must not depend on what the caller happened to send.
                     hdrs["User-Agent"] = "jarvis-privacy-gateway/1.0"
-                    data = json.dumps({**body, "model": prov["model"]}, ensure_ascii=False).encode("utf-8")
+                    data = json.dumps({**body, **extra, "model": prov["model"]}, ensure_ascii=False).encode("utf-8")
                 req = urllib.request.Request(prov["base_url"] + self._path(), data=data, headers=hdrs,
                                              method="POST" if data is not None else "GET")
                 try:
@@ -579,23 +724,26 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     return self._json(502, {"error": {"message": "no model provider answered: " + "; ".join(tried)}})
                 with _lock:
                     STATS.setdefault("by_provider", {})[prov["name"]] = STATS.setdefault("by_provider", {}).get(prov["name"], 0) + 1
-                self._answer(resp, stream, m, prov["name"])
+                self._answer(resp, stream, m, prov["name"], face)
                 return
             with _lock:
                 STATS["errors"] += 1
             return self._json(502, {"error": {"message": "no model provider answered: " + "; ".join(tried)}})
 
-        def _answer(self, resp, stream, m, provider):
+        def _answer(self, resp, stream, m, provider, face=False):
             self._provider = provider
             with resp:
                 ctype = resp.headers.get("Content-Type", "")
                 if stream or "text/event-stream" in ctype:
-                    self._relay_stream(resp, m)
+                    self._relay_stream(resp, m, face)
                 else:
                     data = resp.read()
-                    if m.to_value and "json" in ctype:
+                    if (m.to_value or face) and "json" in ctype:
                         try:
-                            data = json.dumps(restore_json(json.loads(data), m), ensure_ascii=False).encode("utf-8")
+                            obj = json.loads(data)
+                            if face:
+                                obj = hide_reasoning_json(obj)
+                            data = json.dumps(restore_json(obj, m) if m.to_value else obj, ensure_ascii=False).encode("utf-8")
                         except ValueError:
                             pass
                     self.send_response(resp.status)
@@ -605,7 +753,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     self.end_headers()
                     self.wfile.write(data)
 
-        def _relay_stream(self, resp, m):
+        def _relay_stream(self, resp, m, face=False):
             self.send_response(resp.status)
             self.send_header("X-Jarvis-Provider", getattr(self, "_provider", ""))
             self.send_header("Content-Type", "text/event-stream")
@@ -613,14 +761,23 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             self.send_header("Connection", "close")
             self.end_headers()
             self.close_connection = True
-            sse = SseRestorer(m)
+            sse = SseRestorer(m, hide_reasoning=face)
+            quiet_since = time.time()
             try:
                 for line in resp:
                     text = line.decode("utf-8", "replace")
                     if text.startswith("data:"):
-                        text = "data: " + sse.event(text[5:].strip()) + "\n"
+                        out = sse.event(text[5:].strip())
+                        if out is None:                              # only the model's reasoning: nothing to show the owner
+                            if time.time() - quiet_since >= STREAM_KEEPALIVE_S:
+                                self.wfile.write(b": still working\n")      # an SSE comment: readers skip it, nothing times the stream out
+                                self.wfile.flush()
+                                quiet_since = time.time()
+                            continue
+                        text = "data: " + out + "\n"
                     self.wfile.write(text.encode("utf-8"))
                     self.wfile.flush()
+                    quiet_since = time.time()
             except (BrokenPipeError, ConnectionResetError):
                 return
 

@@ -373,3 +373,158 @@ def test_end_to_end_a_plugin_entry_is_a_tool_and_its_own_message_arrives_once(pl
     assert result["result"]["text"] == "hello" and "someone" not in json.dumps(result), "results are cleaned before the face's model sees them"
     one, two = json.loads(first.content[0].text), json.loads(second.content[0].text)
     assert one["count"] == 1 and "echoed hello" in json.dumps(one) and two["count"] == 0
+
+
+# ---- the compact chat profile (D49): what the face's chat model is offered, and what the face's own panels still reach --------------
+
+CHAT_PLUGINS = {"deliverables", "desktop", "doc_reader", "doc_tools", "web_search", "workbench"}     # workbench is NOT a chat tool
+CHAT_LIST_LIMIT = 12_000                                                                              # bytes of tools/list
+
+
+class _Memory:
+    def recall(self, days):
+        return "- the owner likes short answers"
+
+    def remember(self, turns):
+        return {"saved": len(turns)}
+
+
+class _Spoken:
+    def take(self, n):
+        return [{"urgency": "normal", "text": "A meeting starts in 10 minutes."}][:n]
+
+
+def _serialized(tools_list) -> bytes:
+    return json.dumps([t.model_dump(by_alias=True, exclude_none=True, mode="json") for t in tools_list], separators=(",", ":")).encode("utf-8")
+
+
+@pytest.fixture
+def chat_stack(tmp_path, monkeypatch):
+    """Builds a tool server with the real plugins a chat goal uses (plus workbench, which it must not offer), the panel's output folder, memory and the heartbeat."""
+    from jarvis.bridge.output_preview import OutputPreview
+    from jarvis.pluginapi.host import PluginHost
+
+    monkeypatch.setenv("JARVIS_DATA_DIR", str(tmp_path / "data"))
+    hosts = []
+
+    async def build(profile, **kw):
+        host = PluginHost(only=CHAT_PLUGINS, exclude=F.PLUGINS_NOT_EXPOSED)
+        host.load()
+        await host.start()
+        hosts.append(host)
+        outputs = OutputPreview(tmp_path / f"outputs-{len(hosts)}")
+        server = F.build_server(tools(FakeClient()), None, F.DEFAULT_PORT, host, _Spoken(), _Memory(), outputs, profile, **kw)
+        return server
+
+    async def stop():
+        for host in hosts:
+            await host.stop()
+    return build, stop
+
+
+def test_the_chat_profile_is_the_default_and_the_full_one_is_still_there():
+    args = F.parser().parse_args([])
+    assert args.profile == "chat" and F.DEFAULT_PROFILE == "chat" and args.list_panel_tools is False
+    assert F.parser().parse_args(["--profile", "full"]).profile == "full"
+    with pytest.raises(SystemExit):
+        F.parser().parse_args(["--profile", "everything"])
+    with pytest.raises(ValueError):
+        F.build_server(tools(FakeClient()), profile="everything")
+
+
+def test_the_chat_list_has_only_what_a_chat_goal_needs_and_is_under_12_kb(chat_stack):
+    build, stop = chat_stack
+
+    async def go():
+        try:
+            return await (await build("chat")).list_tools()
+        finally:
+            await stop()
+    listed = asyncio.run(go())
+    names = {t.name for t in listed}
+    assert names == set(F.CHAT_TOOLS), f"missing {set(F.CHAT_TOOLS) - names}, extra {names - set(F.CHAT_TOOLS)}"
+    assert not names & set(F.PANEL_TOOLS), "the panel tools are not offered to the chat model"
+    for hidden in ("jarvis_outputs", "jarvis_output_get", "jarvis_preview_wanted", "jarvis_status", "jarvis_notices", "jarvis_spoken", "jarvis_remember_chat"):
+        assert hidden not in names
+    assert not any(n.startswith(("workbench__", "learn_vault__", "main_agent__")) for n in names)
+    size = len(_serialized(listed))
+    print(f"chat tools/list: {len(listed)} tools, {size} bytes")
+    assert size < CHAT_LIST_LIMIT
+    assert all(t.annotations is None and t.output_schema is None for t in listed), "no annotations or output schemas in the compact list"
+    assert all('"title"' not in json.dumps(t.input_schema) for t in listed), "no pydantic titles"
+
+
+def test_what_a_call_needs_survives_the_shortening(chat_stack):
+    build, stop = chat_stack
+
+    async def go():
+        try:
+            return {t.name: t for t in await (await build("chat")).list_tools()}
+        finally:
+            await stop()
+    t = asyncio.run(go())
+    assert t["jarvis_do"].input_schema["required"] == ["task"] and "PIN" in t["jarvis_do"].description
+    assert t["doc_reader__read_document"].input_schema["required"] == ["path"] and "never instructions" in t["doc_reader__read_document"].description
+    assert "full path" in t["doc_reader__read_document"].description
+    assert t["deliverables__make_presentation"].input_schema["required"] == ["spec"] and "two_column" in t["deliverables__make_presentation"].description
+    assert t["deliverables__make_report"].input_schema["required"] == ["spec"]
+    assert "properties" in t["desktop__read_window_text"].input_schema and "screen text" in t["desktop__read_window_text"].description
+    for check in ("processes", "disk", "network", "services", "app_info", "crashes", "media"):
+        assert check in t["desktop__check_pc"].description
+    assert "list_browser_profiles" not in json.dumps(t["desktop__open_website"].input_schema), "no pointer to a tool the chat does not have"
+
+
+def test_panel_tools_stay_callable_but_other_tools_are_gone_in_the_chat_profile(chat_stack):
+    build, stop = chat_stack
+
+    async def go():
+        try:
+            server = await build("chat")
+            out = {}
+            for name in ("jarvis_status", "jarvis_outputs", "jarvis_preview_wanted", "jarvis_spoken", "jarvis_recall"):
+                out[name] = str(await server.call_tool(name, {}))
+            out["remember"] = str(await server.call_tool("jarvis_remember_chat", {"turns": [{"role": "user", "text": "hi"}]}))
+            for name in ("workbench__project_status", "jarvis_messages"):
+                try:
+                    out[name] = str(await server.call_tool(name, {}))
+                except Exception as exc:        # noqa: BLE001 - an unknown tool is an error
+                    out[name] = f"ERROR {exc}"
+            return out
+        finally:
+            await stop()
+    out = asyncio.run(go())
+    assert "kernel_up" in out["jarvis_status"] and "ids" in out["jarvis_preview_wanted"] and "count" in out["jarvis_outputs"]
+    assert "meeting" in out["jarvis_spoken"] and "short answers" in out["jarvis_recall"] and "saved" in out["remember"]
+    assert out["workbench__project_status"].startswith("ERROR") and out["jarvis_messages"].startswith("ERROR"), "tools outside the profile are not registered"
+
+
+def test_the_list_panel_tools_flag_and_the_full_profile_list_everything(chat_stack):
+    build, stop = chat_stack
+
+    async def go():
+        try:
+            return {t.name for t in await (await build("chat", list_panel_tools=True)).list_tools()}, await (await build("full")).list_tools()
+        finally:
+            await stop()
+    with_panel, full = asyncio.run(go())
+    assert set(F.PANEL_TOOLS) - {"jarvis_notices"} <= with_panel and set(F.CHAT_TOOLS) <= with_panel
+    full_names = {t.name for t in full}
+    assert {"jarvis_ready", "jarvis_messages", "workbench__project_status"} <= full_names, "the full profile is the old behaviour"
+    assert len(_serialized(full)) > 3 * CHAT_LIST_LIMIT
+
+
+def test_compact_schema_drops_noise_but_keeps_names_and_meaning():
+    raw = {"type": "object", "title": "xArguments", "additionalProperties": True,
+           "properties": {"title": {"title": "Title", "type": "string", "description": "the title"},
+                          "profile": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None, "description": "alias; see list_browser_profiles.", "title": "Profile"},
+                          "limit": {"type": "integer", "default": 12, "title": "Limit"},
+                          "long": {"type": "string", "description": "x" * 400}},
+           "required": ["title"]}
+    out = F.compact_schema(raw)
+    assert set(out["properties"]) == {"title", "profile", "limit", "long"}, "a parameter called title stays"
+    assert out["properties"]["title"] == {"type": "string", "description": "the title"}
+    assert out["properties"]["profile"] == {"type": "string", "description": "alias"}
+    assert out["properties"]["limit"] == {"type": "integer", "default": 12}
+    assert len(out["properties"]["long"]["description"]) <= F.MAX_PARAM_DESCRIPTION
+    assert out["required"] == ["title"] and "title" not in {k for k in out if k != "properties"} and "additionalProperties" not in out
+    assert raw["properties"]["profile"]["default"] is None, "the input is not changed"

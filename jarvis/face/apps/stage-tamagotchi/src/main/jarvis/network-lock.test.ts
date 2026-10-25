@@ -4,7 +4,7 @@ import { isAllowedUrl, lockGlobalFetch, parseAllowHosts } from './network-lock'
 
 describe('jarvis network lock', () => {
   it('allows this PC and the tailnet', () => {
-    for (const url of ['http://127.0.0.1:48950/v1/chat/completions', 'http://localhost:5173/', 'ws://[::1]:6121/ws', 'http://100.125.91.51:48940/', 'https://100.64.0.1/', 'http://100.127.255.255/'])
+    for (const url of ['http://127.0.0.1:48950/v1/chat/completions', 'http://127.0.0.1:48970/mcp', 'http://localhost:48970/mcp', 'http://[::1]:48970/mcp', 'http://localhost:5173/', 'ws://[::1]:6121/ws', 'http://100.125.91.51:48940/', 'https://100.64.0.1/', 'http://100.127.255.255/'])
       expect(isAllowedUrl(url, []), url).toBe(true)
   })
 
