@@ -76,7 +76,12 @@ def ask(port: int, img: Image.Image) -> tuple[str, float]:
     req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=300) as r:
         out = json.loads(r.read())
-    return out["choices"][0]["message"].get("content") or "", time.time() - t0
+    msg = out["choices"][0]["message"]
+    # llama-server with this model's template puts the transcription in reasoning_content and leaves content empty (seen 2026-10-25, b11669); an
+    # "![image](image_1.png)" marker line the model writes for the picture itself is not text of the document.
+    text = msg.get("content") or msg.get("reasoning_content") or ""
+    text = re.sub(r"^!\[[^\]]*\]\([^)]*\)\s*", "", text)
+    return text, time.time() - t0
 
 
 def main() -> int:
@@ -88,7 +93,7 @@ def main() -> int:
     ap.add_argument("--ngl", default="0", help="GPU layers (0 = CPU only, which keeps the 4 GB GPU for the other models)")
     a = ap.parse_args()
     proc = subprocess.Popen([a.server, "-m", a.model, "--mmproj", a.mmproj, "--port", str(a.port), "-ngl", a.ngl, "-c", "4096", "--host", "127.0.0.1"],
-                            stdout=subprocess.DEVNULL, stderr=open(HERE / "results" / "lightonocr-server.log", "w"))
+                            stdout=subprocess.DEVNULL, stderr=open(HERE.parent / "results" / "lightonocr-server.log", "w"))
     try:
         for _ in range(120):
             try:
@@ -109,7 +114,7 @@ def main() -> int:
             rec = len(words & set(re.findall(r"\w+", got.lower()))) / max(1, len(words))
             rows[name] = {"seconds": round(secs, 1), "chars": len(got), "cer": round(cer, 3), "word_recall": round(rec, 3)}
             print(f"{name:8} {secs:6.1f}s  chars {len(got):4d}  CER {cer:.3f}  word recall {rec:.3f}", flush=True)
-        out = HERE / "results" / f"lightonocr-{time.strftime('%Y%m%d-%H%M%S')}.json"
+        out = HERE.parent / "results" / f"lightonocr-{time.strftime('%Y%m%d-%H%M%S')}.json"
         out.write_text(json.dumps({"model": os.path.basename(a.model), "mmproj": os.path.basename(a.mmproj), "docs": rows}, indent=1), encoding="utf-8")
         print("wrote", out)
         return 0

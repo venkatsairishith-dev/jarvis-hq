@@ -1,0 +1,130 @@
+{
+ "time": "2026-10-25 17:24:20",
+ "profiles": 6,
+ "prompt_version": 3,
+ "set": "decision_cases.json",
+ "models": [
+  {
+   "model": "decider-qwen3-4b-2507",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 70,
+   "total": 70,
+   "accuracy": 1.0,
+   "json_valid": 70,
+   "cold_first_call_s": 0.0,
+   "first_call_status": "ok",
+   "p50_s": 0.97,
+   "p95_s": 1.81,
+   "memory": {
+    "ram_mb": 2875,
+    "top_gpu_dedicated_mb": 2899
+   },
+   "failures": []
+  },
+  {
+   "model": "decider-spark-4b",
+   "cases": 70,
+   "repeat": 1,
+   "correct": 63,
+   "total": 70,
+   "accuracy": 0.9,
+   "json_valid": 70,
+   "cold_first_call_s": 0.0,
+   "first_call_status": "ok",
+   "p50_s": 15.29,
+   "p95_s": 20.39,
+   "memory": {
+    "ram_mb": 3793,
+    "top_gpu_dedicated_mb": 2855
+   },
+   "failures": [
+    {
+     "id": "A33",
+     "why": "tool open_app != press_key",
+     "steps": [
+      {
+       "tool": "open_app",
+       "app": "notepad",
+       "post": "a window for notepad appeared"
+      }
+     ]
+    },
+    {
+     "id": "A38",
+     "why": "tool troubleshoot != window",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "sample",
+       "post": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis"
+      }
+     ]
+    },
+    {
+     "id": "A41",
+     "why": "status clarify: Which site or page should I click the subscribe button on?",
+     "steps": []
+    },
+    {
+     "id": "A42",
+     "why": "target ['']",
+     "steps": [
+      {
+       "tool": "browser",
+       "profile": "Default",
+       "action": "find",
+       "target": "",
+       "text": "pricing",
+       "post": "the find result was observed on the page (whoami: the signed-in account matches Default)"
+      }
+     ]
+    },
+    {
+     "id": "A45",
+     "why": "tool open_website != play_media",
+     "steps": [
+      {
+       "tool": "browser",
+       "action": "whoami",
+       "profile": "Profile 1",
+       "target": "",
+       "text": "",
+       "post": "the whoami result was observed on the page (whoami: the signed-in account matches Profile 1)"
+      },
+      {
+       "tool": "open_website",
+       "profile": "Profile 1",
+       "url": "https://www.youtube.com/",
+       "post": "a Chrome window of profile Profile 1 shows the page"
+      },
+      {
+       "tool": "browser",
+       "profile": "Profile 1",
+       "action": "find",
+       "target": "youtube",
+       "text": "Kalyani song",
+       "post": "the find result was observed on the page (whoami: the signed-in account matches Profile 1)"
+      }
+     ]
+    },
+    {
+     "id": "A53",
+     "why": "tool troubleshoot not in ['answer', 'clarify', 'check_pc']",
+     "steps": [
+      {
+       "tool": "troubleshoot",
+       "app": "Windows Firewall",
+       "post": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis"
+      }
+     ]
+    },
+    {
+     "id": "A68",
+     "why": "status clarify: Which app?",
+     "steps": []
+    }
+   ]
+  }
+ ]
+}

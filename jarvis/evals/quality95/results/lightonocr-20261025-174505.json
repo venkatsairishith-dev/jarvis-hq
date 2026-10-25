@@ -1,0 +1,24 @@
+{
+ "model": "LightOnOCR-3-0.8B.Q4_K_M.gguf",
+ "mmproj": "LightOnOCR-3-0.8B.mmproj-f16.gguf",
+ "docs": {
+  "invoice": {
+   "seconds": 10.7,
+   "chars": 420,
+   "cer": 0.991,
+   "word_recall": 1.0
+  },
+  "letter": {
+   "seconds": 4.2,
+   "chars": 231,
+   "cer": 0.0,
+   "word_recall": 1.0
+  },
+  "form": {
+   "seconds": 4.6,
+   "chars": 169,
+   "cer": 0.03,
+   "word_recall": 0.964
+  }
+ }
+}
