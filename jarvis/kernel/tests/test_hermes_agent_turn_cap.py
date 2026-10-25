@@ -74,7 +74,7 @@ class TurnCap(unittest.TestCase):
         self.assertNotEqual(self.seen[1], self.seen[2])
 
     def test_the_owner_console_uses_the_cap(self):
-        self.assertEqual(llm_proxy.CONSOLE_AGENT_MAX_TURNS, 3)
+        self.assertEqual(llm_proxy.CONSOLE_AGENT_MAX_TURNS, 1)
         src = open(os.path.join(os.path.dirname(llm_proxy.__file__), "llm_proxy.py"), encoding="utf-8").read()
         self.assertIn("max_turns=CONSOLE_AGENT_MAX_TURNS", src)
 

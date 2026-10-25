@@ -32,7 +32,7 @@ PER_DAY = 2000
 # A provider's 5xx is tried once more before falling back: Ollama answers a gpt-oss tool call it cannot parse with
 # HTTP 500 "error parsing tool call" (ollama/ollama#12884), and a fresh sample usually parses.
 RETRY_SAME_PROVIDER = {500, 502, 503}
-CONSOLE_AGENT_MAX_TURNS = 3               # a console conversation is replaced after 3 turns: its history must fit the private lane's smallest free model (see telegram.hermes_agent)
+CONSOLE_AGENT_MAX_TURNS = 1               # every console command starts a fresh Hermes conversation: with Groq (8000 tokens in all) a second command in the same conversation plus its own tool rounds went past the 6976-token limit (2026-10-25); continuity lives in Hermes memory and my_tasks
 CONSOLE_AGENT_TIMEOUT_S = 300             # the owner's console waits at most this long for the agent's answer (then: failed, TimedOut); a long job is a task, not one turn
 OUTAGE_REST_S = 30                       # a provider that failed twice with server errors rests this long
 MAX_OUTPUT_CHARS = 200_000
@@ -307,7 +307,7 @@ def _deep_cache_put(h: str, v) -> None:
             _DEEP_CACHE.pop(next(iter(_DEEP_CACHE)))
 
 
-HOLD_MAX_S = 40                    # a provider's rest this short is waited out inside the request instead of being answered with 429 (see make_handler)
+HOLD_MAX_S = 70                    # a provider's rest this short is waited out inside the request instead of being answered with 429 (see make_handler)
 OWNER_REQUEST_TOKENS = 6000        # what a command from the owner costs the model before it has said anything: estimated 5.7k for a fresh conversation, 6.8k after three turns
                                    # (kernel audit, Hermes -> Groq, 2026-10-22..25; it was 12000 when the owner's agent still sent 10.6k to 11k). With 12000 the private lane's
                                    # only provider counted was OpenRouter's free model, always rate-limited, so every owner command was refused while Groq (8000) could serve it.

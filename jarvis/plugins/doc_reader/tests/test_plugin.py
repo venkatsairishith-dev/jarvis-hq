@@ -40,7 +40,7 @@ def test_the_entry_is_registered_with_the_host():
     assert m and m["id"] == "doc_reader"
     mod, cls = m["entry"].split(":")
     entries, lifecycle, timers = inspect_class(getattr(importlib.import_module(mod), cls))
-    assert set(entries) == {"read_document"} and set(lifecycle) == {"startup", "shutdown"} and not timers
+    assert set(entries) == {"read_document", "recent_files"} and set(lifecycle) == {"startup", "shutdown"} and not timers
     meta = entries["read_document"][0]
     assert "path" in meta.input_schema["required"] and meta.timeout >= 600
 

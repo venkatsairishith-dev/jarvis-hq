@@ -46,7 +46,7 @@ class CompactProfile(unittest.TestCase):
         cls.owner, cls.compact, cls.lab = tools("owner"), tools("owner-compact"), tools("lab")
 
     def test_it_offers_only_the_tools_an_owner_command_used(self):
-        self.assertEqual(set(self.compact), {"save_output", "pc_action", "open_app", "open_folder", "open_file", "list_folder", "list_windows", "task_start",
+        self.assertEqual(set(self.compact), {"save_output", "pc_action", "open_app", "open_folder", "open_file", "list_folder", "list_windows", "my_tasks", "task_start",
                                              "task_update", "task_get", "lab_work"})
         self.assertFalse(DROPPED & set(self.compact))
 
@@ -57,7 +57,7 @@ class CompactProfile(unittest.TestCase):
 
     def test_the_owner_and_lab_profiles_are_unchanged(self):
         self.assertTrue(DROPPED <= set(self.owner))
-        self.assertEqual(len(self.owner), 18)
+        self.assertEqual(len(self.owner), 19)
         self.assertIn("start_lab_task", self.lab)
         self.assertNotIn("task_start", self.lab)
 
@@ -77,7 +77,7 @@ class CompactProfile(unittest.TestCase):
         import private_prompt_size as P
         n_o, c_o = P.tools_json("owner")
         n_c, c_c = P.tools_json("owner-compact")
-        self.assertEqual((n_o, n_c), (18, 11))
+        self.assertEqual((n_o, n_c), (19, 12))
         self.assertLess(c_c, c_o * 0.7)
         saved = round((c_o - c_c) * P.HERMES_FORM_RATIO)
         for label, chars, msgs, real in P.CAPTURED:

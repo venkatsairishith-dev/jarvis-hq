@@ -35,7 +35,7 @@ mcp = MCPServer("jarvis")
 # tools an owner command used in the kernel's audit log (Hermes: pc open/list, task create/get/update/dispatch, output save) plus pc_action and open_file,
 # which the owner's typed commands reach; the connector tools, show_output, models_status and switch_model are left out (the console has its own model
 # switch), and two long descriptions are shorter. Nothing is removed from "owner" or "lab".
-COMPACT_TOOLS = {"save_output", "pc_action", "open_app", "open_folder", "open_file", "list_folder", "list_windows", "task_start", "task_update", "task_get", "lab_work"}
+COMPACT_TOOLS = {"save_output", "pc_action", "open_app", "open_folder", "open_file", "list_folder", "list_windows", "my_tasks", "task_start", "task_update", "task_get", "lab_work"}
 COMPACT_DESC = {
     "lab_work": (
         "Send a task's hands-on work (code, tests, web, files) to the lab ONCE; an independent check verifies every criterion and failures are repaired. "
@@ -248,6 +248,13 @@ def list_windows() -> str:
     _log("list_windows")
     r = _act("ui", "list_windows", "windows")
     return _say(_outcome("list_windows", _wait(r["job"])) if r.get("status") == "queued" else r)
+
+
+@tool("owner")
+def my_tasks() -> str:
+    r"""Your open tasks and where each one stands, compact. Use it to answer "what are we working on" or "how was our week" before you answer from memory."""
+    _log("my_tasks")
+    return _say(_act("task", "checkpoint"))
 
 
 @tool("owner")

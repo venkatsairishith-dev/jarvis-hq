@@ -47,6 +47,30 @@ class DocReaderPlugin(PluginBase):
         return Ok({"status": "stopped"})
 
     @plugin_entry(
+        id="recent_files",
+        name=tr("entry.recent_files.name", default="Recent files"),
+        description=tr("entry.recent_files.description", default=(
+            "When the owner says 'read this invoice' or 'read that scan' and names no file: list the newest PDF and picture files (names and sizes only, nothing "
+            "from inside them) of ONE folder: Downloads, Documents, Desktop or Pictures. Then ask the owner which one, and call read_document with that file's "
+            "full path (the folder in the reply plus the name). Never open a file the owner did not choose.")),
+        input_schema={"type": "object", "properties": {
+            "folder": {"type": "string", "enum": ["Downloads", "Documents", "Desktop", "Pictures"], "default": "Downloads"},
+            "limit": {"type": "integer", "default": 10}}},
+        timeout=30,
+        llm_result_fields=["message", "files", "folder", "total_seen"],
+    )
+    async def recent_files(self, folder: str = "Downloads", limit: int = 10, **_):
+        try:
+            res = await asyncio.to_thread(core.recent_files, folder, limit)
+        except DocReaderError as exc:
+            return Err(SdkError(str(exc)))
+        if not res["files"]:
+            return Ok({"message": f"No PDF or picture files in {res['folder']}.", "folder": res["folder"]})
+        lines = "; ".join(f"{f['name']} ({f['kb']} KB, {f['days_ago']} d ago)" for f in res["files"])
+        # the sentence goes in "message", the key the cleaner leaves as the plugin's own words: the owner needs to hear the names to choose
+        return Ok({"message": f"Newest files in {res['folder']}: {lines}. Ask which one to read.", "folder": res["folder"]})
+
+    @plugin_entry(
         id="read_document",
         name=tr("entry.read_document.name", default="Read a scanned document"),
         description=tr("entry.read_document.description", default=(

@@ -501,3 +501,42 @@ def write_total_card(total: dict[str, str], out_root: "str | os.PathLike | None"
     (folder / "qa.json").write_text(json.dumps({"file": str(png), "folder": str(folder), "kind": "image",
                                                 "qa": {"passed": True, "checks": {"drawn_locally": True}, "warnings": [], "counts": {}}}), encoding="utf-8")
     return folder
+
+
+# ---------------------------------------------------------------- "read this invoice" without a name: which recent files could it be?
+# The model must not search the owner's folders itself. This lists the newest readable files (names and sizes, nothing from inside them) of ONE of the four
+# ordinary folders, so the model can ask the owner which one and then call read_document with that file's full path.
+RECENT_FOLDERS = {"downloads": "Downloads", "documents": "Documents", "desktop": "Desktop", "pictures": "Pictures"}
+RECENT_MAX = 15
+
+
+def recent_files(folder: Any = "Downloads", limit: Any = 10, home: "str | os.PathLike | None" = None) -> dict[str, Any]:
+    """{"folder": path, "files": [{"name", "kb", "days_ago"}], "total_seen"}: the newest files of a readable type in Downloads, Documents, Desktop or Pictures
+    (top level only). A name that looks like it holds credentials, a link, a junction and anything not a plain file is left out."""
+    key = str(folder or "").strip().lower()
+    if key not in RECENT_FOLDERS:
+        raise DocReaderError("I can list Downloads, Documents, Desktop or Pictures.")
+    try:
+        n = max(1, min(RECENT_MAX, int(limit)))
+    except (TypeError, ValueError):
+        n = 10
+    base = Path(home) if home else Path.home()
+    root = base / RECENT_FOLDERS[key]
+    try:
+        names = os.listdir(root)
+    except OSError:
+        raise DocReaderError("I cannot open that folder.") from None
+    now, rows = time.time(), []
+    for name in names:
+        if os.path.splitext(name)[1].lower() not in EXTENSIONS or SECRET_NAME.search(name) or WIN_RESERVED.match(name):
+            continue
+        try:
+            st = os.lstat(root / name)
+        except OSError:
+            continue
+        if _is_link_like(st) or not stat.S_ISREG(st.st_mode):
+            continue
+        rows.append((st.st_mtime, name, st.st_size))
+    rows.sort(reverse=True)
+    files = [{"name": name[:80], "kb": max(1, round(size / 1024)), "days_ago": max(0, int((now - mtime) // 86400))} for mtime, name, size in rows[:n]]
+    return {"folder": str(root), "files": files, "total_seen": len(rows)}
