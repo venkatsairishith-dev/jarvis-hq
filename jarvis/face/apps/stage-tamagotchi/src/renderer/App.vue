@@ -39,6 +39,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import { toast, Toaster } from 'vue-sonner'
 
 import JarvisHud from './components/hud/JarvisHud.vue'
+import PreviewHost from './components/PreviewHost.vue'
 import ResizeHandler from './components/ResizeHandler.vue'
 
 import {
@@ -482,6 +483,7 @@ onUnmounted(() => {
   <ResizeHandler v-if="!isSpotlightWindow && !isFloatingChatWindow && !mainWindowFullscreen" />
   <RouterView />
   <JarvisHud v-if="hudVisible" />
+  <PreviewHost v-if="fullStageRuntime" />
 </template>
 
 <style>
