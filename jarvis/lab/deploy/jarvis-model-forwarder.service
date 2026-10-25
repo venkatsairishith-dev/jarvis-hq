@@ -1,0 +1,23 @@
+# JARVIS model forwarder (Agent PC, hermes-agent-vm-2): loopback only, holds the model token the agent account must never see.
+# Install: model_forwarder.py -> /opt/jarvis-hub/ (root 644); this unit -> /etc/systemd/system/; token -> /etc/jarvis-lab/model.token (root 600).
+[Unit]
+Description=JARVIS model forwarder (127.0.0.1 to the kernel's model endpoint, token added here)
+After=network-online.target tailscaled.service
+
+[Service]
+Environment=JARVIS_FORWARD_UPSTREAM=http://100.125.91.51:8790
+Environment=JARVIS_FORWARD_TOKEN_FILE=/etc/jarvis-lab/model.token
+ExecStart=/usr/bin/python3 -I -B -u /opt/jarvis-hub/model_forwarder.py
+Restart=on-failure
+RestartSec=10
+User=root
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadOnlyPaths=/opt/jarvis-hub /etc/jarvis-lab
+RestrictAddressFamilies=AF_INET AF_UNIX
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
