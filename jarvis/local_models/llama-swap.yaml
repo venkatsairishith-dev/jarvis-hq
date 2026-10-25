@@ -56,7 +56,7 @@ models:
   # pinned in jarvis.lock.json (~0.7 GB). Measured on this laptop on the CPU (-ngl 0, so the 4 GB GPU stays with the other models; the
   # projector on the CPU too): 4 to 11 s a page (jarvis/evals/quality95/results/lightonocr-*.json). -c 4096: a page drawn at 1540 px is
   # about 2k image tokens and the plugin leaves 1800 for the answer. The transcription may come back in `reasoning_content`; the plugin
-  # reads either. NOT yet run through llama-swap with --jinja on this laptop (the measurement started llama-server by hand without it).
+  # reads either. Run through llama-swap WITH --jinja (the ${server} macro) on this laptop 2026-10-25: the model files sit in lightonocr-3-0.8b (SHA-256 as in the lock), a page is read (1.9 to 10 s a page warm, 15 to 25 s the first time; evals/quality95/results/docreader-*.json).
   lightonocr-docreader:
     aliases: [docreader, ocr-docs]
     cmd: ${server} -m D:\jarvis\models\gguf\lightonocr-3-0.8b\LightOnOCR-3-0.8B.Q4_K_M.gguf --mmproj D:\jarvis\models\gguf\lightonocr-3-0.8b\LightOnOCR-3-0.8B.mmproj-f16.gguf -ngl 0 --no-mmproj-offload -c 4096 -np 1

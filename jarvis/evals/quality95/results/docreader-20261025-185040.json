@@ -1,0 +1,78 @@
+{
+ "time": "2026-10-25 18:50:40",
+ "table_cells_in_order": true,
+ "table_markup": true,
+ "rows": [
+  {
+   "file": "invoice-table.png",
+   "pages": 1,
+   "of": 1,
+   "seconds_total": 10.1,
+   "seconds_per_page": 10.1,
+   "chars": 735,
+   "word_recall": 1.0,
+   "cer": 1.942,
+   "removed_kinds": [
+    "key_assignment",
+    "card_number",
+    "bank_account"
+   ],
+   "leaked_values": [],
+   "notes": [
+    "Removed from the text before anything read it: a bank account number, a card number, a password or key."
+   ]
+  },
+  {
+   "file": "report-3pages.pdf",
+   "pages": 3,
+   "of": 3,
+   "seconds_total": 5.8,
+   "seconds_per_page": 1.9,
+   "chars": 743,
+   "word_recall": 1.0,
+   "cer": 0.009,
+   "removed_kinds": [],
+   "leaked_values": [],
+   "notes": []
+  },
+  {
+   "file": "letter-scan-rot4.png",
+   "pages": 1,
+   "of": 1,
+   "seconds_total": 4.7,
+   "seconds_per_page": 4.7,
+   "chars": 256,
+   "word_recall": 1.0,
+   "cer": 0.0,
+   "removed_kinds": [],
+   "leaked_values": [],
+   "notes": []
+  },
+  {
+   "file": "letter-scan-rot-6.png",
+   "pages": 1,
+   "of": 1,
+   "seconds_total": 5.1,
+   "seconds_per_page": 5.1,
+   "chars": 256,
+   "word_recall": 1.0,
+   "cer": 0.0,
+   "removed_kinds": [],
+   "leaked_values": [],
+   "notes": []
+  },
+  {
+   "file": "letter-scan-rot90.png",
+   "pages": 1,
+   "of": 1,
+   "seconds_total": 2.7,
+   "seconds_per_page": 2.7,
+   "chars": 256,
+   "word_recall": 1.0,
+   "cer": 0.0,
+   "removed_kinds": [],
+   "leaked_values": [],
+   "notes": []
+  }
+ ]
+}

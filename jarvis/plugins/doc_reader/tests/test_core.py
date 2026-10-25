@@ -437,3 +437,22 @@ def test_a_proxy_in_the_environment_is_not_used(home, server, monkeypatch):
     monkeypatch.delenv("no_proxy", raising=False)
     assert "ok" in core.read_document(png_file(home / "inv.png"))["text"]
     assert len(s.requests) == 1
+
+
+@pytest.mark.skipif(os.name != "nt", reason="a directory junction is a Windows reparse point")
+def test_a_directory_junction_in_the_path_is_refused_and_a_plain_d_drive_path_is_read(home, tmp_path_factory):
+    """A junction needs no privilege to make (a symlink does), so this runs on every Windows laptop. The real folder is reachable only through it."""
+    import subprocess
+    real_dir = tmp_path_factory.mktemp("real").resolve()
+    png_file(real_dir / "page.png")
+    junction = home / "viaj"
+    made = subprocess.run(["cmd", "/c", "mklink", "/J", str(junction), str(real_dir)], capture_output=True, text=True)
+    if made.returncode:
+        pytest.skip("cannot create a junction here: " + made.stdout[:80])
+    try:
+        with pytest.raises(DocReaderError) as e:
+            core.check_path(str(junction / "page.png"))
+        assert "Links and junctions" in str(e.value)
+        assert core.check_path(str(real_dir / "page.png")).name == "page.png"          # the real path (any drive letter) is fine
+    finally:
+        os.rmdir(junction)                                                             # removes the junction, never the folder it points to
