@@ -280,3 +280,21 @@ Both were read from their public pages only (README / quickstart page). Nothing 
 | **Nemotron 3.5 Parse** (nvidia, 631M, huggingface.co/nvidia/Nemotron-3.5-Parse) | Exists, released 2026-10-17. OpenMDW License 1.1 (commercial use allowed), tokenizer MIT. Reference hardware NVIDIA H100, BF16; runs with Transformers or vLLM (>=0.25, <0.33) on Linux; ParseBench mean 75.2 (three passes) / 72.7 (single pass); IndicVisionBench OCR 83.7 | The post's own test used one pass, not NVIDIA's three-pass headline | **Not for the laptop.** Needs an NVIDIA GPU stack on Linux; the laptop is Windows. Revisit only if a GPU lab box exists. |
 
 Rule applied (D44): posts and summaries are leads; the numbers above are the vendors' own or marked as unverified. Next step, no install yet: add Spark-X2.6-4B to the local-model bench (laptop), and run LightOnOCR-3 on a few of the owner's own invoices if a runnable build exists for the laptop.
+
+### Mixture-of-experts models with about 1 to 2.5B active parameters for this laptop (searched 2026-10-25; vendor cards read the same day; nothing installed)
+
+Laptop: i9-9980HK 8c/16t, 32 GB RAM, Radeon Pro 5500M 4 GB (Vulkan, llama.cpp b11669), **D: has about 8 GB free**. Method: Hugging Face search for `A1B`, `A2B`, `A0.6B`, `A1.5B`, `A1.7B` GGUF repos, then the original model cards, file lists (Q4_K_M sizes) and licences.
+
+| Model | Total / active | Q4_K_M file | Context | Licence | What the card says | Fits this laptop |
+|---|---|---|---|---|---|---|
+| **LFM2.5-8B-A1B** (Liquid AI, May 2026; official GGUF) | 8.3B / 1.5B | 5.16 GB | 128K | LFM Open License 1.0 (free below $10M annual revenue; personal use fine) | IFEval 91.84, IFBench 56.47, MATH500 88.76, Tau2 Telecom 88.07 but Tau2 Retail 39.82 (Qwen3.5-4B 71.93); tool calls (Pythonic by default, JSON on request); 10 languages, no Hindi; "not the best fit for knowledge-heavy QA without retrieval" | Yes (RAM; one model at a time) |
+| **Granite-4.0-H-Tiny** (IBM, Oct 2025; official GGUF) | 7B / 1B | 4.23 GB | 128K | Apache-2.0 | Mamba2 + attention hybrid, 64 experts, 6 active; IFEval 81.44, BFCL v3 57.65, HumanEval 83, GSM8K 84.69; native `<tool_call>` format; 12 languages, no Hindi | Yes |
+| **Ling-3.0-tiny** (inclusionAI, Aug 2026; already JARVIS's generalist) | 7.9B / 1.3B | 4.82 GB | 128K | MIT | measured here: 31 tokens/s with 16 expert layers on the CPU | Already installed |
+| **LFM2.5-24B-A2B** (Liquid AI, Oct 2026; official GGUF) | 24.0B / 2.45B | 14.53 GB | 128K | LFM Open License 1.0 | pure reasoning model (always thinks); BFCLv4 65.01, ToolSandbox 80.71, IFEval 96.75, IFBench 74.69, GPQA-D 74.42, SWE-Bench Verified 51.0 (Qwen3.6-35B-A3B 66.2); 16 languages incl. Hindi; "not recommended for knowledge-heavy tasks on its own" | RAM yes (32 GB), **disk no** (D: 8 GB free; the rule is nothing big on C:) |
+| Ling-mini-2.0 (inclusionAI, Sep 2025) | 16.3B / 1.4B | 9.91 GB | 32K | MIT | older, shorter context | Disk tight |
+| OLMoE-1B-7B-0125-Instruct (Ai2) | 6.9B / 1B | 4.21 GB | 4K | not stated on the card | 2025, 4K context | Not worth it |
+| Lythri-4B-A2B | 4.6B / 2.3B | 3.42 GB | not stated | Apache-2.0 | built for emotional companionship, "not for math, coding or complex reasoning" | No |
+
+Too many active parameters for the ask: Qwen3.5-35B-A3B (3B active), SmallThinker-21B-A3B, Nemotron-3.5-Lightning 30B-A3B. Too big in total: Ling-3.0-flash (127B, 78 GB).
+
+Next step (a measurement, nothing adopted): run LFM2.5-8B-A1B and Granite-4.0-H-Tiny through the same 70 PC-decision cases and tool-call cases that chose Qwen3-4B-Instruct-2507 (70/70, 0.97 s p50), next to Ling-3.0-tiny, and record accuracy, JSON validity, tokens per second and RAM. LFM2.5-24B-A2B only after disk space is made (it would be the strongest local planner by the card, but it reasons at length, so it would be slow here).
