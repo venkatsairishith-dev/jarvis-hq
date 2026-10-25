@@ -24,6 +24,7 @@ import re
 import secrets
 import threading
 import time
+import traceback
 from pathlib import Path
 from typing import Callable
 
@@ -317,8 +318,16 @@ class Operation:
         return False
 
     def _holder_info(self) -> "dict | None":
+        """The holder's identity and the next number of ITS request counter. The counter belongs to the operation, not to a Pc: every
+        step makes a new Pc, and the kernel answers a repeated (token, seq) with the job it already made, so a counter that started
+        at 1 in each Pc made a task's second action return the first action's job (live 2026-10-26: "open Calculator" after a
+        failed focus came back as the focus job's RuntimeError and no pc_open job was ever made)."""
         hold = self.hold
-        return {"token": hold.token, "task": hold.task} if hold is not None else None
+        if hold is None:
+            return None
+        with self._lock:
+            self._pc_seq = getattr(self, "_pc_seq", 0) + 1
+            return {"token": hold.token, "task": hold.task, "seq": self._pc_seq}
 
     def _job_started(self, jid: str) -> None:
         hold = self.hold
@@ -1612,6 +1621,8 @@ class Coordinator:
                         passed, checked, unc = verify(step, res)
                     except Exception as e:  # noqa: BLE001 - a failed agent is a failed step, not a crashed coordinator
                         res = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:160]}"}
+                        last = traceback.extract_tb(e.__traceback__)[-1] if e.__traceback__ else None      # where, never what: the text of a message may hold screen text
+                        LOG.warning("agent step %s raised %s at %s:%s", step.get("tool"), type(e).__name__, last.filename.rsplit("\\", 1)[-1] if last else "?", last.lineno if last else "?")
                         passed, checked, unc = False, "the action did not succeed", res["error"]
                     entry.update(result=_slim(res), passed=passed, checked=checked, uncertainty=unc, finished=self.clock())
                     transient = not passed and TRANSIENT.search(str(res.get("error") or "")) and res.get("state") not in (

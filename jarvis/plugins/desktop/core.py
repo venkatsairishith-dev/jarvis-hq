@@ -246,7 +246,7 @@ class Pc:
                 if h:
                     # an approved re-send of the same action is a new request (the first one asked for approval)
                     self._seq += 1
-                    body = dict(body, holder=dict(h, seq=self._seq))
+                    body = dict(body, holder=dict(h, seq=h.get("seq", self._seq)))      # the operation's own counter when it has one
         try:
             code, r = self.call("POST", "pc", body)
             if code < 400 and isinstance(r.get("job"), str) and r["job"]:

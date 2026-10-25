@@ -36,6 +36,18 @@ def test_every_job_request_carries_the_holders_token_task_and_a_counter(world):
     assert hold.token == sent[0]["token"] and len(hold.token) == 16
 
 
+def test_two_pcs_of_one_operation_never_repeat_a_counter_value(world):
+    """Live 2026-10-26: every step makes a new Pc, each counted from 1, and the kernel answers a repeated (token, seq) with the job it already
+    made: the second action of a task ("open Calculator" after a focus that found no window) came back as the first job's result."""
+    hold = C.acquire("task-B", C.LOCK)
+    try:
+        for _ in range(3):
+            hold.op.new_pc().run(BODY)
+    finally:
+        C.release(hold)
+    assert [b["holder"]["seq"] for b in world.executed] == [1, 2, 3]
+
+
 def test_a_pc_without_a_lock_adds_no_holder(world):
     pc = core.Pc()
     pc.run(BODY)
