@@ -33,13 +33,9 @@ import {
   AIRI_CHAT_SESSION_ID_HEADER,
 } from '../libs/product-signals/headers'
 import { getSpeechBusContext, voiceGenerationEnded } from '../services/speech/bus'
-import { composeDrawCardPrompt, createDrawCardTool, DRAW_CARD_TOOL_NAME, drawCardContent } from '../tools/draw-card'
+import { composeDrawCardPrompt, DRAW_CARD_TOOL_NAME, drawCardContent } from '../tools/draw-card'
 import { createJudgeRecipeTool, judgmentSkillText } from '../tools/judge-recipe'
-import { composeMemoryPrompt, createMemoryTools } from '../tools/memory'
-import { createProposeRecipeTool } from '../tools/propose-recipe'
-import { createSearchIconsTool } from '../tools/search-icons'
-import { createUseRecipeTool } from '../tools/use-recipe'
-import { createWakeWordTool } from '../tools/wake-words'
+import { composeMemoryPrompt } from '../tools/memory'
 import { useLLM } from './ai/chat-llm/llm'
 import { resolveLlmTools } from './ai/chat-llm/tool-resolver'
 import { useLlmToolsStore } from './ai/chat-llm/tools'
@@ -48,7 +44,9 @@ import { useAuthStore } from './auth'
 import { createMinecraftContext, createRuntimePromptContext, createUserAccountContext } from './chat/context-providers'
 import { useChatContextStore } from './chat/context-store'
 import { describeChatImages, replaceToolResultImages } from './chat/image-projection'
+import { latestUserText } from './chat/lean-tools'
 import { composeRecipeSpacePrompt, composeSystemPrompt } from './chat/prompt-recipe'
+import { createRunTools, planRunTools } from './chat/run-tools'
 import { staysLocal } from './chat/session-locality'
 import { useChatSessionStore } from './chat/session-store'
 import { useChatStreamStore } from './chat/stream-store'
@@ -284,9 +282,10 @@ export const useChatStore = defineStore('chat', () => {
    */
   function sessionSystemPrompt(sessionId: string) {
     const persona = personaOf(sessionId)
+    const plan = runToolPlanOf(sessionId, persona)
     const identity = composeSystemPrompt(cardStore.getSystemPrompt(persona))
-      + (memory.enabled ? composeMemoryPrompt(memory.indexFor(persona)) : '')
-      + (drawsCards(sessionId) ? composeDrawCardPrompt() : '')
+      + (plan.memory ? composeMemoryPrompt(memory.indexFor(persona)) : '')
+      + (plan.replyCards ? composeDrawCardPrompt() : '')
     const recipeId = chatSession.sessionMetas[sessionId]?.recipeId
     const recipe = recipeId ? recipes.recipes.find(entry => entry.id === recipeId) : undefined
     return recipe ? identity + composeRecipeSpacePrompt(recipe) : identity
@@ -299,6 +298,23 @@ export const useChatStore = defineStore('chat', () => {
   const toolCards = useToolCardsStore()
   const { activeSessionId } = storeToRefs(chatSession)
   const { streamingMessage } = storeToRefs(chatStream)
+
+  /**
+   * Which optional tools and prompts a request of a session carries. JARVIS: a plain goal carries none of them.
+   * The rules are in `chat/run-tools`.
+   */
+  function runToolPlanOf(sessionId: string, persona: string) {
+    return planRunTools({
+      text: latestUserText(chatSession.getSessionMessages(sessionId)),
+      ownerConversation: isOwnerSession(sessionId),
+      taskSession: isTaskSession(sessionId),
+      memoryEnabled: memory.enabled,
+      memoryIndex: memory.indexFor(persona),
+      usableRecipeCount: recipes.usable.length,
+      proposalsEnabled: recipes.proposalsEnabled,
+      replyCardsEnabled: toolCards.replyCardsEnabled,
+    })
+  }
 
   const activeTurns = shallowRef<readonly { sessionId: string, turnId: string }[]>([])
   const sending = shallowRef(false)
@@ -420,14 +436,6 @@ export const useChatStore = defineStore('chat', () => {
   /** Whether a session is a background task's own space. */
   function isTaskSession(sessionId: string) {
     return Boolean(chatSession.sessionMetas[sessionId]?.recipeId)
-  }
-
-  /**
-   * Whether a session's replies can hold cards: the owner's own chat, with reply cards on. A background task reports in
-   * text, and a card there would take the details out of its report.
-   */
-  function drawsCards(sessionId: string) {
-    return toolCards.replyCardsEnabled && isOwnerSession(sessionId) && !isTaskSession(sessionId)
   }
 
   /** Whether a turn answers the owner: not a background task, and not a reply to a stored notice. */
@@ -621,23 +629,18 @@ export const useChatStore = defineStore('chat', () => {
     const { conversationId: sessionId } = correlation
     // Each character card keeps its own memories and reads the general ones. A scene's card keeps its own as well.
     const persona = personaOf(sessionId)
-    const sourceTools = async () => [
-      ...(typeof tools === 'function' ? await tools() ?? [] : tools ?? []),
-      ...memory.enabled ? await createMemoryTools({ read: name => memory.read(name, persona), write: entry => memory.propose(entry, persona), forget: name => memory.forget(name, persona) }) : [],
-    ]
-    // A recipe's own session runs only that recipe. It cannot start recipes, save them, or choose silence.
-    if (isTaskSession(sessionId))
-      return sourceTools
-    // Only the owner's private conversations start or save recipes. Each recipe runs in its own space.
-    const ownerOnly = isOwnerSession(sessionId)
+    const characterId = chatSession.sessionMetas[sessionId]?.characterId ?? persona
+    // A recipe's own session cannot start recipes, save them, or choose silence. Only the owner's private
+    // conversations start or save recipes, and draw cards. JARVIS: the plan decides each optional tool.
     return async () => [
-      ...await sourceTools(),
-      ...(ownerOnly ? await createUseRecipeTool({ recipes: () => recipes.recipes, start: (recipe, task) => startRecipe(recipe, { parentSessionId: sessionId, task }) }) : []),
-      // The owner can turn proposals off. Every proposal waits for the owner's approval.
-      ...(ownerOnly && recipes.proposalsEnabled ? await createProposeRecipeTool({ propose: recipe => recipes.propose(recipe) }) : []),
-      // Cards show in the owner's own chat only. A scene, such as a Discord channel, gets text. A card names its icons
-      // from a search, so the model never guesses an icon name.
-      ...(drawsCards(sessionId) ? [...await createDrawCardTool(), ...await createSearchIconsTool()] : []),
+      ...(typeof tools === 'function' ? await tools() ?? [] : tools ?? []),
+      ...await createRunTools(runToolPlanOf(sessionId, persona), {
+        memory: { read: name => memory.read(name, persona), write: entry => memory.propose(entry, persona), forget: name => memory.forget(name, persona) },
+        useRecipe: { recipes: () => recipes.recipes, start: (recipe, task) => startRecipe(recipe, { parentSessionId: sessionId, task }) },
+        // The owner can turn proposals off. Every proposal waits for the owner's approval.
+        proposeRecipe: { propose: recipe => recipes.propose(recipe) },
+        wakeWords: { characterId, setWords: wakeWords.setWords },
+      }),
     ]
   }
 
@@ -1296,7 +1299,6 @@ export const useChatStore = defineStore('chat', () => {
         const references = collectToolReferences(payload.sessionId, payload.tools)
         return [
           ...llmToolsStore.getToolsByNames(...references.map(tool => tool.name)),
-          await createWakeWordTool({ characterId, setWords: wakeWords.setWords }),
           ...(decisions.length
             ? await createJudgeRecipeTool({
                 decisions,

@@ -314,9 +314,12 @@ export type ToolCardView
 export const useToolCardsStore = defineStore('tool-cards', () => {
   const state = useToolCardsStateStore()
   // Off, the chat makes no cards and shows every call as it is. The saved cards stay for when it is on again.
-  const enabled = useLocalStorageManualReset<boolean>('settings/tool-cards/enabled', true)
+  // JARVIS: off by default. A card is a second chat-model request of about 8 KB, once for each new tool, and it ran
+  // beside the turn on the same rate limit (2026-10-25).
+  const enabled = useLocalStorageManualReset<boolean>('settings/tool-cards/enabled', false)
   // Off, the chat model gets no card tool in the owner's chat, so it answers in text. Cards in old replies still show.
-  const replyCardsEnabled = useLocalStorageManualReset<boolean>('settings/tool-cards/reply-cards', true)
+  // JARVIS: off by default. The card tool and the icon search cost 2.9 KB of tools and 0.6 KB of prompt in every request.
+  const replyCardsEnabled = useLocalStorageManualReset<boolean>('settings/tool-cards/reply-cards', false)
 
   const cardsByKey = computed(() => new Map(state.cards.map(card => [card.key, card])))
   /** The saved cards, newest first. */
@@ -348,10 +351,12 @@ export const useToolCardsStore = defineStore('tool-cards', () => {
 
   /**
    * Reports a call that the chat shows. `fresh` says that the call finished while its reply streams, and `open` that
-   * its row is unfolded. A tool without a card gets one from such a call. A tool that failed waits for a try again.
+   * its row is unfolded. A tool without a card gets one when the owner unfolds its row. A tool that failed waits for a
+   * try again.
+   * JARVIS: a fresh call does not ask, because its request would run beside the streaming turn on the same model.
    */
   function want(call: ToolCardCall, shown: { fresh: boolean, open: boolean }) {
-    if (enabled.value && (shown.fresh || shown.open) && viewOf(call).status === 'none')
+    if (enabled.value && shown.open && viewOf(call).status === 'none')
       ask(call)
   }
 

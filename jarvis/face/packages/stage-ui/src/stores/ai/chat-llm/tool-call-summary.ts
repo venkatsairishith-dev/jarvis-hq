@@ -4,26 +4,22 @@ import { isPlainObject, omit } from 'es-toolkit'
 import { array, fallback, looseObject, optional, parseJson, pipe, safeParse, string } from 'valibot'
 
 /**
- * The arguments that the model writes first in every tool call: one line that tells the owner what the call does and
- * why, and the icon of that line. The recorded call keeps them, so the chat shows them on the row of the call, and a
- * new tool card learns the purpose of the call from the line. The tool never gets them.
+ * The argument that the model writes first in every tool call: one line that tells the owner what the call does. Calls
+ * recorded before 2026-10-25 also hold an icon argument. The recorded call keeps them, so the chat shows them on the row
+ * of the call, and a new tool card learns the purpose of the call from the line. The tool never gets them.
  */
 export const CALL_SUMMARY_ARGUMENT = 'call_summary'
 export const CALL_ICON_ARGUMENT = 'call_icon'
 
+// JARVIS: the request asks for the label only. The old label plus icon pair cost 670 bytes a tool, and the icon made
+// the model search icons before the real tool. A recorded `call_icon` still reads; both names stay hidden from tools.
 const summaryProperties = {
   [CALL_SUMMARY_ARGUMENT]: {
     type: 'string',
-    // A model that reads the line as words to the user also writes it in the reply, where speech and copy pick it up.
-    // So the description calls it a label and keeps it out of the reply.
-    description: 'Write this first. A short label shown on this call in the chat: what the call does and why, in the language of your reply. It is not part of your reply, so do not repeat it in your text. No final period.',
-  },
-  [CALL_ICON_ARGUMENT]: {
-    type: 'array',
-    items: { type: 'string' },
-    description: 'Write this second. Up to three Tabler icon names (tabler.io/icons) for what this call does, best first, for example ["currency-baht", "coin"]. A name says what the icon draws: "app-window" is a program window, and "window" is a window of a house. The chat draws the first one that exists next to the label.',
+    description: 'Write this first: a label of a few words for this call, in the language of your reply. Not part of your reply.',
   },
 }
+const hiddenArguments = [CALL_SUMMARY_ARGUMENT, CALL_ICON_ARGUMENT]
 const summaryArguments = Object.keys(summaryProperties)
 
 /**
@@ -36,7 +32,7 @@ function parametersWithSummary(parameters: Record<string, unknown> | undefined):
   if (!parameters || (parameters.type !== undefined && parameters.type !== 'object'))
     return undefined
   const properties = isPlainObject(parameters.properties) ? parameters.properties : {}
-  if (summaryArguments.some(name => name in properties))
+  if (hiddenArguments.some(name => name in properties))
     return undefined
   const required = Array.isArray(parameters.required) ? parameters.required : []
   return {
@@ -48,7 +44,7 @@ function parametersWithSummary(parameters: Record<string, unknown> | undefined):
 }
 
 function withoutSummary(input: unknown) {
-  return isPlainObject(input) ? omit(input, summaryArguments) : input
+  return isPlainObject(input) ? omit(input, hiddenArguments) : input
 }
 
 /**
