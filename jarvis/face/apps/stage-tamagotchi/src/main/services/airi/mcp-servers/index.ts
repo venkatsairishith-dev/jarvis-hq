@@ -61,6 +61,8 @@ export interface McpManager {
   readConfigText: () => Promise<ElectronMcpConfigText>
   writeConfigText: (text: string) => Promise<ElectronMcpConfigText>
   testServer: (payload: ElectronMcpTestPayload) => Promise<ElectronMcpTestResult>
+  /** Connects every enabled server that has no live connection (the tool server may start after the face). Never throws. */
+  reconnectMissing: () => Promise<void>
 }
 
 // JARVIS: the face starts with one tool server, JARVIS's own. The kernel decides every action that server is asked for.
@@ -73,6 +75,12 @@ const toolNameSeparator = '::'
 const mcpRequestTimeoutMsec = 10_000
 const mcpRequestMaxTotalTimeoutMsec = 15_000
 const mcpTestStderrMaxChars = 16_000
+/** A server that does not answer `initialize` in this time counts as down (the SDK default is 60 s). */
+const mcpConnectTimeoutMsec = 8_000
+/** A failed connection is not tried again sooner than this, so a burst of calls does not hammer a server that is down. */
+const mcpReconnectCooldownMsec = 1_000
+/** While a configured server is not connected, the main process tries again at this interval. */
+const mcpReconnectIntervalMsec = 5_000
 
 function stringifyError(error: unknown) {
   if (error instanceof Error) {
@@ -80,6 +88,31 @@ function stringifyError(error: unknown) {
   }
 
   return String(error)
+}
+
+/** The server answered, but it does not know our session any more: it was restarted. Nothing ran, so a retry is safe. */
+function isDeadSessionError(error: unknown) {
+  const code = (error as { code?: unknown } | null)?.code
+  return code === 404 || /session not found/i.test(stringifyError(error))
+}
+
+/** Nothing was sent: the port is closed. */
+function isRefusedError(error: unknown) {
+  const cause = (error as { cause?: { code?: unknown } } | null)?.cause
+  return cause?.code === 'ECONNREFUSED' || /ECONNREFUSED/.test(stringifyError(error))
+}
+
+/** An idle connection that the other side had already closed (the server restarted): the request did not get through. */
+function isStaleSocketError(error: unknown) {
+  const cause = (error as { cause?: { code?: unknown } } | null)?.cause
+  return cause?.code === 'UND_ERR_SOCKET' || cause?.code === 'ECONNRESET' || /other side closed|socket hang up/i.test(stringifyError(error))
+}
+
+/** The connection broke or never opened. The request may or may not have reached the server. */
+function isConnectionError(error: unknown) {
+  const cause = (error as { cause?: { code?: unknown } } | null)?.cause
+  const text = `${stringifyError(error)} ${typeof cause?.code === 'string' ? cause.code : ''}`
+  return /fetch failed|terminated|ECONNREFUSED|ECONNRESET|UND_ERR|socket|connection closed|SSE stream disconnected|aborted/i.test(text)
 }
 
 function getConfigPath() {
@@ -193,6 +226,11 @@ function describeRuntime(
 export function createMcpManager(): McpManager {
   const log = useLogg('main/mcp').useGlobalConfig()
   const sessions = new Map<string, McpServerSession>()
+  /** The enabled servers of the last applied config: the ones that must be connected. */
+  const wanted = new Map<string, ElectronMcpServerConfig>()
+  const connecting = new Map<string, Promise<void>>()
+  const lastAttempt = new Map<string, { at: number, error: string }>()
+  let applying: Promise<unknown> | null = null
   const runtimeStatuses = new Map<string, ElectronMcpServerRuntimeStatus>()
   let updatedAt = Date.now()
 
@@ -205,11 +243,27 @@ export function createMcpManager(): McpManager {
     const path = getConfigPath()
     await mkdir(app.getPath('userData'), { recursive: true })
 
+    let raw: string | undefined
     try {
-      await readFile(path, 'utf-8')
+      raw = await readFile(path, 'utf-8')
     }
     catch {
       await writeFile(path, `${JSON.stringify(defaultMcpConfig, null, 2)}\n`)
+      return { path }
+    }
+
+    // JARVIS: an mcp.json from an earlier face (AIRI's default is an empty list) lacks the tool server and is never rewritten.
+    // Add the entry when missing; other servers and `enabled: false` stay. A file that does not parse is left to the owner.
+    try {
+      const config = parseElectronMcpConfigText(raw)
+      if (!(JARVIS_TOOL_SERVER_NAME in config.mcpServers)) {
+        const merged: ElectronMcpConfigFile = { mcpServers: { ...defaultMcpConfig.mcpServers, ...config.mcpServers } }
+        await writeFile(path, `${JSON.stringify(merged, null, 2)}\n`)
+        log.withFields({ path }).warn('added the JARVIS tool server to mcp.json (it was missing)')
+      }
+    }
+    catch {
+      // unreadable config: applyAndRestart reports it
     }
 
     return { path }
@@ -228,11 +282,20 @@ export function createMcpManager(): McpManager {
 
   const stopAll = async () => {
     const entries = [...sessions.entries()]
+    wanted.clear()
     for (const [name, session] of entries) {
+      sessions.delete(name) // before the close, so the close handler does not report a lost connection
       await closeSession(session)
       setRuntimeStatus(describeRuntime(name, session.config, 'stopped'))
-      sessions.delete(name)
     }
+  }
+
+  const dropSession = async (name: string, session: McpServerSession) => {
+    if (sessions.get(name) !== session)
+      return
+    sessions.delete(name)
+    await session.transport.close().catch(() => {})
+    setRuntimeStatus(describeRuntime(name, session.config, 'error', { lastError: 'the connection was lost' }))
   }
 
   const startServer = async (name: string, config: ElectronMcpServerConfig) => {
@@ -241,9 +304,16 @@ export function createMcpManager(): McpManager {
       name: `proj-airi:stage-tamagotchi:mcp:${name}`,
       version: app.getVersion(),
     })
+    let timer: NodeJS.Timeout | undefined
 
     try {
-      await client.connect(transport)
+      // A server that accepts the connection but never answers must not hold the start-up (or a chat turn) for the SDK's 60 s.
+      await Promise.race([
+        client.connect(transport),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`MCP server "${name}" did not answer in ${mcpConnectTimeoutMsec / 1000} s`)), mcpConnectTimeoutMsec)
+        }),
+      ])
       if (transport instanceof StdioClientTransport) {
         transport.stderr?.on('data', (data) => {
           const text = data.toString('utf-8').trim()
@@ -252,7 +322,15 @@ export function createMcpManager(): McpManager {
           }
         })
       }
-      sessions.set(name, { client, transport, config })
+      const session: McpServerSession = { client, transport, config }
+      client.onclose = () => void dropSession(name, session)
+      // The SDK gives up on its server-to-client stream after two tries (the server went away): the session is dead, start a new one on the next request.
+      client.onerror = (error) => {
+        if (/maximum reconnection attempts/i.test(stringifyError(error)))
+          void dropSession(name, session)
+      }
+      sessions.set(name, session)
+      lastAttempt.delete(name)
       setRuntimeStatus(describeRuntime(name, config, 'running', {
         pid: transport instanceof StdioClientTransport ? transport.pid : null,
       }))
@@ -261,52 +339,174 @@ export function createMcpManager(): McpManager {
       await transport.close().catch(() => {})
       throw error
     }
+    finally {
+      if (timer)
+        clearTimeout(timer)
+    }
   }
 
-  const applyAndRestart = async (): Promise<ElectronMcpApplyResult> => {
-    const { path } = await ensureConfigFile()
-    const config = await readConfigFile(path)
+  /** Connects one wanted server unless it is connected. Concurrent callers share one attempt; a recent failure is reported again without a new attempt. */
+  const ensureConnected = async (name: string): Promise<void> => {
+    if (sessions.has(name))
+      return
+    const config = wanted.get(name)
+    if (!config)
+      return
+    const pending = connecting.get(name)
+    if (pending)
+      return pending
+    const recent = lastAttempt.get(name)
+    if (recent && Date.now() - recent.at < mcpReconnectCooldownMsec)
+      throw new Error(recent.error)
 
-    await stopAll()
-    runtimeStatuses.clear()
-
-    const result: ElectronMcpApplyResult = {
-      path,
-      started: [],
-      failed: [],
-      skipped: [],
-    }
-
-    for (const [name, server] of Object.entries(config.mcpServers)) {
-      if (server.enabled === false) {
-        result.skipped.push({ name, reason: 'disabled' })
-        setRuntimeStatus(describeRuntime(name, server, 'stopped'))
-        continue
-      }
-
+    const attempt = (async () => {
       try {
-        await startServer(name, server)
-        result.started.push({ name })
+        try {
+          await startServer(name, config)
+        }
+        catch (error) {
+          // Opening a session repeats safely. The first try can land on an idle connection that the restarted server had closed.
+          if (!isStaleSocketError(error))
+            throw error
+          await startServer(name, config)
+        }
       }
       catch (error) {
         const message = stringifyError(error)
-        result.failed.push({ name, error: message })
-        setRuntimeStatus(describeRuntime(name, server, 'error', { lastError: message }))
+        lastAttempt.set(name, { at: Date.now(), error: message })
+        setRuntimeStatus(describeRuntime(name, config, 'error', { lastError: message }))
+        throw error
       }
+    })().finally(() => connecting.delete(name))
+    connecting.set(name, attempt)
+    return attempt
+  }
+
+  const applyAndRestart = async (): Promise<ElectronMcpApplyResult> => {
+    const run = async (): Promise<ElectronMcpApplyResult> => {
+      const { path } = await ensureConfigFile()
+      const config = await readConfigFile(path)
+
+      await stopAll()
+      runtimeStatuses.clear()
+      wanted.clear()
+      lastAttempt.clear()
+
+      const result: ElectronMcpApplyResult = {
+        path,
+        started: [],
+        failed: [],
+        skipped: [],
+      }
+
+      for (const [name, server] of Object.entries(config.mcpServers)) {
+        if (server.enabled === false) {
+          result.skipped.push({ name, reason: 'disabled' })
+          setRuntimeStatus(describeRuntime(name, server, 'stopped'))
+          continue
+        }
+
+        wanted.set(name, server)
+        try {
+          await ensureConnected(name)
+          result.started.push({ name })
+        }
+        catch (error) {
+          result.failed.push({ name, error: stringifyError(error) })
+        }
+      }
+
+      updatedAt = Date.now()
+
+      return result
     }
 
-    updatedAt = Date.now()
+    // Later calls wait for a start-up that is still running, so a chat turn never sees a half-started set of servers.
+    const previous = applying
+    const current = (async () => {
+      await previous?.catch(() => {})
+      return run()
+    })()
+    applying = current
+    try {
+      return await current
+    }
+    finally {
+      if (applying === current)
+        applying = null
+    }
+  }
 
-    return result
+  /** Waits for a running start-up, then tries every wanted server that is not connected. Returns the failures by server name. */
+  const connectWanted = async (): Promise<Map<string, string>> => {
+    await applying?.catch(() => {})
+    const failures = new Map<string, string>()
+    await Promise.all([...wanted.keys()].map(async (name) => {
+      try {
+        await ensureConnected(name)
+      }
+      catch (error) {
+        failures.set(name, stringifyError(error))
+      }
+    }))
+    return failures
+  }
+
+  const reconnectMissing = async () => {
+    await connectWanted()
+  }
+
+  /**
+   * One request to one server. A server that forgot our session (it restarted) gets a new session and the request once more.
+   * A read-only request (`repeatable`) is also sent again when the connection it used was already closed by the other side; a tool call is not (it may have run).
+   */
+  const withSession = async <V>(name: string, send: (session: McpServerSession) => Promise<V>, repeatable = false): Promise<V> => {
+    let session = sessions.get(name)
+    if (!session) {
+      await ensureConnected(name)
+      session = sessions.get(name)
+      if (!session)
+        throw new Error(`mcp server is not running: ${name}`)
+    }
+    try {
+      return await send(session)
+    }
+    catch (error) {
+      if (isDeadSessionError(error)) {
+        // The server answered 404 before it ran anything, so asking again on a new session cannot run it twice.
+        await dropSession(name, session)
+        lastAttempt.delete(name)
+        await ensureConnected(name)
+        const fresh = sessions.get(name)
+        if (!fresh)
+          throw error
+        return send(fresh)
+      }
+      if (isConnectionError(error)) {
+        await dropSession(name, session) // the next request opens a new connection
+        if (isRefusedError(error) || (repeatable && isStaleSocketError(error))) {
+          lastAttempt.delete(name)
+          await ensureConnected(name)
+          const fresh = sessions.get(name)
+          if (fresh)
+            return send(fresh)
+        }
+      }
+      throw error
+    }
   }
 
   const listTools = async (): Promise<ElectronMcpToolDescriptor[]> => {
-    const entries = [...sessions.entries()].sort(([left], [right]) => left.localeCompare(right))
-    const listResult = await Promise.allSettled(entries.map(async ([serverName, session]) => {
-      const response = await session.client.listTools(undefined, {
+    const connectFailures = await connectWanted()
+    const names = [...new Set([...sessions.keys(), ...connectFailures.keys()])].sort((left, right) => left.localeCompare(right))
+    const listResult = await Promise.allSettled(names.map(async (serverName) => {
+      const failure = connectFailures.get(serverName)
+      if (failure !== undefined && !sessions.has(serverName))
+        throw new Error(`not connected: ${failure}`)
+      const response = await withSession(serverName, session => session.client.listTools(undefined, {
         timeout: mcpRequestTimeoutMsec,
         maxTotalTimeout: mcpRequestMaxTotalTimeoutMsec,
-      })
+      }), true)
       return response.tools.map<ElectronMcpToolDescriptor>(item => ({
         serverName,
         name: `${serverName}${toolNameSeparator}${item.name}`,
@@ -318,7 +518,7 @@ export function createMcpManager(): McpManager {
     const tools: ElectronMcpToolDescriptor[] = []
     const failures: Error[] = []
 
-    // Each result matches the sorted session snapshot. A partial catalog must
+    // Each result matches the sorted server list. A partial catalog must
     // not report successful discovery while a server's tools remain unknown.
     for (const [index, result] of listResult.entries()) {
       if (result.status === 'fulfilled') {
@@ -326,7 +526,7 @@ export function createMcpManager(): McpManager {
         continue
       }
 
-      const [serverName] = entries[index]
+      const serverName = names[index]
       log.withFields({ serverName }).withError(result.reason).warn('failed to list tools from mcp server')
       failures.push(new Error(`MCP server "${serverName}": ${errorMessageFrom(result.reason) ?? 'Unknown error.'}`, { cause: result.reason }))
     }
@@ -339,24 +539,27 @@ export function createMcpManager(): McpManager {
 
   const callTool = async (payload: ElectronMcpCallToolPayload): Promise<ElectronMcpCallToolResult> => {
     const { serverName, toolName } = parseQualifiedToolName(payload.name)
-    const session = sessions.get(serverName)
-    if (!session) {
+    await applying?.catch(() => {})
+    if (!wanted.has(serverName) && !sessions.has(serverName)) {
       throw new Error(`mcp server is not running: ${serverName}`)
     }
 
+    const call = (name: string) => withSession(serverName, session => session.client.callTool({
+      name,
+      arguments: payload.arguments ?? {},
+    }, undefined, {
+      timeout: mcpRequestTimeoutMsec,
+      maxTotalTimeout: mcpRequestMaxTotalTimeoutMsec,
+    }))
+
     let result
     try {
-      result = await session.client.callTool({
-        name: toolName,
-        arguments: payload.arguments ?? {},
-      }, undefined, {
-        timeout: mcpRequestTimeoutMsec,
-        maxTotalTimeout: mcpRequestMaxTotalTimeoutMsec,
-      })
+      result = await call(toolName)
     }
     catch (error) {
       const fallbackToolName = resolveFallbackToolName(toolName)
-      if (!fallbackToolName || fallbackToolName === toolName) {
+      // A broken connection is not a naming problem, and a second try could run the tool twice.
+      if (!fallbackToolName || fallbackToolName === toolName || isConnectionError(error)) {
         throw error
       }
 
@@ -366,13 +569,7 @@ export function createMcpManager(): McpManager {
         fallbackToolName,
       }).warn('retrying mcp tool call with normalized tool name')
 
-      result = await session.client.callTool({
-        name: fallbackToolName,
-        arguments: payload.arguments ?? {},
-      }, undefined, {
-        timeout: mcpRequestTimeoutMsec,
-        maxTotalTimeout: mcpRequestMaxTotalTimeoutMsec,
-      })
+      result = await call(fallbackToolName)
     }
 
     const normalized: ElectronMcpCallToolResult = {}
@@ -494,6 +691,7 @@ export function createMcpManager(): McpManager {
     readConfigText,
     writeConfigText,
     testServer,
+    reconnectMissing,
   }
 }
 
@@ -501,7 +699,13 @@ export async function setupMcpManager() {
   const log = useLogg('main/mcp').useGlobalConfig()
   const manager = createMcpManager()
 
+  // While a configured server (the JARVIS tool server) is not connected, try again every few seconds. The tool server loads its
+  // plugins for up to a minute and the supervisor restarts it on a failure; the face must not need a restart to find it.
+  const retry = setInterval(() => void manager.reconnectMissing(), mcpReconnectIntervalMsec)
+  retry.unref?.()
+
   onAppBeforeQuit(async () => {
+    clearInterval(retry)
     await manager.stopAll()
   })
 
@@ -511,7 +715,7 @@ export async function setupMcpManager() {
     await manager.applyAndRestart()
   }
   catch (error) {
-    log.withError(error).warn('failed to apply mcp stdio config during startup')
+    log.withError(error).warn('failed to apply mcp config during startup')
   }
 
   return manager

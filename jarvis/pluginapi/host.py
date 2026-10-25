@@ -330,14 +330,18 @@ def tool_function(host: PluginHost, pid: str, eid: str, meta: EntryMeta, clean: 
     return call
 
 
-def register_tools(server: Any, host: PluginHost, exclude: set[str] = frozenset(), clean: Callable[[Any], Any] | None = None) -> list[str]:
-    """Adds one MCP tool per entry of every running plugin: `<plugin>__<entry>`. `clean` is applied to every result before it is returned."""
+def register_tools(server: Any, host: PluginHost, exclude: set[str] = frozenset(), clean: Callable[[Any], Any] | None = None,
+                   include: set[str] | None = None) -> list[str]:
+    """Adds one MCP tool per entry of every running plugin: `<plugin>__<entry>`. `clean` is applied to every result before it is returned.
+    `include`, when given, limits the tools to those names (the face's chat profile)."""
     names = []
     for pid, item in host.loaded.items():
         if item.status != "running" or pid in exclude:
             continue
         for eid, (meta, _method) in sorted(item.entries.items()):
             name = f"{pid}__{eid}"
+            if include is not None and name not in include:
+                continue
             server.add_tool(tool_function(host, pid, eid, meta, clean), name=name, description=(meta.description or meta.name or name)[:1000])
             names.append(name)
     return names

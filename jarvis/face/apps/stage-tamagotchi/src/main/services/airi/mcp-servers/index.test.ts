@@ -108,7 +108,11 @@ describe('createMcpManager', () => {
 
   async function startServers(...serverNames: string[]) {
     await writeFile(join(userDataPath, 'mcp.json'), JSON.stringify({
-      mcpServers: Object.fromEntries(serverNames.map(name => [name, { url: `http://127.0.0.1:48970/${name}` }])),
+      // JARVIS adds its own tool server to a config that lacks it (see index.connection.test.ts), so these generic tests switch it off.
+      mcpServers: {
+        jarvis: { url: 'http://127.0.0.1:48970/mcp', enabled: false },
+        ...Object.fromEntries(serverNames.map(name => [name, { url: `http://127.0.0.1:48970/${name}` }])),
+      },
     }))
     const manager = createMcpManager()
     managers.push(manager)

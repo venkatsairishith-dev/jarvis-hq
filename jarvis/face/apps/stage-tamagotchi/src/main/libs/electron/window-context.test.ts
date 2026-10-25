@@ -58,6 +58,7 @@ function createMcpManagerMock() {
     readConfigText: vi.fn<McpManager['readConfigText']>(),
     writeConfigText: vi.fn<McpManager['writeConfigText']>(),
     testServer: vi.fn<McpManager['testServer']>(),
+    reconnectMissing: vi.fn<McpManager['reconnectMissing']>(),
   } satisfies McpManager
 }
 
