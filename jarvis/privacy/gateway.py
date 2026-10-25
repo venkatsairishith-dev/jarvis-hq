@@ -219,7 +219,7 @@ def _redact_message(msg, red: Redactor, m: Mapping):
         calls = []
         for c in msg["tool_calls"]:
             if not isinstance(c, dict):
-                raise GatewayRefusal("a tool call has an unknown shape, so the request was not forwarded")
+                raise GatewayRefusal(f"a tool call has an unknown shape ({type(c).__name__}), so the request was not forwarded")
             fn = c.get("function")
             calls.append({"id": _tree(c.get("id"), red, m), "type": "function",
                           "function": _tree(fn if isinstance(fn, dict) else {}, red, m, key="function", ident=True)})

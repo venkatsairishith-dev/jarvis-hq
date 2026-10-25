@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-26",
+  "protocol": "jarvis/evals/onscreen_bench/PROTOCOL.md (goal 6: 'Open Calculator and tell me the weather in Paris.')",
+  "how": "A clean chat per run (stored chat deleted, face restarted), the goal typed into the face chat box, the gateway pinned to one provider with no failover (pin file D:\\jarvis\\cache\\gateway-pin.txt through JARVIS_GATEWAY_PIN_FILE). Request sizes are the bodies the face posts to the gateway (Playwright request.postData, bytes).",
+  "face_build": "origin/claude/implementation-plan-designs-00v4r6 at 8825099 merged into jarvis/laptop, rebuilt and installed 2026-10-26 (request cut D52: no card tools, get_weather only built-in, do_goal persona)",
+  "request_size_kb": {
+    "cloud_claim": {"first_turn": 7.7, "after_tool_list_round_trip": 15},
+    "measured_first_install_old_profile": {"first_turn": 12.2, "second": 20.6, "third": 23.6, "why": "the saved profile of an older build kept tool cards on (5 tools, drawCard + searchIcons), the old long persona and the artistry widget text; new defaults never reached it"},
+    "measured_after_one_time_migration": {"first_turn": 8.5, "second": 17.5, "third": 18.9, "system_prompt_chars": 5658, "tools_bytes": 2102, "user_message_chars": 969, "note": "the 969-char user message carries the face's own runtime context block (ACT tokens and the emotion list), which the cloud figure does not count"}
+  },
+  "runs": [
+    {"model": "dahl GLM-5.3-Flash (before the fixes below)", "calls": ["get_weather (Failed to fetch)", "jarvis::windows_control (no such tool)"], "result": "weather failed (network lock), Calculator never opened, 400 'tool call has an unknown shape' once", "request_kb": [12, 21, 21]},
+    {"model": "dahl GLM-5.3-Flash, persona and defaults migrated", "calls": ["builtIn_mcpListTools", "get_weather", "jarvis::desktop__do_goal"], "result": "weather returned (12 C Paris); do_goal failed: 'step 1 (open_app): RuntimeError' (the PC job counter bug)", "request_kb": [8, 17, 19]},
+    {"model": "dahl GLM-5.3-Flash, all fixes", "runs": 4, "result": "Calculator opened and verified (CalculatorApp process, pc_open job ok) in 3 of 4; get_weather ok; the final sentence was lost in every run: 429 (Dahl capacity, pinned so no failover) once, Dahl-side 400/SSE error 'Unterminated string starting at: line 1 column ~104' twice (its tool-call parser; the face's arguments were valid JSON), one run ended before the answer", "request_kb": [8, 17, 19], "seconds": [92, 124, 162, 178, 296]},
+    {"model": "dahl MiniMax-M2.7", "result": "tools right (do_goal, get_weather), Calculator opened, 3 requests all 200, but the final answer is an empty string (content chars 0 on the last stream)", "request_kb": [8, 16, 18], "seconds": 186},
+    {"model": "local Ling-3.0-tiny-heretic (pin local)", "goals": ["What is on my screen right now?", "Open Calculator and tell me the weather in Paris."], "result": "all requests 200 in 8/16/17 KB, but wrong tool both times (jarvis_do for the screen question, jarvis_show for the Calculator goal) and an answer that invents what is on the screen; neither goal done"},
+    {"model": "local Granite-4.0-h-tiny abliterated (pin local local-chat-granite)", "goals": ["What is on my screen right now?"], "result": "called get_weather for the screen question; no answer within 240 s; not done"}
+  ],
+  "decision": {
+    "prefer_first": "set to false on the local entry of jarvis/privacy/providers.json: neither local MoE model completed a simple goal, and the face's first request (8.5 KB, 3 tools, about 2.2k tokens) is inside prefer_max_tokens 3000 / prefer_max_tools 3, so with true it would have been answered by the local model first",
+    "provider_order": "unchanged: dahl first, then the fallbacks, local last"
+  },
+  "fixed_during_this_run": [
+    "desktop plugin: the PC job request counter was per Pc (every step makes a new Pc, each counted from 1) and the kernel answers a repeated (holder token, seq) with the job it already made, so the second action of a task returned the first action's job: 'open Calculator' after a focus that found no window came back as the focus job's RuntimeError and no pc_open job was ever created. The counter now belongs to the operation (coordinator._holder_info); test_fencing.test_two_pcs_of_one_operation_never_repeat_a_counter_value fails without the fix",
+    "face: the weather card's hosts (api.open-meteo.com, geocoding-api.open-meteo.com) were allowed by the request filter but not by the Chromium host-resolver rule, so get_weather said 'Failed to fetch'; they are now excluded from the NOTFOUND mapping",
+    "face: a profile saved by an older build kept tool cards on, the old persona and the artistry widget text; a one-time migration (localStorage jarvis/lean-defaults, jarvis/shipped-persona) applies the new defaults and the shipped persona text",
+    "persona: the model invented 'jarvis::windows_control' / 'run_goal'; the PC-goal line now names jarvis::desktop__do_goal exactly",
+    "chat tool list: doc_reader__recent_files fits the 7.6 KB budget again (descriptions shortened, jarvis_tasks stays lent to do_goal), snapshot regenerated",
+    "kernel tests: test_llm_proxy no longer waits out the 70 s x 3 429 hold (a no-op sleep in the test's make_handler)"
+  ],
+  "open": [
+    "a final answer after the tool results is the weak point of both hosted models: Dahl GLM loses it to 429 / a server-side tool-parser 400 delivered inside a 200 stream (the gateway's bad-tool-JSON failover only sees HTTP 400 statuses), MiniMax returns an empty string",
+    "gateway: the 400 'a tool call has an unknown shape' on a history message was seen twice and not reproduced in three capture runs; the refusal now names the Python type of the offending entry"
+  ]
+}
