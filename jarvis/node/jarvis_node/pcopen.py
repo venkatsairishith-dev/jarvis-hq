@@ -143,6 +143,15 @@ def find_app(query: str, apps: list):
     return (scored[0][1], scored[0][2]), []
 
 
+def _opened(go, real: bool) -> None:
+    """Run the opener and, for the real thing on Windows, remember the window it opened (windowpick.py: only a window JARVIS opened may be typed into later)."""
+    if real and os.name == "nt":
+        from . import windowpick
+        windowpick.launch_and_record_any(go)
+    else:
+        go()
+
+
 def pc_open(p: dict, roots: dict = None, apps: list = None, opener=None, launcher=None) -> dict:
     """Run one authorized pc_open job: open_app, open_folder, open_file or list_folder."""
     op, target, rel = str(p.get("op", "")), str(p.get("target", "")), str(p.get("path", ""))
@@ -156,7 +165,8 @@ def pc_open(p: dict, roots: dict = None, apps: list = None, opener=None, launche
         name, appid = found
         if _sensitive(name):
             return {"ok": False, "error": REFUSED}
-        (launcher or (lambda a: subprocess.Popen(["explorer.exe", "shell:AppsFolder\\" + a], close_fds=True)))(appid)
+        go = launcher or (lambda a: subprocess.Popen(["explorer.exe", "shell:AppsFolder\\" + a], close_fds=True))
+        _opened(lambda: go(appid), launcher is None)
         return {"ok": True, "opened": name}
     root = known_folder(target, roots)
     if not root or not os.path.isdir(root):
@@ -173,10 +183,10 @@ def pc_open(p: dict, roots: dict = None, apps: list = None, opener=None, launche
     if op == "open_file":
         if os.path.splitext(path)[1].lower() not in DOC_TYPES:
             return {"ok": False, "error": "refused: only documents and media open; programs and scripts never do"}
-        opener(path)
+        _opened(lambda: opener(path), opener is os.startfile)
         return {"ok": True, "opened": shown}
     if op == "open_folder":
-        opener(path)
+        _opened(lambda: opener(path), opener is os.startfile)
         return {"ok": True, "opened": shown}
     items = []
     with os.scandir(path) as it:

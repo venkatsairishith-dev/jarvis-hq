@@ -19,7 +19,8 @@ public class W { [DllImport("user32.dll")] public static extern IntPtr GetForegr
 '@
 $procName = '__PROC__'; $maxN = __MAX__; $maxD = __DEPTH__; $wantValues = __VALUES__
 if ($procName -eq '') { $h = [W]::GetForegroundWindow() }
-else { $p = Get-Process -Name $procName | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; $h = if ($p) { $p.MainWindowHandle } else { [IntPtr]::Zero }
+else { if ($env:JARVIS_UI_HWND) { $h = [IntPtr][int64]$env:JARVIS_UI_HWND } else {   # chosen by windowpick.py (never just the first process of that name)
+  $p = Get-Process -Name $procName | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; $h = if ($p) { $p.MainWindowHandle } else { [IntPtr]::Zero } }
   if ($h -eq [IntPtr]::Zero) {   # a modern (UWP) app: its window is an ApplicationFrameHost frame titled with the app's name (one only)
     $AE = [System.Windows.Automation.AutomationElement]
     $hit = @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,
@@ -57,7 +58,11 @@ def snapshot(process: str = "", max_elements: int = 60, max_depth: int = 4, valu
         raise ValueError("bad process name")
     script = (PS.replace("__PROC__", process).replace("__MAX__", str(int(max_elements))).replace("__DEPTH__", str(int(max_depth)))
               .replace("__VALUES__", "$true" if values else "$false"))
-    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, encoding="utf-8", timeout=60,
+    env = dict(os.environ)
+    if process:                                                       # a read: the window in front, else the newest, and never a guess for a change (windowpick.py)
+        from . import windowpick
+        env.update(windowpick.pick_env(process, mutating=False))
+    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, encoding="utf-8", timeout=60, env=env,
                        creationflags=0x08000000 if os.name == "nt" else 0)  # CREATE_NO_WINDOW: no flashing console
     snap = json.loads(r.stdout)
     from jarvis_kernel.scrub import scrub  # same scrubber as the gateway and the vault
