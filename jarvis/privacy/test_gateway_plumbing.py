@@ -278,6 +278,28 @@ class JsonKeysAreChecked(unittest.TestCase):
         tag = m.tag("CANARY", c("key"))
         self.assertEqual(gateway.restore_json({tag: {tag: 1}}, m), {c("key"): {c("key"): 1}})
 
+    def test_tool_and_argument_names_are_kept_so_the_model_can_call_them_but_a_speakers_name_and_descriptions_are_still_checked(self):
+        """2026-10-25: the gateway rewrote builtIn_mcpListTools to [API_KEY_1] and a required argument to [USERNAME_2]: no tool call of the face could work."""
+        det = LabelledFakeDetector()
+        body = {"model": "m", "messages": [{"role": "user", "name": "Alice", "content": "hi"},
+                                           {"role": "assistant", "content": None, "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "builtIn_mcpCallTool", "arguments": "{\"name\": \"x\"}"}}]}],
+                "tools": [{"type": "function", "function": {"name": "builtIn_mcpListTools", "description": "List the tools of Bob Example",
+                                                            "parameters": {"type": "object", "properties": {"call_summary": {"type": "string"}, "callIcon": {"type": "string"}},
+                                                                           "required": ["call_summary", "callIcon", "bad name"]}}}],
+                "tool_choice": {"type": "function", "function": {"name": "builtIn_mcpListTools"}}}
+        out = gateway.redact_body(body, det, Mapping())
+        fn = out["tools"][0]["function"]
+        self.assertEqual(fn["name"], "builtIn_mcpListTools")
+        self.assertEqual(sorted(fn["parameters"]["properties"]), ["callIcon", "call_summary"])
+        self.assertEqual(fn["parameters"]["required"][:2], ["call_summary", "callIcon"])
+        self.assertEqual(out["tool_choice"]["function"]["name"], "builtIn_mcpListTools")
+        self.assertEqual(out["messages"][1]["tool_calls"][0]["function"]["name"], "builtIn_mcpCallTool")
+        seen = [t for t, _ in det.seen]
+        for must_check in ("Alice", "List the tools of Bob Example", "bad name"):
+            self.assertIn(must_check, seen, must_check)                  # a speaker's name, a description and a non-identifier still go through the detector
+        for kept in ("builtIn_mcpListTools", "call_summary", "builtIn_mcpCallTool"):
+            self.assertNotIn(kept, seen, kept)
+
     def test_a_key_that_is_not_text_is_refused(self):
         with self.assertRaises(gateway.GatewayRefusal):
             gateway._tree({1: "x"}, LabelledFakeDetector(), Mapping())
@@ -416,6 +438,69 @@ class FirstProviderKeyFile(unittest.TestCase):
         os.remove(os.path.join(self.secret_dir, "providers", "first.key"))
         self.assertEqual(self.call("Bearer jarvis-local"), 200)
         self.assertEqual(AuthRecorder.seen, ["Bearer jarvis-local"])
+
+
+class FallbackTooSmall(unittest.TestCase):
+    """2026-10-25: Dahl said 429 (busy) to the face's 9k-token request, the gateway fell back to Groq (8000 tokens a minute in all), and Groq's 413 reached the face as
+    "Remote sent 413 response". A fallback that declares a token limit is now skipped for a request it cannot take, so the caller gets the first provider's own answer."""
+
+    def start(self, status):
+        counts = {"first": 0, "small": 0}
+
+        def handler_for(name, code):
+            class H(BaseHTTPRequestHandler):
+                def log_message(self, *a):
+                    pass
+
+                def do_POST(self):
+                    self.rfile.read(int(self.headers["Content-Length"]))
+                    counts[name] += 1
+                    raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": name}}]} if code == 200 else {"error": {"message": "busy"}}).encode()
+                    self.send_response(code)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+            return H
+        servers = []
+        for name, code in (("first", status), ("small", 200)):
+            sv = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(name, code))
+            threading.Thread(target=sv.serve_forever, daemon=True).start()
+            servers.append(sv)
+        import tempfile
+        gateway._keys.clear()
+        secret_dir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(secret_dir, "providers"))
+        for f in ("first.key", "small.key"):
+            with open(os.path.join(secret_dir, "providers", f), "w") as fh:
+                fh.write("made-up-test-key")
+        old_root, gateway.SECRET_ROOT = gateway.SECRET_ROOT, secret_dir
+        self.addCleanup(lambda: setattr(gateway, "SECRET_ROOT", old_root))
+        self.addCleanup(gateway._keys.clear)
+        self.addCleanup(lambda: [(sv.shutdown(), sv.server_close()) for sv in servers])
+        provs = [{"name": "first", "base_url": f"http://127.0.0.1:{servers[0].server_address[1]}/v1", "key": "from_request", "key_file": "providers/first.key"},
+                 {"name": "small", "base_url": f"http://127.0.0.1:{servers[1].server_address[1]}/v1", "key_file": "providers/small.key", "model": "m", "max_total_tokens": 2000}]
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 10)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        gateway._cooldown.clear()
+        return f"http://127.0.0.1:{gw.server_address[1]}", counts
+
+    def test_a_request_the_fallback_cannot_take_is_not_sent_there(self):
+        base, counts = self.start(429)
+        code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "word " * 4000}]})     # ~5k tokens: over the fallback's 2000
+        self.assertEqual(code, 429)                                       # the first provider's own answer, not a 413 from the fallback
+        self.assertEqual(counts, {"first": 1, "small": 0})
+
+    def test_a_small_request_still_falls_back(self):
+        gateway._cooldown.clear()
+        base, counts = self.start(429)
+        code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(code, 200)
+        self.assertEqual(counts, {"first": 1, "small": 1})
 
 
 class ClaudeIsNeverAProvider(unittest.TestCase):

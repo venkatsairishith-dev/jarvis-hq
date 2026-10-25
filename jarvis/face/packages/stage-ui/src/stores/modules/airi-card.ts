@@ -618,6 +618,40 @@ export const useAiriCardStore = defineStore('airi-card', () => {
     return updated
   }
 
+  /**
+   * JARVIS: the defaults the store captures at start-up are empty on a fresh profile (the runtime stores are still empty then). Chat and voice read
+   * the character's RESOLVED selection, which falls back to those defaults, so every message failed with "No chat provider or model configured for
+   * this character" even though JARVIS's own defaults were written to the runtime stores a moment later. Takes the runtime selection over wherever
+   * the saved default is empty; a default that holds a provider is never changed. Returns true when something changed.
+   */
+  async function adoptRuntimeDefaultsWhereEmpty(): Promise<boolean> {
+    const runtime = readRuntimeModules()
+    const defaults = moduleDefaults.value
+    if (!defaults) {
+      moduleDefaults.value = runtime
+      return true
+    }
+    const next = structuredClone(toRaw(defaults))
+    let changed = false
+    for (const module of ['consciousness', 'vision'] as const) {
+      if (!next[module].provider && runtime[module].provider) {
+        next[module] = { provider: runtime[module].provider, model: runtime[module].model }
+        changed = true
+      }
+    }
+    const noSpeech = (provider: string) => !provider || provider === 'speech-noop'
+    if (noSpeech(next.speech.provider) && !noSpeech(runtime.speech.provider)) {
+      next.speech = { ...runtime.speech }
+      changed = true
+    }
+    if (!changed)
+      return false
+    moduleDefaults.value = next
+    appliedModules = undefined
+    await applyActiveCardSettings()
+    return true
+  }
+
   /** Clears a removed provider from defaults and the active card, not other cards. */
   async function clearProviderSelections(providerId: string) {
     await pendingAuthenticationSetup
@@ -1450,6 +1484,7 @@ export const useAiriCardStore = defineStore('airi-card', () => {
     activateCard,
     configureForAuthentication,
     clearProviderSelections,
+    adoptRuntimeDefaultsWhereEmpty,
 
     currentModels: computed(() => {
       const {

@@ -307,7 +307,10 @@ def _deep_cache_put(h: str, v) -> None:
             _DEEP_CACHE.pop(next(iter(_DEEP_CACHE)))
 
 
-OWNER_REQUEST_TOKENS = 12000       # what a command from the owner costs the model before it has said anything (measured: 10.6k to 11k)
+HOLD_MAX_S = 40                    # a provider's rest this short is waited out inside the request instead of being answered with 429 (see make_handler)
+OWNER_REQUEST_TOKENS = 6000        # what a command from the owner costs the model before it has said anything: estimated 5.7k for a fresh conversation, 6.8k after three turns
+                                   # (kernel audit, Hermes -> Groq, 2026-10-22..25; it was 12000 when the owner's agent still sent 10.6k to 11k). With 12000 the private lane's
+                                   # only provider counted was OpenRouter's free model, always rate-limited, so every owner command was refused while Groq (8000) could serve it.
 
 
 def _usage(u) -> dict:
@@ -360,7 +363,7 @@ def _recent(times: list, now: float, window: float) -> list:
     return [t for t in times if now - t < window]
 
 
-def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router_mode=None):
+def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router_mode=None, sleep=time.sleep):
     from .jobs import PC_OPS, UI_OPS, Jobs, JobError, action_for
     from .policy import Action
     from .store import Killed
@@ -1203,165 +1206,188 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router
             if summary:
                 body.pop("max_completion_tokens", None)
                 body["max_tokens"] = sizing.SUMMARY_MAX_OUTPUT
-            full = list(chain)
-            too_small = [p.name for p in chain if not sizing.fits_with_output(p, est, need_out)]
-            chain = [p for p in chain if sizing.fits_with_output(p, est, need_out)]   # never send a request it cannot fit
-            if not chain:
-                return self._too_large(agent, lane, est)
-            with lock:
-                rest_until = {n: max(cooling.get(n, 0), outage.get(n, 0)) for n in {p.name for p in full}}
-                benched = {p.name: rest_until[p.name] for p in chain if rest_until[p.name] > now}
-                resting = {n for n, t in rest_until.items() if t > now}
-                down_only = bool(benched) and all(outage.get(n, 0) > now and cooling.get(n, 0) <= now for n in benched)
-            chain = [p for p in chain if p.name not in benched]  # a provider that said "rate limited" rests until it may be asked again
-            if too_small or benched:
-                kernel.audit.append("agent_model_skipped", {"agent": agent, "lane": lane, "est_tokens": est, "providers": too_small,
-                                                            "cooling": sorted(benched), **({"summary": True} if summary else {})})
-            if not chain:
-                # Only resting providers could take it. If a provider that is not resting could take the part that
-                # compression cannot shrink (system prompt + tools), ask the agent to compress (413); a summary call
-                # also gets 413, so the agent uses its own fallback summary. Otherwise it must wait (429).
-                fixed = sizing.estimate_fixed(body)
-                if summary or any(sizing.fits_with_output(p, fixed + 2000, need_out) for p in full if p.name not in resting):
+            base_chain = chain
+            for hold_round in range(3):                   # round 2 and 3 only after a short rest was waited out (see HOLD_MAX_S)
+                now = clock()
+                chain = list(base_chain)
+                full = list(chain)
+                too_small = [p.name for p in chain if not sizing.fits_with_output(p, est, need_out)]
+                chain = [p for p in chain if sizing.fits_with_output(p, est, need_out)]   # never send a request it cannot fit
+                if not chain:
                     return self._too_large(agent, lane, est)
-                wait = max(1, math.ceil(min(benched.values()) - now))
-                if down_only:                            # resting after an outage: a short, plain "unavailable" (not 429:
-                    return self._unavailable(agent, lane, wait)   # agents back off for minutes on a rate limit)
-                return self._rate_limited(agent, lane, wait)
-            if shadow is not None:
-                shadow.observe(lane, [p.name for p in chain], est, pref)
-            last, outcomes = "none", []
-            for p in chain:
-                if kernel.killed():                    # re-checked before EVERY provider (audit M9: store.check_alive says callers must
-                    return self._stopped_by_kill(agent, "before a provider")      # re-check between steps): a fallback must not run
-                model, why = p.default_model, "other"
-                if not p.model_ok(model):
-                    continue
-                payload = dict(body, model=model)
-                withheld = 0
-                if getattr(p, "lane", "") != "local":                # images, audio and files go to a local model only (audit M2)
-                    payload, withheld = withhold_media(payload)
-                for k in ("max_tokens", "max_completion_tokens"):    # shrink the answer budget to what still fits this provider
-                    if k in payload:
-                        payload[k] = sizing.output_budget(p, est, payload[k])
-                payload.update(p.extra_body)
-                if summary:
-                    payload["stream"] = False                        # read the whole summary to check it before passing it on
-                headers = {"Content-Type": "application/json", "User-Agent": "jarvis-llm-proxy/0.1"}
-                try:
-                    headers.update(p.auth_headers())               # {} for a keyless or optional-and-absent key
-                except (OSError, ValueError) as e:                # key withdrawn or unreadable: this provider fails, try the next
-                    last, why = f"key unreadable ({type(e).__name__})", "other"
-                    kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": "no_key"})
-                    outcomes.append(why)
-                    continue
-                req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
-                resp, t_call = None, time.time()
-                for attempt in (1, 2):
-                    if attempt == 2 and kernel.killed():   # the retry of the same provider is a new step too
-                        return self._stopped_by_kill(agent, "before a retry")
-                    try:
-                        resp = urllib.request.urlopen(req, timeout=p.timeout_s or 120)
-                        break
-                    except urllib.error.HTTPError as e:
-                        last = f"HTTP {e.code}"
-                        shadow_outcome(p.name, e.code)
-                        try:
-                            text = e.read(4000).decode(errors="replace")      # classified, never logged
-                        except Exception:
-                            text = ""
-                        why = sizing.classify(e.code, text)
-                        rest = sizing.cooldown_s(e.headers.get("Retry-After") if e.headers else None, text) if why == "rate_limited" else 0
-                        if rest:
-                            with lock:
-                                cooling[p.name] = clock() + rest
-                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": why,
-                                                                        "prompt_chars": prompt_chars, "est_tokens": est, "attempt": attempt,
-                                                                        **({"cooldown_s": rest} if rest else {})})
-                        if (e.code >= 500 and attempt == 2) or e.code == 404:      # failed twice, or "no such model/endpoint": rest it briefly, so retries do
-                            with lock:                                             # not hammer it (a dead free-model id gave 46 failed calls and 5-minute waits)
-                                outage[p.name] = clock() + OUTAGE_REST_S
-                        if e.code not in RETRY_SAME_PROVIDER or why == "too_large":
-                            break
-                    except Exception as e:
-                        last, why = type(e).__name__, "other"
-                        shadow_outcome(p.name, 503)
-                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "attempt": attempt})
-                        with lock:                               # unreachable: rest it briefly as well
-                            outage[p.name] = clock() + OUTAGE_REST_S
-                        break
-                if resp is None:
-                    outcomes.append(why)
-                    continue
-                shadow_outcome(p.name, 200)
-                if kernel.killed():                        # the switch went on while the provider was answering: nothing is passed on
-                    resp.close()
-                    return self._stopped_by_kill(agent, "before the answer was passed on")
-                if summary:
-                    try:
-                        with resp:
-                            reply = json.loads(resp.read())
-                    except (ValueError, OSError) as e:
-                        reply, last = {}, type(e).__name__
-                    ok, bad = sizing.summary_ok(reply)
-                    if not ok:                               # a cut-off or empty checkpoint would freeze the agent's compaction
-                        last = f"summary {bad}"
-                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last,
-                                                                        "class": "summary_" + bad, "est_tokens": est})
-                        outcomes.append("other")
-                        continue
-                    for ch in reply.get("choices") or []:     # the checkpoint is the content; reasoning text must not stand in for it
-                        for k in ("reasoning", "reasoning_content", "reasoning_details"):
-                            (ch.get("message") or {}).pop(k, None)
-                    self._send_reply(reply, stream)
-                    kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "summary": True,
-                                                             "usage": _usage(reply.get("usage")),
-                                                             "prompt_chars": prompt_chars, "est_tokens": est,
-                                                             "out_chars": len(reply["choices"][0]["message"]["content"]), "ms": int((time.time() - t_call) * 1000)})
-                    return
-                with resp:   # from here on we are committed to this provider
-                    self.send_response(200)
-                    self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
-                    if stream:
-                        self.send_header("Cache-Control", "no-cache")
-                    self.end_headers()
-                    sent, tail, broke = 0, b"", None
-                    try:
-                        while True:
-                            chunk = resp.read1(65536) if hasattr(resp, "read1") else resp.read(65536)
-                            if not chunk:
-                                break
-                            if kernel.killed():                        # between chunks: the kill switch ends a stream that is going
-                                raise Killed("kill switch is on")
-                            self.wfile.write(chunk)
-                            self.wfile.flush()
-                            sent += len(chunk)
-                            tail = (tail + chunk)[-8192:]              # the provider's own token count sits at the end of the body/stream
-                    except Exception as e:                             # stalled/cut mid-answer: end here, never invent a [DONE]
-                        broke = "KillSwitch" if isinstance(e, Killed) else type(e).__name__
-                        self.close_connection = True                   # the agent sees a cut-off answer, not a complete one
-                if broke:
-                    kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": broke,
-                                                                    "class": "killed" if broke == "KillSwitch" else "stream_broken",
-                                                                    "stream": stream, "bytes_out": sent,
-                                                                    "est_tokens": est, "ms": int((time.time() - t_call) * 1000)})
-                    return
-                kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "stream": stream, "bytes_out": sent,
-                                                         "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
-                                                         "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings,
-                                                         **({"media_withheld": withheld} if withheld else {}),
-                                                         **({"dropped_fields": dropped} if dropped else {}),
-                                                         "usage": _usage_from_tail(tail),
-                                                         "est_tokens": est, "ms": int((time.time() - t_call) * 1000)})
-                return
-            kernel.audit.append("agent_model_request_failed", {"agent": agent, "lane": lane, "error": last, "classes": outcomes})
-            if outcomes and all(o == "too_large" for o in outcomes):
-                return self._too_large(agent, lane, est)       # the agent must shorten its history, not retry the same request
-            if outcomes and all(o == "rate_limited" for o in outcomes):
                 with lock:
-                    waits = [cooling.get(p.name, 0) - clock() for p in chain]
-                return self._rate_limited(agent, lane, max(1, math.ceil(min(waits))) if waits else 30)
-            self._json(502, {"error": {"message": f"all providers failed ({last})"}})
+                    rest_until = {n: max(cooling.get(n, 0), outage.get(n, 0)) for n in {p.name for p in full}}
+                    benched = {p.name: rest_until[p.name] for p in chain if rest_until[p.name] > now}
+                    resting = {n for n, t in rest_until.items() if t > now}
+                    down_only = bool(benched) and all(outage.get(n, 0) > now and cooling.get(n, 0) <= now for n in benched)
+                fitted = chain                                       # the providers that can take the request, resting or not
+                chain = [p for p in chain if p.name not in benched]  # a provider that said "rate limited" rests until it may be asked again
+                if too_small or benched:
+                    kernel.audit.append("agent_model_skipped", {"agent": agent, "lane": lane, "est_tokens": est, "providers": too_small,
+                                                                "cooling": sorted(benched), **({"summary": True} if summary else {})})
+                if not chain and fitted and not summary and not down_only and hold_round < 2 and min(benched.values()) - now <= HOLD_MAX_S:
+                    # Every provider that can take this is resting for a few seconds (Groq's free 8000 tokens a minute allow about two of the agent's calls a
+                    # minute). A 429 here sends the agent into its own back-off of minutes and the owner's command fails at once; waiting the few seconds
+                    # out keeps the command going at the pace the free tier allows. Longer rests are answered as before.
+                    hold = max(1, math.ceil(min(benched.values()) - now))
+                    kernel.audit.append("agent_model_held", {"agent": agent, "lane": lane, "seconds": hold, "providers": sorted(benched), "est_tokens": est})
+                    sleep(hold)
+                    if kernel.killed():
+                        return self._stopped_by_kill(agent, "while waiting for a provider")
+                    continue
+                if not chain:
+                    # Only resting providers could take it. If a provider that is not resting could take the part that
+                    # compression cannot shrink (system prompt + tools), ask the agent to compress (413); a summary call
+                    # also gets 413, so the agent uses its own fallback summary. Otherwise it must wait (429).
+                    fixed = sizing.estimate_fixed(body)
+                    if summary or any(sizing.fits_with_output(p, fixed + 2000, need_out) for p in full if p.name not in resting):
+                        return self._too_large(agent, lane, est)
+                    wait = max(1, math.ceil(min(benched.values()) - now))
+                    if down_only:                            # resting after an outage: a short, plain "unavailable" (not 429:
+                        return self._unavailable(agent, lane, wait)   # agents back off for minutes on a rate limit)
+                    return self._rate_limited(agent, lane, wait)
+                if shadow is not None:
+                    shadow.observe(lane, [p.name for p in chain], est, pref)
+                last, outcomes = "none", []
+                for p in chain:
+                    if kernel.killed():                    # re-checked before EVERY provider (audit M9: store.check_alive says callers must
+                        return self._stopped_by_kill(agent, "before a provider")      # re-check between steps): a fallback must not run
+                    model, why = p.default_model, "other"
+                    if not p.model_ok(model):
+                        continue
+                    payload = dict(body, model=model)
+                    withheld = 0
+                    if getattr(p, "lane", "") != "local":                # images, audio and files go to a local model only (audit M2)
+                        payload, withheld = withhold_media(payload)
+                    for k in ("max_tokens", "max_completion_tokens"):    # shrink the answer budget to what still fits this provider
+                        if k in payload:
+                            payload[k] = sizing.output_budget(p, est, payload[k])
+                    payload.update(p.extra_body)
+                    if summary:
+                        payload["stream"] = False                        # read the whole summary to check it before passing it on
+                    headers = {"Content-Type": "application/json", "User-Agent": "jarvis-llm-proxy/0.1"}
+                    try:
+                        headers.update(p.auth_headers())               # {} for a keyless or optional-and-absent key
+                    except (OSError, ValueError) as e:                # key withdrawn or unreadable: this provider fails, try the next
+                        last, why = f"key unreadable ({type(e).__name__})", "other"
+                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": "no_key"})
+                        outcomes.append(why)
+                        continue
+                    req = urllib.request.Request(p.base_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
+                    resp, t_call = None, time.time()
+                    for attempt in (1, 2):
+                        if attempt == 2 and kernel.killed():   # the retry of the same provider is a new step too
+                            return self._stopped_by_kill(agent, "before a retry")
+                        try:
+                            resp = urllib.request.urlopen(req, timeout=p.timeout_s or 120)
+                            break
+                        except urllib.error.HTTPError as e:
+                            last = f"HTTP {e.code}"
+                            shadow_outcome(p.name, e.code)
+                            try:
+                                text = e.read(4000).decode(errors="replace")      # classified, never logged
+                            except Exception:
+                                text = ""
+                            why = sizing.classify(e.code, text)
+                            rest = sizing.cooldown_s(e.headers.get("Retry-After") if e.headers else None, text) if why == "rate_limited" else 0
+                            if rest:
+                                with lock:
+                                    cooling[p.name] = clock() + rest
+                            kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": why,
+                                                                            "prompt_chars": prompt_chars, "est_tokens": est, "attempt": attempt,
+                                                                            **({"cooldown_s": rest} if rest else {})})
+                            if (e.code >= 500 and attempt == 2) or e.code == 404:      # failed twice, or "no such model/endpoint": rest it briefly, so retries do
+                                with lock:                                             # not hammer it (a dead free-model id gave 46 failed calls and 5-minute waits)
+                                    outage[p.name] = clock() + OUTAGE_REST_S
+                            if e.code not in RETRY_SAME_PROVIDER or why == "too_large":
+                                break
+                        except Exception as e:
+                            last, why = type(e).__name__, "other"
+                            shadow_outcome(p.name, 503)
+                            kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "attempt": attempt})
+                            with lock:                               # unreachable: rest it briefly as well
+                                outage[p.name] = clock() + OUTAGE_REST_S
+                            break
+                    if resp is None:
+                        outcomes.append(why)
+                        continue
+                    shadow_outcome(p.name, 200)
+                    if kernel.killed():                        # the switch went on while the provider was answering: nothing is passed on
+                        resp.close()
+                        return self._stopped_by_kill(agent, "before the answer was passed on")
+                    if summary:
+                        try:
+                            with resp:
+                                reply = json.loads(resp.read())
+                        except (ValueError, OSError) as e:
+                            reply, last = {}, type(e).__name__
+                        ok, bad = sizing.summary_ok(reply)
+                        if not ok:                               # a cut-off or empty checkpoint would freeze the agent's compaction
+                            last = f"summary {bad}"
+                            kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last,
+                                                                            "class": "summary_" + bad, "est_tokens": est})
+                            outcomes.append("other")
+                            continue
+                        for ch in reply.get("choices") or []:     # the checkpoint is the content; reasoning text must not stand in for it
+                            for k in ("reasoning", "reasoning_content", "reasoning_details"):
+                                (ch.get("message") or {}).pop(k, None)
+                        self._send_reply(reply, stream)
+                        kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "summary": True,
+                                                                 "usage": _usage(reply.get("usage")),
+                                                                 "prompt_chars": prompt_chars, "est_tokens": est,
+                                                                 "out_chars": len(reply["choices"][0]["message"]["content"]), "ms": int((time.time() - t_call) * 1000)})
+                        return
+                    with resp:   # from here on we are committed to this provider
+                        self.send_response(200)
+                        self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
+                        if stream:
+                            self.send_header("Cache-Control", "no-cache")
+                        self.end_headers()
+                        sent, tail, broke = 0, b"", None
+                        try:
+                            while True:
+                                chunk = resp.read1(65536) if hasattr(resp, "read1") else resp.read(65536)
+                                if not chunk:
+                                    break
+                                if kernel.killed():                        # between chunks: the kill switch ends a stream that is going
+                                    raise Killed("kill switch is on")
+                                self.wfile.write(chunk)
+                                self.wfile.flush()
+                                sent += len(chunk)
+                                tail = (tail + chunk)[-8192:]              # the provider's own token count sits at the end of the body/stream
+                        except Exception as e:                             # stalled/cut mid-answer: end here, never invent a [DONE]
+                            broke = "KillSwitch" if isinstance(e, Killed) else type(e).__name__
+                            self.close_connection = True                   # the agent sees a cut-off answer, not a complete one
+                    if broke:
+                        kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": broke,
+                                                                        "class": "killed" if broke == "KillSwitch" else "stream_broken",
+                                                                        "stream": stream, "bytes_out": sent,
+                                                                        "est_tokens": est, "ms": int((time.time() - t_call) * 1000)})
+                        return
+                    kernel.audit.append("agent_model_call", {"agent": agent, "lane": lane, "provider": p.name, "stream": stream, "bytes_out": sent,
+                                                             "messages": len(body.get("messages") or []), "tools": len(body.get("tools") or []),
+                                                             "prompt_chars": prompt_chars, "tool_names": tool_names, "scrubbed": findings,
+                                                             **({"media_withheld": withheld} if withheld else {}),
+                                                             **({"dropped_fields": dropped} if dropped else {}),
+                                                             "usage": _usage_from_tail(tail),
+                                                             "est_tokens": est, "ms": int((time.time() - t_call) * 1000)})
+                    return
+                kernel.audit.append("agent_model_request_failed", {"agent": agent, "lane": lane, "error": last, "classes": outcomes})
+                if outcomes and all(o == "too_large" for o in outcomes):
+                    return self._too_large(agent, lane, est)       # the agent must shorten its history, not retry the same request
+                if outcomes and all(o == "rate_limited" for o in outcomes):
+                    with lock:
+                        waits = [cooling.get(p.name, 0) - clock() for p in chain]
+                    wait = max(1, math.ceil(min(waits))) if waits else 30
+                    if waits and hold_round < 2 and wait <= HOLD_MAX_S:         # the provider said "a few seconds": wait them out here, then ask again
+                        kernel.audit.append("agent_model_held", {"agent": agent, "lane": lane, "seconds": wait, "providers": sorted(p.name for p in chain), "est_tokens": est})
+                        sleep(wait)
+                        if kernel.killed():
+                            return self._stopped_by_kill(agent, "while waiting for a provider")
+                        continue
+                    return self._rate_limited(agent, lane, wait)
+                self._json(502, {"error": {"message": f"all providers failed ({last})"}})
+                return
 
         def _stopped_by_kill(self, agent, where):
             """The kill switch went on while a model request was being served: stop here, call no further provider."""
