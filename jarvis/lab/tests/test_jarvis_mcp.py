@@ -28,7 +28,7 @@ def load(home):
             def __init__(self, *a, **k):
                 pass
 
-            def tool(self):
+            def tool(self, *a, **k):
                 return lambda fn: fn
         stub.MCPServer, stub.Image = MCPServer, object
         for name in ("mcp", "mcp.server"):

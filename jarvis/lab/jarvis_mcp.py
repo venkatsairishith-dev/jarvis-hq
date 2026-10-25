@@ -30,9 +30,32 @@ AGENT_CMDS = {
 mcp = MCPServer("jarvis")
 
 
+# Profile "owner-compact" (2026-10-25): the owner's Hermes on the PRIVATE lane, whose models take few tokens per request (Groq: 8000 for input + answer, so
+# the whole request must stay under ~6900 estimated tokens). Same safety as "owner" (every tool is the same thin client; the kernel decides), but only the
+# tools an owner command used in the kernel's audit log (Hermes: pc open/list, task create/get/update/dispatch, output save) plus pc_action and open_file,
+# which the owner's typed commands reach; the connector tools, show_output, models_status and switch_model are left out (the console has its own model
+# switch), and two long descriptions are shorter. Nothing is removed from "owner" or "lab".
+COMPACT_TOOLS = {"save_output", "pc_action", "open_app", "open_folder", "open_file", "list_folder", "task_start", "task_update", "task_get", "lab_work"}
+COMPACT_DESC = {
+    "lab_work": (
+        "Send a task's hands-on work (code, tests, web, files) to the lab ONCE; an independent check verifies every criterion and failures are repaired. "
+        "You are told the outcome later: tell the owner it started, then stop. agent: hermes, opencode (coding) or goose. Public-lane models: only "
+        "shareable info, public_ok=true. The lab cannot see the owner's PC (no D:\\ or C:\\ paths); verified files arrive flat in D:\\jarvis\\outputs\\task-<id>\\, "
+        "so never require sub-folders in criteria. needs_approval: tell the owner, end your turn, and after they approve call again with task_id and approval_id only."),
+    "task_update": (
+        "Record progress on your task: state (running, paused, completed, failed, cancelled), step, note, result, evidence. completed needs proof: the lab's "
+        "independent check, or evidence citing job:<id> of jobs you ran FOR this task. You can never record a verification yourself; otherwise use failed "
+        "with the exact blocker."),
+}
+
+
 def tool(*profiles):
-    """Register the function as a tool only in the given profiles."""
+    """Register the function as a tool only in the given profiles. "owner-compact" takes the COMPACT_TOOLS among the owner's, with shorter descriptions."""
     def deco(fn):
+        if PROFILE == "owner-compact":
+            if "owner" in profiles and fn.__name__ in COMPACT_TOOLS:
+                return mcp.tool(description=COMPACT_DESC.get(fn.__name__))(fn)
+            return fn
         return mcp.tool()(fn) if PROFILE in profiles else fn
     return deco
 

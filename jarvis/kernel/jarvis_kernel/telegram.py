@@ -73,27 +73,43 @@ class TimedOut(RuntimeError):
 
 
 def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: str = "telegram-owner", timeout: int = 900,
-                 state_path: str = None, clock=time.time):
+                 state_path: str = None, clock=time.time, max_turns: int = None):
     """The owner's own Hermes (private lane, its kernel-gated tools) through its API server on loopback. One session per
     day, so "open it" refers back to what was said before, and a fresh one after a failed turn: a session that grew past
     what the models accept (or got stuck) must not break every later turn. Durable facts live in Hermes memory and the
-    kernel's task records, not in the session. The key is read from its file on every call."""
-    def current():
-        day = time.strftime("%Y%m%d", time.gmtime(clock()))
+    kernel's task records, not in the session. The key is read from its file on every call.
+
+    max_turns (the owner console on the private lane, 2026-10-25): the conversation is replaced after that many turns. Every turn adds its messages and tool results
+    to what Hermes sends next, and the private lane's only free model with room (Groq, 8000 tokens for input and answer) takes about 6900 estimated tokens: a
+    day-long session outgrew it after 3-4 turns and every later command waited five minutes for nothing. The state file keeps the session id on its first line and
+    the turns taken on its second."""
+    turns = {}                                    # without a state file (tests): turns per session id, in memory
+
+    def state():
         try:
             with open(state_path, encoding="utf-8") as fh:
-                sid = fh.read().strip()
-            if sid.startswith(f"{session}-{day}"):
-                return sid
+                lines = fh.read().splitlines() or [""]
+            return lines[0].strip(), int(lines[1]) if len(lines) > 1 and lines[1].strip().isdigit() else 0
         except (OSError, TypeError):
-            pass
+            return "", 0
+
+    def save(sid, n):
+        turns[sid] = n
+        if state_path:
+            with open(state_path, "w", encoding="utf-8") as fh:
+                fh.write("\n".join((sid, str(n))))
+
+    def current():
+        day = time.strftime("%Y%m%d", time.gmtime(clock()))
+        sid, n = state()
+        if sid.startswith(f"{session}-{day}"):
+            turns[sid] = n
+            return sid
         return f"{session}-{day}"
 
     def fresh(old):
         sid = f"{session}-{time.strftime('%Y%m%d', time.gmtime(clock()))}-{int(clock())}"
-        if state_path:
-            with open(state_path, "w", encoding="utf-8") as fh:
-                fh.write(sid)
+        save(sid, 0)
         return sid
 
     def once(text: str, sid: str) -> str:
@@ -119,11 +135,16 @@ def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: st
 
     def call(text: str) -> str:
         sid = current()
+        if max_turns and turns.get(sid, 0) >= max_turns:
+            sid = fresh(sid)
         out = once(text, sid)
+        save(sid, turns.get(sid, 0) + 1)
         if SESSION_FULL.search(out[:300]):
             # Hermes answers a full conversation with an ordinary 200 reply, so nothing above would start a new one and every
             # later message of the day would get the same sentence. Durable facts live in memory and the kernel's task records.
-            out = once(text, fresh(sid))
+            sid = fresh(sid)
+            out = once(text, sid)
+            save(sid, 1)
         return out
     call.session = current
     call.reset = lambda: fresh(current())      # the next message starts a new conversation (an abandoned turn may still be running)

@@ -32,6 +32,7 @@ PER_DAY = 2000
 # A provider's 5xx is tried once more before falling back: Ollama answers a gpt-oss tool call it cannot parse with
 # HTTP 500 "error parsing tool call" (ollama/ollama#12884), and a fresh sample usually parses.
 RETRY_SAME_PROVIDER = {500, 502, 503}
+CONSOLE_AGENT_MAX_TURNS = 3               # a console conversation is replaced after 3 turns: its history must fit the private lane's smallest free model (see telegram.hermes_agent)
 CONSOLE_AGENT_TIMEOUT_S = 300             # the owner's console waits at most this long for the agent's answer (then: failed, TimedOut); a long job is a task, not one turn
 OUTAGE_REST_S = 30                       # a provider that failed twice with server errors rests this long
 MAX_OUTPUT_CHARS = 200_000
@@ -387,7 +388,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router
     if owner_hermes == "auto":                  # the owner's own Hermes, when this server has its API key
         key = os.path.join(gateway.secrets_dir(), "hermes_api_key.txt")
         from .telegram import hermes_agent
-        owner_hermes = (hermes_agent(key, os.environ.get("JARVIS_HERMES_API", "http://127.0.0.1:8642"), session="console-owner", timeout=CONSOLE_AGENT_TIMEOUT_S,
+        owner_hermes = (hermes_agent(key, os.environ.get("JARVIS_HERMES_API", "http://127.0.0.1:8642"), session="console-owner", timeout=CONSOLE_AGENT_TIMEOUT_S, max_turns=CONSOLE_AGENT_MAX_TURNS,
                                      state_path=os.path.join(str(kernel.dir), "owner_session.txt")) if os.path.exists(key) else None)
     owner_plane = owner_mod.Owner(kernel, tasks, jobs, memories, hermes=owner_hermes, clock=clock)
     owner_plane.node = OUTPUT_NODE
