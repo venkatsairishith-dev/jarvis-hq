@@ -217,3 +217,12 @@ def test_the_question_card_text_is_kept_but_cleaned():
     assert prompt.startswith("Which report do you mean?")
     assert "Secret Plans" not in prompt and "Users" not in prompt
     assert st.OFF_NOTE not in prompt
+
+
+def test_a_real_iban_is_removed_but_a_made_up_code_with_the_same_shape_is_not():
+    # found on the real laptop: bank account numbers in IBAN form went through the cleaner untouched
+    text = "pay to GB82 WEST 1234 5698 7654 32 today, ref GB00FAKE00000000000000, DE89370400440532013000."
+    clean, hits = st.scrub_text(text)
+    assert "bank_account" in hits
+    assert "GB82" not in clean and "DE8937" not in clean and clean.count("[bank account removed]") == 2
+    assert "GB00FAKE00000000000000" in clean, "a code that fails the mod-97 check is left alone"

@@ -61,6 +61,19 @@ _PRIVATE_KEY = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----")
 _CARD = re.compile(r"(?<![\w-])\d(?:[ -]?\d){12,18}(?!\w|-\w)")
 
 
+# A bank account in IBAN form (2 letters, 2 check digits, up to 30 letters/digits, spaces every four allowed), kept only when the ISO 13616 mod-97 check
+# passes, so an ordinary code like "GB00FAKE..." is left alone and a real account number never reaches a model (found on the real laptop, 2026-10-25).
+_IBAN = re.compile(r"(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}(?![A-Za-z0-9])")
+
+
+def _iban_ok(raw: str) -> bool:
+    s = re.sub(r"\s", "", raw).upper()
+    if not 15 <= len(s) <= 34:
+        return False
+    moved = s[4:] + s[:4]
+    return int("".join(str(int(c, 36)) for c in moved)) % 97 == 1
+
+
 def _luhn(digits: str) -> bool:
     total, flip = 0, False
     for ch in reversed(digits):
@@ -90,6 +103,9 @@ def scrub_text(text: str) -> tuple[str, list[str]]:
     text, n = _CARD.subn(card, text)
     if "[card number removed]" in text:
         hits.append("card_number")
+    text, n = _IBAN.subn(lambda m: "[bank account removed]" if _iban_ok(m.group(0)) else m.group(0), text)
+    if "[bank account removed]" in text:
+        hits.append("bank_account")
     return text, hits
 
 

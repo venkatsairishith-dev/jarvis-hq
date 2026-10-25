@@ -87,6 +87,7 @@ def capture(proc: str, scale: int = 2) -> tuple[str, dict]:
     if not re.fullmatch(r"[A-Za-z0-9_.\- ]{1,80}", proc or ""):
         raise VisionError("bad target")
     sweep_local()
+    os.makedirs(local_result_dir(), exist_ok=True)       # the folder is not made by anything else on a fresh layout: PowerShell's Save then fails ("capture failed")
     path = os.path.join(local_result_dir(), f"window-{secrets.token_hex(4)}.png")
     r = runtime.powershell(CAPTURE.replace("__PICK__", _pick()), {"JARVIS_UI_PROC": proc, "JARVIS_PNG": path, "JARVIS_SCALE": str(int(scale))}, 30)
     if r.returncode or not os.path.isfile(path):
