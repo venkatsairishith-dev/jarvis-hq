@@ -402,6 +402,14 @@ class LocalModelIsTheLastResort(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual((seen["first"], seen["local"]), (0, 1))
 
+    def test_a_reasoning_caller_can_ask_for_the_online_chain_first(self):
+        base, seen, names = self.start(first_code=200, prefer=True)
+        req = urllib.request.Request(base + "/v1/chat/completions", data=json.dumps({"model": "x", "messages": [{"role": "user", "content": "hi"}]}).encode(),
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer test-not-a-key", "X-Jarvis-Route": "online"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertEqual(r.status, 200)
+        self.assertEqual((seen["first"], seen["local"]), (1, 0))             # the preferred local model was skipped for this caller
+
     def test_a_preferred_local_model_that_errors_falls_back_to_online(self):
         base, seen, names = self.start(first_code=200, prefer=True, local_code=404)
         code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})

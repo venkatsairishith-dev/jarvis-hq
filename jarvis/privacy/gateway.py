@@ -707,7 +707,10 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             # "prefer_first": true on a provider (the local model, owner 2026-10-25: "use the local MoE model") puts it at the front; the online ones stay the failover.
             # Only for a SIMPLE request (owner: "for the simple tasks"): short, and at most prefer_max_tools tools. Big or tool-heavy requests go online first.
             n_tools = len(body.get("tools") or []) if isinstance(body, dict) else 0
-            chain = sorted(chain, key=lambda p: not (p.get("prefer_first") and is_local_provider(p) and est <= int(p.get("prefer_max_tokens") or 3000)
+            # A caller that REASONS (D51: the goal planner) says "X-Jarvis-Route: online": it wants the online chain first, whatever its size. The local model
+            # stays the last link, so a dead online chain is still answered (the reply's X-Jarvis-Provider header says who answered).
+            online_first = (self.headers.get("X-Jarvis-Route") or "").strip().lower() == "online"
+            chain = chain if online_first else sorted(chain, key=lambda p: not (p.get("prefer_first") and is_local_provider(p) and est <= int(p.get("prefer_max_tokens") or 3000)
                                                        and n_tools <= int(p.get("prefer_max_tools") or 3)))
             pin_name, pin_model = read_pin()
             if pin_name and raw is not None and self._path() in ("/chat/completions", "/completions"):

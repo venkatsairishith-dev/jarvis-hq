@@ -450,6 +450,8 @@ def test_the_chat_list_has_only_what_a_chat_goal_needs_and_is_under_12_kb(chat_s
     size = len(_serialized(listed))
     print(f"chat tools/list: {len(listed)} tools, {size} bytes")
     assert size < CHAT_LIST_LIMIT
+    assert size <= 7_600, f"the chat tool list is {size} bytes; the budget is 7.6 KB (shorten a description before adding a tool)"
+    assert "desktop__do_goal" in names and "PIN" in next(t for t in listed if t.name == "desktop__do_goal").description
     assert all(t.annotations is None and t.output_schema is None for t in listed), "no annotations or output schemas in the compact list"
     assert all('"title"' not in json.dumps(t.input_schema) for t in listed), "no pydantic titles"
 
@@ -528,3 +530,26 @@ def test_compact_schema_drops_noise_but_keeps_names_and_meaning():
     assert len(out["properties"]["long"]["description"]) <= F.MAX_PARAM_DESCRIPTION
     assert out["required"] == ["title"] and "title" not in {k for k in out if k != "properties"} and "additionalProperties" not in out
     assert raw["properties"]["profile"]["default"] is None, "the input is not changed"
+
+
+def test_the_goal_tool_gets_the_face_side_readers_and_they_are_not_listed(tmp_path, monkeypatch):
+    from jarvis.pluginapi.host import PluginHost
+    monkeypatch.setenv("JARVIS_DATA_DIR", str(tmp_path / "data"))
+
+    class Views:
+        def tasks(self, state, limit):
+            return [{"id": "t1", "state": state or "done", "limit": limit}]
+
+    async def go():
+        host = PluginHost(only={"desktop"}, exclude=F.PLUGINS_NOT_EXPOSED)
+        host.load()
+        await host.start()
+        try:
+            server = F.build_server(tools(FakeClient()), Views(), F.DEFAULT_PORT, host, None, _Memory(), None, "chat")
+            return host.loaded["desktop"].instance.goal_readers, {t.name for t in await server.list_tools()}
+        finally:
+            await host.stop()
+    readers, names = asyncio.run(go())
+    assert set(readers) == {"recall", "tasks"} and "short answers" in readers["recall"](2)
+    assert readers["tasks"]("waiting_approval", 500)[0]["limit"] == 20, "the limit is capped"
+    assert "desktop__do_goal" in names and not names & {"recall", "tasks", "jarvis_tasks"}, "lent to the plugin, never offered as tools"
