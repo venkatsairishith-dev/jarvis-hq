@@ -927,3 +927,52 @@ class FaceReasoningAtTheHttpEdge(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProviderConcurrencyLimit(unittest.TestCase):
+    """2026-10-25: Dahl answers 429 'model_concurrency' to a second request in flight, and the face sends two at once. max_concurrent makes the second wait."""
+
+    def test_two_requests_do_not_overlap_at_a_provider_with_max_concurrent_one(self):
+        state = {"now": 0, "peak": 0}
+        lock = threading.Lock()
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                with lock:
+                    state["now"] += 1
+                    state["peak"] = max(state["peak"], state["now"])
+                import time as _t
+                _t.sleep(0.3)
+                with lock:
+                    state["now"] -= 1
+                raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+        sv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=sv.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (sv.shutdown(), sv.server_close()))
+        provs = [{"name": "one", "enabled": True, "base_url": f"http://127.0.0.1:{sv.server_address[1]}/v1", "max_concurrent": 1}]
+        gateway._sems.clear()
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 10, 60.0)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        base = f"http://127.0.0.1:{gw.server_address[1]}"
+        codes = []
+
+        def one():
+            codes.append(post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})[0])
+        ts = [threading.Thread(target=one) for _ in range(2)]
+        [t.start() for t in ts]
+        [t.join() for t in ts]
+        self.assertEqual(codes, [200, 200])
+        self.assertEqual(state["peak"], 1)

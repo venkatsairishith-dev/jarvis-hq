@@ -469,6 +469,16 @@ SECRET_ROOT = os.environ.get("JARVIS_SECRET_REF_ROOTS", r"D:\jarvis-secrets").sp
 RETRY_CODES = (429, 500, 502, 503, 504, 520, 522, 524)
 BAD_TOOL_JSON = re.compile(r"unterminated string|invalid json|json.{0,40}(parse|decode)|tool_calls?", re.I)   # a provider's 400 about a tool-call body
 _cooldown: dict[str, float] = {}
+_sems: dict[str, threading.BoundedSemaphore] = {}
+
+
+def _slots(prov: dict):
+    """The semaphore of a provider that sets max_concurrent, else None."""
+    n = int(prov.get("max_concurrent") or 0)
+    if n <= 0:
+        return None
+    with _lock:
+        return _sems.setdefault(prov["name"], threading.BoundedSemaphore(n))
 _keys: dict[str, str] = {}
 
 
@@ -740,45 +750,57 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     # must not depend on what the caller happened to send.
                     hdrs["User-Agent"] = "jarvis-privacy-gateway/1.0"
                     data = json.dumps({**body, **extra, "model": (pin_model if len(chain) == 1 and pin_name else "") or prov["model"]}, ensure_ascii=False).encode("utf-8")
-                req = urllib.request.Request(prov["base_url"] + self._path(), data=data, headers=hdrs,
-                                             method="POST" if data is not None else "GET")
-                try:
-                    resp = urllib.request.urlopen(req, timeout=timeout)
-                except urllib.error.HTTPError as e:
-                    if e.code == 429:
-                        _cooldown[prov["name"]] = time.time() + cooldown
-                    if (e.code in RETRY_CODES or is_local_provider(prov)) and not last:     # a local model that is missing or erroring never blocks the online chain
-                        tried.append(f"{prov['name']}: HTTP {e.code}")
-                        e.close()
-                        continue
-                    err_body = None
-                    if e.code == 400 and not last:
-                        # Dahl answered 400 "Unterminated string" to a tool-call body (face goal d, 2026-10-25): the next provider reads the same request fine.
-                        err_body = e.read()
-                        if BAD_TOOL_JSON.search(err_body[:2000].decode("utf-8", "replace")):
-                            tried.append(f"{prov['name']}: HTTP 400 bad tool JSON")
-                            e.close()
-                            continue
-                    used = [read_key(q) for q in chain[:i + 1] if q.get("key_file")]   # every key file read so far, the first provider's too
-                    payload = scrub_keys(err_body if err_body is not None else e.read(), used)
-                    self.send_response(e.code)
-                    self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
-                    self.send_header("Content-Length", str(len(payload)))
-                    self.send_header("X-Jarvis-Provider", prov["name"])
-                    self.end_headers()
-                    self.wfile.write(payload)
-                    return
-                except Exception as e:                           # noqa: BLE001 - report kind only
-                    tried.append(f"{prov['name']}: {type(e).__name__}")
+                # "max_concurrent": the provider admits only that many requests at once (Dahl: "model_concurrency", HTTP 429 for the second request of the face).
+                # Wait for a turn instead of being refused; a wait that runs out moves on to the next provider.
+                sem = _slots(prov)
+                if sem is not None and not sem.acquire(timeout=float(prov.get("queue_wait_s") or 90)):
+                    tried.append(f"{prov['name']}: busy (queue)")
                     if not last:
                         continue
+                    sem = None
+                try:
+                    req = urllib.request.Request(prov["base_url"] + self._path(), data=data, headers=hdrs,
+                                                 method="POST" if data is not None else "GET")
+                    try:
+                        resp = urllib.request.urlopen(req, timeout=timeout)
+                    except urllib.error.HTTPError as e:
+                        if e.code == 429:
+                            _cooldown[prov["name"]] = time.time() + cooldown
+                        if (e.code in RETRY_CODES or is_local_provider(prov)) and not last:     # a local model that is missing or erroring never blocks the online chain
+                            tried.append(f"{prov['name']}: HTTP {e.code}")
+                            e.close()
+                            continue
+                        err_body = None
+                        if e.code == 400 and not last:
+                            # Dahl answered 400 "Unterminated string" to a tool-call body (face goal d, 2026-10-25): the next provider reads the same request fine.
+                            err_body = e.read()
+                            if BAD_TOOL_JSON.search(err_body[:2000].decode("utf-8", "replace")):
+                                tried.append(f"{prov['name']}: HTTP 400 bad tool JSON")
+                                e.close()
+                                continue
+                        used = [read_key(q) for q in chain[:i + 1] if q.get("key_file")]   # every key file read so far, the first provider's too
+                        payload = scrub_keys(err_body if err_body is not None else e.read(), used)
+                        self.send_response(e.code)
+                        self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
+                        self.send_header("Content-Length", str(len(payload)))
+                        self.send_header("X-Jarvis-Provider", prov["name"])
+                        self.end_headers()
+                        self.wfile.write(payload)
+                        return
+                    except Exception as e:                           # noqa: BLE001 - report kind only
+                        tried.append(f"{prov['name']}: {type(e).__name__}")
+                        if not last:
+                            continue
+                        with _lock:
+                            STATS["errors"] += 1
+                        return self._json(502, {"error": {"message": "no model provider answered: " + "; ".join(tried)}})
                     with _lock:
-                        STATS["errors"] += 1
-                    return self._json(502, {"error": {"message": "no model provider answered: " + "; ".join(tried)}})
-                with _lock:
-                    STATS.setdefault("by_provider", {})[prov["name"]] = STATS.setdefault("by_provider", {}).get(prov["name"], 0) + 1
-                self._answer(resp, stream, m, prov["name"], face)
-                return
+                        STATS.setdefault("by_provider", {})[prov["name"]] = STATS.setdefault("by_provider", {}).get(prov["name"], 0) + 1
+                    self._answer(resp, stream, m, prov["name"], face)
+                    return
+                finally:
+                    if sem is not None:
+                        sem.release()
             with _lock:
                 STATS["errors"] += 1
             return self._json(502, {"error": {"message": "no model provider answered: " + "; ".join(tried)}})
