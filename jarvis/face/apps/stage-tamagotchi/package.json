@@ -32,6 +32,7 @@
     "smoke:linux-window-render": "NODE_OPTIONS='--experimental-websocket' tsx scripts/linux-window-render-smoke.ts",
     "check:csp": "node scripts/csp-check.mjs",
     "check:preview": "node scripts/preview-check.mjs",
+    "check:hud": "node scripts/hud-check.mjs",
     "check:launch": "node scripts/launch-check.mjs",
     "check:render": "node scripts/render-smoke.mjs",
     "check:downloads": "node scripts/verify-downloads.mjs"

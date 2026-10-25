@@ -29,6 +29,8 @@
   pointer-events: none;
   user-select: none;
   contain: layout style;
+  /* the layout below answers the width of the window, not of the screen: the face's default window is only 252 x 336 px */
+  container: jhudw / inline-size;
   color: var(--jhud-cyan);
   transition: color 0.45s ease;
 }
@@ -111,8 +113,8 @@
   position: absolute;
   top: 10px;
   left: 50%;
-  /* leaves room for the controls island, which docks in a corner of the window */
-  width: min(660px, calc(100vw - 7rem));
+  /* leaves room for the controls island, which docks in a corner of the window: 56 px each side when there is room, 16 px in a small window */
+  width: min(660px, calc(100cqw - 2 * clamp(16px, calc((100cqw - 480px) / 2), 56px)));
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -139,7 +141,6 @@
 }
 
 .jhud-strip {
-  container: jhud / inline-size;
   flex: 1;
   min-width: 0;
   height: 28px;
@@ -163,7 +164,7 @@
   position: relative;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 8px;
+  padding: 0 calc(var(--pad, 16px) / 2);
 }
 .jhud-seg + .jhud-seg::before {
   content: '';
@@ -176,14 +177,14 @@
 }
 
 /* fixed widths in characters (--n of them, with the letter spacing): a changing value never moves its neighbours */
-.jhud-seg { width: calc(var(--n) * (1ch + 0.07em) + 16px); }
+.jhud-seg { --pad: 16px; width: calc(var(--n) * (1ch + 0.07em) + var(--pad)); }
 .jhud-seg-state { --n: 9; color: currentColor; padding-left: 0; }
 .jhud-seg-clock { --n: 5; }
 .jhud-seg-kernel { --n: 14; }
 .jhud-seg-task { --n: 13; color: var(--jhud-dim); }
 .jhud-seg-task[data-busy='true'] { color: var(--jhud-amber); }
 .jhud-seg-model { --n: 13; flex: 1 1 auto; color: var(--jhud-dim); }
-.jhud-seg-notices { --n: 4; color: var(--jhud-dim); padding-right: 0; }
+.jhud-seg-notices { --n: 5; color: var(--jhud-dim); padding-right: 0; }
 .jhud-seg-notices svg { vertical-align: -1px; margin-right: 3px; }
 .jhud-seg-notices:not([data-count='0']) { color: var(--jhud-text); }
 .jhud-seg-notices[data-approval='true'] { color: var(--jhud-amber); }
@@ -203,16 +204,60 @@
 .jhud-seg-kernel[data-link='down'],
 .jhud-seg-kernel[data-link='killed'] { color: #ffb3b3; }
 
-/* a narrow window drops the least useful segments first: the model, then the clock, then the state word (the ring and its aria-label still carry it) */
-@container jhud (max-width: 525px) {
+/*
+ * Responsive strip. The widths below are those of the window (the HUD layer fills it), not of the strip, so the reactor and the
+ * strip can both change with them. A narrower window drops the least useful segments first: the model, the clock, the task,
+ * the notice count; the reactor and its aria-label always carry the state. Up to 340 px the strip becomes a small stacked
+ * readout beside the reactor (state word, kernel link, notices) that has no fixed widths, so it can never run out of the window.
+ * Nothing is hidden by clipping: every segment that shows has its full width.
+ */
+@container jhudw (max-width: 716px) {
   .jhud-seg-model { display: none; }
   .jhud-seg-notices { margin-left: auto; }
 }
-@container jhud (max-width: 413px) {
+@container jhudw (max-width: 604px) {
   .jhud-seg-clock { display: none; }
 }
-@container jhud (max-width: 360px) {
-  .jhud-seg-state { display: none; }
+/* medium: the reactor, the state word, the kernel link, then the notice count and the task as the room grows */
+@container jhudw (max-width: 469px) {
+  .jhud-seg { --pad: 12px; }
+  .jhud-seg-kernel { --n: 12.7; }
+}
+@container jhudw (max-width: 449px) {
+  .jhud-seg-task { display: none; }
+}
+
+/* small: the reactor with a stacked mini readout; it wraps (stacks) instead of overflowing */
+@container jhudw (max-width: 340px) {
+  .jhud-chrome {
+    width: fit-content;
+    max-width: calc(100cqw - 16px);
+  }
+  .jhud-strip {
+    flex: 0 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+    height: auto;
+    min-height: 40px;
+    padding: 5px 12px 5px 26px;
+    border-radius: 16px;
+    line-height: 13px;
+    font-size: 11px;
+  }
+  .jhud-seg {
+    width: auto;
+    max-width: 100%;
+    padding: 0;
+    line-height: 13px;
+  }
+  .jhud-seg + .jhud-seg::before { display: none; }
+  .jhud-seg-clock,
+  .jhud-seg-task,
+  .jhud-seg-model { display: none; }
+  .jhud-seg-state { font-weight: 700; }
+  .jhud-seg-notices { margin-left: 0; }
 }
 
 /* ---- the reactor ---- */

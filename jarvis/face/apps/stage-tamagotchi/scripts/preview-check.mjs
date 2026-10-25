@@ -192,6 +192,119 @@ try {
   await settle()
   check('no sideways scroll at 450 px', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
 
+  // 13b. small windows: the face's default window is 252 x 336 px. Under 480 px the panel is an overlay over the whole window.
+  const samples = [['deck', 'Q3 board deck'], ['pdf', 'Hyderabad flights'], ['markdown', 'Notes'], ['code', 'Tools'], ['html', 'Hostile']]
+  /** Where everything of the panel is, and whether anything runs out of the window or the panel. */
+  const geometry = () => page.evaluate(() => {
+    const W = window.innerWidth
+    const H = window.innerHeight
+    const box = (selector) => {
+      const el = document.querySelector(selector)
+      if (!el)
+        return null
+      const r = el.getBoundingClientRect()
+      const style = getComputedStyle(el)
+      return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height, shown: style.display !== 'none' && style.visibility !== 'hidden' && r.width > 0 && r.height > 0 }
+    }
+    const inside = b => b && b.shown && b.left >= -0.5 && b.right <= W + 0.5 && b.top >= -0.5 && b.bottom <= H + 0.5
+    const pv = document.querySelector('.pv')
+    const body = document.querySelector('.pv-body')
+    const parts = [...pv.querySelectorAll('.pv-head, .pv-head button, .pv-title, .pv-sub, .pv-foot, .pv-foot button, .pv-pager, .pv-pager button, .pv-thumbs')]
+      .filter(el => getComputedStyle(el).display !== 'none')
+    const pr = pv.getBoundingClientRect()
+    const stray = parts.filter((el) => {
+      const r = el.getBoundingClientRect()
+      return r.width > 0 && (r.left < pr.left - 0.5 || r.right > pr.right + 0.5)
+    }).map(el => el.className || el.tagName)
+    const title = document.querySelector('.pv-title')
+    return {
+      docOverflow: document.documentElement.scrollWidth > W,
+      panelOverflow: pv.scrollWidth > pv.clientWidth + 1,
+      bodyOverflow: body.scrollWidth > body.clientWidth + 1,
+      stray,
+      panel: box('.pv'),
+      closeInside: inside(box('.pv-close')),
+      openInside: inside(box('.pv-primary')),
+      titleOneLine: title.getBoundingClientRect().height < 26,
+      image: box('.pv-pages .pv-image img'),
+      thumbs: box('.pv-thumbs'),
+      thumbsToggle: box('.pv-thumbs-toggle'),
+      pager: box('.pv-pager'),
+      W,
+      H,
+    }
+  })
+  const sizes = [[252, 336], [320, 480], [480, 800], [900, 600], [1280, 720]]
+  await page.keyboard.press('Escape')
+  await page.evaluate(() => window.__preview.controller.openPanel())
+  await page.waitForSelector('.pv')
+  for (const [w, h] of sizes) {
+    await page.setViewportSize({ width: w, height: h })
+    for (const [name, title] of samples) {
+      await show(title)
+      await shot(`panel-${w}x${h}-${name}`)
+      const g = await geometry()
+      const tag = `${name} at ${w}x${h}`
+      check(`no sideways overflow of the panel: ${tag}`, !g.docOverflow && !g.panelOverflow && !g.bodyOverflow && g.stray.length === 0, g.stray.join(','))
+      check(`close and open in app are in view: ${tag}`, g.closeInside && g.openInside)
+      if (w < 480) {
+        check(`it covers the whole window: ${tag}`, Math.abs(g.panel.width - w) < 1 && Math.abs(g.panel.height - h) < 1)
+        check(`the title is one line: ${tag}`, g.titleOneLine)
+      }
+      if (w < 480 && (name === 'deck' || name === 'pdf')) {
+        check(`the page image fills the width: ${tag}`, g.image && g.image.width >= w - 12 && g.image.height > 40, JSON.stringify(g.image))
+        check(`the pager is in view: ${tag}`, g.pager && g.pager.bottom <= h && g.pager.shown)
+      }
+      if (w < 480 && name === 'deck') {
+        const stripOn = g.thumbs?.shown
+        check(`thumbnails are a strip or behind a toggle: ${tag}`, stripOn ? g.thumbs.right <= w + 0.5 : g.thumbsToggle?.shown === true)
+      }
+    }
+  }
+  // the thumbnail toggle works in the small window, and the strip is reachable
+  await page.setViewportSize({ width: 252, height: 336 })
+  await show('Q3 board deck')
+  const stripShown = () => page.locator('.pv-thumbs').isVisible()
+  check('short window: the thumbnails start hidden', !(await stripShown()))
+  await page.click('.pv-thumbs-toggle')
+  await settle()
+  check('the toggle shows the thumbnail strip', await stripShown())
+  await shot('panel-252x336-deck-thumbs')
+  await page.locator('.pv-thumb').nth(2).click()
+  await settle()
+  check('a thumbnail jumps to its page in the small window', (await page.locator('.pv-sub').textContent()).includes('page 3 of 4'))
+  await page.click('.pv-thumbs-toggle')
+  await settle()
+  check('the toggle hides the strip again', !(await stripShown()))
+  // a long title is cut by an ellipsis on one line, never wrapped
+  const longTitle = 'A very long report title that keeps going well past the width of a small window.pdf'
+  await page.evaluate((t) => {
+    const c = window.__preview.controller.current.value
+    window.__preview.controller.current.value = { ...c, title: t }
+  }, longTitle)
+  await settle()
+  const longGeometry = await geometry()
+  check('a long title stays on one line and inside the panel', longGeometry.titleOneLine && longGeometry.stray.length === 0)
+  await shot('panel-252x336-long-title')
+  // widths from 200 to 1400 px: nothing runs out of the window or the panel
+  const widths = []
+  for (let w = 200; w <= 1400; w += 40)
+    widths.push(w)
+  widths.push(479, 480)
+  const failedWidths = []
+  for (const [name, title] of samples.filter(([n]) => n === 'deck' || n === 'markdown' || n === 'html')) {
+    await show(title)
+    for (const w of widths) {
+      await page.setViewportSize({ width: w, height: w < 480 ? 336 : 700 })
+      const g = await geometry()
+      if (g.docOverflow || g.panelOverflow || g.bodyOverflow || g.stray.length || !g.closeInside || !g.openInside)
+        failedWidths.push(`${name}@${w}`)
+    }
+  }
+  check(`no overflow and buttons in view at ${widths.length} widths from 200 to 1400 px`, failedWidths.length === 0, failedWidths.join(','))
+  await page.setViewportSize({ width: 450, height: 600 })
+  await page.keyboard.press('Escape')
+
   // 14. nothing asked for the outside, and nothing threw
   await settle()
   check('no request for any outside address', unexpected.length === 0, unexpected.join(' | '))
