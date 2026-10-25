@@ -143,6 +143,15 @@ def find_app(query: str, apps: list):
     return (scored[0][1], scored[0][2]), []
 
 
+_last: dict = {"path": None}
+
+
+def take_path():
+    """The folder the last open_folder resolved to (once), or None."""
+    p, _last["path"] = _last["path"], None
+    return p
+
+
 def _opened(go, real: bool) -> None:
     """Run the opener and, for the real thing on Windows, remember the window it opened (windowpick.py: only a window JARVIS opened may be typed into later)."""
     if real and os.name == "nt":
@@ -187,6 +196,7 @@ def pc_open(p: dict, roots: dict = None, apps: list = None, opener=None, launche
         return {"ok": True, "opened": shown}
     if op == "open_folder":
         _opened(lambda: opener(path), opener is os.startfile)
+        _last["path"] = path                              # for jobs._verify_open: an Explorer window already showing this folder counts as open
         return {"ok": True, "opened": shown}
     items = []
     with os.scandir(path) as it:

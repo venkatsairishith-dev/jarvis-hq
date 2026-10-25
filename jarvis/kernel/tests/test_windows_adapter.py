@@ -124,6 +124,22 @@ class NodeSide(unittest.TestCase):
         self.assertEqual(nodejobs._verify_open({"ok": False, "error": "x"}, {"op": "open_app"}, lister=lambda: []), {"ok": False, "error": "x"})
         self.assertNotIn("verified", nodejobs._verify_open({"ok": True, "folder": "Downloads"}, {"op": "list_folder"}, lister=lambda: []))
 
+    def test_an_explorer_window_that_already_shows_the_folder_counts_as_open_even_when_it_is_not_in_front(self):
+        # found on the real laptop: Explorer re-used a window and did not raise it, so the open was reported as "no window showing it was seen"
+        behind = [dict(self.WINS[0], foreground=False), self.WINS[1]]
+        shown = lambda: ["c:/users/venkat/downloads", "d:/jarvis/outputs"]
+        ok = nodejobs._verify_open({"ok": True, "opened": "Downloads"}, {"op": "open_folder"}, lister=lambda: behind, before={1}, timeout=0.5,
+                                   path="C:/Users/venkat/Downloads", locations=shown)
+        self.assertEqual(ok["verified"], "verified")
+        self.assertIn("already showing the folder", ok["note"])
+        other = nodejobs._verify_open({"ok": True, "opened": "Downloads"}, {"op": "open_folder"}, lister=lambda: behind, before={1}, timeout=0.5,
+                                      path="C:/Users/venkat/Documents", locations=shown)
+        self.assertEqual(other["verified"], "unconfirmed")
+        # only folders: a file open never claims a folder window
+        f = nodejobs._verify_open({"ok": True, "opened": "Downloads/a.pdf"}, {"op": "open_file"}, lister=lambda: [], before=set(), timeout=0.2,
+                                  path="C:/Users/venkat/Downloads", locations=shown)
+        self.assertEqual(f["verified"], "unconfirmed")
+
     def test_snapshot_refuses_password_managers(self):
         snap = lambda proc, n, d, v: {"window": "KeePass", "process": "KeePass", "elements": []}
         self.assertFalse(nodejobs.ui_snapshot({"target": ""}, snap=snap)["ok"])                        # the foreground window was a password manager

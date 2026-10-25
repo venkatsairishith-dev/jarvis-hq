@@ -8,6 +8,7 @@
 """
 import hashlib
 import json
+import socket
 import os
 import re
 import threading
@@ -66,6 +67,11 @@ def disabled() -> bool:
 SESSION_FULL = re.compile(r"(conversation|session)\b.{0,80}\b(grown too large|too large to send|exceeds? the (model'?s )?context)", re.I | re.S)
 
 
+class TimedOut(RuntimeError):
+    """The owner's agent did not answer in time. Callers that report only a class name (the owner plane) show "TimedOut": a command ends 'failed: timed out'
+    instead of waiting for ever."""
+
+
 def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: str = "telegram-owner", timeout: int = 900,
                  state_path: str = None, clock=time.time):
     """The owner's own Hermes (private lane, its kernel-gated tools) through its API server on loopback. One session per
@@ -103,6 +109,9 @@ def hermes_agent(key_path: str, base: str = "http://127.0.0.1:8642", session: st
         except urllib.error.HTTPError as e:
             fresh(sid)
             raise RuntimeError(f"agent HTTP {e.code}; the next message starts a fresh conversation") from None
+        except (TimeoutError, socket.timeout):
+            fresh(sid)
+            raise TimedOut(f"the agent did not answer within {timeout} s; the next message starts a fresh conversation") from None
         except Exception as e:
             fresh(sid)
             raise RuntimeError(f"agent error {type(e).__name__}; the next message starts a fresh conversation") from None

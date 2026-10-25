@@ -32,6 +32,7 @@ PER_DAY = 2000
 # A provider's 5xx is tried once more before falling back: Ollama answers a gpt-oss tool call it cannot parse with
 # HTTP 500 "error parsing tool call" (ollama/ollama#12884), and a fresh sample usually parses.
 RETRY_SAME_PROVIDER = {500, 502, 503}
+CONSOLE_AGENT_TIMEOUT_S = 300             # the owner's console waits at most this long for the agent's answer (then: failed, TimedOut); a long job is a task, not one turn
 OUTAGE_REST_S = 30                       # a provider that failed twice with server errors rests this long
 MAX_OUTPUT_CHARS = 200_000
 # Agent actions (POST /v1/jarvis/actions): every one goes through kernel policy; jobs run on the owner's laptop node.
@@ -386,7 +387,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router
     if owner_hermes == "auto":                  # the owner's own Hermes, when this server has its API key
         key = os.path.join(gateway.secrets_dir(), "hermes_api_key.txt")
         from .telegram import hermes_agent
-        owner_hermes = (hermes_agent(key, os.environ.get("JARVIS_HERMES_API", "http://127.0.0.1:8642"), session="console-owner",
+        owner_hermes = (hermes_agent(key, os.environ.get("JARVIS_HERMES_API", "http://127.0.0.1:8642"), session="console-owner", timeout=CONSOLE_AGENT_TIMEOUT_S,
                                      state_path=os.path.join(str(kernel.dir), "owner_session.txt")) if os.path.exists(key) else None)
     owner_plane = owner_mod.Owner(kernel, tasks, jobs, memories, hermes=owner_hermes, clock=clock)
     owner_plane.node = OUTPUT_NODE
@@ -1276,8 +1277,8 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router
                         kernel.audit.append("agent_model_call_failed", {"agent": agent, "provider": p.name, "error": last, "class": why,
                                                                         "prompt_chars": prompt_chars, "est_tokens": est, "attempt": attempt,
                                                                         **({"cooldown_s": rest} if rest else {})})
-                        if e.code >= 500 and attempt == 2:      # failed twice: rest it briefly, so retries do not hammer it
-                            with lock:
+                        if (e.code >= 500 and attempt == 2) or e.code == 404:      # failed twice, or "no such model/endpoint": rest it briefly, so retries do
+                            with lock:                                             # not hammer it (a dead free-model id gave 46 failed calls and 5-minute waits)
                                 outage[p.name] = clock() + OUTAGE_REST_S
                         if e.code not in RETRY_SAME_PROVIDER or why == "too_large":
                             break

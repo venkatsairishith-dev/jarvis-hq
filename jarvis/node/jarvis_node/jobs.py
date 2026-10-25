@@ -386,7 +386,7 @@ def screenshot(p: dict, root: str = None, shooter=None) -> dict:
     return {"ok": True, "saved": os.path.basename(path), "folder": folder, **info}
 
 
-def _verify_open(result: dict, params: dict, lister=None, before=None, timeout=6.0) -> dict:
+def _verify_open(result: dict, params: dict, lister=None, before=None, timeout=6.0, path=None, locations=None) -> dict:
     """After an open action reports success, look at the desktop: did a window for it really appear? The answer is added
     to the result as `verified` (a window matched), `unconfirmed` (opened, but nothing matched in time) or `skipped`."""
     if not result.get("ok") or params.get("op") == "list_folder":
@@ -407,6 +407,14 @@ def _verify_open(result: dict, params: dict, lister=None, before=None, timeout=6
         # a window that was already open counts only if it is in front now: Explorer re-uses and raises an open folder
         return named and (x["hwnd"] not in before or bool(x.get("foreground")))
     w = windows.wait_for(match, timeout=timeout, lister=lister)
+    if not w and path and params.get("op") == "open_folder":
+        # Explorer re-uses a window that already shows the folder and may not raise it (focus rules): that window IS the open folder
+        try:
+            shown_now = (locations or windows.explorer_locations)()
+        except Exception:
+            shown_now = []
+        if windows.normalize_path(path) in shown_now:
+            return dict(result, verified="verified", note="a File Explorer window already showing the folder is open")
     if w:
         out = dict(result, verified="verified", window={"title": w["title"], "process": w.get("process")})
         if w["hwnd"] in before:
@@ -458,7 +466,9 @@ def _run_job(job: dict, projects: dict = None) -> dict:
                     before = {w["hwnd"] for w in windows.list_windows()}
                 except Exception:
                     before = None
-            return _verify_open(pc_open(params), params, before=before)
+            out = pc_open(params)
+            from .pcopen import take_path
+            return _verify_open(out, params, before=before, path=take_path())
         if kind == "ui_windows":
             return ui_windows(params)
         if kind == "ui_snapshot":

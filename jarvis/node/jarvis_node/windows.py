@@ -113,6 +113,30 @@ def wait_for(match, timeout=6.0, interval=0.4, lister=None, before=None):
         time.sleep(interval)
 
 
+def explorer_locations() -> list:
+    """The folders that open File Explorer windows show (Shell.Application's LocationURL), lower-cased with forward slashes. Read only; [] off Windows."""
+    if not ON_WINDOWS:
+        return []
+    import subprocess
+    from urllib.parse import unquote, urlsplit
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                            "(New-Object -ComObject Shell.Application).Windows() | ForEach-Object { $_.LocationURL }"],
+                           capture_output=True, text=True, encoding="utf-8", timeout=20, creationflags=0x08000000)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out = []
+    for line in (r.stdout or "").splitlines():
+        u = urlsplit(line.strip())
+        if u.scheme == "file" and u.path:
+            out.append(normalize_path(unquote(u.path.lstrip("/"))))
+    return out
+
+
+def normalize_path(p: str) -> str:
+    return str(p).replace("\\", "/").rstrip("/").lower()
+
+
 def titles_match(expected: str, title: str) -> bool:
     e, t = expected.strip().lower(), title.strip().lower()
     return bool(e) and (e in t)
