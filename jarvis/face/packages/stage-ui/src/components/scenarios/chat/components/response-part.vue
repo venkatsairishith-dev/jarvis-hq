@@ -5,13 +5,15 @@ import { Truncatable } from '@proj-airi/ui'
 import { computed } from 'vue'
 
 import { MarkdownRenderer } from '../../../markdown'
+import { reasoningToShow } from './reasoning-visibility'
 
 const props = defineProps<{
   message: ChatAssistantMessage
   variant?: 'desktop' | 'mobile'
 }>()
 
-const reasoningContent = computed(() => props.message.categorization?.reasoning?.trim() ?? '')
+// JARVIS: the model's thinking is not shown (reasoning-visibility.ts)
+const reasoningContent = computed(() => reasoningToShow(props.message))
 const hasReasoning = computed(() => reasoningContent.value.length > 0)
 
 const containerClasses = computed(() => [

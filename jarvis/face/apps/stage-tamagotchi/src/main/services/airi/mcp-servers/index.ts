@@ -86,6 +86,14 @@ function getConfigPath() {
   return join(app.getPath('userData'), 'mcp.json')
 }
 
+/** True when the server says the session no longer exists: the MCP spec's "Session not found" (HTTP 404, JSON-RPC -32001) or a bare 404 from the transport. */
+export function isLostSession(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  if (code === 404 || code === -32001)
+    return true
+  return /session not found|unknown or expired session|HTTP 404|\(404\)/i.test(stringifyError(error))
+}
+
 function parseQualifiedToolName(name: string) {
   const separatorIndex = name.indexOf(toolNameSeparator)
   if (separatorIndex <= 0 || separatorIndex === name.length - toolNameSeparator.length) {
@@ -300,13 +308,55 @@ export function createMcpManager(): McpManager {
     return result
   }
 
+  // JARVIS: the tool server forgets a session when it restarts or after it has been idle for a while ("Session not found", HTTP 404). The client does not
+  // start a new one by itself, so from then on every list and call failed until the face was restarted (found on the real laptop, 2026-10-25: the chat model
+  // wrote "the deck player is down"). A lost session is replaced once, and the request that found it out is repeated once.
+  const reconnecting = new Map<string, Promise<McpServerSession>>()
+
+  const reconnect = (serverName: string, lost: McpServerSession): Promise<McpServerSession> => {
+    const running = reconnecting.get(serverName)
+    if (running)
+      return running
+
+    const attempt = (async () => {
+      const current = sessions.get(serverName)
+      if (current && current !== lost)
+        return current // another request already replaced it
+      await closeSession(lost).catch(() => {})
+      sessions.delete(serverName)
+      await startServer(serverName, lost.config)
+      const fresh = sessions.get(serverName)
+      if (!fresh)
+        throw new Error(`mcp server is not running: ${serverName}`)
+      return fresh
+    })().finally(() => reconnecting.delete(serverName))
+    reconnecting.set(serverName, attempt)
+    return attempt
+  }
+
+  const withSession = async <T>(serverName: string, action: (session: McpServerSession) => Promise<T>): Promise<T> => {
+    const session = sessions.get(serverName)
+    if (!session)
+      throw new Error(`mcp server is not running: ${serverName}`)
+
+    try {
+      return await action(session)
+    }
+    catch (error) {
+      if (!isLostSession(error))
+        throw error
+      log.withFields({ serverName }).warn('mcp session lost; starting a new one and repeating the request once')
+      return action(await reconnect(serverName, session))
+    }
+  }
+
   const listTools = async (): Promise<ElectronMcpToolDescriptor[]> => {
     const entries = [...sessions.entries()].sort(([left], [right]) => left.localeCompare(right))
-    const listResult = await Promise.allSettled(entries.map(async ([serverName, session]) => {
-      const response = await session.client.listTools(undefined, {
+    const listResult = await Promise.allSettled(entries.map(async ([serverName]) => {
+      const response = await withSession(serverName, session => session.client.listTools(undefined, {
         timeout: mcpRequestTimeoutMsec,
         maxTotalTimeout: mcpRequestMaxTotalTimeoutMsec,
-      })
+      }))
       return response.tools.map<ElectronMcpToolDescriptor>(item => ({
         serverName,
         name: `${serverName}${toolNameSeparator}${item.name}`,
@@ -339,20 +389,19 @@ export function createMcpManager(): McpManager {
 
   const callTool = async (payload: ElectronMcpCallToolPayload): Promise<ElectronMcpCallToolResult> => {
     const { serverName, toolName } = parseQualifiedToolName(payload.name)
-    const session = sessions.get(serverName)
-    if (!session) {
+    if (!sessions.get(serverName)) {
       throw new Error(`mcp server is not running: ${serverName}`)
     }
 
     let result
     try {
-      result = await session.client.callTool({
+      result = await withSession(serverName, session => session.client.callTool({
         name: toolName,
         arguments: payload.arguments ?? {},
       }, undefined, {
         timeout: mcpRequestTimeoutMsec,
         maxTotalTimeout: mcpRequestMaxTotalTimeoutMsec,
-      })
+      }))
     }
     catch (error) {
       const fallbackToolName = resolveFallbackToolName(toolName)
@@ -366,13 +415,13 @@ export function createMcpManager(): McpManager {
         fallbackToolName,
       }).warn('retrying mcp tool call with normalized tool name')
 
-      result = await session.client.callTool({
+      result = await withSession(serverName, session => session.client.callTool({
         name: fallbackToolName,
         arguments: payload.arguments ?? {},
       }, undefined, {
         timeout: mcpRequestTimeoutMsec,
         maxTotalTimeout: mcpRequestMaxTotalTimeoutMsec,
-      })
+      }))
     }
 
     const normalized: ElectronMcpCallToolResult = {}

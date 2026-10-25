@@ -41,3 +41,11 @@ def tmp_path_factory(tmp_path_factory):
         yield _Factory(safe.resolve())
     finally:
         shutil.rmtree(safe, ignore_errors=True)
+
+
+@pytest.fixture(autouse=True)
+def _cards_go_to_a_temp_folder(tmp_path_factory, monkeypatch):
+    """The reader draws a card for an invoice total into the deliverables folder: no test may write into the owner's real one."""
+    folder = tmp_path_factory.mktemp("cards")
+    monkeypatch.setattr(core, "_deliverables_root", lambda: folder)
+    return folder

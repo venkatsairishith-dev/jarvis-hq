@@ -73,6 +73,15 @@ class DocReaderPlugin(PluginBase):
             out["removed"] = res["removed"]                              # rule names only, never the values
         if res["notes"]:
             out["note"] = " ".join(res["notes"])
+        # The total of an invoice, found here by fixed rules and drawn on a card in the Preview panel: the model learns THAT it is on screen, never the amount.
+        total = core.find_total(res["page_texts"])
+        if total:
+            try:
+                await asyncio.to_thread(core.write_total_card, total)
+                sentence = "The total of this document is shown on the owner's screen in the preview panel. It is not in this reply: tell the owner to look at the card."
+            except OSError:
+                sentence = "A total was found but its card could not be written."
+            out["note"] = (out.get("note", "") + " " + sentence).strip()           # "note" is a key the cleaner leaves as the plugin's own sentence
         if not any(t and not t.startswith("(no text found") for t in res["page_texts"]):
             out["text_note"] = "No text was found in the pages that were read."
         elif not screen_text.flag_on():

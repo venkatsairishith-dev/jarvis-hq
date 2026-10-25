@@ -21,6 +21,7 @@ const shellMock = vi.hoisted(() => ({
 }))
 
 const clientMocks = vi.hoisted(() => ({
+  callTool: vi.fn(),
   close: vi.fn(),
   connect: vi.fn(),
   listTools: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock('../../../libs/bootkit/lifecycle', () => ({
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   Client: class {
+    callTool = clientMocks.callTool
     close = clientMocks.close
     connect = clientMocks.connect
     listTools = clientMocks.listTools
@@ -200,6 +202,53 @@ describe('createMcpManager', () => {
       { serverName: 'alpha', name: 'alpha::read', toolName: 'read', description: 'Read memory.', inputSchema: { type: 'object' } },
       { serverName: 'zeta', name: 'zeta::search', toolName: 'search', description: 'Search files.', inputSchema: { type: 'object' } },
     ])
+  })
+
+  // JARVIS (2026-10-25): the tool server forgets a session when it restarts or idles out; the client never started a new one, so every later list and call
+  // failed with "Session not found" until the face was restarted.
+  describe('a session the server has forgotten', () => {
+    const lost = () => new Error('Streamable HTTP error: Error POSTing to endpoint: {"jsonrpc":"2.0","error":{"code":-32001,"message":"Session not found"}}')
+
+    it('is replaced once and the list is asked for again', async () => {
+      const manager = await startServers('jarvis')
+      expect(clientMocks.connect).toHaveBeenCalledTimes(1)
+      clientMocks.listTools
+        .mockRejectedValueOnce(lost())
+        .mockResolvedValueOnce({ tools: [{ name: 'jarvis_ready', description: 'Ready?', inputSchema: { type: 'object' } }] })
+
+      expect(await manager.listTools()).toEqual([
+        { serverName: 'jarvis', name: 'jarvis::jarvis_ready', toolName: 'jarvis_ready', description: 'Ready?', inputSchema: { type: 'object' } },
+      ])
+      expect(clientMocks.connect).toHaveBeenCalledTimes(2)
+    })
+
+    it('is replaced once and the tool call is made again', async () => {
+      const manager = await startServers('jarvis')
+      clientMocks.callTool
+        .mockRejectedValueOnce(lost())
+        .mockResolvedValueOnce({ content: [{ type: 'text', text: 'ready' }] })
+
+      expect(await manager.callTool({ name: 'jarvis::jarvis_ready', arguments: {} })).toEqual({ content: [{ type: 'text', text: 'ready' }] })
+      expect(clientMocks.connect).toHaveBeenCalledTimes(2)
+      expect(clientMocks.callTool).toHaveBeenCalledTimes(2)
+    })
+
+    it('is not retried for ever: a second failure is reported', async () => {
+      const manager = await startServers('jarvis')
+      clientMocks.listTools.mockRejectedValue(lost())
+
+      await expect(manager.listTools()).rejects.toThrow('Session not found')
+      expect(clientMocks.connect).toHaveBeenCalledTimes(2)
+      expect(clientMocks.listTools).toHaveBeenCalledTimes(2)
+    })
+
+    it('is not touched for any other error', async () => {
+      const manager = await startServers('jarvis')
+      clientMocks.listTools.mockRejectedValueOnce(new Error('MCP request timed out.'))
+
+      await expect(manager.listTools()).rejects.toThrow('MCP request timed out.')
+      expect(clientMocks.connect).toHaveBeenCalledTimes(1)
+    })
   })
 
   // JARVIS: a stdio server would run any command written into mcp.json, so the face refuses to start one.

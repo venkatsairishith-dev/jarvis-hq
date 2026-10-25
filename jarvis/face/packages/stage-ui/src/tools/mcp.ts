@@ -78,6 +78,29 @@ export interface McpToolRuntime {
   callTool: (payload: McpCallToolPayload) => Promise<McpCallToolResult>
 }
 
+/**
+ * A shorter descriptor for the model: the name, a one-line description, each argument's name and type (and its allowed values when there are few), and which are
+ * required. JARVIS's tool server offers about 105 tools; the full list is 60 KB (about 15,000 tokens) and made the next model request 110 KB, which the free
+ * models answered with 429 or minutes of waiting (2026-10-25). The compact list is about a third of that.
+ */
+export function compactMcpToolDescriptor(tool: McpToolDescriptor, maxDescription = 110): McpToolDescriptor {
+  const schema = (tool.inputSchema ?? {}) as { properties?: Record<string, { type?: unknown, enum?: unknown[] }>, required?: unknown[] }
+  const properties: Record<string, Record<string, unknown>> = {}
+  for (const [name, property] of Object.entries(schema.properties ?? {})) {
+    const entry: Record<string, unknown> = { type: typeof property?.type === 'string' ? property.type : 'string' }
+    if (Array.isArray(property?.enum) && property.enum.length > 0 && property.enum.length <= 12)
+      entry.enum = property.enum
+    properties[name] = entry
+  }
+  const required = (schema.required ?? []).filter((name): name is string => typeof name === 'string')
+  const oneLine = (tool.description ?? '').replace(/\s+/g, ' ').trim()
+  return {
+    ...tool,
+    description: oneLine.length > maxDescription ? `${oneLine.slice(0, maxDescription - 1)}…` : oneLine,
+    inputSchema: { type: 'object', properties, ...(required.length > 0 ? { required } : {}) },
+  }
+}
+
 /** The proxy tool that calls an MCP tool. Each call names the MCP tool in its `name` argument, as `server::tool`. */
 export const MCP_CALL_TOOL_NAME = 'builtIn_mcpCallTool'
 

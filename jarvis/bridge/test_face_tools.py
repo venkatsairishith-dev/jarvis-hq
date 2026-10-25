@@ -373,3 +373,17 @@ def test_end_to_end_a_plugin_entry_is_a_tool_and_its_own_message_arrives_once(pl
     assert result["result"]["text"] == "hello" and "someone" not in json.dumps(result), "results are cleaned before the face's model sees them"
     one, two = json.loads(first.content[0].text), json.loads(second.content[0].text)
     assert one["count"] == 1 and "echoed hello" in json.dumps(one) and two["count"] == 0
+
+
+def test_the_developer_plugins_are_left_out_of_the_faces_tool_list_unless_asked_for(monkeypatch):
+    """105 tools (60 KB) made every turn of the face's chat model slow and its next request 110 KB; workbench alone is 30 of them (2026-10-25)."""
+    import importlib
+    assert {"jarvis_bridge", "workbench", "provider_signup"} <= F.PLUGINS_NOT_EXPOSED
+    try:
+        monkeypatch.setenv("JARVIS_FACE_TOOLS_EXCLUDE", "")
+        assert importlib.reload(F).PLUGINS_NOT_EXPOSED == {"jarvis_bridge"}
+        monkeypatch.setenv("JARVIS_FACE_TOOLS_EXCLUDE", " workbench , local_team ")
+        assert importlib.reload(F).PLUGINS_NOT_EXPOSED == {"jarvis_bridge", "workbench", "local_team"}
+    finally:
+        monkeypatch.delenv("JARVIS_FACE_TOOLS_EXCLUDE", raising=False)
+        importlib.reload(F)
