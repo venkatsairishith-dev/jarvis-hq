@@ -704,6 +704,11 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             # "413 request too large" would hide the first provider's real answer (busy), and the face showed "Remote sent 413 response" (2026-10-25).
             est = (len(raw) // 4 + 1024) if raw is not None else 0
             chain = [p for p in chain if p is first_own or not p.get("max_total_tokens") or est <= int(p["max_total_tokens"])]
+            # "prefer_first": true on a provider (the local model, owner 2026-10-25: "use the local MoE model") puts it at the front; the online ones stay the failover.
+            # Only for a SIMPLE request (owner: "for the simple tasks"): short, and at most prefer_max_tools tools. Big or tool-heavy requests go online first.
+            n_tools = len(body.get("tools") or []) if isinstance(body, dict) else 0
+            chain = sorted(chain, key=lambda p: not (p.get("prefer_first") and is_local_provider(p) and est <= int(p.get("prefer_max_tokens") or 3000)
+                                                       and n_tools <= int(p.get("prefer_max_tools") or 3)))
             pin_name, pin_model = read_pin()
             if pin_name and raw is not None and self._path() in ("/chat/completions", "/completions"):
                 pinned = next((p for p in providers if p["name"] == pin_name), None)
@@ -739,7 +744,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 except urllib.error.HTTPError as e:
                     if e.code == 429:
                         _cooldown[prov["name"]] = time.time() + cooldown
-                    if e.code in RETRY_CODES and not last:
+                    if (e.code in RETRY_CODES or is_local_provider(prov)) and not last:     # a local model that is missing or erroring never blocks the online chain
                         tried.append(f"{prov['name']}: HTTP {e.code}")
                         e.close()
                         continue
