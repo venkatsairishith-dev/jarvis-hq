@@ -324,7 +324,7 @@ class LocalModelIsTheLastResort(unittest.TestCase):
     """2026-10-25 (owner: use the local uncensored MoE; the online providers are managed by the gateway): the last link of the chain is a model on this PC
     (llama-swap on loopback), marked "local": true, with no key. Every online provider resting or refusing means the answer comes from the laptop."""
 
-    def start(self, local_flag=True, local_url=None, first_code=429, first_msg="busy"):
+    def start(self, local_flag=True, local_url=None, first_code=429, first_msg="busy", prefer=False, local_code=200):
         seen = {"first": 0, "local": 0, "local_auth": None}
 
         def handler_for(name, code):
@@ -345,7 +345,7 @@ class LocalModelIsTheLastResort(unittest.TestCase):
                     self.wfile.write(raw)
             return H
         servers = []
-        for name, code in (("first", first_code), ("local", 200)):
+        for name, code in (("first", first_code), ("local", local_code)):
             sv = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(name, code))
             threading.Thread(target=sv.serve_forever, daemon=True).start()
             servers.append(sv)
@@ -361,7 +361,7 @@ class LocalModelIsTheLastResort(unittest.TestCase):
         self.addCleanup(gateway._keys.clear)
         cfg = {"cooldown_seconds": 60, "providers": [
             {"name": "first", "enabled": True, "base_url": f"http://127.0.0.1:{servers[0].server_address[1]}/v1", "key": "from_request", "key_file": "providers/first.key"},
-            {"name": "local", "enabled": True, "local": local_flag, "model": "local-chat",
+            {"name": "local", "enabled": True, "local": local_flag, "prefer_first": prefer, "model": "local-chat",
              "base_url": local_url or f"http://127.0.0.1:{servers[1].server_address[1]}/v1"}]}
         path = os.path.join(secret_dir, "providers.json")
         with open(path, "w", encoding="utf-8") as fh:
@@ -395,6 +395,26 @@ class LocalModelIsTheLastResort(unittest.TestCase):
         code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})
         self.assertEqual(code, 400)
         self.assertEqual(seen["local"], 0)
+
+    def test_a_preferred_local_model_answers_first_and_the_online_provider_is_not_touched(self):
+        base, seen, names = self.start(first_code=200, prefer=True)
+        code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(code, 200)
+        self.assertEqual((seen["first"], seen["local"]), (0, 1))
+
+    def test_a_reasoning_caller_can_ask_for_the_online_chain_first(self):
+        base, seen, names = self.start(first_code=200, prefer=True)
+        req = urllib.request.Request(base + "/v1/chat/completions", data=json.dumps({"model": "x", "messages": [{"role": "user", "content": "hi"}]}).encode(),
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer test-not-a-key", "X-Jarvis-Route": "online"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertEqual(r.status, 200)
+        self.assertEqual((seen["first"], seen["local"]), (1, 0))             # the preferred local model was skipped for this caller
+
+    def test_a_preferred_local_model_that_errors_falls_back_to_online(self):
+        base, seen, names = self.start(first_code=200, prefer=True, local_code=404)
+        code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(code, 200)
+        self.assertEqual((seen["local"], seen["first"]), (1, 1))
 
     def test_a_pin_file_sends_the_request_to_that_provider_only(self):
         base, seen, names = self.start()
@@ -907,3 +927,52 @@ class FaceReasoningAtTheHttpEdge(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProviderConcurrencyLimit(unittest.TestCase):
+    """2026-10-25: Dahl answers 429 'model_concurrency' to a second request in flight, and the face sends two at once. max_concurrent makes the second wait."""
+
+    def test_two_requests_do_not_overlap_at_a_provider_with_max_concurrent_one(self):
+        state = {"now": 0, "peak": 0}
+        lock = threading.Lock()
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                with lock:
+                    state["now"] += 1
+                    state["peak"] = max(state["peak"], state["now"])
+                import time as _t
+                _t.sleep(0.3)
+                with lock:
+                    state["now"] -= 1
+                raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+        sv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=sv.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (sv.shutdown(), sv.server_close()))
+        provs = [{"name": "one", "enabled": True, "base_url": f"http://127.0.0.1:{sv.server_address[1]}/v1", "max_concurrent": 1}]
+        gateway._sems.clear()
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 10, 60.0)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        base = f"http://127.0.0.1:{gw.server_address[1]}"
+        codes = []
+
+        def one():
+            codes.append(post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})[0])
+        ts = [threading.Thread(target=one) for _ in range(2)]
+        [t.start() for t in ts]
+        [t.join() for t in ts]
+        self.assertEqual(codes, [200, 200])
+        self.assertEqual(state["peak"], 1)

@@ -105,7 +105,7 @@ _reg("deliverables", "show_in_folder", shape=("shown",))
 _reg("deliverables", "start_slideshow", shape=("presenting",))
 _reg("desktop", "check_pc list_browser_profiles recent_pc_alerts mission_status find_on_screen read_window_text", kind="read")
 _reg("desktop", "open_website play_youtube run_browser_action run_pc_action")           # _brief: state + ok
-_reg("desktop", "run_troubleshooter run_pc_task resume_mission")                         # outcome / status
+_reg("desktop", "run_troubleshooter run_pc_task do_goal resume_mission")                         # outcome / status
 _reg("desktop", "start_mission", kind="start", shape=("mission",))
 _reg("desktop", "stop_pc_task", kind="stop", shape=("stopped_jobs",))
 _reg("desktop", "stop_mission", kind="stop", shape=("mission",), required_true=("stopped",))

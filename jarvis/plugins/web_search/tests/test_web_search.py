@@ -115,3 +115,24 @@ def test_an_empty_question_and_a_huge_one(plugin, monkeypatch):
     with_fake(monkeypatch, fake)
     search(plugin, query="word " * 500)
     assert len(fake.calls[0][1]) < 700
+
+
+def test_weather_entry_geocodes_then_reads_the_forecast(monkeypatch):
+    def handler(request):
+        if "geocoding" in request.url.host:
+            return httpx.Response(200, json={"results": [{"name": "Paris", "country": "France", "latitude": 48.85, "longitude": 2.35}]})
+        return httpx.Response(200, json={"current": {"temperature_2m": 14.2, "weather_code": 3, "wind_speed_10m": 11.0},
+                                         "daily": {"temperature_2m_max": [16.0], "temperature_2m_min": [9.0], "precipitation_probability_max": [20]}})
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(W.httpx, "AsyncClient", lambda **kw: REAL_CLIENT(transport=transport, **kw))
+    res = asyncio.run(W.WebSearchPlugin.weather(W.WebSearchPlugin(), city="Paris"))
+    assert res.value["condition"] == "overcast" and res.value["high_c"] == 16.0 and "Paris, France" in res.value["summary"]
+
+
+def test_weather_entry_reports_an_unknown_city_and_an_outage(monkeypatch):
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, json={"results": []}))
+    monkeypatch.setattr(W.httpx, "AsyncClient", lambda **kw: REAL_CLIENT(transport=transport, **kw))
+    assert isinstance(asyncio.run(W.WebSearchPlugin.weather(W.WebSearchPlugin(), city="Nowhereville")), W.Err)
+    down = httpx.MockTransport(lambda r: httpx.Response(503))
+    monkeypatch.setattr(W.httpx, "AsyncClient", lambda **kw: REAL_CLIENT(transport=down, **kw))
+    assert isinstance(asyncio.run(W.WebSearchPlugin.weather(W.WebSearchPlugin(), city="Paris")), W.Err)

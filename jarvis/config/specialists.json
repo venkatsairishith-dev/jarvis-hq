@@ -1,0 +1,11 @@
+{
+  "_note": "Which model does which kind of work (D51, owner 2026-10-25: a roster of small or MoE specialists, each best at one task kind; the online provider only reasons over what a specialist produced). kind -> llama-swap alias (jarvis/local_models/llama-swap.yaml), a fallback alias tried when the first errors, the answer budget, and what it is for. Loaded by jarvis/plugins/_shared/specialists.py: a missing file means the built-in copy of this table; an unknown kind or a badly written alias is a clear error; an alias the llama-swap file does not define yet is reported as 'not installed yet', never a failure.",
+  "kinds": {
+    "reason": {"where": "online", "note": "the online provider through the privacy gateway: understands the goal, writes the plan, reasons over a specialist's redacted summary. Never forms a tool call, never sees a screenshot."},
+    "ui_decide": {"where": "local", "alias": "decider", "fallback": "decider-ling", "max_tokens": 400, "note": "picks the exact PC step (tool, app, key, target) for a plan step; grammar-forced JSON (plugins/desktop/decide.py)."},
+    "screen_read": {"where": "local", "alias": "vision", "fallback": "vision-ground", "max_tokens": 200, "note": "what is on the screen: the accessibility tree first, then OCR, then this vision alias only for what has no text (node/jarvis_node/vision.py)."},
+    "screen_locate": {"where": "local", "alias": "vision-ground", "fallback": "vision", "max_tokens": 200, "note": "where a label is in a window (UI-Venus grounding); a point from it is checked before use."},
+    "doc_read": {"where": "local", "alias": "lightonocr-docreader", "fallback": "ocr-docs", "max_tokens": 1800, "note": "scanned pages and pictures of pages to text (plugins/doc_reader)."},
+    "chat_simple": {"where": "local", "alias": "local-chat", "fallback": "general", "max_tokens": 400, "note": "short, simple local work: choosing the arguments of a read-only step. local-chat is the Ling MoE once installed; general is the Ling MoE today."}
+  }
+}

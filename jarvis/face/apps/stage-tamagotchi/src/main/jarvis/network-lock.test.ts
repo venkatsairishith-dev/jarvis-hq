@@ -13,6 +13,13 @@ describe('jarvis network lock', () => {
       expect(isAllowedUrl(url, []), url).toBe(false)
   })
 
+  it('allows only the two weather hosts of the face weather card', () => {
+    expect(isAllowedUrl('https://api.open-meteo.com/v1/forecast?latitude=48.85', [])).toBe(true)
+    expect(isAllowedUrl('https://geocoding-api.open-meteo.com/v1/search?name=Paris', [])).toBe(true)
+    expect(isAllowedUrl('https://open-meteo.com.evil.example/', [])).toBe(false)
+    expect(isAllowedUrl('https://evil-api.open-meteo.com.example/', [])).toBe(false)
+  })
+
   it('lets the owner add named hosts', () => {
     const allow = parseAllowHosts(' huggingface.co, *.hf.co ,,')
     expect(allow).toEqual(['huggingface.co', '*.hf.co'])

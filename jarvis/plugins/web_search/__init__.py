@@ -25,6 +25,13 @@ COOLDOWN_SECONDS = 60.0
 MAX_RESULTS = 10
 DEFAULT_RESULTS = 8
 MAX_QUERY_CHARS = 400
+GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+# WMO weather codes (Open-Meteo docs, https://open-meteo.com/en/docs#weathervariables)
+WMO = {0: "clear sky", 1: "mostly clear", 2: "partly cloudy", 3: "overcast", 45: "fog", 48: "freezing fog", 51: "light drizzle", 53: "drizzle",
+       55: "heavy drizzle", 56: "freezing drizzle", 57: "heavy freezing drizzle", 61: "light rain", 63: "rain", 65: "heavy rain", 66: "freezing rain",
+       67: "heavy freezing rain", 71: "light snow", 73: "snow", 75: "heavy snow", 77: "snow grains", 80: "light showers", 81: "showers",
+       82: "violent showers", 85: "snow showers", 86: "heavy snow showers", 95: "thunderstorm", 96: "thunderstorm with hail", 99: "heavy thunderstorm with hail"}
 
 
 @jarvis_plugin
@@ -94,3 +101,41 @@ class WebSearchPlugin(PluginBase):
         summary = "\n".join(f"{i}. {r['title']} - {r['url']}\n   {r['snippet']}".rstrip() for i, r in enumerate(results, 1))
         return Ok({"query": query, "provider": "duckduckgo", "results": results,
                    "summary": summary or "No results were found."})
+
+    @plugin_entry(
+        id="weather",
+        name="Weather",
+        description="Current weather and today's forecast for a city (Open-Meteo, no key). Give the city in English, for example Paris.",
+        llm_result_fields=["summary", "city", "country", "temperature_c", "condition", "high_c", "low_c", "rain_chance_pct", "wind_kmh"],
+        timeout=30.0,
+        input_schema={"type": "object", "properties": {"city": {"type": "string", "description": "City name in English, for example Paris."}}, "required": ["city"]},
+    )
+    async def weather(self, city: str = "", **_: Any):
+        city = " ".join(str(city or "").split())[:80]
+        if not city:
+            return Err(SdkError("Which city?"))
+        try:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+                g = await client.get(GEOCODE_URL, params={"name": city, "count": 1, "language": "en", "format": "json"}, headers={"User-Agent": USER_AGENT})
+                g.raise_for_status()
+                hits = (g.json() or {}).get("results") or []
+                if not hits:
+                    return Err(SdkError(f"No place called '{city}' was found."))
+                place = hits[0]
+                f = await client.get(FORECAST_URL, headers={"User-Agent": USER_AGENT}, params={
+                    "latitude": place["latitude"], "longitude": place["longitude"], "timezone": "auto", "forecast_days": 1,
+                    "current": "temperature_2m,weather_code,wind_speed_10m",
+                    "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max"})
+                f.raise_for_status()
+                data = f.json() or {}
+            cur, day = data.get("current") or {}, data.get("daily") or {}
+            first = lambda k: (day.get(k) or [None])[0]       # noqa: E731
+            out = {"city": str(place.get("name") or city), "country": str(place.get("country") or ""), "temperature_c": cur.get("temperature_2m"),
+                   "condition": WMO.get(int(cur.get("weather_code") if cur.get("weather_code") is not None else -1), "unknown"),
+                   "high_c": first("temperature_2m_max"), "low_c": first("temperature_2m_min"),
+                   "rain_chance_pct": first("precipitation_probability_max"), "wind_kmh": cur.get("wind_speed_10m")}
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+            return Err(SdkError(f"The weather service could not be reached ({type(exc).__name__})."))
+        out["summary"] = (f"{out['city']}, {out['country']}: {out['temperature_c']} C, {out['condition']}; today {out['low_c']} to {out['high_c']} C, "
+                          f"rain chance {out['rain_chance_pct']} %, wind {out['wind_kmh']} km/h.")
+        return Ok(out)

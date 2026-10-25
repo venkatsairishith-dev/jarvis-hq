@@ -2,7 +2,7 @@
   "_note": "Public model providers the privacy gateway may use, in order. Every request is redacted first. The first entry uses the caller's own key (the Dahl key the caller sends). A fallback needs enabled=true, a model, and a key FILE NAME under D:\\jarvis-secrets (the key itself never goes in this file). Free tiers change: check the provider's current terms (jarvis/docs/reports/evidence/06-models-hardware-providers.md section 9). Gemini's free tier is excluded for personal data (its terms allow training on it).",
   "cooldown_seconds": 60,
   "providers": [
-    {"name": "dahl", "base_url": "https://inference.dahl.global/v1", "enabled": true, "key": "from_request", "key_file": "providers/dahl.key",
+    {"name": "dahl", "base_url": "https://inference.dahl.global/v1", "enabled": true, "max_concurrent": 1, "queue_wait_s": 90, "key": "from_request", "key_file": "providers/dahl.key",
      "_note": "A caller that sends its own key gets that key through (the plugins do). A caller that sends none, or the placeholder jarvis-local (the face does), gets the key in D:\\jarvis-secrets\\providers\\dahl.key; if that file is missing the request goes out as it came and Dahl answers 401. The gateway hides the reasoning of a reply to the face (reasoning_content and <think> text). OPTIONAL, off until checked live: rename _face_extra_body_example to face_extra_body (or to extra_body for every caller) to ask Dahl to skip the thinking for the face's chat. Whether Dahl honours chat_template_kwargs for this model is NOT verified; a provider that does not know it may answer 400, then remove it.",
      "_face_extra_body_example": {"chat_template_kwargs": {"enable_thinking": false}}},
     {"name": "groq", "base_url": "https://api.groq.com/openai/v1", "enabled": true, "key_file": "providers/groq.key", "model": "openai/gpt-oss-120b", "max_total_tokens": 8000, "extra_body": {"reasoning_effort": "low"},
@@ -12,6 +12,9 @@
     {"name": "cloudflare", "base_url": "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1", "enabled": false, "key_file": "providers/cloudflare.key", "model": ""},
     {"name": "zai", "base_url": "https://api.z.ai/api/paas/v4", "enabled": false, "key_file": "providers/zai.key", "model": "glm-4.7-flash",
      "_note": "Z AI free GLM-4.7-Flash, 1 request at a time (checked 2026-10-24). Off until the key file exists, the terms were read (free-tier training is not confirmed) and hosted_model_compare.py has run."},
-    {"name": "local", "base_url": "http://127.0.0.1:8080/v1", "enabled": true, "local": true, "model": "local-chat", "max_total_tokens": 7000, "_note": "The last link (2026-10-25): a model on THIS laptop through llama-swap (alias local-chat = the uncensored Ling-3.0-tiny-heretic once it is installed), so a request is answered locally when every online provider is resting or refuses. Needs no key, loopback only (the gateway drops a 'local' entry on any other address). max_total_tokens is the local context (-c 8192) minus the answer: a bigger request is skipped here and the caller sees the first provider's own answer. Uncensored on purpose (owner); the kernel still decides every action."}
+    {"name": "local", "base_url": "http://127.0.0.1:8080/v1", "enabled": true, "local": true,
+      "prefer_first": true,
+      "prefer_max_tokens": 3000,
+      "prefer_max_tools": 3, "model": "local-chat", "max_total_tokens": 7000, "_note": "The last link (2026-10-25): a model on THIS laptop through llama-swap (alias local-chat = the uncensored Ling-3.0-tiny-heretic once it is installed), so a request is answered locally when every online provider is resting or refuses. Needs no key, loopback only (the gateway drops a 'local' entry on any other address). max_total_tokens is the local context (-c 8192) minus the answer: a bigger request is skipped here and the caller sees the first provider's own answer. Uncensored on purpose (owner); the kernel still decides every action."}
   ]
 }

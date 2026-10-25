@@ -14,3 +14,8 @@ entry = "jarvis.plugins.desktop:DesktopPlugin"
 [plugin_runtime]
 enabled = true
 auto_start = true
+
+[config]
+# D51: an online model plans the goal (text only, through the privacy gateway), local models execute it. false: the local model plans alone.
+# JARVIS_PLAN_ONLINE_EXECUTE_LOCAL=0 turns it off for one run without editing this file.
+plan_online_execute_local = true

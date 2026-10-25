@@ -19,7 +19,7 @@ from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_pl
 
 from jarvis.plugins._shared import screen_text
 
-from . import coordinator as coord, core, decide
+from . import coordinator as coord, core, decide, goal as goal_mod
 
 PROFILE_HELP = "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles."
 
@@ -159,6 +159,10 @@ def _brief(res: dict) -> dict:
     for k in ("approval_id", "how", "reason", "level"):
         if res.get(k):
             out[k] = res[k]
+    if out["ok"] and r.get("verified") == "unconfirmed":
+        # owner, 2026-10-25: "Calculator is open on screen" was said while it was not. A launch whose window was not seen is not a success the model may report.
+        out["ok"] = False
+        out["error"] = str(r.get("note") or "launched, but no matching window appeared in time; it is NOT confirmed open")
     return screen_text.sanitize_meta(out)
 
 
@@ -537,7 +541,7 @@ class DesktopPlugin(PluginBase):
             "target": {"type": "string", "description": "Start-menu app name for open_app; otherwise 'process|element' or 'process|x,y'"},
             "text": {"type": "string", "description": "Text to type, the key (e.g. ctrl+s, enter, playpause), or up/down"},
             "approval_id": {"type": "string"}}, "required": ["action", "target"]},
-        timeout=360, llm_result_fields=["state", "ok", "opened", "done", "verified", "window", "error", "approval_id", "how"],
+        timeout=360, llm_result_fields=["state", "ok", "opened", "done", "verified", "window", "note", "error", "approval_id", "how"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def run_pc_action(self, action: str = "", target: str = "", text: str = "", approval_id: str = "", **_):
@@ -1144,6 +1148,12 @@ class DesktopPlugin(PluginBase):
         # answered its clarification question passes it (pending-input contract, main_agent/input_request.py).
         if isinstance(answers, dict) and isinstance(answers.get("clarification"), str) and answers["clarification"].strip():
             request = f"{request}\n(The owner's clarification: {screen_text.clean_message(answers['clarification'], 300)})"
+        rec = await DesktopPlugin._run_task(self, request)         # (not self._run_task: tests and hosts lend a stand-in `self`)
+        return DesktopPlugin._task_result(rec)
+
+    async def _run_task(self, request: str, plan: "decide.Plan | None" = None) -> dict:
+        """One PC task as a registered operation (planning included): the coordinator's record. `plan`: a plan already made (D51: the
+        local decider's plan for one step of an online plan); without it the coordinator plans with the local decider as before."""
         loop = asyncio.get_running_loop()
         await self._missions_ready()                        # also resumes a mission a restart interrupted
         # The task is a registered operation from the start (planning included): Stop sets its flag, cancels its node job,
@@ -1159,7 +1169,7 @@ class DesktopPlugin(PluginBase):
 
         def work():
             try:
-                return c.run(request)
+                return c.run(request) if plan is None else c.run(request, plan)
             finally:
                 op.worker_done()
                 ended.set()
@@ -1176,6 +1186,10 @@ class DesktopPlugin(PluginBase):
             coord.unbind(tok)
             op.entry_exit()
             core.set_activity("idle")
+        return rec
+
+    @staticmethod
+    def _task_result(rec: dict):
         # the summary is built from what the steps observed (a resolved file name, a window title): file names out
         out_extra = {}
         if rec["status"] == "needs_clarification" and rec.get("question"):
@@ -1187,6 +1201,39 @@ class DesktopPlugin(PluginBase):
                    "steps": [{k: s.get(k) for k in ("n", "tool", "agent", "attempts", "passed", "checked", "uncertainty")} for s in rec["steps"]],
                    "uncertain": rec.get("uncertain"), "approval_id": rec.get("approval_id"), "how": rec.get("how"),
                    "route": rec.get("route")})
+
+    goal_readers: dict = {}                 # face-side read-only helpers the host may lend (jarvis/bridge/face_tools.py): {"recall": fn, "tasks": fn}
+
+    async def _goal_pc(self, goal: str, plan) -> dict:
+        return await self._run_task(goal, plan)
+
+    async def _goal_call(self, ref: str, args: dict) -> tuple[bool, dict, str]:
+        """One local helper entry (another plugin's, or this one's) through the plugin router: (ok, value, error text)."""
+        if self.plugins is None:
+            return False, {}, "the plugin router is not available"
+        res = await self.plugins.call_entry_json(ref, args, timeout=900.0 if ref.startswith("doc_reader:") else 180.0)
+        if isinstance(res, Ok):
+            value = res.value if isinstance(res.value, dict) else {}
+            return True, (value["data"] if isinstance(value.get("data"), dict) else value), ""
+        return False, {}, str(getattr(res, "error", res))[:300]
+
+    @plugin_entry(
+        id="do_goal",
+        name=tr("entry.do_goal.name", default="Do a goal on the PC"),
+        description=tr("entry.do_goal.description", default=(
+            "Carry out a goal about this PC, its screen or a document. An online model only plans it (text, a few short steps, "
+            "through the privacy gateway); small local models choose and run every action, and the JARVIS kernel still asks the "
+            "owner's PIN for risky steps, then the goal waits. If no online plan is available the local model plans alone. "
+            "Reports each step, which model ran it and what was observed.")),
+        input_schema={"type": "object", "properties": {"goal": {"type": "string", "description": "What the owner wants done, in their words"}},
+                      "required": ["goal"]},
+        timeout=900, llm_result_fields=["status", "planned_by", "summary", "steps", "approval_id", "fallback_reason"],
+    )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    async def do_goal(self, goal: str = "", **_):
+        hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}))
+        res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on())
+        return Ok(res)
 
     @plugin_entry(
         id="stop_pc_task",
