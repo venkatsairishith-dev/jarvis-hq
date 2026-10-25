@@ -443,8 +443,7 @@ def test_the_chat_list_has_only_what_a_chat_goal_needs_and_is_under_12_kb(chat_s
             await stop()
     listed = asyncio.run(go())
     names = {t.name for t in listed}
-    expected = set(F.CHAT_TOOLS) - {"jarvis_tasks"}          # jarvis_tasks comes from the read-only views, which exist only when the server runs with --data
-    assert names == expected, f"missing {expected - names}, extra {names - expected}"
+    assert names == set(F.CHAT_TOOLS), f"missing {set(F.CHAT_TOOLS) - names}, extra {names - set(F.CHAT_TOOLS)}"
     assert not names & set(F.PANEL_TOOLS), "the panel tools are not offered to the chat model"
     for hidden in ("jarvis_outputs", "jarvis_output_get", "jarvis_preview_wanted", "jarvis_status", "jarvis_notices", "jarvis_spoken", "jarvis_remember_chat"):
         assert hidden not in names
@@ -517,7 +516,7 @@ def test_the_list_panel_tools_flag_and_the_full_profile_list_everything(chat_sta
         finally:
             await stop()
     with_panel, full = asyncio.run(go())
-    assert set(F.PANEL_TOOLS) - {"jarvis_notices"} <= with_panel and set(F.CHAT_TOOLS) - {"jarvis_tasks"} <= with_panel
+    assert set(F.PANEL_TOOLS) - {"jarvis_notices"} <= with_panel and set(F.CHAT_TOOLS) <= with_panel
     full_names = {t.name for t in full}
     assert {"jarvis_ready", "jarvis_messages", "workbench__project_status"} <= full_names, "the full profile is the old behaviour"
     assert len(_serialized(full)) > 3 * CHAT_LIST_LIMIT
