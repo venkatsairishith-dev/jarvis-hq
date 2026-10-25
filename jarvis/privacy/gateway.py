@@ -472,6 +472,18 @@ _cooldown: dict[str, float] = {}
 _keys: dict[str, str] = {}
 
 
+def read_pin() -> tuple[str, str]:
+    """Benchmark switch (owner 2026-10-25: test every model on screen): a one-line file `name` or `name model` in the secrets root
+    ('gateway-pin.txt', not a secret) pins the chain to that one provider. Absent or empty means the normal chain."""
+    path = os.environ.get("JARVIS_GATEWAY_PIN_FILE") or os.path.join(SECRET_ROOT, "gateway-pin.txt")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            parts = fh.readline().split(None, 1)
+    except OSError:
+        return "", ""
+    return (parts[0], parts[1].strip() if len(parts) > 1 else "") if parts else ("", "")
+
+
 def load_providers(path: str = PROVIDERS_FILE, upstream: str | None = None) -> tuple[list[dict], float]:
     """Enabled providers in order. The first always uses the caller's key and model; --upstream replaces its address."""
     try:
@@ -692,10 +704,17 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             # "413 request too large" would hide the first provider's real answer (busy), and the face showed "Remote sent 413 response" (2026-10-25).
             est = (len(raw) // 4 + 1024) if raw is not None else 0
             chain = [p for p in chain if p is first_own or not p.get("max_total_tokens") or est <= int(p["max_total_tokens"])]
+            pin_name, pin_model = read_pin()
+            if pin_name and raw is not None and self._path() in ("/chat/completions", "/completions"):
+                pinned = next((p for p in providers if p["name"] == pin_name), None)
+                if pinned is not None:                       # a benchmark run: this one provider only, no failover, so the result is honest
+                    chain = [pinned]
             tried = []
             for i, prov in enumerate(chain):
                 last = i == len(chain) - 1
                 hdrs, data = dict(headers), raw
+                if pin_model and prov is first_own and len(chain) == 1 and body is not None:
+                    data = json.dumps({**body, "model": pin_model}, ensure_ascii=False).encode("utf-8")
                 extra = {**clean_extra_body(prov.get("extra_body")), **(clean_extra_body(prov.get("face_extra_body")) if face else {})}
                 if extra and body is not None:
                     data = json.dumps({**body, **extra}, ensure_ascii=False).encode("utf-8")
@@ -712,7 +731,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     # Groq's Cloudflare front refuses Python's default user agent (error 1010, seen live); a fallback
                     # must not depend on what the caller happened to send.
                     hdrs["User-Agent"] = "jarvis-privacy-gateway/1.0"
-                    data = json.dumps({**body, **extra, "model": prov["model"]}, ensure_ascii=False).encode("utf-8")
+                    data = json.dumps({**body, **extra, "model": (pin_model if len(chain) == 1 and pin_name else "") or prov["model"]}, ensure_ascii=False).encode("utf-8")
                 req = urllib.request.Request(prov["base_url"] + self._path(), data=data, headers=hdrs,
                                              method="POST" if data is not None else "GET")
                 try:

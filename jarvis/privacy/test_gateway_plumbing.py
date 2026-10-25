@@ -396,6 +396,17 @@ class LocalModelIsTheLastResort(unittest.TestCase):
         self.assertEqual(code, 400)
         self.assertEqual(seen["local"], 0)
 
+    def test_a_pin_file_sends_the_request_to_that_provider_only(self):
+        base, seen, names = self.start()
+        pin = os.path.join(tempfile_dir := __import__("tempfile").mkdtemp(), "pin.txt")
+        with open(pin, "w") as fh:
+            fh.write("local")
+        os.environ["JARVIS_GATEWAY_PIN_FILE"] = pin
+        self.addCleanup(lambda: os.environ.pop("JARVIS_GATEWAY_PIN_FILE", None))
+        code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(code, 200)
+        self.assertEqual((seen["first"], seen["local"]), (0, 1))              # the busy first provider was not even tried
+
     def test_a_provider_not_on_loopback_is_never_treated_as_local(self):
         base, seen, names = self.start(local_url="http://203.0.113.5:8080/v1")
         self.assertEqual(names, ["first"])                                    # dropped: "local" only counts for 127.0.0.1, localhost and ::1
