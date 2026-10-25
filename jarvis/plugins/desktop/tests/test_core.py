@@ -485,3 +485,13 @@ def test_owner_reads_and_writes_send_the_master_token_from_its_0600_file_and_fol
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def test_the_profile_list_is_read_from_the_file_the_node_writes(tmp_path):
+    from jarvis.node.jarvis_node import browserext as node_side
+    assert str(core.PROFILES).lower() == os.path.normpath(node_side.REGISTRY).lower() or os.environ.get("JARVIS_BROWSER_PROFILES")
+    reg = tmp_path / "browser_profiles.json"
+    reg.write_text(json.dumps({"profiles": [{"dir": "Default", "name": "Owner", "account": "ven***@gmail.com", "default": True,
+                                             "aliases": ["default", "owner", "profile1"]}]}), encoding="utf-8")
+    got = core.profiles(reg)
+    assert [p["profile"] for p in got] == ["Default"] and got[0]["say"] == ["default", "owner"]

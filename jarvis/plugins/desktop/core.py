@@ -29,7 +29,9 @@ CONSOLE = os.environ.get("JARVIS_CONSOLE_URL", "http://127.0.0.1:8799").rstrip("
 DATA = Path(os.environ.get("JARVIS_DATA_DIR", r"D:\jarvis\data"))
 ACTIVITY = DATA / "plugins" / "activity.json"
 LOCAL_RESULTS = Path(os.environ.get("JARVIS_OUTPUTS", r"D:\jarvis\outputs")) / "local-only"
-PROFILES = DATA / "plugins" / "browser_profiles.json"
+# The list the node builds from Chrome's profile list (browserext.REGISTRY, same default and same override). It was read from data\plugins\ while the node wrote
+# data\jarvis\, so list_browser_profiles always answered "no profile" (found on the real laptop, 2026-10-25).
+PROFILES = Path(os.environ.get("JARVIS_BROWSER_PROFILES") or DATA / "jarvis" / "browser_profiles.json")
 FINAL = ("done", "failed", "cancelled", "expired")
 STATES = ("inspecting", "diagnosing", "researching", "waiting_for_permission", "applying_fix", "verifying", "completed", "failed")
 
