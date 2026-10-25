@@ -305,6 +305,21 @@ class JsonKeysAreChecked(unittest.TestCase):
             gateway._tree({1: "x"}, LabelledFakeDetector(), Mapping())
 
 
+class ShippedProvidersFile(unittest.TestCase):
+    """2026-10-25: Cerebras joins as the second fallback (Dahl is often busy; Groq's 8K tokens a minute cannot take the face's big tool requests)."""
+
+    def test_cerebras_follows_groq_and_never_holds_a_key(self):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "providers.json")
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        names = [p["name"] for p in json.loads(text)["providers"]]
+        self.assertEqual(names[:3], ["dahl", "groq", "cerebras"])
+        c = [p for p in json.loads(text)["providers"] if p["name"] == "cerebras"][0]
+        self.assertTrue(c["key_file"].startswith("providers/") and c["model"])     # a key FILE NAME and a model, as a fallback needs
+        self.assertNotIn("api_key", c)
+        self.assertFalse(re.search(r"csk-[A-Za-z0-9]{10,}", text))                  # no key text in the file
+
+
 class MissingPiiModelFailsClosed(unittest.TestCase):
     """audit M3: GLiNER missing used to turn the deep pass off for every role without a word."""
 
