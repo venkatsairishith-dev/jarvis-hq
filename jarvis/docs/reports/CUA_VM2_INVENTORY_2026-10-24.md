@@ -305,3 +305,16 @@ Next (owner decision): start the lab runner on VM2 and see it report to the kern
 agent's `lab_work` action (agent token, lane private or public) or the owner plane's `agents/test` and `project_fix`; there is no single CLI like "submit this lab task". Using it would mean minting an agent token on the main server or driving the
 owner plane by hand, which is improvising on the main server. So `jarvis-lab-runner` was **not** started (still disabled and inactive), no task was created, and the main server was not touched.
 What would settle it: a small documented command (for example `python -m jarvis_kernel lab-task --text ... --criteria ...` or an owner-plane route that creates a lab task with a runner-lane job), or the owner choosing the agent-definition test (`POST owner/agents/test`) as the trivial task.
+
+### Lab smoke test via `agents/test`: stopped at the runtime check (2026-10-25, laptop session)
+
+Owner chose the existing owner route `POST owner/agents/test` as the trivial task. Before creating the throw-away agent or starting anything, the runtime it would name was checked on hermes-agent-vm-2 (read-only, as root):
+
+| Check | Result |
+|---|---|
+| `hermes`, `opencode`, `goose` on PATH or in `/home/agent/.local/bin` | **none installed** (`/home/agent/.local/bin` does not exist) |
+| `/home/agent/.hermes` (agent CLI config and model credential) | does not exist |
+| What the runner starts | `lab_runner.py`: `LOCAL_BIN/hermes chat ...`, `opencode run ...` (LOCAL_BIN = `~/.local/bin` of the agent user); the agent definition's runtime must be one of those |
+
+So no agent definition `lab-smoke-test` was created, `jarvis-lab-runner` was not started (still disabled and inactive), no task was made, and nothing on the main server was called. Installing an agent CLI means a model credential on the VM
+(the plan says the VM gets no model key, Telegram token or kernel database) and the lab Hermes install, which is a separate owner decision: which agent CLI, from where (pinned), and which model access (through the privacy gateway or the kernel's llm-proxy over the tailnet, never a key file on the VM).
