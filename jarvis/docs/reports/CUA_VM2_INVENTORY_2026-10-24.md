@@ -335,3 +335,24 @@ So no agent definition `lab-smoke-test` was created, `jarvis-lab-runner` was not
 | Services | jarvis-lab-control, jarvis-desktop, cua-driver active; free memory 3,180 MB available of 3,897 MB |
 
 Left: the owner makes the kernel token (public lane, like the lab agents) and it is copied by path to /etc/jarvis-lab/model.token (root 600); then `systemctl enable --now jarvis-model-forwarder`, the runner start and the smoke test (`agents/test`).
+
+### Model token on hermes-agent-vm-2 and the smoke test: stopped at a 401 (2026-10-25, laptop session)
+
+The owner ran `python -m jarvis_kernel agent-token lab-vm2-agent --lane public --out D:\jarvis-secrets\lab-vm2-agent.token` on the laptop and said yes (laptop session) to copying that one file. It was copied by path only (43 bytes, never opened or printed) and installed as `/etc/jarvis-lab/model.token`
+(root:root 600; temp copy shredded); `jarvis-model-forwarder` was enabled and started.
+
+| Check | Result |
+|---|---|
+| Forwarder | active, listening on 127.0.0.1:18790 only; no other new port |
+| Agent user reads the token | no ("not readable") |
+| `GET /v1/other`, `GET /v1/jarvis/owner/state` through the forwarder | 404 both (path allowlist works) |
+| `GET /v1/models` through the forwarder | **401** from the kernel: the token is not accepted |
+
+Cause (read-only check on the main server): the kernel's token table in `~/.jarvis-kernel/state.db` on hermes-agent-vm lists these names and lanes: lab (public), hub (dashboard), lab-runner (runner), hermes (private), skill-operator (private), memtest (public), console (owner), approval-test (public). **There is no `lab-vm2-agent`.**
+`python -m jarvis_kernel agent-token` writes into the data directory of the machine it runs on (default `~/.jarvis-kernel`, or `$JARVIS_DATA`); run on the laptop it made a token in the laptop's own, separate kernel database, which the main server does not know.
+The same is almost certainly true of the `lab-runner` token issued on the laptop earlier (`check_lab_deploy.py` only checks the file's owner and mode, not that the kernel accepts the token).
+Not done, to avoid improvising on the main server: minting tokens there. The smoke test (agent definition, runner start, `agents/test`) was **not run**; the runner stays disabled and inactive.
+
+Fix (the owner's yes needed for the main server): run the same command on hermes-agent-vm itself (`python3 -m jarvis_kernel agent-token lab-vm2-agent --lane public --out <path on the server>`, and for the runner `lab-runner` already exists there, so its token must be re-issued or the existing file reused),
+then move the token files to VM2 without printing them (for example `ssh server 'cat file' | ssh vm2 'sudo tee /etc/jarvis-lab/model.token'` through a pipe, never to disk on the laptop), root 600.
+The useless model.token on VM2 is harmless (the kernel answers 401) and is replaced by the fix.
