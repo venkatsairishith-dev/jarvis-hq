@@ -21,14 +21,13 @@ import {
   AIRI_CHAT_ROUND_ID_HEADER,
   AIRI_CHAT_SESSION_ID_HEADER,
 } from '../libs/product-signals/headers'
-import { composeDrawCardPrompt } from '../tools/draw-card'
-import { composeMemoryPrompt } from '../tools/memory'
 import { useChatStore } from './chat'
 import { CHAT_FORMAT_RULES } from './chat/prompt-recipe'
 import { useContextObservabilityStore } from './devtools/context-observability'
 import { useMemoryStore } from './memory'
 import { useConsciousnessSettingsStore } from './modules/consciousness-settings'
 import { useRecipesStore } from './recipes'
+import { useToolCardsStore } from './tool-cards'
 
 const ioTracerMocks = vi.hoisted(() => {
   /** The registered turn spans, by turn ID, like the tracer registry. */
@@ -605,11 +604,40 @@ describe('chat store contract', () => {
     expect(getChatProviderInstanceMock).toHaveBeenCalledTimes(2)
     expect(getChatProviderInstanceMock).toHaveBeenCalledWith('mock-provider', { reasoning: 'disabled' })
     expect(() => structuredClone(result)).not.toThrow()
-    // The session character's wake word tool joins every turn. It is not a selectable stored tool.
-    // Reply cards are on by default, so the owner's chat also gets the card tool and the icon search of cards.
+    // JARVIS: a plain turn carries only the tools the owner selected. The wake word editor, the memory, recipe and card
+    // tools join a turn that asks for them (see the next tests and `chat/run-tools`).
     expect(resolvedToolNames).toEqual([
-      ['stage_widgets', 'configure_wake_words', 'builtIn_readMemory', 'builtIn_writeMemory', 'builtIn_forgetMemory', 'builtIn_useRecipe', 'builtIn_proposeRecipe', 'builtIn_drawCard', 'builtIn_searchIcons'],
-      ['stage_widgets', 'configure_wake_words', 'builtIn_readMemory', 'builtIn_writeMemory', 'builtIn_forgetMemory', 'builtIn_useRecipe', 'builtIn_proposeRecipe', 'builtIn_drawCard', 'builtIn_searchIcons'],
+      ['stage_widgets'],
+      ['stage_widgets'],
+    ])
+  })
+
+  // JARVIS: the optional tools of a request follow the owner's words and data, each at the size they cost (3.5 KB for the wake words).
+  it('adds the wake word, memory, recipe and card tools to a turn that asks for them', async () => {
+    const toolNames: string[][] = []
+    llmStreamMock.mockImplementation(async (_model: string, _chatProvider: GenerationProvider, _messages: Conversation, options: any) => {
+      const tools = typeof options.tools === 'function' ? await options.tools() : options.tools
+      toolNames.push(tools.map((tool: Tool) => tool.function.name))
+      await options.onStreamEvent({ type: 'finish' })
+    })
+    useRecipesStore().add({ name: 'standup', description: 'A daily standup note.', instructions: 'Write the note.', keywords: ['standup'], enabled: true })
+    useToolCardsStore().replyCardsEnabled = true
+
+    const store = useChatStore()
+    await store.send({ sessionId: 'session-1', text: 'open notepad' })
+    await store.send({ sessionId: 'session-1', text: 'remember my sister, change my wake words, and save this as a recipe' })
+
+    // A usable recipe and reply cards are the owner's data and settings, so they stay; the rest follows the words.
+    expect(toolNames[0]).toEqual(['builtIn_useRecipe', 'builtIn_drawCard', 'builtIn_searchIcons'])
+    expect(toolNames[1]).toEqual([
+      'configure_wake_words',
+      'builtIn_readMemory',
+      'builtIn_writeMemory',
+      'builtIn_forgetMemory',
+      'builtIn_useRecipe',
+      'builtIn_proposeRecipe',
+      'builtIn_drawCard',
+      'builtIn_searchIcons',
     ])
   })
 
@@ -621,12 +649,16 @@ describe('chat store contract', () => {
       toolNames.push(tools.map((tool: Tool) => tool.function.name))
       await options.onStreamEvent({ type: 'finish' })
     })
-    useRecipesStore().proposalsEnabled = false
+    // JARVIS: the use tool needs a usable recipe, and the proposal tool needs the owner to talk about recipes.
+    useRecipesStore().add({ name: 'standup', description: 'A daily standup note.', instructions: 'Write the note.', keywords: ['standup'], enabled: true })
 
     await useChatStore().send({ sessionId: 'session-1', text: 'make a recipe' })
+    useRecipesStore().proposalsEnabled = false
+    await useChatStore().send({ sessionId: 'session-1', text: 'make another recipe' })
 
-    expect(toolNames[0]).not.toContain('builtIn_proposeRecipe')
-    expect(toolNames[0]).toContain('builtIn_useRecipe')
+    expect(toolNames[0]).toContain('builtIn_proposeRecipe')
+    expect(toolNames[1]).not.toContain('builtIn_proposeRecipe')
+    expect(toolNames[1]).toContain('builtIn_useRecipe')
   })
 
   // Like a slash command, a keyword gives a skill's steps to the owner's message. They stay with it for later turns.
@@ -1527,9 +1559,8 @@ describe('chat store contract', () => {
     cardPrompt.value = 'edited prompt'
     await store.ingest('second', { model: 'gpt-test', chatProvider: provider })
 
-    // The owner's run reads the memory index and, with reply cards on by default, when to draw a card after the identity.
-    const after = `${composeMemoryPrompt('')}${composeDrawCardPrompt()}`
-    expect(systemTexts).toEqual([`${CHAT_FORMAT_RULES}system prompt${after}`, `${CHAT_FORMAT_RULES}edited prompt${after}`])
+    // JARVIS: a plain turn adds neither the memory prompt nor the card prompt after the identity.
+    expect(systemTexts).toEqual([`${CHAT_FORMAT_RULES}system prompt`, `${CHAT_FORMAT_RULES}edited prompt`])
   })
 
   it('keeps hook order and composes context prompt after system message', async () => {
@@ -1635,7 +1666,7 @@ describe('chat store contract', () => {
     if (composedMessages[0].type !== 'system' || composedMessages[1].type !== 'user')
       throw new Error('Expected system and user turns')
     expect(composedMessages[0].content).toEqual([
-      { type: 'text', text: `${CHAT_FORMAT_RULES}system prompt${composeMemoryPrompt('')}${composeDrawCardPrompt()}` },
+      { type: 'text', text: `${CHAT_FORMAT_RULES}system prompt` },
       { type: 'text', text: '\n\nPlugin toolset guidance.' },
     ])
     expect(composedMessages[1].content[0]).toMatchObject({

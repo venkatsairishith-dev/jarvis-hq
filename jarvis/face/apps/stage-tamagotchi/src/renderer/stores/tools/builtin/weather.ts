@@ -19,19 +19,13 @@ const weatherParams = z.object({
   // "上海市" with `language=zh` found a place in the United States, and "東京" with `language=ja` found nothing.
   // Source: https://geocoding-api.open-meteo.com/v1/search
   // Remove this rule when the tool resolves names in other languages, for example with a second search.
-  city: z.string().describe('English name of the city, for example "Shanghai", "Tokyo", or "New York". Translate a city name in another language to English.'),
-  days: z.number().int().min(weatherForecastDays.min).max(weatherForecastDays.max).describe('Number of forecast days from today. Use 1 for today only, 2 to include tomorrow.'),
+  city: z.string().describe('English name of the city, for example "Shanghai". Translate a name in another language to English.'),
+  days: z.number().int().min(weatherForecastDays.min).max(weatherForecastDays.max).describe('Forecast days from today: 1 is today only, 2 includes tomorrow.'),
 })
 
 /**
- * Returns the weather as JSON for the model. It does not show a widget.
- *
- * NOTICE:
- * The tool description tells the model how to show the result with `stage_widgets`.
- * The description is the only text that reaches the model with this tool. `useLlmToolsetPromptsStore` joins every
- * registered prompt into every turn, so a toolset prompt would also reach turns without the weather tool.
- * Source: `packages/stage-ui/src/stores/ai/chat-llm/toolset-prompts.ts`.
- * Move the instruction into a toolset prompt when a toolset prompt reaches only turns that have its tools.
+ * Returns the weather as JSON for the model. It does not show a widget: the chat draws the forecast card from the result
+ * (`weatherToolCallWidget`). JARVIS no longer sends the model `stage_widgets`, so the description does not mention it.
  */
 async function executeGetWeather(input: { city: string, days: number }): Promise<string> {
   return JSON.stringify(await fetchWeather(input.city, input.days))
@@ -40,12 +34,8 @@ async function executeGetWeather(input: { city: string, days: number }): Promise
 const tools: Promise<Tool>[] = [
   tool({
     name: WEATHER_TOOL_NAME,
-    description: [
-      'Get the current weather and a daily forecast for a city. Returns JSON with `location`, `current`, and `daily`.',
-      '`daily[0]` is today in the time zone of the city. `precipitation` is the chance of precipitation.',
-      'To show the weather to the user, you can call `stage_widgets` with action `spawn`, componentName `weather`,',
-      'and componentProps set to `current` or one `daily` entry, plus `city` from `location`.',
-    ].join(' '),
+    // JARVIS: the chat draws the forecast card from this result; the model only reports it in a sentence.
+    description: 'Get the current weather and a daily forecast for a city. Returns JSON with `location`, `current`, and `daily` (`daily[0]` is today). The chat shows the forecast card by itself.',
     execute: executeGetWeather,
     parameters: weatherParams,
   }),
