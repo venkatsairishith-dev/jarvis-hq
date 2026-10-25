@@ -137,3 +137,77 @@ def test_the_check_catches_what_it_should():
         assert FORBIDDEN.search(bad), bad
     for ok in ("x --no-webui -fa off", "x --api-key-file D:\\jarvis-secrets\\k", "x --jinja -np 1 --n-cpu-moe 16"):
         assert not FORBIDDEN.search(ok), ok
+
+
+# ---- footprint budget (D50, owner 2026-10-25: JARVIS may use 20% of the laptop) ---------------------------------------------------------
+# One model loaded at a time (the group is exclusive + swap), at most 3 threads (3 of 16 = 18.75% of the machine; the CPU hard cap in
+# jarvis/supervisor/jobobject.py is the backstop), idle models unloaded after 120 s so their RAM comes back.
+
+def thread_caps(path):
+    macro, _ = server_commands(path)
+    return [int(n) for n in re.findall(r"(?<![\w-])-t\s+(\d+)(?!\d)", macro)]
+
+
+def test_every_server_macro_caps_llama_server_threads():
+    for path in CONFIGS:
+        caps = thread_caps(path)
+        assert len(caps) == 1 and 1 <= caps[0] <= 3, f"{os.path.basename(path)}: need exactly one '-t N' with N in 1..3, got {caps}"
+        _, cmds = server_commands(path)
+        for cmd in cmds:      # a model may not undo the cap with its own -t / --threads
+            assert len(re.findall(r"(?<![\w-])(-t|--threads|-tb|--threads-batch)\s", cmd)) == 1, (os.path.basename(path), cmd[:100])
+
+
+def test_the_profiles_use_the_thread_numbers_of_the_budget():
+    caps = {os.path.basename(p): thread_caps(p)[0] for p in CONFIGS}
+    assert caps["llama-swap.yaml"] == 3 and caps["cpu16.yaml"] == 3 and caps["vram8plus.yaml"] == 3 and caps["cpu8.yaml"] == 2
+
+
+def model_names(text):
+    return re.findall(r"(?m)^  ([\w.-]+):\s*$", text.split("models:", 1)[1].split("groups:", 1)[0])
+
+
+def test_idle_models_unload_after_at_most_120_seconds():
+    for path in CONFIGS:
+        text = "\n".join(lines(path))
+        models = model_names(text)
+        ttls = [int(t) for t in re.findall(r"(?m)^\s+ttl:\s*(\d+)\s*$", text)]
+        assert models and len(ttls) == len(models), f"{os.path.basename(path)}: every model needs a ttl"
+        assert all(0 < t <= 120 for t in ttls), f"{os.path.basename(path)}: ttl must be 1..120 s, got {ttls}"
+
+
+def test_one_model_at_a_time():
+    for path in CONFIGS:
+        text = "\n".join(lines(path))
+        grp = text.split("groups:", 1)[1]
+        assert re.search(r"swap:\s*true", grp) and re.search(r"exclusive:\s*true", grp), os.path.basename(path)
+        members = re.search(r"members:\s*\[(.*?)\]", grp, re.S).group(1)
+        assert {m.strip() for m in members.replace("\n", " ").split(",") if m.strip()} == set(model_names(text)), os.path.basename(path)
+
+
+def test_the_governors_thread_rewrite_keeps_the_config_valid():
+    """local-models.ps1 replaces the number in the 'server:' macro line only; do the same here and run the usual checks on the result."""
+    import tempfile
+    src = os.path.join(HERE, "llama-swap.yaml")
+    with open(src, encoding="utf-8") as fh:
+        text = fh.read()
+    new = re.sub(r"(?m)^(\s+server:.*?\s)-t \d+(?=\s|$)", r"\g<1>-t 2", text)
+    assert new != text and thread_caps(src) == [3]
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "llama-swap.t2.yaml")
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(new)
+        assert thread_caps(p) == [2]
+        macro, cmds = server_commands(p)
+        assert cmds and "--host 127.0.0.1" in macro and not any(FORBIDDEN.findall(c) for c in cmds)
+
+
+def test_the_models_over_the_vram_budget_are_flagged_in_the_config():
+    """The two Qwen3-4B deciders put the whole model on the GPU (-ngl 99, about 2.6 GB) against a 2048 MB budget for all of JARVIS.
+    Their files and commands are unchanged on purpose; the config says so, and footprint.py reports OVER while one is loaded."""
+    path = os.path.join(HERE, "llama-swap.yaml")
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    assert "VRAM budget (D50" in text and "2048 MB" in text and "OVER" in text
+    _, cmds = server_commands(path)
+    big = [c for c in cmds if "Qwen3-4B" in c]
+    assert len(big) == 2 and all("-ngl 99" in c for c in big)

@@ -237,6 +237,12 @@ if (-not $pyExe) {
 if (-not $pyExe) { throw "Python 3.11 could not be found or installed" }
 Ok "Python 3.11: $pyExe"
 . (Join-Path $PSScriptRoot "d-env.ps1")        # TEMP, TMP and every cache on D: (owner rule)
+# D50 (owner, 2026-10-25: "for storage use only the D: drive"): the installer, pip, uv, npm, pnpm, Playwright and Electron write only here.
+foreach ($n in 'TEMP','TMP','HF_HOME','PIP_CACHE_DIR','UV_CACHE_DIR','npm_config_cache','PNPM_HOME','npm_config_store_dir','PLAYWRIGHT_BROWSERS_PATH','ELECTRON_CACHE') {
+  $v = [Environment]::GetEnvironmentVariable($n, 'Process')
+  if (-not $v -or $v -notmatch '^[dD]:\\') { throw "JARVIS install: $n is not on the D: drive ($v)" }
+}
+Ok "temp files and every cache are on D: (footprint budget D50); the budget numbers are in jarvis\supervisor\budget.py, the meter is jarvis\tools\footprint.py"
 foreach ($v in @(@("agent-venv", "agent-venv.txt"), @("jarvis-venv", "jarvis-venv.txt"), @("privacy-venv", "privacy-venv.txt"), @("piper-venv", "piper-venv.txt"))) {
   $dir = "$Root\tools\$($v[0])"; $vpy = "$dir\Scripts\python.exe"; $req = Join-Path $jarvis "tools\requirements\$($v[1])"
   if ($Verify) { if (Test-Path $vpy) { Ok "$($v[0]) present" } else { Fail "$($v[0]) missing" }; continue }
