@@ -1,0 +1,49 @@
+{
+ "time": "2026-10-26 00:41:04",
+ "rows": [
+  {
+   "model": "h-cpu",
+   "gpu_mb_before_load": 886,
+   "first_answer_s": 3.2,
+   "first_reply": "OK.",
+   "tokens_per_s": 24.4,
+   "prompt_tokens_per_s": 46.2,
+   "generated_tokens": 200,
+   "peak_ram_mb": 3795,
+   "peak_gpu_mb": 1235
+  },
+  {
+   "model": "h-moe99",
+   "gpu_mb_before_load": 878,
+   "first_answer_s": 4.0,
+   "first_reply": "OK.",
+   "tokens_per_s": 25.7,
+   "prompt_tokens_per_s": 57.2,
+   "generated_tokens": 200,
+   "peak_ram_mb": 3970,
+   "peak_gpu_mb": 1838
+  },
+  {
+   "model": "g-cpu",
+   "gpu_mb_before_load": 878,
+   "first_answer_s": 2.9,
+   "first_reply": "OK.",
+   "tokens_per_s": 14.5,
+   "prompt_tokens_per_s": 30.4,
+   "generated_tokens": 200,
+   "peak_ram_mb": 4246,
+   "peak_gpu_mb": 896
+  },
+  {
+   "model": "g-moe99",
+   "gpu_mb_before_load": 878,
+   "first_answer_s": 3.9,
+   "first_reply": "OK.",
+   "tokens_per_s": 14.9,
+   "prompt_tokens_per_s": 40.1,
+   "generated_tokens": 177,
+   "peak_ram_mb": 3962,
+   "peak_gpu_mb": 1853
+  }
+ ]
+}

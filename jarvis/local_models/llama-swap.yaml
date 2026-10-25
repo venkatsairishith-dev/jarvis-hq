@@ -22,7 +22,7 @@ models:
   # Measured here through llama-server, 2026-10-15: 31 tokens/s (n-cpu-moe 12: 22, 20: 30, all: 27; 4 slots cost ~30%).
   # It is a hybrid reasoning model: callers pass chat_template_kwargs {"enable_thinking": false} for quick answers.
   ling-tiny:
-    cmd: ${server} -m ${models}\Ling-3.0-tiny-Q4_K_M.gguf -ngl 99 --n-cpu-moe 16 -c 8192 -np 1
+    cmd: ${server} -m ${models}\Ling-3.0-tiny-Q4_K_M.gguf -ngl 0 -c 8192 -np 1
     aliases: [general, local-general, decider-ling]
     ttl: 120
   # Code: Qwen2.5-Coder 1.5B Instruct (Apache-2.0)
@@ -66,6 +66,23 @@ models:
     aliases: [docreader, ocr-docs]
     cmd: ${server} -m D:\jarvis\models\gguf\lightonocr-3-0.8b\LightOnOCR-3-0.8B.Q4_K_M.gguf --mmproj D:\jarvis\models\gguf\lightonocr-3-0.8b\LightOnOCR-3-0.8B.mmproj-f16.gguf -ngl 0 --no-mmproj-offload -c 4096 -np 1
     ttl: 120
+  # Uncensored chat, D51 roster `chat_simple` (owner 2026-10-25). local-chat is Ling-3.0-tiny-heretic (MoE 7.9B / 1.3B active, MIT; refusals 97 -> 1 of 100, KL 0.0381 on the
+  # author's card): mradermacher/Ling-3.0-tiny-heretic-GGUF @ ccfd8b95069d..., Q4_K_M, sha256 54086358663edb37f7da5441b34a3eb5e24b2a4f683957409b871b9689b9e508.
+  # D50 budget: -t 3 from the server macro, one model at a time (the group below), ttl 120. Measured on this laptop 2026-10-26 (jarvis/evals/local_models/results/local-*.json):
+  # CPU only (-ngl 0) is as fast as any GPU split (24.4 tokens/s), loads in 3 s and peaks at 3.8 GB RAM and +0.35 GB GPU; the old -ngl 99 --n-cpu-moe 16 peaked at 7.8 GB RAM and
+  # 3.2 GB GPU (over the 6.5 GB / 2 GB budget). Refusals on 49 edgy-but-legitimate prompts: this model 1, the original Ling 7. Like the other Ling, a hybrid reasoning model:
+  # callers pass chat_template_kwargs {"enable_thinking": false}.
+  ling-heretic:
+    cmd: ${server} -m ${models}\Ling-3.0-tiny-heretic.Q4_K_M.gguf -ngl 0 -c 8192 -np 1
+    aliases: [local-chat]
+    ttl: 120
+  # Granite-4.0-H-Tiny abliterated (huihui-ai; Apache-2.0; 6.9B / 1B active, hybrid Mamba, native tool calls): mradermacher/Huihui-granite-4.0-h-tiny-abliterated-GGUF
+  # @ e0145b051ad7..., Q4_K_M, sha256 1d7251a350330660a3729d26057b3c8d727465aa8947ea1b6071719b76ebec2e. The second uncensored alias; no refusal number is published for it.
+  # Measured: CPU only 14.5 tokens/s, 4.2 GB RAM, 3 of 49 refusals (the -ngl 99 layout peaked at 10.2 GB RAM). Slower than Ling, so the second choice.
+  granite-abliterated:
+    cmd: ${server} -m ${models}\Huihui-granite-4.0-h-tiny-abliterated.Q4_K_M.gguf -ngl 0 -c 8192 -np 1
+    aliases: [local-chat-granite]
+    ttl: 120
   # No separate router model: the generalist routes (one grammar-limited word, thinking off). SmolLM2-360M was tried and
   # dropped: 203 tokens/s, but it sorted only 5-6 of 12 requests correctly (jarvis/plugins/local_team/core.py).
 
@@ -75,4 +92,4 @@ groups:
     swap: true
     exclusive: true
     members: [ling-tiny, qwen-coder-1.5b, qwen-math-1.5b, decider-qwen3-1.7b, decider-qwen3-4b, decider-qwen3-4b-2507,
-              vision-ui-venus-2b, lightonocr-docreader]
+              vision-ui-venus-2b, lightonocr-docreader, ling-heretic, granite-abliterated]
