@@ -89,3 +89,9 @@ def test_the_forwarder_files_it_installs_exist():
     for name in ("model_forwarder.py", "jarvis-model-forwarder.service"):
         assert (DEPLOY / name).is_file()
     assert "model_forwarder.py" in TEXT and "jarvis-model-forwarder.service" in TEXT
+
+def test_the_verifier_gets_a_root_owned_cli_path_because_it_cannot_enter_the_agents_home():
+    # first real smoke test: jarvis-verify ran /home/agent/.local/bin/hermes -> "Permission denied" (/home/agent is 0700), so no VERIFY.json was written
+    assert "/opt/jarvis-verify/bin" in TEXT and "JARVIS_LAB_VERIFY_BIN=/opt/jarvis-verify/bin" in TEXT
+    assert 'install -d -o root -g root -m 0755 /opt/jarvis-verify /opt/jarvis-verify/bin' in TEXT
+    assert 'ln -sfn "$OPT/venv/bin/hermes" /opt/jarvis-verify/bin/hermes' in TEXT

@@ -356,3 +356,23 @@ Not done, to avoid improvising on the main server: minting tokens there. The smo
 Fix (the owner's yes needed for the main server): run the same command on hermes-agent-vm itself (`python3 -m jarvis_kernel agent-token lab-vm2-agent --lane public --out <path on the server>`, and for the runner `lab-runner` already exists there, so its token must be re-issued or the existing file reused),
 then move the token files to VM2 without printing them (for example `ssh server 'cat file' | ssh vm2 'sudo tee /etc/jarvis-lab/model.token'` through a pipe, never to disk on the laptop), root 600.
 The useless model.token on VM2 is harmless (the kernel answers 401) and is replaced by the fix.
+
+### Model tokens fixed, forwarder up, smoke test run twice (2026-10-25, laptop session; owner approved the token copy, the smoke test and the main-server token minting in the laptop session)
+
+**Tokens.** The tokens the owner made on the laptop lived in the laptop's own kernel database, not the main server's (401). With the owner's yes, `lab-vm2-agent` (public) was minted on hermes-agent-vm and `lab-runner` (runner) was re-issued there (INSERT OR REPLACE, so the old lab-runner token is void), and each was streamed
+through a pipe straight into `/etc/jarvis-lab/model.token` and `/etc/jarvis-lab/runner.token` on VM2 (root:root 600, 43 bytes each); nothing was written on the laptop or printed; the temp file on the server was shredded. Through the forwarder, `GET /v1/models` as `agent` now returns **200**, `/v1/other` 404, `/v1/jarvis/owner/state` 404,
+the agent user cannot read the token, the forwarder listens on 127.0.0.1:18790 only.
+
+**Smoke test.** Agent `lab-smoke-test` (id ag-3900540d, public, runtime hermes, no tools, 2 runs a day) was created and activated through the console's owner proxy; `jarvis-lab-runner` started on VM2 ("isolation: identity - self-test ok"); `agents/test` ran twice (both runs used).
+
+| Run | Task | Worker (agent user, Hermes through the forwarder and the kernel) | Verifier (jarvis-verify) | Result |
+|---|---|---|---|---|
+| 1 | 2435cf831c72 | **worked**: created `hello.txt` ("JARVIS lab smoke test ok"), `deliver/hello.txt` and EVIDENCE.md in about 90 s | `/home/agent/.local/bin/hermes: Permission denied` (jarvis-verify cannot enter /home/agent, mode 0700) | failed: "the verifier wrote no VERIFY.json" |
+| 2 (after the fix below) | bd599bef1324 | worked again (attempt 1: exit 0, 87 s; attempt 2 exit 1 after 18 s) | now **runs** but prints "No reply: jarvis didn't produce a reply this time, even after retries" | failed: "the verifier printed no JARVIS-VERDICT: line as its final answer" |
+
+Fix made for run 1 (in `provision_vm2_agent.sh`, step 6b, following `caretaker/README.md` step 3): a root-owned `/opt/jarvis-verify/bin/hermes` (symlink to the install) and a runner drop-in `Environment=JARVIS_LAB_VERIFY_BIN=/opt/jarvis-verify/bin`; `jarvis-verify` runs it fine (a manual one-word prompt as jarvis-verify returned "ok", with `<think>` text in it).
+
+What is left: the verifier's long prompt gets no usable reply from the model ("No reply ... even after retries"; the worker shows the same message in its log but still created the files). Likely the same reasoning-token problem seen earlier with MiniMax (the answer is empty or all `<think>`), not the VM. Not investigated further: the next step is to read what the kernel's llm-proxy returned for those calls
+(`agent_model_call` events for the lab lane) and either raise the lab lane's output budget or pick a non-reasoning model for the verifier. The agent's two runs for today are used (max_runs_per_day 2).
+
+**State now.** `jarvis-lab-runner` stopped (inactive, disabled); no process left for jarvis-sandbox, jarvis-verify or agent; cua-driver, lab-control, the desktop, the forwarder and tailscaled active; free memory 3,181 MB available. The throw-away agent `lab-smoke-test` still exists (state active) and needs the owner's confirm to terminate.

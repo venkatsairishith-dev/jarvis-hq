@@ -128,6 +128,22 @@ CFG
   chown "$u:$u" "$home/.hermes/config.yaml"; chmod 0600 "$home/.hermes/config.yaml"
 done
 
+say "6b the verifier's CLI path: root-owned /opt/jarvis-verify/bin/hermes and JARVIS_LAB_VERIFY_BIN in the runner unit (jarvis-verify cannot enter /home/agent; caretaker/README.md step 3)"
+if [ "$PLAN" = 1 ]; then
+  echo "   would run: install -d -o root -g root -m 0755 /opt/jarvis-verify/bin ; ln -sfn $OPT/venv/bin/hermes /opt/jarvis-verify/bin/hermes"
+  echo "   would write: /etc/systemd/system/jarvis-lab-runner.service.d/verify-bin.conf with Environment=JARVIS_LAB_VERIFY_BIN=/opt/jarvis-verify/bin ; systemctl daemon-reload (a running runner picks it up at its next restart)"
+else
+  install -d -o root -g root -m 0755 /opt/jarvis-verify /opt/jarvis-verify/bin
+  ln -sfn "$OPT/venv/bin/hermes" /opt/jarvis-verify/bin/hermes
+  install -d -o root -g root -m 0755 /etc/systemd/system/jarvis-lab-runner.service.d
+  cat > /etc/systemd/system/jarvis-lab-runner.service.d/verify-bin.conf <<'DROPIN'
+[Service]
+Environment=JARVIS_LAB_VERIFY_BIN=/opt/jarvis-verify/bin
+DROPIN
+  chmod 0644 /etc/systemd/system/jarvis-lab-runner.service.d/verify-bin.conf
+  systemctl daemon-reload
+fi
+
 say "7 the model forwarder: root-owned service on 127.0.0.1:${FWD_PORT}; the token file is NOT created here"
 if [ "$PLAN" = 1 ]; then
   echo "   would run: install -o root -g root -m 0644 $HERE/model_forwarder.py /opt/jarvis-hub/model_forwarder.py"
