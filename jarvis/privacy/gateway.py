@@ -42,6 +42,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -484,9 +485,21 @@ def load_providers(path: str = PROVIDERS_FILE, upstream: str | None = None) -> t
         provs = [{"name": "upstream", "base_url": DEFAULT_UPSTREAM, "key": "from_request"}]
     if upstream:
         provs[0] = {**provs[0], "base_url": upstream}
-    usable = [provs[0]] + [p for p in provs[1:] if p.get("key_file") and p.get("model")]
+    usable = [provs[0]] + [p for p in provs[1:] if p.get("model") and (p.get("key_file") or is_local_provider(p))]
     return [{**p, "base_url": p["base_url"].rstrip("/"), "extra_body": clean_extra_body(p.get("extra_body")),
              "face_extra_body": clean_extra_body(p.get("face_extra_body"))} for p in usable], cool
+
+
+def is_local_provider(p: dict) -> bool:
+    """A fallback that is a model on THIS PC (llama-swap): marked "local": true, address on loopback only, needs no key. It is the last link
+    of the chain, so a request is answered on the laptop (nothing leaves it) when every online provider is resting or refuses."""
+    if not p.get("local"):
+        return False
+    try:
+        host = (urllib.parse.urlsplit(str(p.get("base_url") or "")).hostname or "").lower()
+    except ValueError:
+        return False
+    return host in ("127.0.0.1", "localhost", "::1")
 
 
 def clean_extra_body(value) -> dict:
@@ -686,11 +699,15 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 if extra and body is not None:
                     data = json.dumps({**body, **extra}, ensure_ascii=False).encode("utf-8")
                 if prov is not first_own:
-                    key = read_key(prov)
-                    if not key:
+                    local = is_local_provider(prov)
+                    key = "" if local else read_key(prov)
+                    if not key and not local:
                         tried.append(f"{prov['name']}: no key file")
                         continue
-                    hdrs["Authorization"] = f"Bearer {key}"
+                    if local:
+                        hdrs.pop("Authorization", None)      # the caller's placeholder key is not for the local server
+                    else:
+                        hdrs["Authorization"] = f"Bearer {key}"
                     # Groq's Cloudflare front refuses Python's default user agent (error 1010, seen live); a fallback
                     # must not depend on what the caller happened to send.
                     hdrs["User-Agent"] = "jarvis-privacy-gateway/1.0"

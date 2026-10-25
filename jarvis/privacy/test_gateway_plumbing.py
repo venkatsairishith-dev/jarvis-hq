@@ -320,6 +320,79 @@ class ShippedProvidersFile(unittest.TestCase):
         self.assertFalse(re.search(r"csk-[A-Za-z0-9]{10,}", text))                  # no key text in the file
 
 
+class LocalModelIsTheLastResort(unittest.TestCase):
+    """2026-10-25 (owner: use the local uncensored MoE; the online providers are managed by the gateway): the last link of the chain is a model on this PC
+    (llama-swap on loopback), marked "local": true, with no key. Every online provider resting or refusing means the answer comes from the laptop."""
+
+    def start(self, local_flag=True, local_url=None):
+        seen = {"first": 0, "local": 0, "local_auth": None}
+
+        def handler_for(name, code):
+            class H(BaseHTTPRequestHandler):
+                def log_message(self, *a):
+                    pass
+
+                def do_POST(self):
+                    self.rfile.read(int(self.headers["Content-Length"]))
+                    seen[name] += 1
+                    if name == "local":
+                        seen["local_auth"] = self.headers.get("Authorization")
+                    raw = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": name}}]} if code == 200 else {"error": {"message": "busy"}}).encode()
+                    self.send_response(code)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+            return H
+        servers = []
+        for name, code in (("first", 429), ("local", 200)):
+            sv = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(name, code))
+            threading.Thread(target=sv.serve_forever, daemon=True).start()
+            servers.append(sv)
+        self.addCleanup(lambda: [(sv.shutdown(), sv.server_close()) for sv in servers])
+        import tempfile
+        gateway._keys.clear()
+        secret_dir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(secret_dir, "providers"))
+        with open(os.path.join(secret_dir, "providers", "first.key"), "w") as fh:
+            fh.write("made-up-test-key")
+        old_root, gateway.SECRET_ROOT = gateway.SECRET_ROOT, secret_dir
+        self.addCleanup(lambda: setattr(gateway, "SECRET_ROOT", old_root))
+        self.addCleanup(gateway._keys.clear)
+        cfg = {"cooldown_seconds": 60, "providers": [
+            {"name": "first", "enabled": True, "base_url": f"http://127.0.0.1:{servers[0].server_address[1]}/v1", "key": "from_request", "key_file": "providers/first.key"},
+            {"name": "local", "enabled": True, "local": local_flag, "model": "local-chat",
+             "base_url": local_url or f"http://127.0.0.1:{servers[1].server_address[1]}/v1"}]}
+        path = os.path.join(secret_dir, "providers.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(cfg, fh)
+        provs, cool = gateway.load_providers(path)
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 10, cool)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        gateway._cooldown.clear()
+        return f"http://127.0.0.1:{gw.server_address[1]}", seen, [p["name"] for p in provs]
+
+    def test_a_busy_online_provider_is_answered_by_the_local_model_without_a_key(self):
+        base, seen, names = self.start()
+        self.assertEqual(names, ["first", "local"])
+        code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(code, 200)
+        self.assertEqual((seen["first"], seen["local"]), (1, 1))
+        self.assertIsNone(seen["local_auth"])                                # no key and no caller placeholder went to the local server
+
+    def test_a_provider_not_on_loopback_is_never_treated_as_local(self):
+        base, seen, names = self.start(local_url="http://203.0.113.5:8080/v1")
+        self.assertEqual(names, ["first"])                                    # dropped: "local" only counts for 127.0.0.1, localhost and ::1
+
+    def test_without_the_local_flag_a_keyless_fallback_is_still_dropped(self):
+        base, seen, names = self.start(local_flag=False)
+        self.assertEqual(names, ["first"])
+
+
 class MissingPiiModelFailsClosed(unittest.TestCase):
     """audit M3: GLiNER missing used to turn the deep pass off for every role without a word."""
 

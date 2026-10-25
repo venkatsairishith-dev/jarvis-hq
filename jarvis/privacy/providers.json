@@ -11,6 +11,7 @@
     {"name": "openrouter", "base_url": "https://openrouter.ai/api/v1", "enabled": false, "key_file": "providers/openrouter.key", "model": ""},
     {"name": "cloudflare", "base_url": "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1", "enabled": false, "key_file": "providers/cloudflare.key", "model": ""},
     {"name": "zai", "base_url": "https://api.z.ai/api/paas/v4", "enabled": false, "key_file": "providers/zai.key", "model": "glm-4.7-flash",
-     "_note": "Z AI free GLM-4.7-Flash, 1 request at a time (checked 2026-10-24). Off until the key file exists, the terms were read (free-tier training is not confirmed) and hosted_model_compare.py has run."}
+     "_note": "Z AI free GLM-4.7-Flash, 1 request at a time (checked 2026-10-24). Off until the key file exists, the terms were read (free-tier training is not confirmed) and hosted_model_compare.py has run."},
+    {"name": "local", "base_url": "http://127.0.0.1:8080/v1", "enabled": true, "local": true, "model": "local-chat", "max_total_tokens": 7000, "_note": "The last link (2026-10-25): a model on THIS laptop through llama-swap (alias local-chat = the uncensored Ling-3.0-tiny-heretic once it is installed), so a request is answered locally when every online provider is resting or refuses. Needs no key, loopback only (the gateway drops a 'local' entry on any other address). max_total_tokens is the local context (-c 8192) minus the answer: a bigger request is skipped here and the caller sees the first provider's own answer. Uncensored on purpose (owner); the kernel still decides every action."}
   ]
 }
