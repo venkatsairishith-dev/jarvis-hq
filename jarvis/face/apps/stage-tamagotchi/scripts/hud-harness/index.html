@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HUD harness</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body, #app { margin: 0; height: 100%; overflow: hidden; }
+      .bg { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 30%, #1c2733, #0b0f14 70%); }
+      .char { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 34%; height: 78%; }
+      .char .head { position: absolute; left: 50%; top: 6%; width: 42%; aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; background: #e9c9b6; }
+      .char .body { position: absolute; left: 50%; top: 34%; width: 70%; bottom: 0; transform: translateX(-50%); border-radius: 40% 40% 0 0; background: #2c3e66; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

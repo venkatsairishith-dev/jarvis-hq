@@ -9,13 +9,19 @@
  *     clean-up that removes every link target and every outside image;
  *   - HTML in an iframe with `sandbox=""` (no scripts, no forms, no popups, no navigation) and a policy of `default-src 'none'`.
  * Clicking a link in shown content does nothing. The panel has no network access of its own and loads nothing.
+ *
+ * Small windows: the face's default window is only 252 x 336 px, so under 480 px wide the panel becomes an overlay over the whole
+ * window (see the media query at the end of the styles): a two-line header, the page image at the full width, a compact pager,
+ * the thumbnails as one scrolling strip behind a toggle, and "Open in app" and close always in view. The panel does not resize the
+ * window: the only window-bounds call the face has (electronMainWindowSetFullscreenBounds) works only inside the fullscreen mode,
+ * and a new privileged call for this is not worth it.
  */
 import type { PreviewController } from '../composables/use-jarvis-preview'
 
 import DOMPurify from 'dompurify'
 
 import { useMarkdown } from '@proj-airi/stage-ui/composables/markdown'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
   fenceCode,
@@ -35,21 +41,24 @@ const { process } = useMarkdown()
 const KIND_LABEL: Record<string, string> = { pdf: 'PDF', html: 'HTML', deck: 'Deck', image: 'Image', text: 'Text', document: 'Document' }
 const showList = ref(false)
 const expanded = ref(false)
+// In a small window the thumbnails are a strip that starts hidden when the window is short (the page image needs the room).
+const shortWindow = ref(typeof window !== 'undefined' && window.innerHeight < 520)
+const thumbsChoice = ref<boolean | null>(null)
+const thumbsOpen = computed(() => thumbsChoice.value ?? !shortWindow.value)
+function onResize() {
+  shortWindow.value = window.innerHeight < 520
+}
+onMounted(() => window.addEventListener('resize', onResize))
+onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 const richHtml = ref('')
 let richSeq = 0
 
 const imageUrl = computed(() => imageDataUrl(current.value?.image))
 const thumbUrls = computed(() => (current.value?.thumbs ?? []).map(t => ({ page: t.page, url: imageDataUrl(t) })).filter(t => t.url))
 const frameDoc = computed(() => current.value?.view === 'html' ? htmlFrameDocument(current.value.html ?? '', DOMPurify) : '')
-const subtitle = computed(() => {
-  const c = current.value
-  if (!c)
-    return ''
-  const bits = [KIND_LABEL[c.kind] ?? c.kind, formatSize(c.size)]
-  if (c.view === 'pages' && pageCount.value > 1)
-    bits.push(`page ${page.value + 1} of ${pageCount.value}`)
-  return bits.join(' · ')
-})
+const subKind = computed(() => current.value ? KIND_LABEL[current.value.kind] ?? current.value.kind : '')
+const subSize = computed(() => current.value ? formatSize(current.value.size) : '')
+const subPage = computed(() => current.value?.view === 'pages' && pageCount.value > 1 ? `page ${page.value + 1} of ${pageCount.value}` : '')
 const checks = computed(() => items.value.find(i => i.id === current.value?.id)?.passed ?? null)
 
 // Text and code are turned into markup in one place; a slow answer never replaces a newer one.
@@ -147,25 +156,27 @@ function age(modified: number): string {
         <div class="pv-titles">
           <strong class="pv-title" :title="current?.title">{{ showList ? 'Recent things' : current?.title || 'Preview' }}</strong>
           <span v-if="!showList && current" class="pv-sub">
-            {{ subtitle }}
-            <span v-if="checks === true" class="pv-badge pv-ok">checks passed</span>
-            <span v-else-if="checks === false" class="pv-badge pv-warn">checks not passed</span>
+            {{ subKind }}<span class="pv-sub-size"> · {{ subSize }}</span><template v-if="subPage"> · {{ subPage }}</template>
+            <span v-if="checks === true" class="pv-badge pv-ok"><span class="pv-badge-long">checks passed</span><span class="pv-badge-short" aria-hidden="true">&#10003;</span></span>
+            <span v-else-if="checks === false" class="pv-badge pv-warn"><span class="pv-badge-long">checks not passed</span><span class="pv-badge-short" aria-hidden="true">!</span></span>
           </span>
         </div>
         <div class="pv-actions">
-          <button type="button" aria-label="Previous item" title="Previous item" :disabled="itemIndex <= 0" @click="props.controller.previousItem()">
-            &#8249;
-          </button>
-          <button type="button" aria-label="Next item" title="Next item" :disabled="itemIndex < 0 || itemIndex >= items.length - 1" @click="props.controller.nextItem()">
-            &#8250;
-          </button>
-          <button type="button" :aria-pressed="showList" aria-label="List of recent things" title="List" @click="toggleList">
-            &#9776;
-          </button>
-          <button type="button" :aria-pressed="expanded" aria-label="Make larger or smaller" title="Larger" @click="expanded = !expanded">
-            &#9974;
-          </button>
-          <button type="button" aria-label="Close the preview" title="Close" @click="props.controller.close()">
+          <div class="pv-nav">
+            <button type="button" aria-label="Previous item" title="Previous item" :disabled="itemIndex <= 0" @click="props.controller.previousItem()">
+              &#8249;
+            </button>
+            <button type="button" aria-label="Next item" title="Next item" :disabled="itemIndex < 0 || itemIndex >= items.length - 1" @click="props.controller.nextItem()">
+              &#8250;
+            </button>
+            <button type="button" :aria-pressed="showList" aria-label="List of recent things" title="List" @click="toggleList">
+              &#9776;
+            </button>
+            <button type="button" class="pv-expand" :aria-pressed="expanded" aria-label="Make larger or smaller" title="Larger" @click="expanded = !expanded">
+              &#9974;
+            </button>
+          </div>
+          <button type="button" class="pv-close" aria-label="Close the preview" title="Close" @click="props.controller.close()">
             &#10005;
           </button>
         </div>
@@ -204,17 +215,28 @@ function age(modified: number): string {
               <img :src="imageUrl" :alt="current.title" decoding="async">
             </div>
 
-            <div v-else-if="current.view === 'pages' && imageUrl" class="pv-pages">
+            <div v-else-if="current.view === 'pages' && imageUrl" class="pv-pages" :class="{ 'pv-thumbs-open': thumbsOpen }">
               <div class="pv-image">
                 <img :src="imageUrl" :alt="`${current.title}, page ${page + 1}`" decoding="async">
               </div>
               <div v-if="pageCount > 1" class="pv-pager">
                 <button type="button" aria-label="Previous page" :disabled="page <= 0" @click="props.controller.goToPage(page - 1)">
-                  &#8249; Previous
+                  &#8249;<span class="pv-pager-word"> Previous</span>
                 </button>
-                <span>{{ page + 1 }} / {{ pageCount }}</span>
+                <span class="pv-pager-count">{{ page + 1 }} / {{ pageCount }}</span>
+                <button
+                  v-if="thumbUrls.length > 1"
+                  type="button"
+                  class="pv-thumbs-toggle"
+                  :aria-pressed="thumbsOpen"
+                  aria-label="Show or hide the page thumbnails"
+                  title="Thumbnails"
+                  @click="thumbsChoice = !thumbsOpen"
+                >
+                  &#9638;
+                </button>
                 <button type="button" aria-label="Next page" :disabled="page >= pageCount - 1" @click="props.controller.goToPage(page + 1)">
-                  Next &#8250;
+                  <span class="pv-pager-word">Next </span>&#8250;
                 </button>
               </div>
               <div v-if="thumbUrls.length > 1" class="pv-thumbs" role="list">
@@ -349,12 +371,18 @@ function age(modified: number): string {
   color: var(--pv-dim);
   font-size: 12px;
 }
-.pv-actions {
+.pv-actions,
+.pv-nav {
   display: flex;
   gap: 2px;
 }
+.pv-thumbs-toggle,
+.pv-badge-short {
+  display: none;
+}
 .pv-actions button,
 .pv-pager button {
+  flex: none;
   min-width: 28px;
   height: 28px;
   padding: 0 6px;
@@ -562,6 +590,9 @@ button:focus-visible {
   font-size: 0.92em;
 }
 .pv-rich :deep(table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
 }
 .pv-rich :deep(th),
@@ -600,6 +631,139 @@ button:focus-visible {
 .pv-note {
   color: var(--pv-dim);
   font-size: 12px;
+}
+
+/*
+ * A small window (the face's default is 252 x 336 px): the panel is an overlay over the whole window, nothing runs out of it.
+ * Header: the title on its own line (one line, an ellipsis only when truly long) with close beside it; below, what it is, the
+ * checks as a mark, and the item buttons. The page image takes the full width, the pager is one slim row and the thumbnails
+ * are one scrolling strip that the pager's toggle shows or hides. "Open in app" and close stay in view.
+ */
+@media (max-width: 479px) {
+  .pv,
+  .pv-expanded {
+    inset: 0;
+    width: auto;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .pv-launch {
+    left: 8px;
+    bottom: 8px;
+  }
+  .pv-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 6px;
+    row-gap: 0;
+    padding: 6px 6px 4px 10px;
+  }
+  .pv-titles,
+  .pv-actions {
+    display: contents;
+  }
+  .pv-title {
+    grid-area: 1 / 1;
+    font-size: 13px;
+  }
+  .pv-close {
+    grid-area: 1 / 2;
+  }
+  .pv-sub {
+    grid-area: 2 / 1;
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pv-sub-size,
+  .pv-expand {
+    display: none;
+  }
+  .pv-nav {
+    grid-area: 2 / 2;
+  }
+  .pv-actions button {
+    min-width: 26px;
+    height: 26px;
+    padding: 0 4px;
+  }
+  .pv-badge {
+    margin-left: 4px;
+    padding: 0 5px;
+    font-size: 10px;
+  }
+  /* the words stay for a screen reader; the sighted reader sees the mark */
+  .pv-badge-long {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .pv-badge-short {
+    display: inline;
+  }
+  .pv-image {
+    padding: 4px;
+  }
+  .pv-pages .pv-image img {
+    width: 100%;
+    box-shadow: none;
+  }
+  .pv-pager {
+    gap: 6px;
+    padding: 4px 8px;
+  }
+  .pv-pager button {
+    min-width: 36px;
+    height: 28px;
+  }
+  .pv-pager-word {
+    display: none;
+  }
+  .pv-pager-count {
+    flex: 1;
+    text-align: center;
+  }
+  .pv-pager .pv-thumbs-toggle {
+    display: block;
+  }
+  .pv-thumbs {
+    display: none;
+    gap: 4px;
+    padding: 2px 8px 6px;
+    overscroll-behavior-x: contain;
+  }
+  .pv-thumbs-open .pv-thumbs {
+    display: flex;
+  }
+  .pv-thumb {
+    width: 52px;
+  }
+  .pv-text {
+    padding: 8px 10px;
+  }
+  .pv-frame {
+    min-height: 180px;
+  }
+  .pv-foot {
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .pv-primary {
+    flex: none;
+    height: 30px;
+  }
+  .pv-foot .pv-note {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 </style>
 
