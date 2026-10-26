@@ -530,7 +530,7 @@
   },
   {
    "id": "delete_permanent",
-   "name": "Delete for good (only when you say so)",
+   "name": "Delete for good (cannot be undone; only when you say so)",
    "group": "files",
    "class": "A",
    "phrases": [
@@ -579,7 +579,7 @@
   },
   {
    "id": "empty_bin",
-   "name": "Empty the Recycle Bin",
+   "name": "Empty the Recycle Bin (cannot be undone)",
    "group": "files",
    "class": "A",
    "phrases": [
@@ -605,7 +605,7 @@
   },
   {
    "id": "cleanup",
-   "name": "Clean up the PC (the fixed safe list only)",
+   "name": "Clean up the PC (the fixed safe list only; caches cannot be put back)",
    "group": "files",
    "class": "A",
    "phrases": [

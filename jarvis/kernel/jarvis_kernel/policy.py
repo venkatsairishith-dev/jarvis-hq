@@ -81,6 +81,8 @@ RULES = [
     ("media", "state", GREEN),
     ("diag", "processes|app_errors|crashes|services|disk|network|app_info|window_text|window_ocr|window_locate|battery", GREEN),
     ("repair", "restore", YELLOW_AUTO),
+    # Undo (D61): reversing one journaled step. Ordinary for the owner's own request (owner_direct, below); an agent's needs the owner's approval.
+    ("undo", "recycle|restore_bin|move|close_window|setting", YELLOW_APPROVAL),
     ("repair", "restart_app|edit_file|install", YELLOW_APPROVAL),
     # Caretaker (2026-10-17): the caretaker's own run summary goes into the audit chain. Its fixes reach main only as pull
     # requests the owner merges; a caretaker lab dispatch must pass caretaker_problems below.
@@ -418,7 +420,9 @@ ORDINARY_OPS = {"ui": {"launch", "focus", "click", "type", "key", "scroll", "cli
                 "file": {"mkdir", "create_file", "rename", "move", "copy", "zip", "unzip", "sort_downloads", "find", "reveal", "undo",
                          "trash", "delete_permanent", "cleanup", "empty_bin"},
                 "setting": {"dark_mode", "light_mode", "wallpaper", "lock", "dnd", "brightness", "night_light", "wifi", "bluetooth", "airplane"},
-                "clipboard": {"get", "set"}}
+                "clipboard": {"get", "set"},
+                # D61: reversing one journaled step (the node re-checks it; a file's own name does not make an undo consequential)
+                "undo": {"recycle", "restore_bin", "move", "close_window", "setting"}}
 CONSEQUENTIAL = re.compile(
     r"\b(pay|payment|buy|purchase|order|checkout|check out|place order|subscribe|donate|send|post|publish|share|tweet|reply|"
     r"comment|submit|confirm|delete|remove|erase|trash|wipe|format|uninstall|install|sign ?out|log ?out|sign ?in|log ?in|"
@@ -1341,15 +1345,15 @@ def _file_level(a: Action, op: str):
     if op == "delete_permanent":
         if "D:permanent" in grant and named_in_goal(p.get("path"), a.goal):
             return YELLOW_AUTO, "the owner named this item and said to delete it for good"
-        return YELLOW_APPROVAL, "a real deletion that the owner's words do not ask for: the owner approves it"
+        return YELLOW_APPROVAL, "a real deletion (it skips the Recycle Bin and cannot be undone) that the owner's words do not ask for: the owner approves it"
     if op == "cleanup":
         if "D:cleanup" in grant:
             return YELLOW_AUTO, "the owner asked to clean up: only the fixed safe cleanup list is removed (the node enforces it)"
-        return YELLOW_APPROVAL, "a cleanup the goal does not ask for: the owner approves it"
+        return YELLOW_APPROVAL, "a cleanup (the caches it removes cannot be put back) that the goal does not ask for: the owner approves it"
     if op == "empty_bin":
         if {"D:permanent", "D:cleanup", "D:bin"} & set(grant):
             return YELLOW_AUTO, "the owner asked to empty the Recycle Bin (or to clean up for good)"
-        return YELLOW_APPROVAL, "emptying the Recycle Bin is permanent and the goal does not ask for it: the owner approves it"
+        return YELLOW_APPROVAL, "emptying the Recycle Bin is permanent (it cannot be undone) and the goal does not ask for it: the owner approves it"
     return YELLOW_AUTO, "the owner asked for this directly, and the step is ordinary (class A): new names are numbered, nothing is overwritten"
 
 
@@ -1370,7 +1374,9 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         level, reason = YELLOW_AUTO, "the owner asked for this directly (ordinary PC or browser action)"
         words = clean_words(" ".join(_leaves(a.target, [], False) + _leaves(a.params, [], False)))
         key = _name((a.params or {}).get("text", "")) if op in ("key", "press") else ""
-        if tool == "file":
+        if tool == "undo":
+            pass                       # a file's name ("Pay slip.pdf") says nothing about the undo; the node re-checks the place, and secret paths and sensitive names are DENY below
+        elif tool == "file":
             level, reason = _file_level(a, op)
         elif tool == "setting":
             level, reason = _setting_level(a, op)
@@ -1414,7 +1420,7 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
     if ((WRITE_OPS.search(op) or (tool, op) == ("project", "apply_patch")) and level < RED
             and any(LOG_TAMPER.search(f) for f in forms)):
         level, reason = RED, "changes a system log or shell history (console only)"
-    if tool in ("ui", "browser", "pc"):
+    if tool in ("ui", "browser", "pc", "undo"):
         why = sensitive_target([_canon(lf)[0] for lf in leaves])
         if why:
             level, reason = DENY, f"UI or browser on a password manager, wallet or banking app ({why})"

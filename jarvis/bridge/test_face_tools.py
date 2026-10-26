@@ -418,13 +418,14 @@ def chat_stack(tmp_path, monkeypatch):
         from jarvis.bridge.ask import AskBroker
         from jarvis.bridge.cleaner import Cleaner, Env
         from jarvis.bridge.cleaner_ui import CleanerService
+        from jarvis.bridge.timeline import Timeline
         root = tmp_path / f"pc-{len(hosts)}"
         env = Env(home=root / "Users" / "me", user_temp=[root / "Temp"], windows=root / "Windows", local_appdata=root / "Users" / "me" / "AppData" / "Local",
                   appdata=root / "Users" / "me" / "AppData" / "Roaming", program_files=[root / "Program Files"], program_data=root / "ProgramData",
                   users_root=root / "Users")
         broker = AskBroker(home=env.home)
         server = F.build_server(tools(FakeClient()), None, F.DEFAULT_PORT, host, _Spoken(), _Memory(), outputs, profile,
-                                asker=broker, cleaner=CleanerService(Cleaner(env=env), broker), **kw)
+                                asker=broker, cleaner=CleanerService(Cleaner(env=env), broker), timeline=Timeline(lambda: None), **kw)
         return server
 
     async def stop():

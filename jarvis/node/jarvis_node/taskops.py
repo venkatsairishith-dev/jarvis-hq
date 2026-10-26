@@ -283,7 +283,7 @@ def _type_folder(name: str):
 
 def sort_downloads(p, ctx):
     folder, label = _folder(p["target"] or "Downloads", ctx)
-    moved, by_type, undo, skipped = 0, {}, [], {"recent": 0, "other": 0, "hidden": 0}
+    moved, by_type, undo, skipped, moves = 0, {}, [], {"recent": 0, "other": 0, "hidden": 0}, []
     for e in sorted(os.scandir(folder), key=lambda e: e.name.lower()):
         if moved >= MAX_SORT:
             break
@@ -306,6 +306,7 @@ def sort_downloads(p, ctx):
             undo.append(ctx.fo.create_folder(dest)["op_id"])
         name, _ = sf.free_name(dest, e.name)
         undo.append(ctx.fo.move(e.path, os.path.join(dest, name))["op_id"])
+        moves.append([e.name, sub, name])                       # D61: the flight recorder's undo puts each file back only while it is unchanged
         moved += 1
         by_type[sub] = by_type.get(sub, 0) + 1
     record = os.path.join(os.path.dirname(ctx.fo.journal_path), f"sort-undo-{int(ctx.now())}.json")
@@ -314,7 +315,7 @@ def sort_downloads(p, ctx):
             json.dump({"folder": label, "ops": undo}, fh)
     except OSError:
         pass
-    return {"ok": True, "folder": label, "moved": moved, "by_type": by_type, "skipped": skipped, "undo": undo[-50:], "note": UNDO_NOTE, "verified": True}
+    return {"ok": True, "folder": label, "moved": moved, "by_type": by_type, "skipped": skipped, "undo": undo[-50:], "moves": moves, "note": UNDO_NOTE, "verified": True}
 
 
 def _last_sort_record(ctx):

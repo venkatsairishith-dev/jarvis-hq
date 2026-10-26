@@ -39,6 +39,10 @@ BROWSER_OPS = {"open": "open", "read": "snapshot", "tabs": "snapshot", "whoami":
 DIAG_OPS = {"processes", "app_errors", "crashes", "services", "disk", "network", "app_info", "window_text",
             "window_ocr", "window_locate", "battery"}   # 2026-10-16: OCR of one window / where a label is in it (read-only, text stays local)
 REPAIR_OPS = {"restart_app", "edit_file", "restore", "install"}
+# Undo (D61): the owner's explicit "undo that" (or a click on Undo in the Timeline panel) reverses one step JARVIS did: move a new file to the Recycle Bin,
+# put a binned file back, move a moved file back, close a window JARVIS opened, set a setting back to its recorded value. The node checks the
+# thing is still what the journal recorded (size+mtime) and refuses otherwise; the kernel treats it like any ordinary owner-direct PC action.
+UNDO_OPS = {"recycle", "restore_bin", "move", "close_window", "setting"}
 URL = re.compile(r"^https?://[^\s\"'<>\\]{1,2000}$")
 SAFE_TEXT = re.compile(r"^[^\r\n\0]*$")
 KINDS = {
@@ -64,6 +68,7 @@ KINDS = {
     "diag": ("diag", None),
     "repair": ("repair", None),
     "media_state": ("media", "state"),
+    "pc_undo": ("undo", None),             # D61: reverse one journaled step (the node re-checks it; the policy rule is tool `undo`)
     # projectfix (2026-10-18): apply an owner-approved fix (a git patch from the lab) to an allowlisted project. Its own rule
     # project.apply_patch (YELLOW_APPROVAL): the approval binds the patch digest and its file list; the policy's secret-path
     # rule (DENY), agent-rule files and, when the project is JARVIS itself, its safety files (RED) see every file name. The
@@ -159,6 +164,10 @@ def _check_params(kind: str, params: dict):
             ok = re.match(r"^[A-Za-z0-9][A-Za-z0-9.+_-]{1,80}$", t) is not None and args == {}
     elif kind == "media_state":
         ok = keys == set()
+    elif kind == "pc_undo":
+        ok = (keys == {"agent", "op", "target", "path", "expect"} and NAME.match(str(params["agent"])) is not None and params["op"] in UNDO_OPS
+              and all(isinstance(params[k], str) and SAFE_TEXT.match(params[k]) is not None for k in ("target", "path", "expect"))
+              and 0 < len(params["target"]) <= 260 and len(params["path"]) <= 260 and len(params["expect"]) <= 64)
     elif kind == "pc_open":
         ok = (keys == {"agent", "op", "target", "path"} and NAME.match(str(params["agent"])) and params["op"] in PC_OPS
               and isinstance(params["target"], str) and 0 < len(params["target"].strip()) <= 80
@@ -245,6 +254,8 @@ def _action_for(kind: str, params: dict, lane: str, untrusted: bool):
         return Action("connector", "manage", params["connector"], {}, lane, untrusted)
     if kind == "pc_open":
         return Action("pc", params["op"], params["target"], {"path": params["path"]} if params["path"] else {}, lane, untrusted)
+    if kind == "pc_undo":                     # the target and the second path are part of it: an approval binds to exactly this reversal
+        return Action("undo", params["op"], params["target"], {k: params[k] for k in ("path", "expect") if params[k]}, lane, untrusted)
     if kind == "file_op":                     # the content of a new file is the owner's: the action binds its digest and size, not the words
         p = {k: params[k] for k in ("path", "dest") if params[k]}
         if params["text"]:

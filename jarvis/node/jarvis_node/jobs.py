@@ -437,7 +437,8 @@ def run_job(job: dict, projects: dict = None) -> dict:
     runtime.begin(job.get("id"))
     try:
         runtime.check()                       # cancelled between being handed over and starting: no side effect at all
-        result = _run_job(job, projects)
+        from . import journal
+        result = journal.around(job, lambda: _run_job(job, projects))      # D61: a before/after picture of the one window a changing job acts on
     except runtime.Cancelled:
         result = {}
     finally:
@@ -473,9 +474,18 @@ def _run_job(job: dict, projects: dict = None) -> dict:
                     before = {w["hwnd"] for w in windows.list_windows()}
                 except Exception:
                     before = None
+            from . import windowpick
+            windowpick.take_launched()                      # nothing left over from an earlier job
             out = pc_open(params)
             from .pcopen import take_path
-            return _verify_open(out, params, before=before, path=take_path())
+            res = _verify_open(out, params, before=before, path=take_path())
+            launched = windowpick.take_launched()
+            if launched and res.get("ok") and res.get("verified") == "verified" and not res.get("note"):
+                res["launched"] = launched[:3]          # D61: the window(s) this job opened (process, pid): the journal's undo closes exactly those
+            return res
+        if kind == "pc_undo":                    # D61: one journaled step reversed; the node re-checks it (undo.py)
+            from .undo import run as undo_run
+            return undo_run(params)
         if kind in ("file_op", "setting", "clipboard"):       # D54: simple tasks (taskops.py): the kernel authorized exactly this job
             from .taskops import run as task_run
             return task_run(kind, params)
