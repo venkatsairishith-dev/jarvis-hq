@@ -1207,3 +1207,48 @@ class ABusyProviderIsAskedAgainOnce(unittest.TestCase):
         text, seen = self._run(600)
         self.assertEqual(text, "local answered")
         self.assertEqual(seen, {"busy": 1, "local": 1})
+
+
+class ABusyModelIsReplacedByASiblingOfTheSameProvider(unittest.TestCase):
+    """2026-10-27: Dahl said 429 "this model is at concurrency capacity" (Retry-After 10) for an hour at a time while its other models were free."""
+
+    def test_the_provider_s_model_fallbacks_are_tried_before_the_next_provider(self):
+        seen = []
+
+        class Busy(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_POST(self):
+                req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                seen.append(req["model"])
+                if req["model"] == "big":
+                    body = b'{"error":{"message":"This model is at concurrency capacity."}}'
+                    self.send_response(429)
+                    self.send_header("Retry-After", "10")
+                else:
+                    body = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": req["model"] + " answered"}, "finish_reason": "stop"}]}).encode()
+                    self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+        sv = ThreadingHTTPServer(("127.0.0.1", 0), Busy)
+        threading.Thread(target=sv.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (sv.shutdown(), sv.server_close()))
+        provs = [{"name": "online", "enabled": True, "model_fallbacks": ["small", "other"], "base_url": f"http://127.0.0.1:{sv.server_address[1]}/v1"}]
+        gateway._cooldown.clear()
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 20, 60.0)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        req = urllib.request.Request(f"http://127.0.0.1:{gw.server_address[1]}/v1/chat/completions", method="POST", headers={"Content-Type": "application/json"},
+                                     data=json.dumps({"model": "big", "messages": [{"role": "user", "content": "hi"}]}).encode())
+        t0 = time.time()
+        with urllib.request.urlopen(req, timeout=20) as r:
+            text = json.loads(r.read())["choices"][0]["message"]["content"]
+        self.assertEqual(text, "small answered")
+        self.assertEqual(seen, ["big", "small"])
+        self.assertLess(time.time() - t0, 5)                 # no waiting for the Retry-After of 10 s

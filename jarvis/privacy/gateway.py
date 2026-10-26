@@ -940,7 +940,7 @@ def _note_upstream_error(name: str, e: "urllib.error.HTTPError") -> None:
         pass
 
 
-RETRY_AFTER_MAX_S = 8.0       # a 429 that says "try again in N seconds" with N up to this is waited out once on the same provider
+RETRY_AFTER_MAX_S = 10.0       # a 429 that says "try again in N seconds" with N up to this is waited out once on the same provider
 
 
 def _short_retry_after(e: "urllib.error.HTTPError") -> float | None:
@@ -955,6 +955,37 @@ def _short_retry_after(e: "urllib.error.HTTPError") -> float | None:
     except ValueError:
         wait = 3.0 if "concurrency" in str(getattr(e, "jv_msg", "")).lower() else -1.0
     return wait if 0 <= wait <= RETRY_AFTER_MAX_S else None
+
+
+def _open_upstream(prov: dict, req: "urllib.request.Request", timeout: float, with_model=None):
+    """urlopen with the two cheap second chances a busy provider gets before the request moves down the chain (2026-10-27, measured on the laptop: Dahl answered
+    429 "this model is at concurrency capacity" for an hour at a time, Retry-After 10, while its other models were free; the request then fell to Groq with its
+    daily tokens used up and to the local model, whose broken tool-call JSON answered 500, so the owner got no answer).
+      1. another model of the SAME provider, named in the provider's "model_fallbacks" (`with_model(name)` makes that request body), tried at once;
+      2. the same request again after the provider's Retry-After, when that is short (RETRY_AFTER_MAX_S).
+    Any other error, and a second 429, reaches the caller as the HTTPError it was."""
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        _note_upstream_error(prov["name"], e)
+        if e.code != 429:
+            raise
+        first = e
+    if with_model is not None:
+        for alt in prov.get("model_fallbacks") or []:
+            try:
+                alt_req = urllib.request.Request(req.full_url, data=with_model(alt), headers={k: v for k, v in req.header_items() if k.lower() != "content-length"}, method=req.get_method())
+                return urllib.request.urlopen(alt_req, timeout=timeout)
+            except urllib.error.HTTPError as e2:
+                _note_upstream_error(prov["name"] + "/" + str(alt), e2)
+                if e2.code != 429:
+                    raise
+    wait = _short_retry_after(first)
+    if wait is None:
+        raise first
+    first.close()
+    time.sleep(wait)
+    return urllib.request.urlopen(req, timeout=timeout)
 
 
 FIRST_BYTE_S = 30.0          # a streamed answer from a provider that is not the last link must begin within this many seconds
@@ -1203,16 +1234,8 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     # that ended with no answer at all after 183 s although another provider was free (normal first byte: GLM 1.2 s, p90 9 s).
                     first_byte = timeout if (last or not stream) else min(timeout, float(prov.get("first_byte_timeout_s") or FIRST_BYTE_S))
                     try:
-                        try:
-                            resp = urllib.request.urlopen(req, timeout=first_byte)
-                        except urllib.error.HTTPError as e0:
-                            _note_upstream_error(prov["name"], e0)
-                            wait = _short_retry_after(e0)
-                            if wait is None:
-                                raise
-                            e0.close()
-                            time.sleep(wait)                         # asked again once; a second 429 is handled like any other error below
-                            resp = urllib.request.urlopen(req, timeout=first_byte)
+                        resp = _open_upstream(prov, req, first_byte,
+                                              (lambda alt: json.dumps({**body, **extra, "model": alt}, ensure_ascii=False).encode("utf-8")) if body is not None else None)
                     except urllib.error.HTTPError as e:
                         if not hasattr(e, "jv_msg"):
                             _note_upstream_error(prov["name"], e)
