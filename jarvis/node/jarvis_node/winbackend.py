@@ -360,6 +360,7 @@ Add-Type -AssemblyName System.Windows.Forms, UIAutomationClient, UIAutomationTyp
 $AE = [System.Windows.Automation.AutomationElement]; $TS = [System.Windows.Automation.TreeScope]
 $PC = [System.Windows.Automation.PropertyCondition]; $CT = [System.Windows.Automation.ControlType]
 $path = $env:JARVIS_SAVE_PATH; $mainH = [int64]$h; $mypid = $p.Id
+Add-Type -Namespace JV -Name Msg -MemberDefinition '[System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, string l); [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, System.Text.StringBuilder l); [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, IntPtr l); [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, int m, IntPtr w, IntPtr l);'
 if (Test-Path -LiteralPath $path) { throw 'path exists' }                    # nothing is ever saved over an existing file
 function Get-Dialogs {
   $r = @()
@@ -370,11 +371,19 @@ function Get-Dialogs {
   $r
 }
 function Find-Button($dlg, $ids, $names) {
-  foreach ($b in $dlg.FindAll($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, $CT::Button)))) {
-    if ($ids -contains $b.Current.AutomationId -or $names -contains ($b.Current.Name -replace '&', '')) { return $b } }
+  foreach ($b in $dlg.FindAll($TS::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+    $c = $b.Current
+    $isButton = ($c.ControlType -eq $CT::Button) -or ($c.ClassName -eq 'Button') -or ($c.ClassName -eq 'CCPushButton')       # Windows 11: the common dialog's buttons are Panes of class Button; the Replace / Save changes prompts' are CCPushButton (AutomationIds CommandButton_6 Yes, CommandButton_7 No)
+    if ($isButton -and ($ids -contains $c.AutomationId -or $names -contains ($c.Name -replace '&', ''))) { return $b } }
   return $null
 }
-function Press($b) { $ip = $null; if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$ip)) { $ip.Invoke() } else { throw 'no save button' } }
+function Press($b) {
+  $ip = $null
+  if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$ip)) { $ip.Invoke(); return }
+  $bh = [int64]$b.Current.NativeWindowHandle                                            # no Invoke pattern: a real click message to that button's own window
+  if ($bh -eq 0) { throw 'no save button' }
+  [void][JV.Msg]::PostMessage([IntPtr]$bh, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)     # BM_CLICK, posted: a SendMessage would wait for the Replace prompt it opens and never return
+}
 $before = @(Get-Dialogs | ForEach-Object { [int64]$_.Current.NativeWindowHandle })
 [System.Windows.Forms.SendKeys]::SendWait('^+s')                              # Save As...
 $dlg = $null
@@ -384,13 +393,25 @@ for ($i = 0; $i -lt 40 -and -not $dlg; $i++) {
 }
 if (-not $dlg) { throw 'no save dialog' }
 $dlgH = [int64]$dlg.Current.NativeWindowHandle
-$edit = $dlg.FindFirst($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::AutomationIdProperty, '1001')))      # the file name box of the common dialog
-if (-not $edit) { $edit = @($dlg.FindAll($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, $CT::Edit))) | Where-Object { $_.Current.Name -match '(?i)file name' })[0] }
+# Windows 11 Notepad (checked live 2026-10-26): the common dialog sits inside the Notepad window; its file name box is AutomationId 1001, class 'Edit',
+# ControlType Pane with NO patterns at all (no ValuePattern), and a second element with the same id 1001 is the address bar (ToolbarWindow32).
+# So the box is the 1001 element whose class is Edit (or whose type is Edit), and when it has no ValuePattern its own window handle is written with WM_SETTEXT.
+$cands = @($dlg.FindAll($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::AutomationIdProperty, '1001'))))
+$edit = @($cands | Where-Object { $_.Current.ClassName -eq 'Edit' -or $_.Current.ControlType -eq $CT::Edit })[0]
+if (-not $edit) { $edit = @($dlg.FindAll($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, $CT::Edit))) | Where-Object { $_.Current.Name -match '(?i)file na' })[0] }
 if (-not $edit) { throw 'no file name box' }
 $vp = $null
-if (-not $edit.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$vp)) { throw 'no file name box' }
-$vp.SetValue($path)
-if ($vp.Current.Value -ne $path) { throw 'no file name box' }
+if ($edit.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$vp)) {
+  $vp.SetValue($path)
+  if ($vp.Current.Value -ne $path) { throw 'no file name box' }
+} else {
+  $eh = [int64]$edit.Current.NativeWindowHandle
+  if ($eh -eq 0) { throw 'no file name box' }
+  [void][JV.Msg]::SendMessage([IntPtr]$eh, 0x000C, [IntPtr]::Zero, $path)                  # WM_SETTEXT
+  $sb = New-Object System.Text.StringBuilder 1024
+  [void][JV.Msg]::SendMessage([IntPtr]$eh, 0x000D, [IntPtr]1024, $sb)                       # WM_GETTEXT: read back what the box holds
+  if ($sb.ToString() -ne $path) { throw 'no file name box' }
+}
 $save = Find-Button $dlg @('1') @('Save')
 if (-not $save) { throw 'no save button' }
 function Cancel-Save { $c = Find-Button $dlg @('2') @('Cancel'); if ($c) { try { Press $c } catch { } } }

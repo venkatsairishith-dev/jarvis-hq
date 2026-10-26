@@ -591,6 +591,12 @@ class GoalRunner:
         return plan
 
     async def _execute(self, goal: str, plan: GoalPlan) -> dict:
+        # A plan whose steps are ALL "operate this PC" is carried out by the local decider from the OWNER'S OWN words, not from the online planner's
+        # rewording of them: the planner only ever saw the gateway's redacted copy ("save it as <a .txt file> in Documents"), so the file name, the
+        # typed text and the folder the owner said were gone from the step goals, and the save was never planned (live 2026-10-26, Notepad write + save).
+        # The decider is local, so it may read what the owner said; it plans the several steps itself (the cap of the plan is unchanged).
+        if plan.steps and all(EXECUTORS[x["executor"]].entry == "" for x in plan.steps):
+            plan = GoalPlan(plan.summary, [{**plan.steps[0], "goal": self.utterance, "n": 1}], plan.provider)
         done: list[dict] = []
         self.planned_by, self.done_steps = ONLINE_PLAN, done
         last_rec: dict | None = None
