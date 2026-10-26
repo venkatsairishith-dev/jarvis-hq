@@ -368,7 +368,7 @@ def sensitive_target(texts, sites: dict = None) -> str:
 
 # Files that hold the rules, hooks and settings the agents run under: changing them is console-only (at least RED).
 SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".claude", "hooks.json", "providers.json", "policy.py", "audit.py", "store.py",
-                     "sensitive_sites.json",
+                     "sensitive_sites.json", "auto_click.json",
                      # Audit M10 (2026-10-18): the files that decide what leaves, what is checked and who may close a task. Names that
                      # only JARVIS has are RED wherever they are; the generic names are in JARVIS_SAFETY_FILES below.
                      "gitleaks_gate.py", "llm_proxy.py", "projectfix.py", "lab_runner.py", "control_auth.py",
@@ -1093,6 +1093,46 @@ def _jarvis_project(a: Action) -> bool:
     return False
 
 
+# On-screen permission buttons JARVIS clicks itself (owner, 2026-10-25, twice: "JARVIS can click for permission on screen"). The list is
+# config/auto_click.json: [{"process": regex, "element": regex}], both must match the WHOLE name. It only waives the SOFT words of CONSEQUENTIAL
+# (accept, agree, allow, grant, authorize, confirm); a click whose words also name money, deletion, sending, installing or signing in stays the owner's.
+AUTO_CLICK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "auto_click.json")
+HARD_CONSEQUENCE = re.compile(
+    r"\b(pay|payment|buy|purchase|order|checkout|check out|place order|subscribe|donate|send|post|publish|share|tweet|reply|comment|submit|delete|"
+    r"remove|erase|trash|wipe|format|uninstall|install|sign ?out|log ?out|sign ?in|log ?in|unsubscribe|transfer|withdraw|deposit|upload|download|"
+    r"save card|add card|change password|close account|deactivate|password|admin|administrator)\b", re.I)
+_auto_click_cache: dict = {"mtime": None, "rules": []}
+
+
+def _auto_click_rules() -> list:
+    try:
+        mtime = os.path.getmtime(AUTO_CLICK_FILE)
+    except OSError:
+        return []
+    if _auto_click_cache["mtime"] != mtime:
+        rules = []
+        try:
+            with open(AUTO_CLICK_FILE, encoding="utf-8") as f:
+                for r in json.load(f).get("rules", []):
+                    if isinstance(r, dict) and r.get("process") and r.get("element"):
+                        rules.append((re.compile(str(r["process"]), re.I), re.compile(str(r["element"]), re.I)))
+        except (OSError, ValueError, re.error, AttributeError):
+            rules = []
+        _auto_click_cache.update(mtime=mtime, rules=rules)
+    return _auto_click_cache["rules"]
+
+
+def auto_click_ok(target, words: str) -> bool:
+    """True when a ui.click on 'process|element' is a button the owner listed for JARVIS to click by itself, and nothing hard is in its words."""
+    if HARD_CONSEQUENCE.search(words):
+        return False
+    proc, sep, element = str(target).partition("|")
+    if not sep:
+        return False
+    proc, element = proc.strip(), element.strip()
+    return any(p.fullmatch(proc) and e.fullmatch(element) for p, e in _auto_click_rules())
+
+
 def decide(a: Action, suggested=None, protected=None) -> Decision:
     """Return the final decision. `suggested` is a model's opinion: it can only raise the level."""
     tool, op = _name(a.tool), _name(a.op)
@@ -1103,7 +1143,10 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         words = " ".join(_leaves(a.target, [], False) + _leaves(a.params, [], False))
         key = _name((a.params or {}).get("text", "")) if op in ("key", "press") else ""
         if CONSEQUENTIAL.search(words):
-            level, reason = YELLOW_APPROVAL, "this could pay, send, delete, install, sign in or out, or accept something: the owner approves it"
+            if tool == "ui" and op == "click" and auto_click_ok(a.target, words):
+                reason = "the owner listed this on-screen permission button in config/auto_click.json: JARVIS clicks it itself"
+            else:
+                level, reason = YELLOW_APPROVAL, "this could pay, send, delete, install, sign in or out, or accept something: the owner approves it"
         elif key in RISKY_KEYS or (key == "enter" and (MESSAGING_APPS.search(words) or (tool == "browser" and "search" not in words.lower()))):
             level, reason = YELLOW_APPROVAL, "this key can close, delete or send: the owner approves it"
     if tool == "lab" and op == "task" and _name(a.lane) != "public" and level < YELLOW_APPROVAL:

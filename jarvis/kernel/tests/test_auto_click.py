@@ -1,0 +1,49 @@
+"""Owner 2026-10-25: JARVIS clicks listed on-screen permission buttons itself; everything risky still waits for the PIN."""
+import json
+
+from jarvis_kernel import policy
+
+
+def decide(target, text="", owner_direct=True, tool="ui", op="click"):
+    a = policy.Action(tool=tool, op=op, target=target, params={"text": text} if text else {}, lane="private", owner_direct=owner_direct)
+    return policy.decide(a)
+
+
+def with_rules(tmp_path, monkeypatch, rules):
+    f = tmp_path / "auto_click.json"
+    f.write_text(json.dumps({"rules": rules}), encoding="utf-8")
+    monkeypatch.setattr(policy, "AUTO_CLICK_FILE", str(f))
+    policy._auto_click_cache.update(mtime=None, rules=[])
+
+
+def test_a_listed_permission_button_is_clicked_without_the_pin(tmp_path, monkeypatch):
+    with_rules(tmp_path, monkeypatch, [{"process": "chrome", "element": "Allow"}])
+    assert decide("chrome|Allow").level == policy.YELLOW_AUTO
+
+
+def test_an_unlisted_allow_button_still_needs_the_owner(tmp_path, monkeypatch):
+    with_rules(tmp_path, monkeypatch, [{"process": "chrome", "element": "Allow"}])
+    assert decide("notepad|Allow").level == policy.YELLOW_APPROVAL
+    assert decide("chrome|Allow all").level == policy.YELLOW_APPROVAL      # the whole name must match
+
+
+def test_hard_words_are_never_waived(tmp_path, monkeypatch):
+    with_rules(tmp_path, monkeypatch, [{"process": "chrome", "element": ".*"}])
+    for el in ("Allow and install", "Accept and pay", "Confirm delete", "Sign in", "Allow admin access"):
+        assert decide(f"chrome|{el}").level == policy.YELLOW_APPROVAL, el
+
+
+def test_only_the_owners_own_request_and_only_a_click(tmp_path, monkeypatch):
+    with_rules(tmp_path, monkeypatch, [{"process": "chrome", "element": "Allow"}])
+    assert decide("chrome|Allow", owner_direct=False).level == policy.YELLOW_APPROVAL      # an agent's click
+    assert decide("chrome|Allow", op="type").level == policy.YELLOW_APPROVAL
+
+
+def test_no_file_means_nothing_is_waived(tmp_path, monkeypatch):
+    monkeypatch.setattr(policy, "AUTO_CLICK_FILE", str(tmp_path / "missing.json"))
+    policy._auto_click_cache.update(mtime=None, rules=[])
+    assert decide("chrome|Allow").level == policy.YELLOW_APPROVAL
+
+
+def test_the_rules_file_is_console_only():
+    assert "auto_click.json" in policy.SAFETY_COMPONENTS
