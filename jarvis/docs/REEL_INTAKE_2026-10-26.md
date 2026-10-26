@@ -14,7 +14,7 @@ Captions of 14 saved Instagram reels, judged against JARVIS rules (local-only ru
 | 8 | Google ARTEMIS (Android) | checked (github.com/google/artemis) | NOT NOW. Android phones only; Apache-2.0. Useful pattern: fast observe-act profile vs planner/operator/checker profile, same shape as D65. Revisit if the owner wants phone control. |
 | 10 | KittenTTS 2 | checked (github.com/KittenML/KittenTTS) | Skip. No Telugu (Hindi yes), v2 voice cloning needs ~6 GB RAM and a separate community licence. |
 | 11 | PrismML 27B at 5.9 GB | caption only; commenters report ~0.2 tok/s | Skip. Does not fit the 2 GB VRAM budget. |
-| 1 | NVIDIA Kumo Tabular | caption only | Not relevant to JARVIS. |
+| 1 | NVIDIA Kumo Tabular | checked (github.com/NVIDIA/structured-data-models, build.nvidia.com model card, 2026-10-26) | PARKED, real but not needed yet. Weights OpenMDW-1.1, code Apache-2.0, 28M-215M params, predicts a class or number from labelled rows with no training. Repo page gives no hardware figures and its examples use CUDA; NVIDIA's #1 TabArena ranking is its own, independent reproduction pending, pretraining data/recipe not released. Possible later use: predict from JARVIS's own run logs (which provider/model/strategy succeeds, task duration) for auto routing, but only if a plain baseline (rules / logistic regression) is beaten on held-out rows. |
 | 3 | Cindy | not checked | Skip (competing agent; unverified). |
 | 4, 5 | CDA, Octopus-SI-OS | caption only | Skip (no usable detail). |
 | 12 | Agency Agents (200+ prompt personas) | caption only | Skip for JARVIS: the face prompt budget is ~3.8 KB, and these are coding-assistant prompts. |
