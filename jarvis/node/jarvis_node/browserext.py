@@ -27,6 +27,7 @@ import urllib.parse
 from . import runtime
 from .sensitive import ai_chat_site
 from .paths import local_result_dir, sweep_local
+from . import connectclick
 
 CHROME = next((p for p in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
@@ -231,6 +232,7 @@ class Session:
 
     def __init__(self, profile: dict, session_factory=None, isolated: bool = False):
         self.profile = profile
+        self._factory, self._isolated = session_factory, isolated
         env = runtime.safe_environ()                      # no GitHub/git credential variables by inheritance (completion E)
         tok = token_file(profile["dir"])
         if tok:
@@ -252,8 +254,16 @@ class Session:
             self.s = session_factory(argv, env=env)
 
     def __enter__(self):
+        self._watch = None
         try:
             self.s.start()
+            # The extension shows its "allow this connection" page in Chrome when the FIRST tool is called (the handshake itself needs no approval, seen live
+            # 2026-10-26) and waits for a click. JARVIS answers that page itself (connectclick.py: only the extension's own connect page, only for the
+            # client "jarvis", only the row of THIS launch's relay port), for the whole session, unless a token file already skips the page. Not for a test
+            # double (session_factory) and not for the isolated headless Chrome: they show no page.
+            if not (self._factory is not None or self._isolated or token_file(self.profile["dir"])):
+                self._watch = connectclick.Approver(limit_s=75.0)
+                self._watch.__enter__()
             self.s.handshake(timeout=60)                # the owner may have to allow the connection in the extension
         except BaseException:
             # `with` never calls __exit__ when __enter__ fails: without this the MCP server process (and its connection
@@ -263,6 +273,8 @@ class Session:
         return self
 
     def __exit__(self, *a):
+        if getattr(self, "_watch", None) is not None:
+            self._watch.__exit__(None, None, None)
         self.s.close()
         import shutil
         for _ in range(5):                              # page console logs are page content: not kept (retry: Windows file locks)

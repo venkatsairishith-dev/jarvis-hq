@@ -93,8 +93,9 @@ def run(env: LocalEnv, driver: Any, args: Any, sleep: Callable[[float], None] = 
         return f"{env.size(path)} bytes"
 
     def tool_server() -> str:
-        r = drivers.McpClient(args.mcp_url).call("jarvis_ready")
-        assert "ready" in r, f"jarvis_ready answered {str(r)[:80]}"
+        # jarvis_ready is not in the chat profile's list (the default); jarvis_waiting is, reads nothing private and says "ok" (seen live 2026-10-26)
+        r = drivers.McpClient(args.mcp_url).call("jarvis_waiting")
+        assert r.get("ok") is True and "approvals" in r, f"jarvis_waiting answered {str(r)[:80]}"
         return r.get("message", "")[:80]
 
     def face() -> str:

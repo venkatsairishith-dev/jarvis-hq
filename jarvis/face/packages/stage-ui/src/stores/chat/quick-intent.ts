@@ -94,7 +94,9 @@ export function parseQuickResult(result: unknown): QuickResult {
   }
   if (!data || typeof data !== 'object' || Array.isArray(data))
     return { handled: false }
-  const d = data as Record<string, unknown>
+  // The tool server wraps a plugin entry's answer as {ok, result: {...}} (seen live 2026-10-26: handled was never read, so every plain command went to a model).
+  const outer = data as Record<string, unknown>
+  const d = (outer.result && typeof outer.result === 'object' && !Array.isArray(outer.result) ? outer.result : outer) as Record<string, unknown>
   const reply = typeof d.reply === 'string' ? d.reply.replace(/\s+/g, ' ').trim().slice(0, 600) : ''
   if (d.handled !== true || !reply)
     return { handled: false }

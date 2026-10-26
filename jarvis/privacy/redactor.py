@@ -104,6 +104,17 @@ def sentences(text: str):
 CUE_WORDS = {"password", "passwords", "passcode", "passphrase", "pass", "pwd", "pw", "pin", "otp", "code", "key", "token",
              "login", "username", "user", "id", "vpn", "atm", "wifi", "wi-fi", "account", "number", "card", "cvv", "secret",
              "admin", "root", "ssh", "api"}
+# Names of the apps and places the owner asks JARVIS to use, and the plain verbs around them. The deep model marked "Notepad" as a person, "WordPad" as a
+# username and the whole of "Open Notepad" as an API key (live 2026-10-26, /redact on the running gateway, the Jev verifier not reachable), so the chat model
+# never saw the request and the reply carried "[USERNAME 19]". A span made ONLY of these words is not a secret and is left alone. Nothing else is relaxed:
+# "Notepad hunter2" still has a word that is not here.
+BENIGN_WORDS = {
+    "notepad", "wordpad", "calculator", "calc", "paint", "mspaint", "chrome", "google", "edge", "microsoft", "firefox", "word", "excel", "powerpoint",
+    "outlook", "teams", "spotify", "youtube", "vlc", "explorer", "file", "files", "settings", "control", "panel", "task", "manager", "code", "vscode",
+    "visual", "studio", "whatsapp", "telegram", "discord", "zoom", "slack", "snipping", "tool", "clock", "calendar", "mail", "photos", "maps", "camera",
+    "terminal", "powershell", "cmd", "command", "prompt", "windows", "documents", "downloads", "desktop", "pictures", "videos", "music", "notepad++",
+    "open", "launch", "start", "close", "run", "play", "show", "use", "type", "write", "save", "the", "my", "app", "a", "an", "in", "on", "to", "and", "or",
+    "editor", "text", "browser", "folder", "window"}
 _TRAILING = ".,;:?)\"'"
 
 
@@ -131,6 +142,8 @@ def model_candidates(model, sentence: str):
             continue                             # secrets this short are caught by the cue patterns ("pin 123")
         words = sentence[s:e].lower().split()
         if words and all(w.strip(_TRAILING) in CUE_WORDS for w in words):
+            continue
+        if words and all(w.strip(_TRAILING) in BENIGN_WORDS for w in words):       # "Notepad", "Open Notepad", "WordPad": app names, not people or keys
             continue
         if any(o[1] == s and o[2] == e for o in out):
             continue

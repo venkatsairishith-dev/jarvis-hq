@@ -144,6 +144,8 @@ describe('the router answer', () => {
     const body = { handled: true, status: 'completed', reply: 'Opened Notepad.', label: 'Opening notepad' }
     expect(parseQuickResult({ structuredContent: body })).toEqual({ handled: true, reply: 'Opened Notepad.', status: 'completed', label: 'Opening notepad' })
     expect(parseQuickResult({ content: [{ type: 'text', text: JSON.stringify(body) }] }).reply).toBe('Opened Notepad.')
+    // the tool server wraps a plugin's answer as { ok, result } (live 2026-10-26)
+    expect(parseQuickResult({ content: [{ type: 'text', text: JSON.stringify({ ok: true, result: body }) }] }).reply).toBe('Opened Notepad.')
   })
 
   it.each([

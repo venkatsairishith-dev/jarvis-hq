@@ -69,10 +69,16 @@
  "panels": {
   "_confirm_on_laptop": "Both panels are windows or panes of the face. Put what identifies each (process and/or title_contains) here after looking at it on screen; until then a goal that needs the panel is INVALID, never a pass.",
   "cleaner": {
-   "title_contains": ""
+   "process": "jarvis",
+   "title_contains": "JARVIS",
+   "contains": ["Clean up this PC", "Safe rows are ticked"],
+   "_note": "checked live 2026-10-26: the cleaner is a pane inside the face's JARVIS window; its text appears in that window's UI Automation tree"
   },
   "preview": {
-   "title_contains": ""
+   "process": "jarvis",
+   "title_contains": "JARVIS",
+   "contains": ["List of recent things", "Make larger or smaller"],
+   "_note": "checked live 2026-10-26: the Preview panel is a pane inside the JARVIS window; the launcher button 'Open the preview panel' is always there and does not count"
   }
  },
  "probes": {

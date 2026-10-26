@@ -1,0 +1,46 @@
+93 timing lines; 10 chat turns
+
+Chat turns (face marks, ms since the message was sent)
+  ack                        n=6    p50     1 ms   p90     1 ms   max     1 ms   target p50 100 ms  OK
+  model_first                n=10   p50    2.9 s   p90    6.5 s   max   40.5 s
+  first_token                n=10   p50    2.9 s   p90    6.5 s   max   40.5 s   target p50 2.0 s  OVER
+  tool_start                 n=6    p50   31.0 s   p90   51.6 s   max   76.4 s
+  tool_end                   n=6    p50   32.2 s   p90   52.2 s   max   77.0 s
+  final_token                n=10   p50    8.5 s   p90   82.0 s   max   96.1 s
+  done                       n=9    p50   10.1 s   p90   82.0 s   max   96.1 s   target p50 15.0 s, p90 30.0 s  OVER
+  first_token_no_tool        n=4    p50    1.5 s   p90    6.5 s   max    6.5 s
+  first_token_after_tools    n=6    p50    4.4 s   p90    4.8 s   max   40.5 s
+  done_with_tools            n=6    p50   39.9 s   p90   82.0 s   max   96.1 s
+  done_chat_only             n=3    p50    3.1 s   p90    7.4 s   max    7.4 s
+  model rounds per turn      n=10   p50     2   p90     3   max     3
+  model decides the tool     n=6    p50   26.2 s   p90   36.3 s   max   47.3 s
+  tool desktop__whats_on_screen n=4    p50    1.7 s   p90    1.7 s   max    1.7 s
+  tool get_weather           n=3    p50   616 ms   p90   623 ms   max   623 ms
+  tool jarvis_recall         n=1    p50    1.2 s   p90    1.2 s   max    1.2 s
+
+Model requests (gateway lines)
+ dahl
+  redact_ms                  n=15   p50   418 ms   p90    5.3 s   max   37.2 s
+  queue_ms                   n=15   p50     0 ms   p90     0 ms   max     0 ms
+  first_ms                   n=15   p50    2.3 s   p90    6.1 s   max    6.5 s
+  total_ms                   n=15   p50    7.3 s   p90   51.6 s   max   76.4 s
+  req_bytes                  n=15   p50    16041 B  p90    19414 B
+  redaction cache hits/request p50 50, misses p50 1
+ dahl / after tool
+  redact_ms                  n=6    p50   740 ms   p90    3.6 s   max    5.3 s
+  queue_ms                   n=6    p50     0 ms   p90     0 ms   max     0 ms
+  first_ms                   n=6    p50    1.2 s   p90    4.4 s   max    6.5 s
+  total_ms                   n=6    p50    5.5 s   p90   39.4 s   max   43.9 s
+  req_bytes                  n=6    p50    17238 B  p90    19414 B
+  redaction cache hits/request p50 53, misses p50 3
+ dahl / after user
+  redact_ms                  n=9    p50   246 ms   p90   465 ms   max   37.2 s
+  queue_ms                   n=9    p50     0 ms   p90     0 ms   max     0 ms
+  first_ms                   n=9    p50    2.4 s   p90    4.6 s   max    6.1 s
+  total_ms                   n=9    p50    7.3 s   p90   51.6 s   max   76.4 s
+  req_bytes                  n=9    p50    16039 B  p90    16041 B
+  redaction cache hits/request p50 50, misses p50 1
+
+Gateway /health
+  dahl: p50 redact_ms 418, queue_ms 0, first_ms 2278, total_ms 7324 | p90 redact_ms 5327, queue_ms 0, first_ms 6125, total_ms 51606
+  redaction cache: {'hits': 776, 'misses': 77, 'uncacheable': 0, 'size': 77}

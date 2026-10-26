@@ -205,6 +205,16 @@ def _panel_open(c: EvalCtx, s: dict) -> CheckResult:
     cfg = c.panels.get(s["panel"]) or {}
     if not (cfg.get("process") or cfg.get("title_contains") or cfg.get("title_regex")):
         return CheckResult("panel_open", False, f"panel {s['panel']} has no window description in goals.json", "panel_not_configured")
+    if cfg.get("contains") or cfg.get("contains_any"):
+        # The face's panels are panes INSIDE its one window (checked live 2026-10-26: no new window appears when the cleaner or the preview opens), so
+        # what shows that a panel is open is its own text in that window's UI Automation tree (a launcher button's label does not count).
+        spec = {k: cfg[k] for k in ("process", "title_contains", "title_regex") if cfg.get(k)}
+        for w in [w for w in c.env.windows() if _match(w, spec)]:
+            text = w.title + chr(10) + c.env.window_text(w)
+            need, any_of = list(cfg.get("contains", [])), list(cfg.get("contains_any", []))
+            if not _has_all(text, need) and (not any_of or len(_has_all(text, any_of)) < len(any_of)):
+                return CheckResult("panel_open", True, f"{w.process}: {w.title[:40]} shows the panel")
+        return CheckResult("panel_open", False, f"no {cfg.get('process', '')} window shows {cfg.get('contains') or cfg.get('contains_any')}", "panel_not_found")
     new = _new_windows(c, cfg)
     return CheckResult("panel_open", bool(new), new[0].title[:80] if new else f"no new window like {cfg}", "" if new else "panel_not_found")
 

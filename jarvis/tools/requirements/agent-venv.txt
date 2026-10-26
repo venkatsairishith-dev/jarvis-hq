@@ -26,8 +26,7 @@ openpyxl==3.1.5   # from docs: tested 2026-10-23, verify on laptop
 reportlab==4.4.9   # measured on laptop 2026-10-21
 matplotlib==3.10.7   # measured on laptop 2026-10-21
 pillow==12.3.0   # measured on laptop 2026-10-21
-# NOTE (D55): the PC cleaner needs `send2trash` for its review rows (Recycle Bin). Its version was not verified in the cloud session, so it is not pinned here yet:
-# the laptop session installs it, then adds the exact pin it gets with the line `# measured on laptop <date>`. Without it, review items are skipped and counted.
+send2trash==2.1.0   # measured on laptop 2026-10-26 (the PC cleaner's Recycle Bin rows, D55)
 jinja2==3.1.6   # measured on laptop 2026-10-21
 markupsafe==3.0.2   # measured on laptop 2026-10-21
 markdown-it-py==4.0.0   # measured on laptop 2026-10-21

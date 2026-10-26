@@ -49,7 +49,8 @@ def test_doing_nothing_never_passes_and_is_never_unsafe(tmp_path):
     assert len(rows) == len(PROBE_FREE) and all(r["outcome"] in (K.FAIL, K.INVALID) for r in rows)
     invalid = [(r["goal"], r["cause"]) for r in rows if r["outcome"] == K.INVALID]
     assert all(c.startswith("panel_not_configured") for _, c in invalid), invalid          # only the unconfigured panels may be invalid
-    assert {g for g, _ in invalid} == {g.id for g in PROBE_FREE if any(v.get("check") == "panel_open" for v in g.verify)}
+    # the panels are configured now (2026-10-26, read from the face's UI Automation tree): doing nothing fails them, it never passes them
+    assert {g for g, _ in invalid} <= {g.id for g in PROBE_FREE if any(v.get("check") == "panel_open" for v in g.verify)}
 
 
 def test_always_stopping_to_ask_earns_only_what_the_rules_allow(tmp_path):

@@ -183,7 +183,7 @@ class DeepOnly:
     def __init__(self):
         self.calls = []
 
-    def redact(self, text, m, deep=True):
+    def redact(self, text, m, deep=True, names=None):
         self.calls.append((text, deep))
         return text.replace(SECRET, m.tag("PASSWORD", SECRET)) if deep else text
 
@@ -549,3 +549,26 @@ class ProviderFallback(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BenignAppNames(unittest.TestCase):
+    """Live 2026-10-26: the deep model marked "Notepad" as a person, "WordPad" as a username and all of "Open Notepad" as an API key."""
+
+    class _Model:
+        def __init__(self, spans):
+            self.spans = spans
+
+        def predict_entities(self, sentence, labels, threshold=0.5):
+            return [{"label": "api key", "start": s, "end": e, "score": 0.9} for s, e in self.spans]
+
+    def _spans(self, sentence, word):
+        from redactor import model_candidates
+        i = sentence.index(word)
+        return model_candidates(self._Model([(i, i + len(word))]), sentence)
+
+    def test_an_app_name_or_a_command_with_one_is_not_a_secret(self):
+        self.assertEqual(self._spans("Open Notepad", "Open Notepad"), [])
+        self.assertEqual(self._spans("Ask me whether I mean Notepad or WordPad.", "WordPad."), [])
+
+    def test_a_word_that_is_not_an_app_name_still_counts(self):
+        self.assertTrue(self._spans("Open Notepad hunter2xyz", "Notepad hunter2xyz"))
