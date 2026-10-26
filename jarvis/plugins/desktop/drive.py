@@ -21,7 +21,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from jarvis.plugins._shared import loopback_http, screen_text, specialists
+from jarvis.plugins._shared import loopback_http, screen_text, specialists, translate
 
 from . import composite
 
@@ -283,6 +283,7 @@ def propose_local(task: str, obs: dict, history: list, post: Callable[[dict], st
     shown = screen_text.release_local_for_task(str(obs.get("text") or ""), url.rsplit("/chat/completions", 1)[0])
     view = {"windows": [{"app": w.get("process"), "title": w.get("title")} for w in (obs.get("windows") or [])[:8]],
             "dialogs": obs.get("dialogs") or [], "text": shown.text[:OBS_CHARS] if shown.allowed else "(window text not shown)"}
+    task = translate.english(task, source="drive")                   # D58: the local model reads English only (the goal is already English from the entry hook)
     user = "Task: " + " ".join(task.split())[:600] + "\nDone so far: " + json.dumps(history[-8:]) + "\nScreen: " + json.dumps(view)[:OBS_CHARS * 2]
     last: Exception | None = None
     for alias in spec.aliases:

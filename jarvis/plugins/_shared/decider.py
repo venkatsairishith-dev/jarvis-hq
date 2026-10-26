@@ -370,6 +370,8 @@ def _alias(kind: str, cfg: dict) -> str:
 
 
 def _body(kind: str, question: str, options: list, context: str, alias: str) -> dict:
+    from jarvis.plugins._shared import translate
+    question = translate.english(question, source="decider")      # D58: the local model reads English only
     labels = [str(o) for o in options][:40]
     user = (f"Task: {HELP[kind]}\n<<<\n{question[:600]}\n>>>\n" + (f"Context: <<<\n{context[:400]}\n>>>\n" if context else "") +
             "Options:\n" + "\n".join(f"- {o}" for o in labels))

@@ -104,7 +104,7 @@ def test_do_goal_plans_in_english(monkeypatch):
         def __init__(self, hands):
             pass
 
-        async def run(self, goal, flag):
+        async def run(self, goal, flag, **kw):
             seen.append(goal)
             return {"status": "done", "steps": []}
     monkeypatch.setattr(D.goal_mod, "GoalRunner", FakeRunner)
