@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import contextvars
 import threading
 import time
 import urllib.error
@@ -38,6 +39,12 @@ STATES = ("inspecting", "diagnosing", "researching", "waiting_for_permission", "
 
 class DesktopError(Exception):
     pass
+
+
+# D54 (task-scoped consent): the owner's OWN goal, as he said it. Every PC job of a task carries it (body["goal"]) and the kernel computes what the task
+# may do without the PIN from these words alone (policy.grant_from_goal). A plan, a screen, a page or a file can never put words here: only the entry
+# that received the owner's goal sets it, and the plan steps an online model wrote are not the goal.
+OWNER_GOAL: "contextvars.ContextVar[str]" = contextvars.ContextVar("owner_goal", default="")
 
 
 class NotSent(Exception):
@@ -173,6 +180,7 @@ class Pc:
         self.holder: Callable[[], "dict | None"] | None = None
         self._seq = 0
         self.on_approval: Callable[[str, str], None] | None = None     # ("pending"|"resolved", approval id): the owning operation tracks it
+        self.goal = ""                                                 # the owner's goal for this task (OWNER_GOAL); sent with every job request
         self.pending_approval: str | None = None
         self.submitting = False
         self._cancel_lock = threading.Lock()
@@ -236,6 +244,8 @@ class Pc:
                 if not holds:
                     self.fence_reason = "this task no longer holds the PC lock (another task took it over, or it was recovered)"
                     raise NotSent(self.fence_reason)
+            if self.goal and "goal" not in body:
+                body = dict(body, goal=self.goal[:1000])
             self.submitting = True        # while a request is on the wire the kernel may create a job whose id is not yet known
             hf = self.holder
             if hf is not None:

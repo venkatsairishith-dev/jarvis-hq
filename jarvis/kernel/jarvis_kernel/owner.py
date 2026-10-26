@@ -654,7 +654,7 @@ class Owner:
         with what it actually observed. Ordinary actions run at once (owner_direct); one that needs the owner's approval
         comes back as {"status": "needs_approval", "approval_id"}: approve it with the PIN, then send the same request again
         with that approval_id (it is bound to exactly this action and used once)."""
-        from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, action_for
+        from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, FILE_OPS, SETTING_OPS, CLIPBOARD_OPS, FILE_TEXT_MAX, action_for
         from .store import Killed
         holder, dup = self._pc_holder(body.get("holder"))
         if dup is not None:                                           # the same request delivered twice: the job it made, no second one
@@ -673,7 +673,25 @@ class Owner:
         elif op == "project_check":
             kind, params = "project_check", {"project": target}
         elif op == "ui" and body.get("action") in UI_OPS:
-            kind, params = "ui_action", {"agent": "owner", "op": body["action"], "target": s("target", 120), "text": s("text", 500)}
+            kind, params = "ui_action", {"agent": "owner", "op": body["action"], "target": s("target", 120),
+                                         "text": s("text", 4000 if body["action"] == "type_focused" else 500)}
+            if body.get("goal"):                 # D54: the owner's own goal (task-scoped consent); the kernel computes the grant from these words
+                params["goal"] = s("goal", 1000)
+            if body.get("ctx") is not None:      # the dialog text this click or key is aimed at ("" and "(unreadable dialog)" are asked about)
+                params["ctx"] = s("ctx", 600)
+        elif op == "file" and body.get("action") in FILE_OPS:        # D54: files in the known folders; the owner's own words ride along (the grant)
+            kind, params = "file_op", {"agent": "owner", "op": body["action"], "target": s("target", 120), "path": s("path", 200), "dest": s("dest", 200),
+                                       "text": s("text", FILE_TEXT_MAX)}
+            if body.get("goal"):
+                params["goal"] = s("goal", 1000)
+        elif op == "setting" and body.get("action") in SETTING_OPS:
+            kind, params = "setting", {"agent": "owner", "op": body["action"], "text": s("text", 300)}
+            if body.get("goal"):
+                params["goal"] = s("goal", 1000)
+        elif op == "clipboard" and body.get("action") in CLIPBOARD_OPS:
+            kind, params = "clipboard", {"agent": "owner", "op": body["action"], "text": s("text", 4000)}
+            if body.get("goal"):
+                params["goal"] = s("goal", 1000)
         elif op == "browser" and body.get("action") in BROWSER_OPS:
             kind, params = "browser_ext", {"profile": s("profile", 32).lower() or "default", "op": body["action"], "url": s("url", 2000),
                                            "target": s("target", 300), "text": s("text", 500)}
@@ -691,7 +709,7 @@ class Owner:
                              ") or media")
         aid = str(body.get("approval_id") or "")[:40] or None
         try:
-            if aid is None and kind in ("ui_action", "browser_ext", "diag", "repair", "media_state"):
+            if aid is None and kind in ("ui_action", "browser_ext", "diag", "repair", "media_state", "file_op", "setting", "clipboard"):
                 from .jobs import _check_params
                 _check_params(kind, params)
                 a = action_for(kind, params, "private", untrusted=False, owner_direct=True)

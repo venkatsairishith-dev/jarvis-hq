@@ -281,9 +281,23 @@ class FaceTools:
             sent = await self.client_factory().delegate(task, source=SOURCE)
         except self.console.BridgeError as exc:
             return self._fail(exc)
-        return self._out({"ok": True, "command_id": sent["id"], "state": sent["state"],
-                          "message": "JARVIS has the task. Risky steps wait for the owner's PIN in the JARVIS console. "
-                                     "Ask for the result with jarvis_task_result."})
+        out = {"ok": True, "command_id": sent["id"], "state": sent["state"],
+               "message": "JARVIS has the task. Risky steps wait for the owner's PIN in the JARVIS console. "
+                          "Ask for the result with jarvis_task_result."}
+        better = self.better_tool(task)
+        if better:                                   # D54b: a small chat model picked jarvis_do for a question another tool answers directly
+            out["hint"] = f"For a request like this, {better} answers directly next time."
+        return self._out(out)
+
+    @staticmethod
+    def better_tool(task: str) -> str:
+        """The shared decision engine's RULES only (instant, no model): the tool that fits a screen, document, weather or web question, else ''. A hint, never a block."""
+        try:
+            from jarvis.plugins._shared import decider
+            r = decider.route(str(task or ""), use_model=False)
+        except Exception:  # noqa: BLE001 - a hint is optional
+            return ""
+        return r["tool"] if r["intent"] in ("screen_read", "doc_read", "weather", "web_search") and r["confidence"] >= 0.9 else ""
 
     async def task_result(self, command_id: str = "") -> dict:
         try:

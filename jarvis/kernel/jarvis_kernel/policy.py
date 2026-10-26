@@ -48,10 +48,15 @@ RULES = [
     ("models", "prefer", YELLOW_AUTO),
     ("ui", "snapshot|list_windows", GREEN),
     ("ui", "screenshot", YELLOW_AUTO),     # the owner's own side at once; a lab agent needs approval (raised in decide below)
-    ("ui", "launch|focus|click|type|key|scroll|click_at|minimize|maximize|restore", YELLOW_APPROVAL),
+    # D54 (2026-10-26): save_as (Save As + file name + Save, verified on disk) and type_focused (paste into the focused editor) are the same kind of
+    # action as type and key: approval for an agent, at once for the owner's own request (ORDINARY_OPS below).
+    ("ui", "launch|focus|click|type|key|scroll|click_at|minimize|maximize|restore|save_as|type_focused|drag|close", YELLOW_APPROVAL),
+    ("file", "mkdir|create_file|rename|move|copy|zip|unzip|sort_downloads|find|reveal|undo|trash|delete_permanent|cleanup|empty_bin", YELLOW_APPROVAL),
+    ("setting", "dark_mode|light_mode|wallpaper|lock|dnd|brightness|night_light|wifi|bluetooth|airplane", YELLOW_APPROVAL),
+    ("clipboard", "get|set", YELLOW_APPROVAL),
     # Opening things on the laptop (2026-10-10): the owner's own agent (private lane) at once; a lab agent (public
     # lane) only with the owner's approval and never a folder listing (raised in decide below).
-    ("pc", "open_app|open_folder|open_file|list_folder", YELLOW_AUTO),
+    ("pc", "open_app|open_folder|open_file|list_folder|open_code", YELLOW_AUTO),      # open_code (D54): VS Code on a known folder only (the node checks)
     # Outcome tasks (2026-10-10): agents record and update their own tasks; dispatching work to the lab is automatic
     # (the dispatch itself refuses private keys and, from the private lane, needs an explicit "may be shared").
     ("task", "create|update|get|dispatch", YELLOW_AUTO),
@@ -74,7 +79,7 @@ RULES = [
     # owner's side. Repairs change the PC: approval, except putting a backed-up file back (the safe direction).
     ("browser", "play", YELLOW_AUTO),
     ("media", "state", GREEN),
-    ("diag", "processes|app_errors|crashes|services|disk|network|app_info|window_text|window_ocr|window_locate", GREEN),
+    ("diag", "processes|app_errors|crashes|services|disk|network|app_info|window_text|window_ocr|window_locate|battery", GREEN),
     ("repair", "restore", YELLOW_AUTO),
     ("repair", "restart_app|edit_file|install", YELLOW_APPROVAL),
     # Caretaker (2026-10-17): the caretaker's own run summary goes into the audit chain. Its fixes reach main only as pull
@@ -407,8 +412,13 @@ WRITE_OPS = re.compile(r"write|edit|delete|remove|rename|move|commit|truncate|ov
 SECRET_COMPONENTS = {".jarvis", ".jarvis-kernel", "secrets.env", "keys.json", "protected.json", "id_ed25519", "id_rsa"}
 # What the owner may ask for directly without an approval each time (owner_direct): looking, opening, clicking, typing,
 # keys, scrolling. A click or key whose words could pay, send, delete, install, sign out or accept is raised back to approval.
-ORDINARY_OPS = {"ui": {"launch", "focus", "click", "type", "key", "scroll", "click_at", "minimize", "maximize", "restore"},
-                "browser": {"click", "type", "select", "press"}}
+ORDINARY_OPS = {"ui": {"launch", "focus", "click", "type", "key", "scroll", "click_at", "minimize", "maximize", "restore", "save_as", "type_focused", "drag", "close"},
+                "browser": {"click", "type", "select", "press"},
+                # D54, simple tasks of any kind: files, a few reversible settings, the clipboard (the node does exactly these and nothing else)
+                "file": {"mkdir", "create_file", "rename", "move", "copy", "zip", "unzip", "sort_downloads", "find", "reveal", "undo",
+                         "trash", "delete_permanent", "cleanup", "empty_bin"},
+                "setting": {"dark_mode", "light_mode", "wallpaper", "lock", "dnd", "brightness", "night_light", "wifi", "bluetooth", "airplane"},
+                "clipboard": {"get", "set"}}
 CONSEQUENTIAL = re.compile(
     r"\b(pay|payment|buy|purchase|order|checkout|check out|place order|subscribe|donate|send|post|publish|share|tweet|reply|"
     r"comment|submit|confirm|delete|remove|erase|trash|wipe|format|uninstall|install|sign ?out|log ?out|sign ?in|log ?in|"
@@ -944,10 +954,18 @@ class Action:
     # for the owner to know what he approves when the bound params hold only its digest (project_apply: the patch itself).
     # It must be text the digest already binds, supplied by the same server code that built the params.
     card: dict = field(default_factory=dict)
+    # D54, task-scoped implied consent. goal = the owner's OWN words for the task this action belongs to (set by Owner.pc from the request of the entry
+    # that received them; never from a screen, a page, a file or a plan). What the task may do without the PIN is computed from these words alone
+    # (grant_from_goal). ctx = the visible text of the dialog this click or key is aimed at, read from the screen by the observing side: it is
+    # evidence, so it can only ADD risk (a word like "delete" in it makes the step class C) and never remove any; None means the action is not aimed at
+    # a dialog. Both are part of the digest, so an approval is for exactly this action in exactly this task.
+    goal: str = ""
+    ctx: "str | None" = None
 
     def digest(self) -> str:
         parts = [_name(self.tool), _name(self.op), self.target, self.params, self.lane] + (["owner_direct"] if self.owner_direct else []) \
-            + (["requester", self.requester] if self.requester else [])
+            + (["requester", self.requester] if self.requester else []) + (["goal", self.goal] if self.goal else []) \
+            + (["ctx", self.ctx] if self.ctx is not None else [])
         blob = json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str)
         return hashlib.sha256(blob.encode()).hexdigest()
 
@@ -1012,6 +1030,10 @@ class Action:
             out["requester"] = clean(self.requester, "requester")
         if self.card and limit > 500:            # approval cards only, never the audit chain
             out["card"] = clean(self.card, "card")
+        if self.goal:                            # the owner's words are his own content: the card shows them, the audit chain only their size
+            out["goal"] = clean(self.goal, "goal") if limit > 500 else f"[{len(self.goal)} characters]"
+        if self.ctx is not None:
+            out["dialog"] = clean(self.ctx, "dialog") if limit > 500 else f"[{len(self.ctx)} characters]"
         found = rep.result()
         if found:                                # only when something was found: an ordinary card is unchanged
             out["invisible"] = found
@@ -1133,6 +1155,196 @@ def auto_click_ok(target, words: str) -> bool:
     return any(p.fullmatch(proc) and e.fullmatch(element) for p, e in _auto_click_rules())
 
 
+# ======================================================================================================================================
+# D54 (2026-10-26, owner): "It should work like that for ANY kind of task." TASK-SCOPED IMPLIED CONSENT.
+# When the owner gives JARVIS a goal, every ordinary step needed to finish it is covered by that request: open, click, type, select, scroll, navigate,
+# create a NEW file or folder, SAVE what the task made, press Next / OK / Continue / Open / Save / Yes / Allow on the dialogs the task itself causes,
+# in any app. He does not list buttons or goals in advance. Three effect classes, decided here and only here:
+#   A  ordinary and local: covered by the goal, no PIN.
+#   B  changes or overwrites something that already existed, runs a program / script / terminal command, changes system or app settings:
+#      covered ONLY when the owner's goal words say so (grant_from_goal: "replace it", "run it", "change the setting"); otherwise the PIN.
+#   C  money, sending anything to other people, deleting / uninstalling / formatting, credentials / sign-in / 2FA, admin / UAC, accepting terms,
+#      installing: ALWAYS the PIN, whatever the goal says. (The owner-editable config/auto_click.json stays as an EXTRA allow list for the
+#      soft "accept / allow" buttons he names himself; it never waives the hard words.)
+# The grant comes from the owner's goal text only. Text read from a screen, a page, a file or a model's plan is evidence: it can raise the class of
+# a step (a dialog that says "delete" is class C) and can never lower it or widen the grant. A dialog that cannot be read, or that belongs to an app the
+# goal did not open or name, is asked about, never pressed.
+# ======================================================================================================================================
+C_NEVER = re.compile(HARD_CONSEQUENCE.pattern[:-3] + r"|two-?factor|2fa|otp|one-?time|verification code|security code|passcode|passkey|credentials?|"
+                     r"uac|user account control|make changes to your device|run as administrator)\b", re.I)
+C_TERMS = re.compile(r"\b(accept|agree|terms|licen[sc]e|eula)\b", re.I)
+SOFT_OK = re.compile(r"\b(allow|grant|authori[sz]e|confirm)\b", re.I)
+# class B words -> the tag of the grant that covers them
+B_WORDS = (("overwrite", re.compile(r"\b(replace|overwrite|over-?write|replace all)\b", re.I)),
+           ("run", re.compile(r"\b(run|execute|run as)\b", re.I)),
+           ("settings", re.compile(r"\b(apply|restart|reboot|shut ?down|enable|disable|turn (?:on|off)|toggle|reset|settings?)\b", re.I)),
+           ("modify", re.compile(r"\b(rename|move to|cut)\b", re.I)))
+TERMINALS = re.compile(r"^(windowsterminal|wt|cmd|conhost|powershell|pwsh|bash|wsl|mintty|alacritty|putty|terminal|git-?bash)$", re.I)
+CONTENT_KEYS = {"ui": {"type": ("text",), "type_focused": ("text",), "save_as": ("folder", "file", "digest")}}
+GRANT_WORDS = (("overwrite", re.compile(r"\b(replace|overwrite|over-?write|save over|write over|replace it)\b", re.I)),
+               ("run", re.compile(r"\b(run|execute)\s+(it|this|that|the|my|them|those|these)\b|\b(and|then)\s+(run|execute)\b|\brun it\b", re.I)),
+               ("settings", re.compile(r"\b(change|set|turn on|turn off|switch on|switch off|enable|disable|toggle|adjust|configure|reset|restart|apply)\b"
+                                       r"[^.;]{0,40}\b(settings?|options?|preferences?|mode|brightness|volume|theme|wallpaper|resolution|it|them)\b", re.I)),
+               ("modify", re.compile(r"\b(rename|move|cut)\b[^.;]{0,40}\b(file|folder|document|existing|it)\b", re.I)),
+               # D54: deletion follows his words. "delete / remove / trash X" = the Recycle Bin (reversible); only "permanently / for good / erase /
+               # shift-delete" is a real deletion; "clean up my PC / free up space" is the broad cleanup (a fixed safe list); the bin on its own is permanent.
+               ("trash", re.compile(r"\b(delete|remove|trash|bin|get rid of|throw away|throw out)\b", re.I)),
+               ("permanent", re.compile(r"\b(permanently|for good|forever|erase|shift[- ]?delete|irreversibly|without (?:the )?(?:recycle )?bin)\b", re.I)),
+               ("cleanup", re.compile(r"\b(clean ?up|clean (?:my|the|this) (?:pc|computer|laptop|machine)|clean everything|free up (?:some )?(?:disk )?space|free (?:some )?(?:disk )?space|"
+                                      r"make (?:some )?(?:disk )?space)\b", re.I)),
+               ("bin", re.compile(r"\bempty (?:the |my )?(?:recycle )?bin\b|\bclear (?:the |my )?(?:recycle )?bin\b", re.I)),
+               ("network", re.compile(r"\b(turn|switch|toggle|put)\s+(?:on|off|the)?\s*(?:my |the )?(wi-?fi|wifi|bluetooth|airplane|aeroplane|flight)\b|"
+                                      r"\b(enable|disable)\s+(?:my |the )?(wi-?fi|wifi|bluetooth)\b|\b(airplane|flight) mode\b", re.I)))
+APP_ALIASES = {"notepad": ("notepad",), "wordpad": ("wordpad",), "paint": ("mspaint", "paintstudio.view", "applicationframehost"),
+               "calculator": ("calculator", "calculatorapp", "applicationframehost", "calc"), "calc": ("calculator", "calculatorapp", "applicationframehost", "calc"),
+               "word": ("winword",), "excel": ("excel",), "powerpoint": ("powerpnt",), "vs code": ("code",), "vscode": ("code",),
+               "visual studio code": ("code",), "chrome": ("chrome",), "edge": ("msedge",), "firefox": ("firefox",), "browser": ("chrome", "msedge", "firefox"),
+               "explorer": ("explorer",), "file explorer": ("explorer",), "folder": ("explorer",), "settings": ("systemsettings", "applicationframehost"),
+               "spotify": ("spotify",), "vlc": ("vlc",), "html": ("chrome", "msedge", "firefox"), "form": ("chrome", "msedge", "firefox")}
+
+
+def grant_from_goal(goal: str) -> tuple:
+    """What a task may do without the PIN, from the owner's goal words ONLY: always "A", plus the B tags his words name ("replace the file" ->
+    B:overwrite, "run it" -> B:run, "change the setting" -> B:settings, "rename it" -> B:modify). Never C. Deterministic and word-based on purpose."""
+    g = " ".join(str(goal or "").split())[:1000]
+    return ("A",) + tuple((f"D:{tag}" if tag in ("trash", "permanent", "cleanup", "bin") else f"B:{tag}") for tag, rx in GRANT_WORDS if rx.search(g))
+
+
+def app_named(proc: str, goal: str) -> bool:
+    """Does the owner's goal open or name this process's app? (the process name as a word, or a known name for it)"""
+    p = re.sub(r"\.exe$", "", str(proc or "").strip().lower())
+    g = " ".join(str(goal or "").lower().split())
+    if not p or not g:
+        return False
+    if re.search(r"(?<![a-z0-9])" + re.escape(p) + r"(?![a-z0-9])", g):
+        return True
+    return any(alias in g and p in procs for alias, procs in APP_ALIASES.items())
+
+
+def dialog_readable(ctx) -> bool:
+    return isinstance(ctx, str) and len(ctx.strip()) >= 3 and not ctx.strip().startswith("(unreadable")
+
+
+def effect_of(a: Action) -> tuple:
+    """(class "A" | "B" | "C", grant tag a B step needs or "", why) for a ui action, by the rules above. The words scanned: the target, the parameters
+    that are not the owner's content (typed text and the file name of a save are content), and the dialog text."""
+    tool, op = _name(a.tool), _name(a.op)
+    proc, _, element = str(a.target).partition("|")
+    skip = CONTENT_KEYS.get(tool, {}).get(op, ())
+    params = {k: v for k, v in (a.params or {}).items() if k not in skip}
+    words = " ".join(_leaves(a.target, [], False) + _leaves(params, [], False))
+    inner = " ".join([element] + _leaves(params, [], False))
+    ctx = a.ctx if isinstance(a.ctx, str) else ""
+    if C_NEVER.search(words) or C_NEVER.search(ctx):
+        return "C", "", "it could pay, send, delete, install, sign in or out, use a code or password, or need admin rights"
+    if C_TERMS.search(words) or C_TERMS.search(ctx):
+        return "C", "", "it would accept terms"
+    if op in ("type", "type_focused", "key") and TERMINALS.match(proc.strip()):
+        return "B", "run", "it would type into a terminal, which runs commands"
+    for tag, rx in B_WORDS:
+        if rx.search(inner) or rx.search(ctx):
+            return "B", tag, f"it changes or replaces something that was already there, or runs or configures something ({tag})"
+    return "A", "", ""
+
+
+def _ui_level(a: Action, op: str):
+    """The decision for an owner-direct ui action under the general rule. Returns (level, reason)."""
+    cls, tag, why = effect_of(a)
+    proc = str(a.target).partition("|")[0]
+    words = " ".join(_leaves(a.target, [], False) + _leaves(a.params, [], False))
+    if cls == "C":
+        if op == "click" and C_TERMS.search(words + " " + (a.ctx or "")) and not C_NEVER.search(words + " " + (a.ctx or "")) and auto_click_ok(a.target, words):
+            return YELLOW_AUTO, "the owner listed this on-screen permission button in config/auto_click.json: JARVIS clicks it itself"
+        return YELLOW_APPROVAL, f"class C, always the owner's: {why}"
+    if cls == "B":
+        if f"B:{tag}" in grant_from_goal(a.goal):
+            return YELLOW_AUTO, f"class B, covered by the owner's own words in the goal ({tag})"
+        return YELLOW_APPROVAL, f"class B, not covered by the goal: {why}; the owner approves it"
+    if a.ctx is not None and not (dialog_readable(a.ctx) and app_named(proc, a.goal)):
+        if op == "click" and auto_click_ok(a.target, words):
+            return YELLOW_AUTO, "the owner listed this on-screen button in config/auto_click.json: JARVIS clicks it itself"
+        return YELLOW_APPROVAL, "a dialog that cannot be read, or that is not from an app the goal opened or named: the owner decides"
+    if SOFT_OK.search(" ".join([str(a.target).partition("|")[2]] + _leaves(a.params, [], False))) and not (
+            a.ctx is not None and dialog_readable(a.ctx) and app_named(proc, a.goal)):
+        if op == "click" and auto_click_ok(a.target, words):
+            return YELLOW_AUTO, "the owner listed this on-screen permission button in config/auto_click.json: JARVIS clicks it itself"
+        return YELLOW_APPROVAL, "a permission button with no readable dialog from the task's own app: the owner approves it"
+    return YELLOW_AUTO, "the owner asked for this directly, and the step is ordinary (class A)"
+
+
+# ---- D54 simple tasks: files (the delete family follows the owner's words), a few reversible settings, the clipboard -------------------------------
+PROTECTED_ROOTS = re.compile(r"^(windows|system32|syswow64|winsxs|program files(?: \(x86\))?|programdata|users|\$recycle\.bin|system volume information|recovery|boot|"
+                             r"jarvis-secrets|\.jarvis|\.jarvis-kernel|vault|memory|audit|hq|jarvis|jarvis-hq|appdata|registry|etc|usr|bin|sbin|root|proc|sys)$", re.I)
+DRIVE_OR_ABS = re.compile(r"^(?:[A-Za-z]:|[\\/]|~)|\.\.|[*?<>|\0\r\n]")
+
+
+def named_in_goal(name: str, goal: str) -> bool:
+    """Does the owner's goal NAME this item (its file name or, for a name of 3+ letters, its name without the extension, as a whole word)?"""
+    n = str(name or "").strip().strip("\\/").rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
+    g = " ".join(str(goal or "").lower().split())
+    if len(n) < 3 or not g:
+        return False
+    stem = n.rsplit(".", 1)[0] if "." in n.strip(".") else n
+    # the whole name always counts; the name without its extension only when it is distinctive (6+ letters, or a digit, hyphen or underscore in it):
+    # "delete old stuff" must not name old.txt
+    distinct = len(stem) >= 6 or re.search(r"[0-9_-]", stem)
+    for cand in {n, stem} if distinct else {n}:
+        if re.search(r"(?<![a-z0-9])" + re.escape(cand) + r"(?![a-z0-9])", g):
+            return True
+    return False
+
+
+def protected_target(a: Action) -> str:
+    """Why this file action may never be done whatever anyone says ("" when it may): a path that leaves the known folders (a drive letter, .., a wildcard),
+    a system folder, the user profile root, a drive root, the secrets or JARVIS's own code / vault / memory / audit folders."""
+    p = a.params or {}
+    for v in (a.target, p.get("path"), p.get("dest")):
+        v = str(v or "")
+        if not v:
+            continue
+        if DRIVE_OR_ABS.search(v):
+            return "a path outside the known folders, or a wildcard"
+        parts = [x for x in re.split(r"[\\/]+", v) if x]
+        if parts and PROTECTED_ROOTS.match(parts[0]):
+            return "a system, profile, secrets or JARVIS folder"
+        if any(x.lower() in JARVIS_DIRS or x.lower() in {"jarvis-secrets", ".git", ".ssh", ".gnupg", ".aws"} for x in parts):
+            return "a system, profile, secrets or JARVIS folder"
+    return ""
+
+
+def _file_level(a: Action, op: str):
+    why = protected_target(a)
+    if why:
+        return DENY, f"always blocked: {why}"
+    grant = grant_from_goal(a.goal)
+    p = a.params or {}
+    if op == "trash":
+        if "D:trash" in grant and named_in_goal(p.get("path"), a.goal):
+            return YELLOW_AUTO, "the owner named this item and asked to delete it: it goes to the Recycle Bin (reversible)"
+        return YELLOW_APPROVAL, "deleting an item the goal does not name: the owner approves it"
+    if op == "delete_permanent":
+        if "D:permanent" in grant and named_in_goal(p.get("path"), a.goal):
+            return YELLOW_AUTO, "the owner named this item and said to delete it for good"
+        return YELLOW_APPROVAL, "a real deletion that the owner's words do not ask for: the owner approves it"
+    if op == "cleanup":
+        if "D:cleanup" in grant:
+            return YELLOW_AUTO, "the owner asked to clean up: only the fixed safe cleanup list is removed (the node enforces it)"
+        return YELLOW_APPROVAL, "a cleanup the goal does not ask for: the owner approves it"
+    if op == "empty_bin":
+        if {"D:permanent", "D:cleanup", "D:bin"} & set(grant):
+            return YELLOW_AUTO, "the owner asked to empty the Recycle Bin (or to clean up for good)"
+        return YELLOW_APPROVAL, "emptying the Recycle Bin is permanent and the goal does not ask for it: the owner approves it"
+    return YELLOW_AUTO, "the owner asked for this directly, and the step is ordinary (class A): new names are numbered, nothing is overwritten"
+
+
+def _setting_level(a: Action, op: str):
+    if op in ("wifi", "bluetooth", "airplane"):
+        if "B:network" in grant_from_goal(a.goal):
+            return YELLOW_AUTO, "the owner asked for this radio change in his own words"
+        return YELLOW_APPROVAL, "turning the Wi-Fi, Bluetooth or flight mode off can cut the connection JARVIS needs: the owner approves it"
+    return YELLOW_AUTO, "a small reversible setting the owner asked for (class A)"
+
+
 def decide(a: Action, suggested=None, protected=None) -> Decision:
     """Return the final decision. `suggested` is a model's opinion: it can only raise the level."""
     tool, op = _name(a.tool), _name(a.op)
@@ -1142,13 +1354,25 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         level, reason = YELLOW_AUTO, "the owner asked for this directly (ordinary PC or browser action)"
         words = " ".join(_leaves(a.target, [], False) + _leaves(a.params, [], False))
         key = _name((a.params or {}).get("text", "")) if op in ("key", "press") else ""
-        if CONSEQUENTIAL.search(words):
+        if tool == "file":
+            level, reason = _file_level(a, op)
+        elif tool == "setting":
+            level, reason = _setting_level(a, op)
+        elif tool == "clipboard":
+            level, reason = YELLOW_AUTO, "the owner asked for this directly (the clipboard)"
+        elif tool == "ui":                                      # the general rule: effect classes A / B / C with the task's grant (D54)
+            level, reason = _ui_level(a, op)
+            if level == YELLOW_AUTO and (key in RISKY_KEYS or (key == "enter" and MESSAGING_APPS.search(words))):
+                level, reason = YELLOW_APPROVAL, "this key can close, delete or send: the owner approves it"
+        elif CONSEQUENTIAL.search(words):
             if tool == "ui" and op == "click" and auto_click_ok(a.target, words):
                 reason = "the owner listed this on-screen permission button in config/auto_click.json: JARVIS clicks it itself"
             else:
                 level, reason = YELLOW_APPROVAL, "this could pay, send, delete, install, sign in or out, or accept something: the owner approves it"
         elif key in RISKY_KEYS or (key == "enter" and (MESSAGING_APPS.search(words) or (tool == "browser" and "search" not in words.lower()))):
             level, reason = YELLOW_APPROVAL, "this key can close, delete or send: the owner approves it"
+    if tool == "file" and protected_target(a):          # system folders, the profile root, drive roots, secrets, JARVIS's own folders, wildcards: nobody, ever
+        level, reason = DENY, f"always blocked: {protected_target(a)}"
     if tool == "lab" and op == "task" and _name(a.lane) != "public" and level < YELLOW_APPROVAL:
         level, reason = YELLOW_APPROVAL, "the owner's side handing work to a lab agent shares it with public-lane models: the owner approves exactly this text"
     if tool in ("diag", "media") and _name(a.lane) == "public" and level < YELLOW_APPROVAL:
@@ -1160,7 +1384,7 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         forms += [f for j in ("", "/") for f in _canon(j.join(group))]
     if _is_secret_path(forms):
         level, reason = DENY, "touches a secrets path"
-    if tool in ("fs", "config", "git", "delete", "service", "repair") and WRITE_OPS.search(op) and level < RED:
+    if tool in ("fs", "config", "git", "delete", "service", "repair", "file") and WRITE_OPS.search(op) and level < RED:
         pieces = {c.strip("'\"()[]{},;:<>") for f in forms for c in re.split(r"[/\s]+", f)}
         if pieces & SAFETY_COMPONENTS or (pieces & JARVIS_SAFETY_FILES and pieces & JARVIS_DIRS):
             level, reason = RED, "changes the rules, hooks or settings the agents run under (console only)"
