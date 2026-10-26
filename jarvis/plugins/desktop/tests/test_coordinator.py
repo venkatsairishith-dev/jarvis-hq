@@ -224,8 +224,9 @@ def test_round3_resolver_rules():
     assert [s["tool"] for s in p.steps] == ["play_media"]
     assert D.resolve_site("127.0.0.1:8799") == "http://127.0.0.1:8799" and D.resolve_site("google maps").startswith("https://maps")
     # a report or slides asked for in the request is kept even if the model left it out
+    # D64: slides asked for in the request are made on a free web generator (web_task), whatever the model planned
     p = D.validate(json.dumps({"steps": [{"tool": "research", "query": "solar"}]}), six, "make a presentation about solar energy")
-    assert p.steps[0]["deliverable"] == "presentation"
+    assert p.steps[0]["tool"] == "web_task" and p.steps[0]["topic"] == "solar energy"
 
 
 def test_media_toggle_keeps_the_owners_intent():
@@ -286,7 +287,8 @@ def test_plan_completion_rules_for_measured_omissions():
                    six, "create a pdf and open it")
     assert p.status == "clarify" and "about" in p.question
     p = D.validate('{"steps": [{"tool": "research", "query": "solar panels"}]}', six, "make a pdf report about solar panels and open it")
-    assert p.status == "ok" and p.steps[0]["deliverable"] == "report"
+    assert p.status == "ok" and p.steps[0]["tool"] == "research" and p.steps[0]["deliverable"] == "none"      # D64: no PDF is built by JARVIS itself
+    assert any("report file" in x for x in p.problems)
     # A12 regression (dev run 15:43): "put ... on youtube" is music, not typing into an app called youtube
     p = D.validate('{"steps": [{"tool": "play_media", "query": "Ilaiyaraaja music"}]}', six, "put on some Ilaiyaraaja music on youtube")
     assert [s["tool"] for s in p.steps] == ["play_media"]
@@ -310,13 +312,13 @@ def test_follow_ups_refer_to_what_the_last_task_produced(tmp_path):
     p = D.decide("show me that again", PROFILES, last={"url": "https://mail.google.com/", "profile": "Profile 2"}, post=lambda b: 1 / 0)
     assert p.steps[0]["tool"] == "open_website" and p.steps[0]["profile"] == "Profile 2"
     assert D.decide("open it", PROFILES, last=None, post=lambda b: 1 / 0).status == "clarify"
-    # research that should be opened: the research step opens it; a separate open step is dropped
+    # a deck that should be opened: the web_task step opens it; a separate open step is dropped (D64: the deck is made on a free web generator)
     p = D.validate(json.dumps({"steps": [{"tool": "research", "query": "solar panels"}, {"tool": "open_file", "name": "slides"}]}),
                    PROFILES, "research solar panels, make slides and open them")
-    assert [s["tool"] for s in p.steps] == ["research"] and p.steps[0]["open_after"] and p.steps[0]["deliverable"] == "presentation"
+    assert [s["tool"] for s in p.steps] == ["web_task"] and p.steps[0]["open_after"] and p.steps[0]["topic"]
     p = D.validate(json.dumps({"steps": [{"tool": "research", "query": "solar panels"}, {"tool": "browser", "action": "read"}]}),
                    PROFILES, "research solar panels, make slides, open them and explain what you found")
-    assert [s["tool"] for s in p.steps] == ["research"]
+    assert [s["tool"] for s in p.steps] == ["web_task"]
     # the coordinator remembers only checked results, and only recent ones
     tasks = tmp_path / "tasks"
     tasks.mkdir()

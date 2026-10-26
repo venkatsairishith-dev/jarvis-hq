@@ -1433,6 +1433,39 @@ class DesktopPlugin(PluginBase):
             seen, why = opened_window(stem, before)
             return {"ok": True, "opened": seen or step.get("path"), "opened_verified": bool(seen), "open_note": why or None}
 
+        def pc_raw(body, timeout=120.0, what=""):
+            """D64: the job runner of the browser agent. The same operation, lock, Stop and journal wiring as `pc`, but the node job's state and result come back
+            as they are (the agent reads the page text itself, once, from the local file the node left)."""
+            op = coord.current_op()
+            own = coord.begin("agent-step", f"step-{body.get('op', 'job')}-{secrets.token_hex(2)}") if op is None else None
+            op = op or own
+            p = op.attach_pc(core.Pc(on_state=core.set_activity))
+            active.append(p)
+            try:
+                op.touch("browser agent")
+                res = run_pc(p, body, timeout, what)
+                jc.note_job(res.get("job"))
+                return res
+            finally:
+                active.remove(p)
+                op.detach_pc(p)
+                if own is not None:
+                    own.entry_exit()
+
+        def web_task(step):
+            """D64: a deck (slides, a presentation) is made on a FREE web generator in the owner's own Chrome by the browser agent (web_runner.py): the shortlist,
+            the site playbooks, the per-site grants. It passes only on a file that arrived in quarantine and was read (coordinator.verify)."""
+            from jarvis.plugins._shared import owner_ask
+            from . import web_runner
+            op = coord.current_op()
+            stopped = lambda: bool(abort and abort()) or (op is not None and op.stop_flag.is_set())      # noqa: E731
+            res = web_runner.run_deck(step, pc_run=pc_raw, stop=stopped, ask=owner_ask.ask, profile=alias(step.get("profile", "Default")), journal=jc.record_web_step,
+                                     touch=(op.touch if op is not None else None))
+            if res.get("ok") and step.get("open_after") and res.get("file"):          # "... and open it": the verified copy, through the deliverables plugin's own open
+                o = open_output({"path": res["file"]})
+                res.update(opened=o.get("opened"), opened_verified=bool(o.get("opened_verified")), open_note=o.get("open_note") or o.get("error"))
+            return res
+
         def stop(step):
             for p in list(active):
                 p.stopped = True
@@ -1450,6 +1483,7 @@ class DesktopPlugin(PluginBase):
             "window": window, "type_text": type_text, "press_key": press_key, "open_file": open_file, "check_pc": check,
             "troubleshoot": troubleshoot, "research": research, "open_output": open_output, "stop": stop,
             "open_in_vscode": open_in_vscode, "type_in_editor": type_in_editor, "save_as": save_as, "drive": drive, "simple_task": simple_task,
+            "web_task": web_task,
         }
         wrapped = AgentSet({k: jc.wrap_agent(k, _with_approval(fn)) for k, fn in agents.items()})       # D61: one journal line per step run
 

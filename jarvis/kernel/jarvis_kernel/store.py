@@ -133,10 +133,24 @@ class Kernel:
         for col in ("reason TEXT", "decided REAL", "job TEXT", "created REAL", "requester TEXT"):   # older databases were created without these columns
             add_column(self.db, "approvals", col)
         self.audit = AuditLog(self.db)
+        # D64: the key that seals the entries of config/trusted_sites.json. Only this database holds it, so an entry written by hand or by a plugin
+        # has no valid seal and is ignored. (The last Kernel created in a process owns the key: one kernel per process.)
+        self.db.execute("CREATE TABLE IF NOT EXISTS kernel_secrets(name TEXT PRIMARY KEY, value TEXT)")
+        from . import sitegrants
+        sitegrants.SEAL_KEY = self.seal_key
         self.kill_file = self.dir / "KILL"
         self.lock = threading.RLock()
         # The kernel's own data dir is always protected: no action may touch state.db or KILL.
         self.protected = set(protected or ()) | {str(self.dir).replace("\\", "/").lower(), "hermes-agent-vm-2"}   # the data dir and the protected server are always off limits
+
+    def seal_key(self) -> bytes:
+        """The HMAC key for the per-site grants (created once, kept in the database, never shown)."""
+        with self.lock:
+            r = self.db.execute("SELECT value FROM kernel_secrets WHERE name='site_grant_seal'").fetchone()
+            if not r:
+                self.db.execute("INSERT OR IGNORE INTO kernel_secrets(name, value) VALUES ('site_grant_seal', ?)", (secrets.token_hex(32),))
+                r = self.db.execute("SELECT value FROM kernel_secrets WHERE name='site_grant_seal'").fetchone()
+        return bytes.fromhex(r[0])
 
     # --- kill switch -------------------------------------------------
     def _private_files(self):

@@ -134,7 +134,7 @@ def _obj(props: dict, required: list | None = None) -> dict:
 _S = {"type": "string"}
 EXECUTORS: dict[str, Executor] = {e.id: e for e in (
     Executor("pc", "ui_decide", "", "Operate this PC: open or focus an app or a website in Chrome, play music or video, type, press keys, "
-             "check disk or network, troubleshoot an app. A local model chooses the exact action."),
+             "check disk or network, troubleshoot an app, make a slide deck on a free web generator in the owner's Chrome. A local model chooses the exact action."),
     Executor("screen_read", "screen_read", "desktop:read_window_text", "Read the text of one open window (accessibility, OCR, local vision). "
              "Say which app in the goal.", _obj({"app": _S}, ["app"])),
     Executor("screen_locate", "screen_locate", "desktop:find_on_screen", "Find where a label or text is inside one window (does not click). "

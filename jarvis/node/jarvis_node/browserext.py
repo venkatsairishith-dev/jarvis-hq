@@ -45,7 +45,12 @@ MCP_VERSION = "0.0.83"
 TOKEN_FILE = r"D:\jarvis-secrets\playwright\extension-token.txt"
 EXTENSION_ID = "mmlmfjhmonkocbjadbfplnigmagldckm"
 ALLOWED_TOOLS = {"browser_tabs", "browser_navigate", "browser_snapshot", "browser_find", "browser_click", "browser_type",
-                 "browser_press_key", "browser_wait_for", "browser_evaluate"}
+                 "browser_press_key", "browser_wait_for", "browser_evaluate",
+                 # D64 (2026-10-26), the browser agent (browserops.py). Names checked against @playwright/mcp 0.0.83's own package on 2026-10-26. Still never enabled or
+                 # called: the storage, cookie, network, devtools, route, code-running (browser_run_code_unsafe) and webmcp tools. browser_reload is a CLI-only
+                 # tool in this version (navigation to the same address does it); the two mouse tools need --caps vision, which only agent sessions start with.
+                 "browser_select_option", "browser_hover", "browser_drag", "browser_navigate_back", "browser_handle_dialog", "browser_file_upload",
+                 "browser_take_screenshot", "browser_mouse_click_xy", "browser_mouse_wheel"}
 VIDEO_STATE = ("() => { const v = document.querySelector('video'); return v ? {paused: v.paused, ended: v.ended, "
                "position_s: Math.round(v.currentTime * 10) / 10, muted: v.muted, title: document.title, url: location.href} "
                ": {none: true, title: document.title, url: location.href}; }")
@@ -230,9 +235,10 @@ def extension_ready(profile: dict) -> bool:
 class Session:
     """One Playwright MCP connection to the running Chrome profile, for the length of one job."""
 
-    def __init__(self, profile: dict, session_factory=None, isolated: bool = False):
+    def __init__(self, profile: dict, session_factory=None, isolated: bool = False, agent: bool = False):
         self.profile = profile
         self._factory, self._isolated = session_factory, isolated
+        self.agent = agent
         env = runtime.safe_environ()                      # no GitHub/git credential variables by inheritance (completion E)
         tok = token_file(profile["dir"])
         if tok:
@@ -242,9 +248,12 @@ class Session:
         self.work = os.path.join(local_result_dir(), f"playwright-{os.getpid()}-{secrets.token_hex(3)}")
         argv = [NODE, MCP_CLI, "--extension", "--profile-dir-name", profile["dir"], "--image-responses", "omit",
                 "--output-dir", self.work]
+        if agent:                       # D64: element boxes in the snapshot, the two coordinate tools, no page-registered tools, absolute file paths in events
+            argv += ["--snapshot-boxes", "--caps", "vision", "--no-webmcp", "--file-paths", "absolute", "--timeout-action", "15000"]
         if isolated:                    # tests and risky scenarios: a throwaway headless Chrome, no owner profile, no extension
             argv = [NODE, MCP_CLI, "--headless", "--isolated", "--browser", "chrome", "--image-responses", "omit",
                     "--output-dir", self.work]
+        self.secrets: dict = {}                         # D64: value -> placeholder name of what the node typed by reference (@cred:password): never returned as it is
         if session_factory is None:                     # the real server, started through runtime so a cancel kills it
             check_mcp_version()
             from .mcpclient import StdioSession
@@ -284,6 +293,27 @@ class Session:
             time.sleep(0.5)
         sweep_local()
 
+    def add_secret(self, value: str, name: str) -> None:
+        """A value the node is about to type by reference. From now on every text this session returns holds `<secret:name>` where the value (or its URL-,
+        HTML- or JSON-escaped form) appeared: the page echoing it into its title or fields, Playwright's own code echo, an error message. The model, the
+        journal and the Timeline therefore never see it, whatever the page does. Playwright MCP's `--secrets` flag is NOT relied on: the vendor documents it as
+        'a convenience and not a security feature'."""
+        if len(value or "") >= 4:
+            self.secrets[value] = re.sub(r"[^a-z0-9_]", "", str(name).lower())[:20] or "secret"
+
+    def redact(self, text: str) -> str:
+        if not self.secrets or not text:
+            return text
+        import html as _html
+        out = text
+        for value, name in sorted(self.secrets.items(), key=lambda kv: -len(kv[0])):
+            ph = f"<secret:{name}>"
+            for form in {value, urllib.parse.quote(value, safe=""), urllib.parse.quote_plus(value), _html.escape(value), _html.escape(value, quote=False),
+                         json.dumps(value)[1:-1], value.replace("\\", "\\\\")}:
+                if form:
+                    out = out.replace(form, ph)
+        return out
+
     def call(self, tool: str, args: dict, timeout=45.0) -> str:
         if tool not in ALLOWED_TOOLS:
             raise BrowserError("tool not allowed")
@@ -291,7 +321,7 @@ class Session:
             raise BrowserError("only the fixed video check may run in a page")
         runtime.check()
         res = self.s.call(tool, args, timeout=timeout)
-        text = "\n".join(c.get("text", "") for c in res.get("content") or [] if c.get("type") == "text")
+        text = self.redact("\n".join(c.get("text", "") for c in res.get("content") or [] if c.get("type") == "text"))
         if res.get("isError"):
             raise BrowserError(f"{tool} failed: " + _first_line(text))
         return text
@@ -566,6 +596,98 @@ def act(sess, op: str, url: str, target: str, text: str, prof: dict) -> dict | N
     return None
 
 
+# ---------------------------------------------------------------- the browser agent's pooled session (D64)
+class Entry:
+    """One pooled MCP session for one agent task: a connection to the owner's Chrome kept for the length of the task, so a 40-step flow does not
+    start 40 servers and ask the owner to allow 40 connections."""
+
+    def __init__(self, sess, profile, task):
+        self.sess, self.profile, self.task = sess, profile, task
+        self.started = self.last_used = time.time()
+        self.downloads: list = []        # files the MCP server says it saved (its ### Events section)
+        self.before_dl: dict = {}        # the downloads folder before the last click
+        self.click_at = 0.0
+        self.vision = True               # the agent flavour starts with --caps vision
+
+
+POOL: dict = {}
+POOL_IDLE_S = 180.0                      # a pooled session nobody used for this long is closed (the browser connection is the owner's)
+POOL_MAX_S = 3600.0
+_pool_lock = __import__("threading").RLock()
+
+
+def pool_end(task: str) -> bool:
+    with _pool_lock:
+        e = POOL.pop(task, None)
+    if e is None:
+        return False
+    try:
+        e.sess.__exit__(None, None, None)
+    except Exception:  # noqa: BLE001 - closing must not raise
+        pass
+    return True
+
+
+def pool_reap(now: float = None) -> int:
+    now = now or time.time()
+    with _pool_lock:
+        old = [t for t, e in POOL.items() if now - e.last_used > POOL_IDLE_S or now - e.started > POOL_MAX_S]
+    return sum(1 for t in old if pool_end(t))
+
+
+def pool_close_all() -> int:
+    with _pool_lock:
+        tasks = list(POOL)
+    return sum(1 for t in tasks if pool_end(t))
+
+
+def pool_lease(prof: dict, task: str, session_factory=None, isolated: bool = False) -> "Entry":
+    pool_reap()
+    with _pool_lock:
+        e = POOL.get(task)
+        if e is not None and e.profile.get("dir") == prof.get("dir") and (session_factory is not None or getattr(e.sess.s, "alive", lambda: True)()):
+            e.last_used = time.time()
+            return e
+    if e is not None:
+        pool_end(task)
+    sess = Session(prof, session_factory, isolated, agent=True)
+    sess.__enter__()
+    e = Entry(sess, prof, task)
+    with _pool_lock:
+        POOL[task] = e
+    return e
+
+
+AGENT_ONLY_OPS = {"observe", "goto", "reload", "back", "hover", "check", "select", "scroll", "wait", "tab_select", "tab_close", "dialog", "drag",
+                  "xy_click", "shot", "locate", "upload", "download", "cred_new", "session_end"}
+
+
+def run_agent_op(p: dict, prof: dict, session_factory=None) -> dict:
+    """One browser-agent job (browserops.py) on the task's pooled session. A failure that is the page's or the owner's business (the page changed,
+    a human check, a refused host) comes back as {ok: False, error} so the engine can recover; a lost connection ends the pooled session."""
+    from . import browserops
+    op, task = str(p.get("op", "")), str(p.get("task", ""))
+    fn = browserops.OPS.get(op)
+    if fn is None:
+        return {"ok": False, "error": "unknown browser action"}
+    if op == "session_end":
+        return {"ok": True, "ended": pool_end(task)}
+    entry = pool_lease(prof, task or ("t" + secrets.token_hex(6)), session_factory)
+    try:
+        out = fn(entry.sess, p, entry)
+    except browserops.OpError as e:
+        return {"ok": False, "error": str(e)[:240], "refused": "node"}
+    except BrowserError as e:
+        return {"ok": False, "error": str(e)[:240]}
+    except runtime.Cancelled:
+        raise
+    except Exception as e:  # noqa: BLE001 - the kind only: the text could hold page content
+        pool_end(entry.task)
+        return {"ok": False, "error": f"browser connection failed: {type(e).__name__} {getattr(e, 'kind', '')}".strip()}
+    entry.last_used = time.time()
+    return out
+
+
 def run(p: dict, session_factory=None) -> dict:
     op, url, target, text = str(p.get("op", "")), str(p.get("url", "")), str(p.get("target", "")), str(p.get("text", ""))
     try:
@@ -573,6 +695,16 @@ def run(p: dict, session_factory=None) -> dict:
     except BrowserError as e:
         return {"ok": False, "error": str(e), "needs": "clarification"}
     ready = extension_ready(prof) or session_factory is not None
+    if p.get("task") or op in AGENT_ONLY_OPS:         # D64: the browser agent's jobs (a task id means: use the task's pooled session)
+        if not ready:
+            return {"ok": False, "error": f"the Playwright extension is not installed in the {prof['name']} profile ({prof['dir']})", "needs": "extension"}
+        try:
+            return run_agent_op(p, prof, session_factory)
+        except runtime.Cancelled:
+            raise
+        except Exception as e:  # noqa: BLE001
+            kind = getattr(e, "kind", "")
+            return {"ok": False, "error": f"browser connection failed: {type(e).__name__} {kind}".strip()}
     if op == "open" and session_factory is None:
         # opening needs no extension: Chrome's own --profile-directory puts it in that profile's window, and the page
         # then exists for the extension's connect prompt (which lists the profile's tabs)

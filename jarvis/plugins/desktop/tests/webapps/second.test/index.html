@@ -1,0 +1,12 @@
+<!doctype html>
+<html><head><title>Quick Slides</title></head>
+<body>
+<h1>Quick Slides</h1>
+<label for="t">Topic</label>
+<input id="t" type="text" name="topic">
+<button data-disabled-until-text="#t=a" data-on-click="show:#done">Make slides</button>
+<section id="done" data-hidden>
+  <h2>Slides ready</h2>
+  <button data-on-click="download:/exports/deck.pptx">Get PowerPoint</button>
+</section>
+</body></html>

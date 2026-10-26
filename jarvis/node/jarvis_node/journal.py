@@ -488,7 +488,9 @@ def plan_for_job(job: dict) -> dict | None:
         if not proc or proc.lower() == "media" or not re.fullmatch(r"[A-Za-z0-9_.\- ]{1,80}", proc):
             return None
         return {"before": None if p.get("op") == "launch" else proc, "after": proc, "texts": [str(p.get("target", "")).replace("|", " ")]}
-    if kind == "browser_ext" and p.get("op") in BROWSER_SHOT_OPS:
+    # D64: a browser-agent step (it carries a task id) takes no window picture: a 40-step flow would add two PowerShell runs to each click. The agent writes its own
+    # content-free journal line per action (browser_agent.py), and its page pictures stay in the local-only folder.
+    if kind == "browser_ext" and p.get("op") in BROWSER_SHOT_OPS and not p.get("task"):
         return {"before": None if p.get("op") == "open" else "chrome", "after": "chrome", "texts": [str(p.get("url", "")), str(p.get("profile", ""))]}
     if kind == "pc_open" and p.get("op") in ("open_app", "open_folder", "open_file"):
         return {"before": None, "after": "@result", "texts": [str(p.get("target", "")), str(p.get("path", ""))]}

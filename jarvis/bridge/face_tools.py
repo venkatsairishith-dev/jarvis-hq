@@ -88,13 +88,6 @@ CHAT_TOOLS: dict[str, str] = {
     "desktop__open_website": "Open an https address in the owner's Chrome.",
     "desktop__play_youtube": "Play a song or video on YouTube in Chrome.",
     "desktop__stop_pc_task": "Stop everything acting on the PC.",
-    "deliverables__make_presentation": (
-        "Make a .pptx deck. spec: {title, subtitle, theme (midnight|paper|vivid), sources: [{id:'S1', title, url, date, publisher}], "
-        "slides: [{layout, title, bullets, notes, sources}]}. layout: title, section, bullets, two_column, chart (type column|bar|line|pie, labels, "
-        "series), table (columns, rows), quote, timeline, stats, closing. Cite with [S1]."),
-    "deliverables__make_report": (
-        "Make a PDF report. spec: {title, subtitle, theme, summary, sources, sections: [{heading, kind fact|opinion|uncertain|"
-        "recommendation, paragraphs, bullets, callout, table, chart}]}. Cite with [S1]."),
     "deliverables__open_output": "Open a deck, report or preview JARVIS made (full path).",
     "deliverables__show_in_folder": "Show a file JARVIS made in File Explorer (full path).",
     "web_search__search": "Search the web (DuckDuckGo).",
@@ -617,6 +610,8 @@ async def _serve(args, views) -> None:
         if not args.no_ask:
             from jarvis.bridge.ask import AskBroker
             asker = AskBroker()
+            from jarvis.plugins._shared import owner_ask                   # D64: the browser agent asks the owner through this panel when a page needs him
+            owner_ask.install(asker, asyncio.get_running_loop())
             try:
                 from jarvis.bridge.cleaner import Cleaner
                 from jarvis.bridge.cleaner_ui import CleanerService

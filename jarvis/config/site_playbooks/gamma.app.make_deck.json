@@ -1,0 +1,49 @@
+{
+  "name": "make_deck", "host": "gamma.app", "hosts": ["gamma.app"], "version": 1, "source": "builtin",
+  "goal": "Generate a presentation from a topic with Gamma and export it as PPTX and PDF",
+  "start": "https://gamma.app/create",
+  "verified_live": false,
+  "needs": ["signin_existing_session", "accept_terms", "download_to_quarantine"],
+  "terms_note": "Gamma's terms (effective 2025-09-09) bar automated software that scrapes or downloads data from its pages. One deck for the owner, in his own session at human pace, is not scraping, but the clause is broad. Gamma offers an official API and MCP on every plan.",
+  "terms_read": "2026-10-26", "terms_source": "gamma.app terms of use (Gamma's own mirror host); help.gamma.app; developers.gamma.app",
+  "formats": ["pptx", "pdf"],
+  "params": [{"name": "topic", "required": true}, {"name": "outline", "default": ""}, {"name": "slides", "default": "3"}, {"name": "theme", "default": ""}, {"name": "formats", "default": "pptx,pdf"}],
+  "notes": {"drafted": "2026-10-26 from the vendor's help pages, NOT yet seen on the real site: the laptop session confirms every step (names, order, the export menu) and 'learn this site' repairs what differs.",
+            "export_path": "help.gamma.app: click Share (top right) then Export, or the three-dot menu then Export; PDF, PNG, PowerPoint. A click on a button named Share is the owner's PIN in the kernel (the word can send or publish): use the three-dot menu path first."},
+  "phases": [
+    {"name": "open", "steps": [
+      {"id": "open", "do": "goto", "to": "https://gamma.app/create", "new_tab": true, "expect": {"host_is": "gamma.app"}}
+    ]},
+    {"name": "signin", "note": "only when the site shows its sign-in page; Continue with Google uses the Chrome session the owner already has",
+     "skip_if": {"any": [{"element": {"role": "textbox", "name": "Describe what you'd like to make", "any_of": ["Topic", "Prompt", "What would you like to create?"]}},
+                          {"element": {"role": "button", "name": "Generate", "any_of": ["Create with AI", "Paste in text"]}}]},
+     "steps": [
+      {"id": "login", "do": "click", "loc": {"role": "button", "name": "Log in", "any_of": ["Sign in", "Log in with Google", "Continue with Google"]}, "optional": true, "intent": "open the sign-in options"},
+      {"id": "google", "do": "click", "loc": {"role": "button", "name": "Continue with Google", "any_of": ["Sign in with Google", "Log in with Google", "Google"]}, "intent": "sign in with the Google session of this Chrome", "expect": {"any": [{"host_is": "accounts.google.com"}, {"host_is": "gamma.app"}]}},
+      {"id": "account", "do": "click", "loc": {"role": "button", "text": "@"}, "optional": true, "intent": "choose the Google account already signed in", "note": "the first account listed; the owner names one in the grant card if he has several"},
+      {"id": "consent", "do": "click", "loc": {"role": "button", "name": "Continue", "any_of": ["Next"]}, "optional": true, "intent": "the basic sign-in screen only", "expect": {"host_is": "gamma.app"}}
+    ]},
+    {"name": "create", "steps": [
+      {"id": "new", "do": "click", "loc": {"role": "button", "name": "Generate", "any_of": ["Create with AI", "Paste in text", "Create new with AI"]}, "optional": true, "intent": "start a new AI presentation", "expect": {"changed": true}},
+      {"id": "prompt", "do": "fill", "loc": {"role": "textbox", "name": "Describe what you'd like to make", "any_of": ["Topic", "Prompt", "What would you like to create?", "Paste in text"]}, "value": "{topic}", "intent": "give the topic"},
+      {"id": "count", "do": "select", "loc": {"role": "combobox", "name": "Number of cards", "any_of": ["Cards", "Slides", "Number of slides"]}, "value": "{slides}", "optional": true, "intent": "choose the number of slides"},
+      {"id": "outline", "do": "click", "loc": {"role": "button", "name": "Generate outline", "any_of": ["Continue", "Next", "Generate"]}, "intent": "make the outline", "expect": {"changed": true}},
+      {"id": "theme", "do": "click", "loc": {"role": "button", "name": "{theme}"}, "optional": true, "intent": "pick the theme the owner named"},
+      {"id": "generate", "do": "click", "loc": {"role": "button", "name": "Generate", "any_of": ["Continue", "Create"]}, "intent": "generate the slides", "expect": {"changed": true}}
+    ]},
+    {"name": "wait", "steps": [
+      {"id": "ready", "do": "wait", "timeout_s": 240, "intent": "wait until the deck is made",
+       "until": {"text_any": ["Share", "Export", "Present"], "fail_if": ["Something went wrong", "Try again", "Generation failed"]}}
+    ]},
+    {"name": "export", "steps": [
+      {"id": "menu", "do": "click", "loc": {"role": "button", "name": "More", "any_of": ["More options", "Menu", "Options", "..."]}, "optional": true, "intent": "open the three-dot menu", "expect": {"changed": true}},
+      {"id": "export", "do": "click", "loc": {"role": "menuitem", "name": "Export", "any_of": ["Export as", "Download"]}, "intent": "open the export choices", "expect": {"changed": true}},
+      {"id": "pptx_pick", "do": "click", "loc": {"role": "menuitem", "name": "Export to PowerPoint", "any_of": ["PowerPoint", "PPTX"]}, "optional": true, "intent": "choose PowerPoint"},
+      {"id": "pptx_go", "do": "click", "loc": {"role": "button", "name": "Download PowerPoint", "any_of": ["Download", "Export"]}, "optional": true, "intent": "start the PowerPoint download", "expect": {"noop_ok": true}},
+      {"id": "pptx_file", "do": "download", "value": "pptx", "intent": "collect the PowerPoint file into quarantine", "expect": {"download": {"ext": "pptx"}}},
+      {"id": "pdf_pick", "do": "click", "loc": {"role": "menuitem", "name": "Export to PDF", "any_of": ["PDF"]}, "optional": true, "intent": "choose PDF"},
+      {"id": "pdf_go", "do": "click", "loc": {"role": "button", "name": "Download PDF", "any_of": ["Download", "Export"]}, "optional": true, "intent": "start the PDF download", "expect": {"noop_ok": true}},
+      {"id": "pdf_file", "do": "download", "value": "pdf", "optional": true, "intent": "collect the PDF into quarantine", "expect": {"download": {"ext": "pdf"}}}
+    ]}
+  ]
+}
