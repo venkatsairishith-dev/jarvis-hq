@@ -10,9 +10,9 @@
     "job":       {"task": "a long running job", "recipe": "steps with status icons + progress + Cancel", "when": "work that takes more than a few seconds; call again with update=true to move it forward", "data": "{title, steps:[{label, status}], value, max, label, update}"},
     "data_view": {"task": "numbers and statistics", "recipe": "chart (bar, line, pie) + table of the same numbers", "when": "the answer is a series of numbers", "data": "{title, kind, labels, series:[{name, values}], unit}"},
     "confirm":   {"task": "review before a consequential step", "recipe": "info_table + clear Approve and Cancel; the console still asks for the PIN for risky steps", "when": "the owner should look at what will happen first", "data": "{title, rows:[[label, value]], warn, approve_label}"},
-    "schedule":  {"task": "reminder or schedule", "recipe": "date + time + repeat + note", "when": "set a reminder, a meeting or a repeating task", "data": "{title, note, repeat: [none, daily, weekly, monthly]}"},
-    "text":      {"task": "free input", "recipe": "one text box", "when": "JARVIS needs a short answer in the owner's words", "data": "{question, placeholder, multiline}"},
-    "save":      {"task": "choose where to save", "recipe": "list of the known folders", "when": "a file is about to be written and the owner did not say where", "data": "{what}"},
+    "schedule":  {"task": "reminder or schedule", "recipe": "date + time + repeat + note", "when": "set a reminder, a meeting or a repeating task", "data": "{title, note, what, repeat: [none, daily, weekly, monthly]}"},
+    "text":      {"task": "free input", "recipe": "one text box", "when": "JARVIS needs a short answer in the owner's words", "data": "{question, placeholder, multiline, heading}"},
+    "save":      {"task": "choose where to save", "recipe": "list of the known folders", "when": "a file is about to be written and the owner did not say where", "data": "{what, file_name}"},
     "clarify":   {"task": "the decider's question", "recipe": "radio for 'Which one: A or B?', file list for 'Which file?', else a text box", "when": "the PC planner asks the owner something", "data": "{question}"}
   }
 }

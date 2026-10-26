@@ -7,19 +7,29 @@
  * It appears the moment the server has a form (a long poll), shows what is known at once and a progress strip while JARVIS works, never
  * blocks on a long call, and draws only text (no markup, no link, no script). Keyboard: Tab/Shift+Tab, Space toggles, arrow keys inside
  * a choice, Enter = the primary button, Escape = Cancel (or Close). Focus moves into the panel on open and back where it was on close.
+ *
+ * Voice (D63, only when the window has a voice host and `voice` is given): every text, number and date field has a small microphone, the header
+ * has one for spoken commands and one that reads the form aloud. Each has a key: Alt+M microphone (dictates into the focused field, else listens
+ * for commands; again to stop), Alt+R read aloud, Alt+Z undo the last voice change. Escape first stops the microphone, the reading or a question,
+ * and only then cancels the form. The microphone is started by the owner, never by a form opening, and stops when the form closes.
  */
 import type { AskController } from '../../composables/use-jarvis-ask'
+import type { AskVoice } from '../../composables/use-jarvis-ask-voice'
 
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 
 import AskNode from './AskNode.vue'
+import AskVoiceBar from './AskVoiceBar.vue'
 
-import { formatSize, keyAction, plural, progressFraction, progressText, selectedTotal } from '../../composables/jarvis-ask-logic'
+import { formatSize, keyAction, plural, progressFraction, progressText, selectedTotal, walk } from '../../composables/jarvis-ask-logic'
+import { ASK_VOICE_KEY } from '../../composables/use-jarvis-ask-voice'
 
 import './ask.css'
 
-const props = defineProps<{ controller: AskController }>()
+const props = defineProps<{ controller: AskController, voice?: AskVoice | null }>()
 const { form, values, busy, error } = props.controller
+const voice = props.voice ?? null
+provide(ASK_VOICE_KEY, voice)
 
 const panel = ref<HTMLElement | null>(null)
 const ended = ref('')
@@ -45,10 +55,51 @@ function onSet(id: string, value: Parameters<AskController['setValue']>[1]) {
   props.controller.setValue(id, value)
 }
 
+/** Voice keys. Returns true when the key was taken. */
+function onVoiceKey(event: KeyboardEvent): boolean {
+  if (!voice)
+    return false
+  const k = event.key.toLowerCase()
+  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+    if (k === 'm') {
+      voice.toggleMic()
+      return true
+    }
+    if (k === 'r') {
+      if (voice.reading.value)
+        voice.stopReading()
+      else
+        void voice.readAloud()
+      return true
+    }
+    if (k === 'z') {
+      void voice.undo()
+      return true
+    }
+  }
+  const target = event.target as HTMLElement
+  const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && k === 'z' && !typing && voice.undoStack.value.length) {
+    void voice.undo()
+    return true
+  }
+  // Escape first ends what voice is doing (listening, reading, a question), then it cancels the form as before
+  if (event.key === 'Escape' && (voice.mode.value !== 'off' || voice.reading.value || voice.question.value)) {
+    voice.stop()
+    return true
+  }
+  return false
+}
+
 function onKey(event: KeyboardEvent) {
   const f = form.value
   if (!f)
     return
+  if (onVoiceKey(event)) {
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
   const target = event.target as HTMLElement
   const action = keyAction(event.key, f.buttons, { tag: target.tagName, type: (target as HTMLInputElement).type, role: target.getAttribute('role') ?? undefined })
   if (!action)
@@ -112,10 +163,46 @@ onBeforeUnmount(() => {
             {{ form.intro }}
           </p>
         </div>
+        <button
+          v-if="voice"
+          type="button"
+          class="ask-hbtn ask-mic"
+          :class="`ask-mic-${voice.mode.value === 'command' ? voice.micState() : 'idle'}`"
+          :aria-pressed="voice.mode.value === 'command'"
+          aria-label="Speak a command (Alt+M)"
+          title="Speak a command: tick, untick, set, next, undo, cancel, and at last clean or submit (Alt+M)"
+          aria-keyshortcuts="Alt+M"
+          :disabled="working"
+          @click="voice.mode.value === 'command' ? voice.stop() : voice.startCommand()"
+        >
+          <svg v-if="!(voice.mode.value === 'command' && voice.understanding.value)" class="ask-mic-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+            <rect x="5.5" y="1.5" width="5" height="8" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.4" />
+            <path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          </svg>
+          <span v-else class="ask-mic-dots" aria-hidden="true"><i /><i /><i /></span>
+        </button>
+        <button
+          v-if="voice"
+          type="button"
+          class="ask-hbtn ask-read"
+          :aria-pressed="voice.reading.value"
+          :aria-label="voice.reading.value ? 'Stop reading (Alt+R)' : 'Read the form aloud (Alt+R)'"
+          :title="voice.reading.value ? 'Stop reading (Alt+R)' : 'Read the form aloud (Alt+R)'"
+          aria-keyshortcuts="Alt+R"
+          @click="voice.reading.value ? voice.stopReading() : voice.readAloud()"
+        >
+          <svg class="ask-mic-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+            <path d="M2 6h3l4-3v10l-4-3H2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+            <path v-if="voice.reading.value" d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+            <path v-else d="M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          </svg>
+        </button>
         <button type="button" class="ask-x" aria-label="Close" title="Close (Esc)" @click="controller.close()">
           &#10005;
         </button>
       </header>
+
+      <AskVoiceBar v-if="voice" :voice="voice" :field-label="id => (form ? [...walk(form.fields)].find(n => n.id === id)?.label : '') || ''" />
 
       <div class="ask-body">
         <div v-if="working" class="ask-working" role="status" aria-live="polite">

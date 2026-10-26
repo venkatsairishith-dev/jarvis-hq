@@ -1,6 +1,6 @@
 {
  "_note": "The shared decision engine (D54b, jarvis/plugins/_shared/decider.py). thresholds: the confidence below which a kind answers 'ask' instead of choosing (dialog_class is raise-only, so its threshold is 0: a class is never withheld). models: a llama-swap alias per kind (default: the ui_decide alias of specialists.json, the 4B); set a kind to decider-qwen3-1.7b only when jarvis/evals/pc_control/eval_decider.py shows the 1.7B holds the accuracy for that kind. The numbers below are the DEFAULTS until the laptop session runs that eval against the real models (python jarvis/evals/pc_control/eval_decider.py --models decider,decider-qwen3-1.7b --apply writes measured values here). timeout_s: the model call is cut off after this and the deterministic fallback answers. rule_sure: a deterministic rule at or above this confidence answers alone, with no model call.",
- "thresholds": {"intent": 0.7, "dialog_class": 0.0, "specialist": 0.7, "ui_pattern": 0.7, "folder": 0.8, "file": 0.85, "app": 0.8},
+ "thresholds": {"intent": 0.7, "dialog_class": 0.0, "specialist": 0.7, "ui_pattern": 0.7, "folder": 0.8, "file": 0.85, "app": 0.8, "form_control": 0.8},
  "models": {},
  "timeout_s": 3.0,
  "rule_sure": 0.9,

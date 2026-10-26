@@ -165,6 +165,9 @@ def main(out: Path) -> None:
     solo("confirm", U.build("confirm", {"title": "Send the report?", "rows": [["To", "Asha Rao"], ["File", "Q3 board deck.pptx"], ["Size", "4.0 MB"]], "warn": "This sends the file outside your PC.", "approve_label": "Send it"}))
     solo("schedule", U.build("schedule", {"title": "Remind me", "note": "When should I remind you about the dentist?"}))
     solo("save", U.build("save", {"what": "the Q3 report"}))
+    # D63: forms used by voice. An editable heading (the reminder text, the file name), a date, a time, a choice, a note; and the settings page.
+    solo("voice-schedule", U.build("schedule", {"title": "Remind me", "what": "Call the dentist", "note": "Say or type the reminder, the day and the time."}))
+    solo("voice-save", U.build("save", {"what": "the Q3 deck", "file_name": "Q3 board deck"}))
     solo("fallback", {"title": "Odd form", "fields": [{"id": "x", "type": "hologram", "label": "Spin it", "options": [{"id": "a", "label": "Left"}, {"id": "b", "label": "Right"}]},
                                                        {"type": "callout", "text": "The rest of the form still works."}]})
     out.write_text(json.dumps(fixtures), encoding="utf-8")

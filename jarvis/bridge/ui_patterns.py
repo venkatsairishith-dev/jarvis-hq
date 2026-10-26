@@ -64,9 +64,12 @@ def pick_file(data: dict, **_) -> dict:
 
 def save(data: dict, **_) -> dict:
     what = plain(data.get("what") or data.get("text"), 80) or "this"
-    return {"title": "Where to save?", "intro": f"Choose a folder for {what}.", "fields": [
-        {"id": "folder", "type": "file_choice", "source": "folders", "label": "Folder", "required": True}],
-        "buttons": [{"id": "ok", "label": "Save here", "style": "primary"}, {"id": "cancel", "label": "Cancel", "style": "secondary"}]}
+    fields: list[dict] = []
+    if data.get("file_name") is not None:                             # D63: the file name is an editable heading (typed or dictated)
+        fields.append({"id": "name", "type": "text", "heading": True, "label": "File name", "value": plain(data.get("file_name"), 120), "max_len": 120, "required": True})
+    fields.append({"id": "folder", "type": "file_choice", "source": "folders", "label": "Folder", "required": True})
+    return {"title": "Where to save?", "intro": f"Choose a folder for {what}.", "fields": fields,
+            "buttons": [{"id": "ok", "label": "Save here", "style": "primary"}, {"id": "cancel", "label": "Cancel", "style": "secondary"}]}
 
 
 def choose(data: dict, **_) -> dict:
@@ -163,18 +166,22 @@ def confirm(data: dict, **_) -> dict:
 
 def schedule(data: dict, **_) -> dict:
     repeat = [str(r) for r in _list(data.get("repeat"))[:6]] or ["none", "daily", "weekly", "monthly"]
-    return {"title": plain(data.get("title"), 80) or "When?", "intro": plain(data.get("note"), 300), "fields": [
+    fields: list[dict] = []
+    if data.get("what") is not None:                                  # D63: the reminder text is an editable heading (typed or dictated)
+        fields.append({"id": "what", "type": "text", "heading": True, "label": "Reminder", "value": plain(data.get("what"), 200), "max_len": 200, "required": True})
+    fields += [
         {"id": "day", "type": "date", "mode": "date", "label": "Day", "required": True},
         {"id": "at", "type": "date", "mode": "time", "label": "Time", "required": True},
         {"id": "repeat", "type": "select", "label": "Repeat", "options": [{"id": r, "label": r.capitalize(), "checked": i == 0} for i, r in enumerate(repeat)]},
-        {"id": "note", "type": "text", "label": "Note", "max_len": 200}],
-        "buttons": [{"id": "ok", "label": "Set it", "style": "primary"}, {"id": "cancel", "label": "Cancel", "style": "secondary"}]}
+        {"id": "note", "type": "text", "label": "Note", "max_len": 200}]
+    return {"title": plain(data.get("title"), 80) or "When?", "intro": plain(data.get("note"), 300), "fields": fields,
+            "buttons": [{"id": "ok", "label": "Set it", "style": "primary"}, {"id": "cancel", "label": "Cancel", "style": "secondary"}]}
 
 
 def text(data: dict, **_) -> dict:
     return {"title": plain(data.get("title"), 80) or "JARVIS asks", "intro": plain(data.get("question"), 300), "fields": [
         {"id": "answer", "type": "text", "label": "Your answer", "placeholder": data.get("placeholder"), "multiline": data.get("multiline") is True,
-         "max_len": 1000 if data.get("multiline") else 300, "required": True}], "buttons": OK_CANCEL}
+         "heading": data.get("heading") is True, "max_len": 1000 if data.get("multiline") else 300, "required": True}], "buttons": OK_CANCEL}
 
 
 BUILDERS: dict[str, Callable[..., dict]] = {

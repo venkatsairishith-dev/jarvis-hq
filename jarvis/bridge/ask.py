@@ -8,6 +8,9 @@ component that draws it. What a form can and cannot do:
   - It never grants an approval. Approvals stay in the JARVIS console with the PIN (D27): this module does not import the console client or
     the kernel, a field that asks for a PIN, password or code is refused, and an answer is data for the task, not an approval.
   - A form that is not answered says so: {answered: false, reason: timeout | closed | replaced}. An answer is never invented.
+  - D63: every form can also be used by voice (face: use-jarvis-ask-voice.ts; backend help: ask_voice.py). The owner's own words in a text field
+    stay as he said them in the panel (Telugu, Hindi or English); the answer the MODEL gets has them in English (D58), the original is kept in
+    the owner's translation record on this PC.
 
 The model's tool is `jarvis_ask` (waits for the answer). The panel's own calls are `jarvis_ask_wanted` (a long poll: it returns within
 milliseconds of a change, so the panel appears at once without fast polling), `jarvis_ask_submit` and `jarvis_ask_close`
@@ -26,6 +29,49 @@ from typing import Any, Callable
 from jarvis.bridge.ask_spec import AskError, clean_spec, default_values, for_panel, paths_of, plain, validate_answer  # noqa: F401 - re-exported
 
 NOTE = "The owner's choice is data for the task. It is not an approval; approvals happen in the JARVIS console with the PIN."
+
+
+def english_answer(spec: dict, result: dict) -> dict:
+    """D63 + D58: a text the owner typed or dictated in Telugu or Hindi reaches the model in English; his original is kept in his record on this PC
+    (translate.keep_record). A translation that could not be done leaves the original and says so. Only `text` inputs are looked at."""
+    values = result.get("values")
+    if not result.get("answered") or not isinstance(values, dict):
+        return result
+    try:
+        from jarvis.plugins._shared import translate
+    except Exception:                                             # noqa: BLE001 - no translation layer: the answer goes on as it is
+        return result
+    texts = {n["id"] for n in iter_text_inputs(spec)}
+    changed: dict[str, str] = {}
+    skipped: list[str] = []
+    out = dict(values)
+    for nid in texts:
+        raw = values.get(nid)
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        info = translate.english_info(raw, source="form")
+        lang = str(info.get("source_lang") or "en")
+        if lang == "en":
+            continue
+        if info.get("translated"):
+            out[nid] = str(info["english"])[:2000]
+            changed[nid] = lang.split("-")[0]
+        else:
+            skipped.append(nid)
+    if not changed and not skipped:
+        return result
+    note = []
+    if changed:
+        note.append("These text answers were in " + ", ".join(sorted({translate.LANG_NAMES.get(v, v) for v in changed.values()})) + " and are given in English: "
+                    + ", ".join(sorted(changed)) + ". The owner's own words are kept on his PC.")
+    if skipped:
+        note.append("These could not be translated on this PC and are in the owner's own words: " + ", ".join(sorted(skipped)) + ".")
+    return {**result, "values": out, "translated_fields": {k: v for k, v in sorted(changed.items())}, "note_for_model_language": " ".join(note)}
+
+
+def iter_text_inputs(spec: dict):
+    from jarvis.bridge.ask_spec import iter_inputs
+    return (n for n in iter_inputs(spec["fields"]) if n.get("type") == "text")
 
 
 class _Form:
@@ -121,7 +167,7 @@ class AskBroker:
             result = dict(form.result or {"answered": False, "reason": "closed"})
         if clean.get("notes") and result.get("answered"):
             result["note_for_model"] = "Some parts of the form were simplified: " + " ".join(clean["notes"])
-        return result
+        return await asyncio.to_thread(english_answer, clean, result)
 
     # -- the panel's side ----------------------------------------------------------------------------------------------------------------
     def wanted(self, seen: int = 0, wait_s: float = 0.0) -> dict:
@@ -168,6 +214,14 @@ class AskBroker:
             self.withdraw(f.id)
             return {"ok": True, "done": True}
         return {"ok": True, "done": False}
+
+    def peek(self, form_id: str, token: str) -> dict | None:
+        """The open form's cleaned spec (a copy), for the voice helper (ask_voice.py), only for the form id and its one-time token. None otherwise."""
+        with self.lock:
+            f = self.form
+            if f is None or f.id != str(form_id) or not secrets.compare_digest(f.token, str(token or "")):
+                return None
+            return {"spec": f.spec, "busy": f.busy}
 
     def close(self, form_id: str, token: str) -> dict:
         with self.lock:
