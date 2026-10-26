@@ -1,0 +1,455 @@
+{
+ "time": "2026-10-26 23:53:59",
+ "dpi_scale": 2.0,
+ "rows": [
+  {
+   "alias": "vision-ground",
+   "window": "calc",
+   "title": "Calculator",
+   "describe": "This screen displays a calculator application with a dark theme, showing a display area with the number '0' and various buttons for number input, operations, and memory functions.",
+   "describe_s": 23.1,
+   "close_raw": "[970, 25]",
+   "close_point": [
+    970.0,
+    25.0
+   ],
+   "close_right": false,
+   "close_s": 0.4,
+   "image": [
+    3098,
+    1866
+   ],
+   "close_point_1000": [
+    3005,
+    47
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-ground",
+   "window": "notepad",
+   "title": "Untitled - Notepad",
+   "describe": "This screen displays a text editor window with a blank document titled \"Untitled - No...\" and standard menu options such as File, Edit, Format, View, and Help. The editor is set to use Windows line endings (CRLF) and UTF-8 encoding.",
+   "describe_s": 23.7,
+   "close_raw": "[886, 112]",
+   "close_point": [
+    886.0,
+    112.0
+   ],
+   "close_right": false,
+   "close_s": 0.4,
+   "image": [
+    516,
+    300
+   ],
+   "close_point_1000": [
+    457,
+    34
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-ground",
+   "window": "paint",
+   "title": "Untitled - Paint",
+   "describe": "This screen displays the Microsoft Paint application, where users can create and edit images using various tools and shapes. The interface includes options for drawing, selecting colors, and manipulating images.",
+   "describe_s": 20.3,
+   "close_raw": "[966, 19]",
+   "close_point": [
+    966.0,
+    19.0
+   ],
+   "close_right": false,
+   "close_s": 0.4,
+   "image": [
+    2457,
+    1536
+   ],
+   "close_point_1000": [
+    2373,
+    29
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-ground",
+   "window": "settings",
+   "title": "Settings",
+   "describe": "This screen is the Windows Settings homepage, where users can access various system settings such as System, Devices, Mobile devices, and more.",
+   "describe_s": 21.1,
+   "close_raw": "[970, 23]",
+   "close_point": [
+    970.0,
+    23.0
+   ],
+   "close_right": false,
+   "close_s": 0.5,
+   "image": [
+    3098,
+    1866
+   ],
+   "close_point_1000": [
+    3005,
+    43
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-ground",
+   "window": "explorer",
+   "title": "outputs",
+   "describe": "This screen is a file explorer window displaying the contents of the \"outputs\" folder, which includes various folders and files.",
+   "describe_s": 21.1,
+   "close_raw": "[962, 22]",
+   "close_point": [
+    962.0,
+    22.0
+   ],
+   "close_right": false,
+   "close_s": 0.5,
+   "image": [
+    2278,
+    1200
+   ],
+   "close_point_1000": [
+    2191,
+    26
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-ground",
+   "window": "charmap",
+   "title": "Character Map",
+   "describe": "This screen displays a character map interface, allowing users to select and copy various characters from different fonts.",
+   "describe_s": 20.4,
+   "close_raw": "[938, 40]",
+   "close_point": [
+    938.0,
+    40.0
+   ],
+   "close_right": true,
+   "close_s": 0.4,
+   "image": [
+    974,
+    806
+   ],
+   "close_point_1000": [
+    914,
+    32
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-ground",
+   "window": "control",
+   "title": "Control Panel",
+   "describe": "This screen displays various system settings options such as System and Security, Network and Internet, Hardware and Sound, Programs, User Accounts, Appearance and Personalization, Clock and Region, and Ease of Access.",
+   "describe_s": 21.4,
+   "close_raw": "[962, 22]",
+   "close_point": [
+    962.0,
+    22.0
+   ],
+   "close_right": false,
+   "close_s": 0.5,
+   "image": [
+    2278,
+    1200
+   ],
+   "close_point_1000": [
+    2191,
+    26
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-ground",
+   "window": "taskmgr",
+   "title": "Task Manager",
+   "describe": "The screen is completely black, indicating no visible content or image is present.",
+   "describe_s": 20.9,
+   "close_raw": "[-1, -1]",
+   "close_point": null,
+   "close_right": false,
+   "close_s": 0.4,
+   "image": [
+    1360,
+    1200
+   ],
+   "close_point_1000": null,
+   "close_right_1000": false
+  },
+  {
+   "alias": "vision-ground",
+   "window": "clock",
+   "title": "Clock",
+   "describe": "This screen displays a digital clock interface with four different timer options: 1 minute, 3 minutes, 5 minutes, and 10 minutes, each with a play button and a reset button.",
+   "describe_s": 20.2,
+   "close_raw": "[960, 20]",
+   "close_point": [
+    960.0,
+    20.0
+   ],
+   "close_right": false,
+   "close_s": 0.5,
+   "image": [
+    2074,
+    1614
+   ],
+   "close_point_1000": [
+    1991,
+    32
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-ground",
+   "window": "winver",
+   "title": "About Windows",
+   "describe": "This screen displays information about the Windows 10 operating system, including its version, build number, and licensing details.",
+   "describe_s": 19.7,
+   "close_raw": "[944, 32]",
+   "close_point": [
+    944.0,
+    32.0
+   ],
+   "close_right": false,
+   "close_s": 0.4,
+   "image": [
+    941,
+    792
+   ],
+   "close_point_1000": [
+    888,
+    25
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "calc",
+   "title": "Calculator",
+   "describe": "This is a screenshot of a calculator interface, specifically the \"Standard\" mode, showing the number 0 and a message indicating no history yet.",
+   "describe_s": 22.9,
+   "close_raw": "[967, 21]",
+   "close_point": [
+    967.0,
+    21.0
+   ],
+   "close_right": false,
+   "close_s": 15.6,
+   "image": [
+    3098,
+    1866
+   ],
+   "close_point_1000": [
+    2996,
+    39
+   ],
+   "close_right_1000": false
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "notepad",
+   "title": "Untitled - Notepad",
+   "describe": "This is a screenshot of an empty text editor window titled \"Untitled - No...\" with menu options like File, Edit, Format, View, and Help. The file format is set to Windows (CRLF) on the left and UTF-8 on the right.",
+   "describe_s": 20.3,
+   "close_raw": "[937, 100]",
+   "close_point": [
+    937.0,
+    100.0
+   ],
+   "close_right": false,
+   "close_s": 17.7,
+   "image": [
+    516,
+    300
+   ],
+   "close_point_1000": [
+    483,
+    30
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "paint",
+   "title": "Untitled - Paint",
+   "describe": "This is a screenshot of Microsoft Paint, a free image editing program, showing an untitled blank canvas with various tool options and color palettes visible in the toolbar.",
+   "describe_s": 16.4,
+   "close_raw": "[960, 17]",
+   "close_point": [
+    960.0,
+    17.0
+   ],
+   "close_right": false,
+   "close_s": 14.7,
+   "image": [
+    2457,
+    1536
+   ],
+   "close_point_1000": [
+    2359,
+    26
+   ],
+   "close_right_1000": false
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "settings",
+   "title": "Settings",
+   "describe": "This screen is the Settings window in Windows, showing various categories like System, Devices, Accounts, and more. It also displays a user profile named \"venkat\" and a notification about getting more out of Windows.",
+   "describe_s": 17.7,
+   "close_raw": "[964,19]",
+   "close_point": [
+    964.0,
+    19.0
+   ],
+   "close_right": false,
+   "close_s": 15.5,
+   "image": [
+    3098,
+    1866
+   ],
+   "close_point_1000": [
+    2986,
+    35
+   ],
+   "close_right_1000": false
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "explorer",
+   "title": "outputs",
+   "describe": "This is a screenshot of a Windows File Explorer window showing the contents of a folder named \"outputs\" on a local disk.",
+   "describe_s": 16.6,
+   "close_raw": "[977,17]",
+   "close_point": [
+    977.0,
+    17.0
+   ],
+   "close_right": false,
+   "close_s": 15.5,
+   "image": [
+    2278,
+    1200
+   ],
+   "close_point_1000": [
+    2226,
+    20
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "charmap",
+   "title": "Character Map",
+   "describe": "This is a character map interface showing a full set of Unicode characters, with the font set to Arial and the currently selected character being the Exclamation Mark (U+0021).",
+   "describe_s": 16.7,
+   "close_raw": "[989,37]",
+   "close_point": [
+    989.0,
+    37.0
+   ],
+   "close_right": false,
+   "close_s": 14.8,
+   "image": [
+    974,
+    806
+   ],
+   "close_point_1000": [
+    963,
+    30
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "control",
+   "title": "Control Panel",
+   "describe": "This screen displays the Control Panel interface, which allows users to adjust various computer settings.",
+   "describe_s": 16.6,
+   "close_raw": "[973,19]",
+   "close_point": [
+    973.0,
+    19.0
+   ],
+   "close_right": false,
+   "close_s": 15.5,
+   "image": [
+    2278,
+    1200
+   ],
+   "close_point_1000": [
+    2216,
+    23
+   ],
+   "close_right_1000": true
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "taskmgr",
+   "title": "Task Manager",
+   "describe": "There is nothing on this screen.",
+   "describe_s": 16.4,
+   "close_raw": "There are none.",
+   "close_point": null,
+   "close_right": false,
+   "close_s": 15.6,
+   "image": [
+    1360,
+    1200
+   ],
+   "close_point_1000": null,
+   "close_right_1000": false
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "clock",
+   "title": "Clock",
+   "describe": "This screen displays a timer interface with four active timers, each set for different durations (1 minute, 3 minutes, 5 minutes, and 10 minutes). The timers are arranged in a grid format, and each has a play button and a stop button below it. The interface is part of a larger application, likely a productivity or time management tool, as indicated by the sidebar options such as \"Focus sessions,\" ",
+   "describe_s": 19.2,
+   "close_raw": "[937,17]",
+   "close_point": [
+    937.0,
+    17.0
+   ],
+   "close_right": false,
+   "close_s": 14.7,
+   "image": [
+    2074,
+    1614
+   ],
+   "close_point_1000": [
+    1943,
+    27
+   ],
+   "close_right_1000": false
+  },
+  {
+   "alias": "vision-qwen35",
+   "window": "winver",
+   "title": "About Windows",
+   "describe": "This is the \"About Windows\" dialog box for Windows 10, showing the version number (22H2) and the Microsoft license terms.",
+   "describe_s": 16.2,
+   "close_raw": "[987,20]",
+   "close_point": [
+    987.0,
+    20.0
+   ],
+   "close_right": false,
+   "close_s": 14.8,
+   "image": [
+    941,
+    792
+   ],
+   "close_point_1000": [
+    929,
+    16
+   ],
+   "close_right_1000": true
+  }
+ ],
+ "regrade_note": "the first grader read the answers as pixels; both models answer on a 0..1000 grid ([970,25] on a 3098 px wide window is x 3005 px): re-graded here"
+}

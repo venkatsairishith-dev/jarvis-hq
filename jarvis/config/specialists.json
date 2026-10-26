@@ -3,7 +3,7 @@
   "kinds": {
     "reason": {"where": "online", "note": "the online provider through the privacy gateway: understands the goal, writes the plan, reasons over a specialist's redacted summary. Never forms a tool call, never sees a screenshot."},
     "ui_decide": {"where": "local", "alias": "decider", "fallback": "decider-ling", "max_tokens": 400, "note": "picks the exact PC step (tool, app, key, target) for a plan step; grammar-forced JSON (plugins/desktop/decide.py)."},
-    "screen_read": {"where": "local", "alias": "vision", "fallback": "vision-ground", "max_tokens": 200, "note": "what is on the screen: the accessibility tree first, then OCR, then this vision alias only for what has no text (node/jarvis_node/vision.py)."},
+    "screen_read": {"where": "local", "alias": "vision-qwen35", "fallback": "vision-ground", "max_tokens": 200, "note": "what is on the screen: the accessibility tree first, then OCR, then this vision alias only for what has no text (node/jarvis_node/vision.py)."},
     "screen_locate": {"where": "local", "alias": "vision-ground", "fallback": "vision", "max_tokens": 200, "note": "where a label is in a window (UI-Venus grounding); a point from it is checked before use."},
     "doc_read": {"where": "local", "alias": "lightonocr-docreader", "fallback": "ocr-docs", "max_tokens": 1800, "note": "scanned pages and pictures of pages to text (plugins/doc_reader)."},
     "chat_simple": {"where": "local", "alias": "local-chat", "fallback": "general", "max_tokens": 400, "note": "short, simple local work: choosing the arguments of a read-only step. local-chat is the Ling MoE once installed; general is the Ling MoE today."},
