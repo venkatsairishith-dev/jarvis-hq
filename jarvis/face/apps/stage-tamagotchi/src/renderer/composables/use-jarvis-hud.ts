@@ -38,9 +38,12 @@ import {
 } from '../components/hud/hud-model'
 import { useJarvisHudSettingsStore } from '../stores/settings/jarvis-hud'
 import { resolveInitialRendererRoutePath, resolveRendererWindowContext } from '../window-context'
+import { pageIsHidden, POLL_CALL_TIMEOUT_MS, POLL_WAIT_MS, shouldPollNow, withDeadline } from './poll-guard'
 
 /** How often the status is asked for, in milliseconds. A local read; the PC registry file itself is rewritten every 5 s. */
 export const HUD_POLL_MS = 4_000
+/** While the window does not have the keyboard focus (the owner works in another app) the status is asked for this rarely. */
+export const HUD_UNFOCUSED_POLL_MS = 15_000
 
 /** The HUD's live state. The signals are written by {@link useJarvisHud}; the components only read it. */
 export const useJarvisHudStore = defineStore('jarvis-hud', () => {
@@ -122,13 +125,17 @@ export function useJarvisHud() {
 
   let timer: ReturnType<typeof setInterval> | undefined
   let running = false
+  let lastPollAt = 0
   async function pollOnce() {
-    // No work for a window nobody sees; the next visible tick catches up.
-    if (running || globalThis.document?.hidden)
+    // No work for a window nobody sees; the next visible tick catches up. A window the owner is not using polls less often.
+    const now = Date.now()
+    if (running || !shouldPollNow({ hidden: pageIsHidden(), focused: globalThis.document?.hasFocus?.() ?? true, now, lastPollAt, unfocusedMs: HUD_UNFOCUSED_POLL_MS }))
       return
     running = true
+    lastPollAt = now
     try {
-      const result = await callMcpTool({ name: JARVIS_STATUS_TOOL })
+      // A status is worth a few seconds, not the 180 s of a real tool call: a stuck tool server must not hold the poll.
+      const result = await withDeadline(callMcpTool({ name: JARVIS_STATUS_TOOL, timeoutMs: POLL_CALL_TIMEOUT_MS }), POLL_WAIT_MS, 'the status poll')
       hud.setPoll(reduceStatusPoll(hud.poll, result))
     }
     catch {

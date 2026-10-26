@@ -47,3 +47,17 @@ def test_no_file_means_nothing_is_waived(tmp_path, monkeypatch):
 
 def test_the_rules_file_is_console_only():
     assert "auto_click.json" in policy.SAFETY_COMPONENTS
+
+
+def test_lookalikes_and_invisible_characters_do_not_hide_a_consequential_word(tmp_path, monkeypatch):
+    """Review 2026-10-26: fullwidth 'Ｐａｙ', Cyrillic 'а' in 'pаy' and a soft hyphen in 'Se-nd' all returned YELLOW_AUTO."""
+    with_rules(tmp_path, monkeypatch, [{"process": "chrome", "element": ".*"}])
+    for el in ("Ｐａｙ now", "Pаy now", "Se­nd", "Delete​", "Reset all"):
+        assert decide(f"chrome|{el}").level == policy.YELLOW_APPROVAL, el
+    assert decide("chrome|Allow").level == policy.YELLOW_AUTO
+
+
+def test_the_rules_files_are_protected_from_an_agent_push():
+    from jarvis_kernel import push_gate
+    for f in ("jarvis/config/auto_click.json", "jarvis/config/specialists.json", "jarvis/config/simple_tasks.json", "jarvis/config/providers.json"):
+        assert push_gate.PROTECTED.search(f), f

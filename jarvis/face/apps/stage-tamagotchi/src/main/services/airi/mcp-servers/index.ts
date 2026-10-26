@@ -77,11 +77,29 @@ const mcpRequestMaxTotalTimeoutMsec = 15_000
 /** A tool CALL may take long: reading a scanned page is 10 to 26 s, a deck or a report longer. At 15 s the face gave up on `doc_reader__read_document` while it was still reading and the
  *  chat model fell back to other tools in a loop (found live, 2026-10-25). Listing and connecting keep the short limits above. The plugin entries carry their own, longer, limits. */
 const mcpToolCallTimeoutMsec = 180_000
+/** A caller may ask for less than the long limit (a background poll does), never for less than this or more than the long limit. */
+const mcpMinCallTimeoutMsec = 1_000
+
+/** The time a tool call may take: the long limit, or what the caller asked for within [1 s, long limit]. */
+export function resolveCallTimeoutMsec(requested: unknown): number {
+  if (typeof requested !== 'number' || !Number.isFinite(requested))
+    return mcpToolCallTimeoutMsec
+  return Math.min(mcpToolCallTimeoutMsec, Math.max(mcpMinCallTimeoutMsec, Math.round(requested)))
+}
 const mcpTestStderrMaxChars = 16_000
 /** A server that does not answer `initialize` in this time counts as down (the SDK default is 60 s). */
 const mcpConnectTimeoutMsec = 8_000
 /** A failed connection is not tried again sooner than this, so a burst of calls does not hammer a server that is down. */
 const mcpReconnectCooldownMsec = 1_000
+/** After repeated failures the wait grows (1 s, 2 s, 4 s, 8 s) up to this, so a tool server that is down for minutes costs one refused connection every 10 s, not one a second. */
+const mcpReconnectMaxCooldownMsec = 10_000
+
+/** The wait before the next connection attempt after `failures` failures in a row. */
+export function reconnectCooldownMsec(failures: number): number {
+  if (failures <= 1)
+    return mcpReconnectCooldownMsec
+  return Math.min(mcpReconnectMaxCooldownMsec, mcpReconnectCooldownMsec * 2 ** Math.min(failures - 1, 4))
+}
 /** While a configured server is not connected, the main process tries again at this interval. */
 const mcpReconnectIntervalMsec = 5_000
 
@@ -232,7 +250,7 @@ export function createMcpManager(): McpManager {
   /** The enabled servers of the last applied config: the ones that must be connected. */
   const wanted = new Map<string, ElectronMcpServerConfig>()
   const connecting = new Map<string, Promise<void>>()
-  const lastAttempt = new Map<string, { at: number, error: string }>()
+  const lastAttempt = new Map<string, { at: number, error: string, failures: number }>()
   let applying: Promise<unknown> | null = null
   const runtimeStatuses = new Map<string, ElectronMcpServerRuntimeStatus>()
   let updatedAt = Date.now()
@@ -359,7 +377,7 @@ export function createMcpManager(): McpManager {
     if (pending)
       return pending
     const recent = lastAttempt.get(name)
-    if (recent && Date.now() - recent.at < mcpReconnectCooldownMsec)
+    if (recent && Date.now() - recent.at < reconnectCooldownMsec(recent.failures))
       throw new Error(recent.error)
 
     const attempt = (async () => {
@@ -376,7 +394,7 @@ export function createMcpManager(): McpManager {
       }
       catch (error) {
         const message = stringifyError(error)
-        lastAttempt.set(name, { at: Date.now(), error: message })
+        lastAttempt.set(name, { at: Date.now(), error: message, failures: (lastAttempt.get(name)?.failures ?? 0) + 1 })
         setRuntimeStatus(describeRuntime(name, config, 'error', { lastError: message }))
         throw error
       }
@@ -542,6 +560,7 @@ export function createMcpManager(): McpManager {
 
   const callTool = async (payload: ElectronMcpCallToolPayload): Promise<ElectronMcpCallToolResult> => {
     const { serverName, toolName } = parseQualifiedToolName(payload.name)
+    const callTimeoutMsec = resolveCallTimeoutMsec(payload.timeoutMs)
     await applying?.catch(() => {})
     if (!wanted.has(serverName) && !sessions.has(serverName)) {
       throw new Error(`mcp server is not running: ${serverName}`)
@@ -551,8 +570,8 @@ export function createMcpManager(): McpManager {
       name,
       arguments: payload.arguments ?? {},
     }, undefined, {
-      timeout: mcpToolCallTimeoutMsec,
-      maxTotalTimeout: mcpToolCallTimeoutMsec,
+      timeout: callTimeoutMsec,
+      maxTotalTimeout: callTimeoutMsec,
     }))
 
     let result
@@ -714,12 +733,14 @@ export async function setupMcpManager() {
 
   await manager.ensureConfigFile()
 
-  try {
-    await manager.applyAndRestart()
-  }
-  catch (error) {
+  // D57: the connection to the tool server is made in the background. The face's windows are created after this function returns
+  // (injeca builds the main window and the chat window only when the MCP manager exists), so awaiting the connection here held
+  // the avatar back for the whole connect time: up to 8 s per try when the tool server accepts the connection and does not
+  // answer, twice when the first try lands on a stale socket, and about 2 s per try on Windows when the port is closed.
+  // Every use of the manager (list, call, the 5 s retry above) already waits for this start-up to end (`applying`).
+  void manager.applyAndRestart().catch((error) => {
     log.withError(error).warn('failed to apply mcp config during startup')
-  }
+  })
 
   return manager
 }

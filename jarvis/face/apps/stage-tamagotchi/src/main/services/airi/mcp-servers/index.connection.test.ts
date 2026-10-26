@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
+import { createServer as createTcpServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -13,7 +14,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { lockGlobalFetch } from '../../../jarvis/network-lock'
-import { createMcpManager } from './index'
+import { createMcpManager, reconnectCooldownMsec, resolveCallTimeoutMsec, setupMcpManager } from './index'
 
 /**
  * These tests use the REAL MCP client of the face (no mocked transport) against a stand-in for the JARVIS tool server
@@ -40,6 +41,8 @@ vi.mock('../../../libs/bootkit/lifecycle', () => ({ onAppBeforeQuit: vi.fn() }))
 interface FakeToolServer {
   port: number
   calls: string[]
+  /** Makes every tool call wait this long before it answers. */
+  slowBy: (ms: number) => void
   sessions: () => number
   close: () => Promise<void>
 }
@@ -55,6 +58,7 @@ async function freePort(): Promise<number> {
 async function startFakeToolServer(port: number): Promise<FakeToolServer> {
   const transports = new Map<string, StreamableHTTPServerTransport>()
   const calls: string[] = []
+  let slowMs = 0
 
   async function bodyOf(req: IncomingMessage): Promise<unknown> {
     const chunks: Buffer[] = []
@@ -93,6 +97,8 @@ async function startFakeToolServer(port: number): Promise<FakeToolServer> {
       }))
       server.setRequestHandler(CallToolRequestSchema, async (request) => {
         calls.push(request.params.name)
+        if (slowMs > 0)
+          await new Promise(resolve => setTimeout(resolve, slowMs))
         return { content: [{ type: 'text', text: '{"ready":true}' }] }
       })
       await server.connect(transport)
@@ -103,6 +109,7 @@ async function startFakeToolServer(port: number): Promise<FakeToolServer> {
   return {
     port,
     calls,
+    slowBy: (ms) => { slowMs = ms },
     sessions: () => transports.size,
     close: async () => {
       for (const t of transports.values())
@@ -253,5 +260,56 @@ describe('the face reaching the JARVIS tool server (real MCP client)', () => {
     const result = await m.applyAndRestart()
     expect(result.skipped).toEqual([{ name: 'jarvis', reason: 'disabled' }])
     expect(JSON.parse(await readFile(join(userData, 'mcp.json'), 'utf-8')).mcpServers.jarvis.enabled).toBe(false)
+  })
+
+  // D57: the avatar window is created after the MCP manager exists. A tool server that accepts the connection and never answers
+  // (it is loading its plugins) held the start-up for the whole connect time, and the window with it.
+  it('start-up does not wait for a tool server that accepts the connection and never answers', async () => {
+    const sockets = new Set<import('node:net').Socket>()
+    const silent = createTcpServer(socket => void sockets.add(socket))
+    await new Promise<void>(resolve => silent.listen(port, '127.0.0.1', resolve))
+    try {
+      await writeConfig(jarvisEntry())
+      const started = Date.now()
+      const m = await setupMcpManager()
+      managers.push(m)
+      // the connect limit is 8 s; the start-up returns at once and the connection is tried in the background
+      expect(Date.now() - started).toBeLessThan(1500)
+    }
+    finally {
+      for (const socket of sockets)
+        socket.destroy()
+      await new Promise<void>(resolve => silent.close(() => resolve()))
+    }
+  })
+
+  it('a tool call may ask for a shorter limit than the long one (background polls do), and the long call still works', async () => {
+    const server = await up()
+    await writeConfig(jarvisEntry())
+    const m = manager()
+    await m.applyAndRestart()
+    server.slowBy(2500)
+
+    const started = Date.now()
+    await expect(m.callTool({ name: 'jarvis::jarvis_ready', timeoutMs: 1000 })).rejects.toThrow()
+    expect(Date.now() - started).toBeLessThan(2300)
+
+    // without a limit of its own a call gets the long one and waits for the slow answer
+    await expect(m.callTool({ name: 'jarvis::jarvis_ready' })).resolves.toMatchObject({ content: [{ type: 'text' }] })
+  })
+})
+
+describe('the limits of the tool connection', () => {
+  it('keeps a requested call limit between 1 s and the long limit', () => {
+    expect(resolveCallTimeoutMsec(undefined)).toBe(180_000)
+    expect(resolveCallTimeoutMsec('5000')).toBe(180_000)
+    expect(resolveCallTimeoutMsec(Number.NaN)).toBe(180_000)
+    expect(resolveCallTimeoutMsec(8_000)).toBe(8_000)
+    expect(resolveCallTimeoutMsec(5)).toBe(1_000)
+    expect(resolveCallTimeoutMsec(10 * 60_000)).toBe(180_000)
+  })
+
+  it('waits 1 s after the first failed connection and longer after more, up to 10 s', () => {
+    expect([1, 2, 3, 4, 5, 6, 20].map(reconnectCooldownMsec)).toEqual([1000, 2000, 4000, 8000, 10_000, 10_000, 10_000])
   })
 })

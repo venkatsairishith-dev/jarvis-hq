@@ -22,11 +22,13 @@ import { WidgetStage } from '@proj-airi/stage-ui/components/scenes'
 import { useCanvasPixelIsTransparentAtPoint } from '@proj-airi/stage-ui/composables/canvas-alpha'
 import { useVoiceListening } from '@proj-airi/stage-ui/composables/voice-input-mode'
 import { FULLSCREEN_WORKSPACE_FLAG } from '@proj-airi/stage-ui/libs/feature-flags'
+import { useSpeakingStore } from '@proj-airi/stage-ui/stores/audio'
+import { useChatStore } from '@proj-airi/stage-ui/stores/chat'
 import { useFeatureFlagsStore } from '@proj-airi/stage-ui/stores/feature-flags'
 import { useOnboardingStore } from '@proj-airi/stage-ui/stores/onboarding'
 import { useSettings } from '@proj-airi/stage-ui/stores/settings'
 import { useVoiceStore } from '@proj-airi/stage-ui/stores/voice'
-import { refDebounced } from '@vueuse/core'
+import { refDebounced, refThrottled, useEventListener } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, onScopeDispose, ref, shallowRef, toRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -46,6 +48,7 @@ import { useModelSettingsRuntimeOwner } from '../composables/model-settings-runt
 import { useFullscreenHost } from '../composables/use-fullscreen-host'
 import { provideFullscreenLayout } from '../composables/use-fullscreen-layout'
 import { usePushToTalkShortcut } from '../composables/use-push-to-talk-shortcut'
+import { useStageFrameRate } from '../composables/use-stage-frame-rate'
 import { useScreenAmbientLight } from '../composables/use-screen-ambient-light'
 import { stageOpaqueAttribute } from '../composables/use-stage-painted-mask'
 import { useControlsIslandStore } from '../stores/controls-island'
@@ -53,6 +56,7 @@ import { useFullscreenStore } from '../stores/fullscreen'
 import { useStageWindowLifecycleStore } from '../stores/stage-window-lifecycle'
 import { useToolSelectionStore } from '../stores/tools'
 import { resolveFadeOnHoverInteraction } from '../utils/fade-on-hover'
+import { HIT_TEST_SAMPLE_MS } from '../utils/stage-frame-rate'
 import { shouldSampleStageTransparency } from '../utils/stage-three-transparency'
 
 const hearingStatusElement = ref<HTMLElement>()
@@ -86,30 +90,36 @@ const { isOutside: isOutsideWindow } = useElectronMouseInWindow()
 const isOutside = computed(() => controlsIslandRef.value?.isOutside ?? true)
 const isOutsideFor250Ms = refDebounced(isOutside, 250)
 const { x: relativeMouseX, y: relativeMouseY } = useElectronRelativeMouse()
+// D57: the pixel tests below read the canvas back (`gl.readPixels`), which waits for the GPU to finish the frame it is drawing, and the
+// cursor position arrives up to 60 times a second from the main process. Reading at that rate stalled the page's main thread on
+// every cursor move, which is when the owner reaches for the avatar or the chat button. The tests now see the cursor at most every
+// `HIT_TEST_SAMPLE_MS`; the controls island and the window border keep the unthrottled position.
+const sampledMouseX = refThrottled(relativeMouseX, HIT_TEST_SAMPLE_MS)
+const sampledMouseY = refThrottled(relativeMouseY, HIT_TEST_SAMPLE_MS)
 // NOTICE: In real-world use cases of Fade on Hover feature, the cursor may move around the edge of the
 // model rapidly, causing flickering effects when checking pixel transparency strictly.
 // Here we use render-target pixel sampling to keep detection aligned with the actual render output.
 const isTransparentByPixels = useCanvasPixelIsTransparentAtPoint(
   stageCanvas,
-  relativeMouseX,
-  relativeMouseY,
+  sampledMouseX,
+  sampledMouseY,
   { regionRadius: 25 },
 )
 const isTransparentByThree = useThreeSceneIsTransparentAtPoint(
   widgetStageRef,
-  relativeMouseX,
-  relativeMouseY,
+  sampledMouseX,
+  sampledMouseY,
   { regionRadius: 25 },
 )
 const isTransparentByPixelsExact = useCanvasPixelIsTransparentAtPoint(
   stageCanvas,
-  relativeMouseX,
-  relativeMouseY,
+  sampledMouseX,
+  sampledMouseY,
 )
 const isTransparentByThreeExact = useThreeSceneIsTransparentAtPoint(
   widgetStageRef,
-  relativeMouseX,
-  relativeMouseY,
+  sampledMouseX,
+  sampledMouseY,
 )
 
 const settingsStore = useSettings()
@@ -643,11 +653,28 @@ useModelSettingsRuntimeOwner({
 })
 
 const voice = useVoiceStore()
+// D57: 30 frames a second while nothing happens, 60 while the character is in use (the owner's own limit in Settings still wins).
+const { nowSpeaking: stageSpeaking } = storeToRefs(useSpeakingStore())
+const stageChat = useChatStore()
+const stageThinking = computed(() => stageChat.activeTurns.length > 0)
+const stageListening = computed(() => voice.state?.phase === 'capturing')
+const { frameRate: stageFrameRate, touch: touchStage } = useStageFrameRate({
+  speaking: stageSpeaking,
+  thinking: stageThinking,
+  listening: stageListening,
+  cursorX: relativeMouseX,
+  cursorY: relativeMouseY,
+  cursorOutside: isOutsideWindow,
+  hidden: () => globalThis.document?.hidden === true,
+})
+useEventListener(window, ['keydown', 'pointerdown'], touchStage, { passive: true })
 const toolSelection = useToolSelectionStore()
 // Spoken turns start in this window. They use the tools that the chat window composer grants.
 onScopeDispose(voice.connectTools(() => toolSelection.requestTools))
 const openInlay = useElectronEventaInvoke(electronOpenInlay)
-useVoiceListening()
+// D57: a microphone left on starts listening 8 s after the window opens, not inside the avatar's model load (the voice activity model
+// and the wake word spotter are ONNX/WASM Workers).
+useVoiceListening({ startDelayMs: 8_000 })
 usePushToTalkShortcut()
 // The inlay stays shown from startup and draws a capsule when any capture starts.
 // This call shows it again after the user hid it. A failed begin never reaches `capturing`.
@@ -733,6 +760,7 @@ const cursorPosition = computed(() => ({
           flex-1
           :cursor-position="cursorPosition"
           :paused="stagePaused"
+          :frame-rate="stageFrameRate"
           @error="handleStageRenderError"
           @reset="handleStageReset"
           @select-avatar-model="openSettings({ route: '/settings/models' })"

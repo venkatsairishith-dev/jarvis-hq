@@ -35,6 +35,8 @@ export interface MemorySaverDeps {
   lastOwnerActivity: () => number
   now?: () => number
   enabled?: () => boolean
+  /** True while nobody sees the window (minimized, hidden): the check skips its turn. */
+  paused?: () => boolean
   onError?: (error: unknown) => void
 }
 
@@ -42,15 +44,18 @@ export function createMemorySaver(deps: MemorySaverDeps) {
   const now = deps.now ?? Date.now
   let saved = 0
   let timer: ReturnType<typeof setInterval> | undefined
+  /** A save that is still going is not started again by the next check. */
+  let running = false
 
   async function checkOnce(): Promise<boolean> {
-    if (deps.enabled && !deps.enabled())
+    if (running || (deps.enabled && !deps.enabled()) || deps.paused?.())
       return false
     const turns = deps.turns()
     if (turns.length < saved)
       saved = 0 // another conversation (or a cleared one) started
     if (turns.length - saved < MIN_NEW_TURNS || deps.busy() || now() - deps.lastOwnerActivity() < QUIET_MS)
       return false
+    running = true
     try {
       await deps.save(turns)
       saved = turns.length
@@ -59,6 +64,9 @@ export function createMemorySaver(deps: MemorySaverDeps) {
     catch (error) {
       deps.onError?.(error)
       return false
+    }
+    finally {
+      running = false
     }
   }
 

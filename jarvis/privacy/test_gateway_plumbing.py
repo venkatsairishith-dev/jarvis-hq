@@ -1041,3 +1041,36 @@ class StreamedAnswersAreJudgedBeforeTheCallerSeesThem(unittest.TestCase):
         body, seen = self.run_case(self.GOOD, [{"role": "user", "content": "hi"}])
         self.assertIn("hello", body)
         self.assertEqual((seen["first"], seen["local"]), (1, 0))
+
+
+class PinFileAndPeekRobustness(unittest.TestCase):
+    """Review 2026-10-26."""
+
+    def test_the_pin_file_survives_a_bom_and_a_utf16_file(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "pin.txt")
+        os.environ["JARVIS_GATEWAY_PIN_FILE"] = p
+        self.addCleanup(lambda: os.environ.pop("JARVIS_GATEWAY_PIN_FILE", None))
+        open(p, "wb").write(b"\xef\xbb\xbfgroq\r\n")
+        self.assertEqual(gateway.read_pin(), ("groq", ""))
+        open(p, "wb").write("groq".encode("utf-16"))                        # PowerShell 5.1 '>' redirection
+        self.assertEqual(gateway.read_pin(), ("", ""))
+
+    def test_peek_judges_message_shapes_whitespace_and_broken_streams(self):
+        class R(list):
+            pass
+
+        def lines(*events):
+            return R([("data: " + e + "\n").encode() for e in events])
+        ok_msg = lines('{"choices":[{"message":{"content":"hi"}}]}')
+        self.assertEqual(gateway.peek_stream(ok_msg, whole=True)[1], "ok")
+        self.assertEqual(gateway.peek_stream(lines('{"choices":[{"text":"hi"}]}'), whole=True)[1], "ok")
+        self.assertEqual(gateway.peek_stream(lines('{"choices":[{"delta":{"content":"\\n"}}]}', "[DONE]"), whole=True)[1], "empty")
+        self.assertEqual(gateway.peek_stream(lines('{"choices":["bad"]}', "[DONE]"), whole=True)[1], "empty")
+
+        class Broken:
+            def __iter__(self):
+                yield b'data: {"choices":[{"delta":{"role":"assistant"}}]}\n'
+                raise __import__("http.client").client.IncompleteRead(b"")
+        self.assertEqual(gateway.peek_stream(Broken())[1], "error")

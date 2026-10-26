@@ -394,35 +394,45 @@ class ReplayResponse:
         return False
 
 
+PEEK_DEADLINE_S = 60.0
+
+
+def _delta_has_answer(ch) -> bool:
+    if not isinstance(ch, dict):
+        return False
+    d = ch.get("delta") if isinstance(ch.get("delta"), dict) else ch.get("message") if isinstance(ch.get("message"), dict) else {}
+    content = d.get("content")
+    return (isinstance(content, str) and bool(content.strip())) or bool(d.get("tool_calls")) or (isinstance(ch.get("text"), str) and bool(ch["text"].strip()))
+
+
 def peek_stream(resp, whole: bool = False) -> tuple[list, str]:
-    """Read a provider's SSE answer far enough to judge it: ("ok") once content or a tool call arrives (or, with `whole`, the stream ended with some),
-    ("error") when an event is an error object, ("empty") when the stream ends with neither content nor a tool call. Returns the lines read."""
-    head, ok = [], False
+    """Read a provider's SSE answer far enough to judge it: ("ok") once content or a tool call arrives (or, with `whole`, the stream ended with some,
+    or PEEK_DEADLINE_S passed with the provider still talking), ("error") when an event is an error object or the connection broke before any answer,
+    ("empty") when the stream ends with neither content nor a tool call. Returns the lines read."""
+    head, ok, t0 = [], False, time.time()
     try:
         for line in resp:
             head.append(line)
             text = line.decode("utf-8", "replace")
-            if not text.startswith("data:"):
-                continue
-            payload = text[5:].strip()
-            if payload == "[DONE]":
-                break
-            try:
-                ev = json.loads(payload)
-            except ValueError:
-                continue
-            if not isinstance(ev, dict):
-                continue
-            if ev.get("error") and not ev.get("choices"):
-                return head, "error"
-            for ch in ev.get("choices") or []:
-                d = ch.get("delta") or {}
-                if d.get("content") or d.get("tool_calls"):
-                    ok = True
+            if text.startswith("data:"):
+                payload = text[5:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    ev = json.loads(payload)
+                except ValueError:
+                    ev = None
+                if isinstance(ev, dict):
+                    if ev.get("error") and not ev.get("choices"):
+                        return head, "error"
+                    if any(_delta_has_answer(ch) for ch in (ev.get("choices") if isinstance(ev.get("choices"), list) else [])):
+                        ok = True
             if ok and not whole:
                 break
-    except (OSError, ValueError):
-        return head, "error" if not ok else "ok"
+            if time.time() - t0 > PEEK_DEADLINE_S:
+                return head, "ok"                      # still producing after a minute: relay it rather than fail a slow answer
+    except Exception:                                  # noqa: BLE001 - IncompleteRead, a reset, a timeout: a broken stream before an answer is "error"
+        return head, "ok" if ok else "error"
     return head, "ok" if ok else "empty"
 
 
@@ -538,9 +548,9 @@ def read_pin() -> tuple[str, str]:
     ('gateway-pin.txt', not a secret) pins the chain to that one provider. Absent or empty means the normal chain."""
     path = os.environ.get("JARVIS_GATEWAY_PIN_FILE") or os.path.join(SECRET_ROOT, "gateway-pin.txt")
     try:
-        with open(path, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8-sig") as fh:        # a BOM (PowerShell 5.1 writes one) must not become part of the name
             parts = fh.readline().split(None, 1)
-    except OSError:
+    except (OSError, ValueError):                            # UnicodeDecodeError is a ValueError: a UTF-16 file means "no pin", not a dead gateway
         return "", ""
     return (parts[0], parts[1].strip() if len(parts) > 1 else "") if parts else ("", "")
 

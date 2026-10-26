@@ -41,6 +41,19 @@ describe('createMemorySaver', () => {
     expect(save).toHaveBeenCalledTimes(2)
   })
 
+  it('does not check while the window cannot be seen, and does not start a save while one is still going (D57)', async () => {
+    const hidden = make({ paused: () => true })
+    expect(await hidden.saver.checkOnce()).toBe(false)
+    expect(hidden.save).not.toHaveBeenCalled()
+
+    let release: () => void = () => {}
+    const slow = make({ save: () => new Promise<void>((resolve) => { release = resolve }) })
+    const first = slow.saver.checkOnce()
+    expect(await slow.saver.checkOnce()).toBe(false)
+    release()
+    expect(await first).toBe(true)
+  })
+
   it('waits while the owner is active, an answer runs, or there is too little new', async () => {
     const active = make({ lastOwnerActivity: () => 10_000_000 - 60_000 })
     expect(await active.saver.checkOnce()).toBe(false)
