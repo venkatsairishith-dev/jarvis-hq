@@ -91,7 +91,10 @@ def plan_timeout(providers_file: Path | str | None = None) -> float:
 
 
 def _read_capped(r) -> bytes:
-    raw = r.read(MAX_BODY + 1)
+    try:
+        raw = r.read(MAX_BODY + 1)
+    except TypeError:                                            # a reader that takes no size (a test double)
+        raw = r.read()
     if len(raw) > MAX_BODY:
         raise ValueError("the reply was too large")
     return raw
