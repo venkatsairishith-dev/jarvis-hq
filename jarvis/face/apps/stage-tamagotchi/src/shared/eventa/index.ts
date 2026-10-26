@@ -793,5 +793,22 @@ export const electronAuthLogout = defineInvokeEventa<void>('eventa:invoke:electr
 export const i18nSetLocale = defineInvokeEventa<void, Locale>('eventa:invoke:electron:i18n:set-locale')
 export const i18nGetLocale = defineInvokeEventa<string | undefined>('eventa:invoke:electron:i18n:get-locale')
 
+// JARVIS D60 (speed): the environment's defaults for the speed switches, and the content-free timing marks of a chat turn (phase word + milliseconds).
+export interface JarvisSpeedEnv {
+  directTools: boolean
+  quickAck: boolean
+  quickCommand: boolean
+  timing: boolean
+}
+export interface JarvisTimingMark {
+  phase: string
+  ms: number
+  turn: number
+  tool?: string
+  round?: number
+}
+export const jarvisSpeedEnv = defineInvokeEventa<JarvisSpeedEnv>('eventa:invoke:electron:jarvis:speed-env')
+export const jarvisTimingMarks = defineInvokeEventa<void, JarvisTimingMark[]>('eventa:invoke:electron:jarvis:timing-marks')
+
 export { electron } from '@proj-airi/electron-eventa'
 export * from '@proj-airi/electron-eventa/electron-updater'

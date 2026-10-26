@@ -11,6 +11,7 @@ import { isMacOS, isWindows } from 'std-env'
 
 import { createServerChannelService } from '../../services/airi/channel-server'
 import { createI18nService } from '../../services/airi/i18n'
+import { createJarvisSpeedService } from '../../services/airi/jarvis-speed'
 import { createAppService, createAppVersionService, createPowerMonitorService, createScreenService, createSystemPreferencesService, createWindowService } from '../../services/electron'
 import { WindowBackdropService } from '../../services/electron/window-backdrop'
 
@@ -186,6 +187,7 @@ export async function setupBaseWindowElectronInvokes(params: {
   WindowBackdropService.install(params.window)
 
   await createI18nService({ context: params.context, window: params.window, i18n: params.i18n })
+  createJarvisSpeedService({ context: params.context })
 
   createServerChannelService({ serverChannel: params.serverChannel })
 }

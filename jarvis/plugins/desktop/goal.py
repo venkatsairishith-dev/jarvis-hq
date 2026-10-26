@@ -47,6 +47,11 @@ LOCAL_ALONE = "local_alone"
 LOCAL_KEY = "jarvis-local"                     # the placeholder key the gateway knows (it adds the real one itself)
 ROUTE_HEADER = "X-Jarvis-Route"                # "online": the gateway puts the online chain first (a reasoning call, not a simple local one)
 PLAN_TIMEOUT_S = 90.0
+# D60: a plan is a short JSON object, decided not invented: temperature 0 and a small answer limit. A reasoning model spends the same limit on hidden
+# thinking, so a plan that comes back empty or cut off is asked ONCE more with PLAN_RETRY_TOKENS before the goal falls back to the local planner.
+PLAN_TEMPERATURE = 0
+PLAN_MAX_TOKENS = int(os.environ.get("JARVIS_PLAN_MAX_TOKENS", "") or 500)
+PLAN_RETRY_TOKENS = 1500
 PICK_TIMEOUT_S = 60.0
 DEFAULT_ONLINE_MODEL = "zai-org/GLM-5.3-Flash"
 PLUGIN_TOML = Path(__file__).with_name("plugin.toml")
@@ -142,24 +147,31 @@ def _gateway_base() -> str:
 def ask_online(messages: list[dict], post: Callable[[dict, dict], tuple[str, str]] | None = None, timeout: float = PLAN_TIMEOUT_S) -> tuple[str, str]:
     """(plan text, provider that answered) from the privacy gateway's online chain. The body holds messages and a few numbers: no `tools`,
     no `tool_choice`, no image part, no streaming. `post(body, headers)` is the test seam."""
-    body = {"model": os.environ.get("JARVIS_AGENT_MODEL", DEFAULT_ONLINE_MODEL), "temperature": 0.1, "max_tokens": 900, "messages": messages}
+    body = {"model": os.environ.get("JARVIS_AGENT_MODEL", DEFAULT_ONLINE_MODEL), "temperature": PLAN_TEMPERATURE, "max_tokens": PLAN_MAX_TOKENS, "messages": messages}
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LOCAL_KEY}", ROUTE_HEADER: "online"}
     if post is not None:
         return post(body, headers)
     ready, why = screen_text.gateway_state()
     if not ready:
         raise GoalError(f"the privacy gateway is not ready ({why})")
-    req = urllib.request.Request(_gateway_base() + "/v1/chat/completions", data=json.dumps(body).encode(), headers=headers)
-    try:
-        with loopback_http.urlopen(req, timeout=timeout) as r:
-            provider = r.headers.get("X-Jarvis-Provider", "") or "gateway"
-            out = json.loads(r.read().decode("utf-8", "replace"))
-        content = out["choices"][0]["message"]["content"]
-    except urllib.error.HTTPError as e:
-        raise GoalError(f"the online model answered HTTP {e.code}") from None
-    except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
-        raise GoalError(f"the online plan could not be read ({type(e).__name__})") from None
-    if not isinstance(content, str) or not content.strip():
+    for attempt in (1, 2):
+        req = urllib.request.Request(_gateway_base() + "/v1/chat/completions", data=json.dumps(body).encode(), headers=headers)
+        try:
+            with loopback_http.urlopen(req, timeout=timeout) as r:
+                provider = r.headers.get("X-Jarvis-Provider", "") or "gateway"
+                out = json.loads(r.read().decode("utf-8", "replace"))
+            choice = out["choices"][0]
+            content = choice["message"]["content"]
+        except urllib.error.HTTPError as e:
+            raise GoalError(f"the online model answered HTTP {e.code}") from None
+        except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
+            raise GoalError(f"the online plan could not be read ({type(e).__name__})") from None
+        empty = not isinstance(content, str) or not content.strip()
+        if (empty or choice.get("finish_reason") == "length") and attempt == 1 and body["max_tokens"] < PLAN_RETRY_TOKENS:
+            body = {**body, "max_tokens": PLAN_RETRY_TOKENS}         # cut off or all thinking: once more with room
+            continue
+        break
+    if empty:
         raise GoalError("the online model returned no plan")
     return content, provider
 
@@ -253,6 +265,7 @@ class Hands:
     decide_fn: Callable[[str, str], decide.Plan] | None = None     # (step goal, model alias) -> decide.Plan
     local_post: Callable[[dict], str] | None = None
     readers: dict = field(default_factory=dict)                    # {"recall": fn(days=3) -> str, "tasks": fn(state, limit) -> list}
+    on_progress: Callable[[dict], None] | None = None              # D60: {state: planning|running|done|failed|waiting, n, total, executor}; content-free, never raises into the goal
 
 
 def _short(value: Any) -> str:
@@ -276,6 +289,14 @@ class GoalRunner:
         self.table = specialists.load() if table is None else table
         self.decide_fn = hands.decide_fn or (lambda goal, model: decide.decide(goal, _profiles(), model=model, post=hands.local_post))
 
+    def _note(self, state: str, n: int = 0, total: int = 0, executor: str = "") -> None:
+        """D60: tell the host which step is running (for the face's progress line). Fixed words and numbers only; a broken callback is ignored."""
+        if self.h.on_progress is not None:
+            try:
+                self.h.on_progress({"state": state, "n": n, "total": total, "executor": executor})
+            except Exception:                                   # noqa: BLE001 - progress must never fail a goal
+                pass
+
     # ---- the whole goal
     async def run(self, goal: str, enabled: bool = True) -> dict:
         goal = " ".join(str(goal or "").split())[:MAX_GOAL]
@@ -284,6 +305,7 @@ class GoalRunner:
         if not enabled:
             return await self._local_alone(goal, "the online-plan option is off")
         caps = catalogue(self.h.readers)
+        self._note("planning")
         try:
             text, provider = await asyncio.to_thread(self.h.ask_online, plan_messages(goal, caps))
             plan = parse_online_plan(text, caps)
@@ -297,6 +319,7 @@ class GoalRunner:
     async def _local_alone(self, goal: str, why: str) -> dict:
         """The local model plans by itself (decide.py, as run_pc_task always did) and says so."""
         spec = specialists.resolve("ui_decide", self.table)
+        self._note("running", 1, 1, "pc")
         plan = await self._decide(goal, spec)
         rec = await self.h.run_pc(goal, plan)
         step = self._pc_step({"n": 1, "executor": "pc", "kind": "ui_decide", "goal": goal, "check": ""}, rec, spec.alias)
@@ -317,6 +340,7 @@ class GoalRunner:
         last_rec: dict | None = None
         for s in plan.steps:
             ex, spec = EXECUTORS[s["executor"]], specialists.resolve(EXECUTORS[s["executor"]].kind, self.table)
+            self._note("running", s["n"], len(plan.steps), ex.id)
             if ex.entry == "":
                 dplan = await self._decide(s["goal"], spec)
                 last_rec = rec = await self.h.run_pc(s["goal"], dplan)
@@ -331,6 +355,7 @@ class GoalRunner:
         head = f"Planned by {plan.provider or 'the online model'} (text only), executed by local models. {plan.summary}".strip()
         out = self._result(done, ONLINE_PLAN, head, last_rec)
         out["provider"] = plan.provider or "gateway"
+        self._note({"completed": "done", "waiting_for_permission": "waiting"}.get(out["status"], "failed"), len(done), len(plan.steps))
         return out
 
     def _pc_step(self, s: dict, rec: dict, alias: str) -> dict:

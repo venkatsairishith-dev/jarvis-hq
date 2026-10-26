@@ -10,7 +10,7 @@ import { hudLook } from './hud-model'
 /** The HUD in the main stage window: the live state from use-jarvis-hud.ts, drawn by HudLayer. App.vue mounts it when the setting is not "off". */
 const hud = useJarvisHudStore()
 const settings = useJarvisHudSettingsStore()
-const { state, stateLabel, ariaLabel, link, status, statusAt, modelLabel, level } = storeToRefs(hud)
+const { state, stateLabel, ariaLabel, link, status, statusAt, modelLabel, level, line } = storeToRefs(hud)
 </script>
 
 <template>
@@ -23,6 +23,7 @@ const { state, stateLabel, ariaLabel, link, status, statusAt, modelLabel, level 
     :status="status"
     :status-at="statusAt"
     :model-label="modelLabel"
+    :line="line"
     :level="level"
   />
 </template>

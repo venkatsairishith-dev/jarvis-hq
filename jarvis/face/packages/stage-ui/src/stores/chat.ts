@@ -44,13 +44,17 @@ import { useAuthStore } from './auth'
 import { createMinecraftContext, createRuntimePromptContext, createUserAccountContext } from './chat/context-providers'
 import { useChatContextStore } from './chat/context-store'
 import { describeChatImages, replaceToolResultImages } from './chat/image-projection'
+import { createLatencyTrace } from './chat/latency-trace'
 import { latestUserText } from './chat/lean-tools'
 import { composeRecipeSpacePrompt, composeSystemPrompt } from './chat/prompt-recipe'
+import { guessTask, mightBeQuickCommand, parseQuickResult } from './chat/quick-intent'
+import { emitLocalReply, ownerTextOf, QUICK_TOOL_NAME, QUICK_WAIT_MS } from './chat/quick-reply'
 import { createRunTools, planRunTools } from './chat/run-tools'
 import { staysLocal } from './chat/session-locality'
 import { useChatSessionStore } from './chat/session-store'
 import { useChatStreamStore } from './chat/stream-store'
 import { useContextObservabilityStore } from './devtools/context-observability'
+import { useJarvisSpeedStore } from './jarvis-speed'
 import { useMemoryStore } from './memory'
 import { useAiriCardStore } from './modules/airi-card'
 import { useAutonomousArtistryStore } from './modules/artistry-autonomous'
@@ -960,6 +964,71 @@ export const useChatStore = defineStore('chat', () => {
     chatSession.setSessionMessages(sessionId, nextMessages)
   }
 
+  // JARVIS D60 (speed): the instant acknowledgement, the rules-first quick command, and the content-free timing trace of a turn.
+  const speed = useJarvisSpeedStore()
+  const latencyTrace = createLatencyTrace({ enabled: () => speed.timing })
+
+  /** Asks the tool server's rules-first router whether the message is one plain command (and runs it). `null`: not handled, or no router, or it failed. */
+  async function askQuickCommand(text: string, turnId: string) {
+    const tool = llmToolsStore.getToolsByNames(QUICK_TOOL_NAME)[0]
+    if (!tool || !text || text.length > 160)
+      return null
+    latencyTrace.mark(turnId, 'quick_start')
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const raw = await Promise.race([
+        Promise.resolve(tool.execute({ text }, { messages: [], toolCallId: `quick-${turnId}` })),
+        new Promise<undefined>((resolve) => { timer = setTimeout(resolve, QUICK_WAIT_MS, undefined) }),
+      ])
+      const result = parseQuickResult(raw)
+      return result.handled ? result : null
+    }
+    catch {
+      return null
+    }
+    finally {
+      if (timer)
+        clearTimeout(timer)
+      latencyTrace.mark(turnId, 'quick_end')
+    }
+  }
+
+  /**
+   * The model request of a turn, with the D60 fast paths in front of it: show "On it" at once for a PC, screen or document message; answer a plain
+   * command ("open notepad", "pause", "what time is it") from the rules, with no model request at all; otherwise the normal stream, with its timing marks.
+   * A rules answer goes through the same stream events as a model's text, so the chat, the voice and the history treat it like any reply.
+   */
+  async function streamWithFastPaths(model: string, chatProvider: GenerationProvider, context: Conversation, options?: StreamOptions) {
+    const turnId = options?.requestCorrelation?.turnId
+    const sessionId = options?.requestCorrelation?.conversationId
+    if (turnId)
+      latencyTrace.sent(turnId)
+    const traced: StreamOptions | undefined = options && turnId
+      ? {
+          ...options,
+          onStreamEvent: async (event: StreamEvent) => {
+            latencyTrace.streamEvent(turnId, event)
+            await options.onStreamEvent?.(event)
+          },
+        }
+      : options
+    if (turnId && sessionId && isOwnerSession(sessionId) && !isTaskSession(sessionId)) {
+      const text = ownerTextOf(context)
+      const guess = guessTask(text)
+      if (guess && speed.quickAck) {
+        speed.setAck({ line: guess.line, kind: guess.kind, turnId })
+        latencyTrace.mark(turnId, 'ack')
+      }
+      // The router is asked only for what could be a plain command (a PC verb) or a clock question; every other message goes straight to the model.
+      const quick = speed.quickCommand && mightBeQuickCommand(text, guess) ? await askQuickCommand(text, turnId) : null
+      if (quick?.reply) {
+        await emitLocalReply(quick.reply, traced)
+        return
+      }
+    }
+    await streamWithStageAdapters(model, chatProvider, context, traced)
+  }
+
   const runtime = createChatOrchestratorRuntime({
     session: {
       ensureSession: sessionId => chatSession.ensureSession(sessionId),
@@ -989,7 +1058,7 @@ export const useChatStore = defineStore('chat', () => {
       },
     },
     llm: {
-      stream: streamWithStageAdapters,
+      stream: streamWithFastPaths,
     },
     getActiveSessionId: () => activeSessionId.value,
     getActiveProvider: () => activeProvider.value,
@@ -1006,6 +1075,8 @@ export const useChatStore = defineStore('chat', () => {
     unwrapMessage: message => toRaw(message),
     onStateChange: syncRuntimeState,
     onSendSettled: (event) => {
+      speed.clearAck(event.turnId)
+      latencyTrace.finish(event.turnId, event.status)
       settleOwnedTurnSpan(event)
       getSpeechBusContext().emit(voiceGenerationEnded, event)
     },

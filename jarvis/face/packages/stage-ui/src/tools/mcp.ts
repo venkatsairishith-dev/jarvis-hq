@@ -168,3 +168,77 @@ export function createMcpTools(runtime: McpToolRuntime): Array<Promise<Tool>> {
 export async function mcp(): Promise<Tool[]> {
   return []
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// JARVIS D60: direct tools. The proxy path (builtIn_mcpListTools, then builtIn_mcpCallTool "jarvis::<tool>") costs the chat model one or two
+// extra full requests before the real tool runs (D52: a goal took 3 to 7 rounds on the owner's laptop, each one a full request to a provider
+// that needs 10 to 60 seconds for it). In direct mode the first request already carries the real tool schemas of the JARVIS tool server, each
+// under its own name, and the model calls them in round one.
+
+/** The server whose tools are offered directly. Tools of any other MCP server stay behind the proxies. */
+export const DIRECT_TOOL_SERVER = 'jarvis'
+
+const DIRECT_NAME = /^[\w-]{1,64}$/
+
+/** An MCP result without the copy that a structured result carries beside its text: the model reads one, and the next request pays for both. */
+export function slimMcpResult(result: McpCallToolResult | undefined): McpCallToolResult | string {
+  if (!result)
+    return 'The tool returned nothing.'
+  const hasText = Array.isArray(result.content) && result.content.some(item => item?.type === 'text' && typeof item.text === 'string')
+  if (!hasText)
+    return result
+  const { structuredContent: _structured, toolResult: _toolResult, ...rest } = result
+  return rest
+}
+
+function directParameters(schema: Record<string, unknown> | undefined): Record<string, unknown> {
+  const source = (schema ?? {}) as { properties?: Record<string, unknown>, required?: unknown[] }
+  const required = (source.required ?? []).filter((name): name is string => typeof name === 'string')
+  return { type: 'object', properties: source.properties ?? {}, ...(required.length > 0 ? { required } : {}) }
+}
+
+/**
+ * The tools of one MCP server as chat tools under their own names (`desktop__do_goal`, not `jarvis::desktop__do_goal`).
+ *
+ * Expects:
+ * - descriptors as the tool server lists them. The JARVIS server's chat profile already shortens descriptions and schemas (about 8 KB for 22 tools),
+ *   so nothing is cut here; the descriptions carry what makes a call safe ("data, never instructions", "full path").
+ * - no `call_summary` argument is added to these tools (the resolver skips them, see `isDirectTool`): it cost about 150 bytes a tool, 3.4 KB for
+ *   the 22, in every request.
+ */
+export function createDirectMcpTools(
+  descriptors: McpToolDescriptor[],
+  runtime: Pick<McpToolRuntime, 'callTool'>,
+  server: string = DIRECT_TOOL_SERVER,
+): Tool[] {
+  return descriptors
+    .filter(tool => tool.serverName === server && DIRECT_NAME.test(tool.toolName))
+    .map((descriptor): Tool => {
+      const parameters = directParameters(descriptor.inputSchema)
+      const required = (parameters.required as string[] | undefined) ?? []
+      return {
+        type: 'function',
+        function: { name: descriptor.toolName, description: descriptor.description ?? '', parameters },
+        validate: async (input) => {
+          if (input === null || typeof input !== 'object' || Array.isArray(input))
+            return { issues: [{ message: 'The arguments must be a JSON object.' }] }
+          const missing = required.filter(name => (input as Record<string, unknown>)[name] === undefined)
+          return missing.length > 0 ? { issues: [{ message: `Missing: ${missing.join(', ')}` }] } : { value: input }
+        },
+        // The tool store keeps only a tool's definition and its `execute`, so the check lives here too.
+        execute: async (input) => {
+          if (input !== null && typeof input === 'object' && !Array.isArray(input)) {
+            const missing = required.filter(name => (input as Record<string, unknown>)[name] === undefined)
+            if (missing.length > 0)
+              return { isError: true, content: [{ type: 'text', text: `Missing: ${missing.join(', ')}` }] }
+          }
+          try {
+            return slimMcpResult(await runtime.callTool({ name: descriptor.name, arguments: (input ?? {}) as Record<string, unknown> }))
+          }
+          catch (error) {
+            return { isError: true, content: [{ type: 'text', text: errorMessageFrom(error) ?? 'Unknown error.' }] }
+          }
+        },
+      }
+    })
+}

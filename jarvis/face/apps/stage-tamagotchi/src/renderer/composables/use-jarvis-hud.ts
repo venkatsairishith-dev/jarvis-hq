@@ -19,6 +19,7 @@ import type { StatusPoll } from '../components/hud/hud-model'
 import { useElectronEventaInvoke } from '@proj-airi/electron-vueuse'
 import { useSpeakingStore } from '@proj-airi/stage-ui/stores/audio'
 import { useChatStore } from '@proj-airi/stage-ui/stores/chat'
+import { useJarvisSpeedStore } from '@proj-airi/stage-ui/stores/jarvis-speed'
 import { useConsciousnessStore } from '@proj-airi/stage-ui/stores/modules/consciousness'
 import { useVoiceControlsStore } from '@proj-airi/stage-ui/stores/voice-controls'
 import { defineStore, storeToRefs } from 'pinia'
@@ -28,6 +29,7 @@ import { useRoute } from 'vue-router'
 import { electronMcpCallTool } from '../../shared/eventa'
 import {
   hudAriaLabel,
+  hudLine,
   hudLook,
   hudStateLabel,
   JARVIS_STATUS_TOOL,
@@ -42,6 +44,8 @@ import { pageIsHidden, POLL_CALL_TIMEOUT_MS, POLL_WAIT_MS, shouldPollNow, withDe
 
 /** How often the status is asked for, in milliseconds. A local read; the PC registry file itself is rewritten every 5 s. */
 export const HUD_POLL_MS = 4_000
+/** D60: while a task is under way (the instant "On it", or a goal's steps) the status is asked for this often, even when another app has the focus, so the step lines keep up. */
+export const HUD_ACTIVE_POLL_MS = 1_500
 /** While the window does not have the keyboard focus (the owner works in another app) the status is asked for this rarely. */
 export const HUD_UNFOCUSED_POLL_MS = 15_000
 
@@ -54,6 +58,8 @@ export const useJarvisHudStore = defineStore('jarvis-hud', () => {
   const listening = ref(false)
   const thinking = ref(false)
   const voiceError = ref(false)
+  /** D60: the instant acknowledgement of a task message ("On it"), set by the chat store before any model answers. */
+  const ack = shallowRef<{ line: string, kind: string, turnId: string } | null>(null)
   const model = ref('')
   /** The character's mouth, 0 to 1, for the pulse of the ring. Written often; read only by a watcher that sets one CSS variable. */
   const level = ref(0)
@@ -67,7 +73,12 @@ export const useJarvisHudStore = defineStore('jarvis-hud', () => {
     voiceError: voiceError.value,
     link: link.value,
     pcBusy: poll.value.status?.pcBusy ?? false,
+    ack: ack.value !== null,
   }))
+  /** The one short line under way: the goal's step from the status, else the acknowledgement. */
+  const line = computed(() => hudLine(ack.value?.line, poll.value.status))
+  /** A task is being acknowledged or a goal runs: the status is worth asking for more often. */
+  const taskActive = computed(() => ack.value !== null || ['planning', 'running', 'waiting'].includes(poll.value.status?.goalState ?? 'none'))
   const stateLabel = computed(() => hudStateLabel(state.value, link.value))
   const ariaLabel = computed(() => hudAriaLabel(state.value, link.value, poll.value.status))
   const modelLabel = computed(() => shortModel(model.value))
@@ -78,7 +89,7 @@ export const useJarvisHudStore = defineStore('jarvis-hud', () => {
       statusAt.value = Date.now()
   }
 
-  return { poll, statusAt, speaking, listening, thinking, voiceError, model, level, link, status, state, stateLabel, ariaLabel, modelLabel, setPoll }
+  return { poll, statusAt, speaking, listening, thinking, voiceError, ack, line, taskActive, model, level, link, status, state, stateLabel, ariaLabel, modelLabel, setPoll }
 })
 
 /**
@@ -103,6 +114,7 @@ export function useJarvisHud() {
   const voiceControls = useVoiceControlsStore()
   const chatStore = useChatStore()
   const consciousness = useConsciousnessStore()
+  const speed = useJarvisSpeedStore()
   const { nowSpeaking, mouthOpenSize } = storeToRefs(speakingStore)
   const { snapshot: voiceSnapshot } = storeToRefs(voiceControls)
   const { activeModel } = storeToRefs(consciousness)
@@ -122,6 +134,7 @@ export function useJarvisHud() {
   )
   watch(() => voiceSnapshot.value.microphone?.error, e => hud.voiceError = !!e, { immediate: true })
   watch(activeModel, v => hud.model = v ?? '', { immediate: true })
+  watch(() => speed.ack, v => hud.ack = v, { immediate: true })
 
   let timer: ReturnType<typeof setInterval> | undefined
   let running = false
@@ -129,7 +142,7 @@ export function useJarvisHud() {
   async function pollOnce() {
     // No work for a window nobody sees; the next visible tick catches up. A window the owner is not using polls less often.
     const now = Date.now()
-    if (running || !shouldPollNow({ hidden: pageIsHidden(), focused: globalThis.document?.hasFocus?.() ?? true, now, lastPollAt, unfocusedMs: HUD_UNFOCUSED_POLL_MS }))
+    if (running || !shouldPollNow({ hidden: pageIsHidden(), focused: globalThis.document?.hasFocus?.() ?? true, now, lastPollAt, unfocusedMs: hud.taskActive ? HUD_ACTIVE_POLL_MS : HUD_UNFOCUSED_POLL_MS }))
       return
     running = true
     lastPollAt = now
@@ -150,12 +163,15 @@ export function useJarvisHud() {
       clearInterval(timer)
     timer = undefined
   }
-  watch(visible, (on) => {
+  watch([visible, () => hud.taskActive], ([on, active], previous) => {
     stop()
     if (!on)
       return
+    // a task just began: ask now, so the first step line does not wait for the next tick
+    if (active && !previous?.[1])
+      lastPollAt = 0
     void pollOnce()
-    timer = setInterval(() => void pollOnce(), HUD_POLL_MS)
+    timer = setInterval(() => void pollOnce(), active ? HUD_ACTIVE_POLL_MS : HUD_POLL_MS)
   }, { immediate: true })
   onScopeDispose(stop)
 

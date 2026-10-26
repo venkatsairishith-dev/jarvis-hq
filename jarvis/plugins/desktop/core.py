@@ -501,6 +501,25 @@ def set_activity(state: str, detail: str = "", path: Path = ACTIVITY):
         pass
 
 
+GOAL_PROGRESS = DATA / "plugins" / "goal_progress.json"
+GOAL_STATES = ("planning", "running", "done", "failed", "waiting", "idle")
+GOAL_EXECUTORS = ("pc", "screen_read", "screen_locate", "doc_read", "deliverable_list", "deliverable_open", "recall", "tasks", "rules")
+
+
+def set_goal_progress(state: str, n: int = 0, total: int = 0, executor: str = "", path: Path | None = None) -> None:
+    """D60: which step of a goal runs now, for the face's progress line (the status tool reads this file). Content-free by construction: one
+    of six state words, two small numbers and one of the fixed executor ids; never the goal's words, a step's goal, a file name or a result."""
+    state = state if state in GOAL_STATES else "idle"
+    executor = executor if executor in GOAL_EXECUTORS else ""
+    path = path or GOAL_PROGRESS
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"state": state, "n": max(0, min(int(n), 99)), "total": max(0, min(int(total), 99)), "executor": executor,
+                                    "at": time.time()}), encoding="utf-8")
+    except (OSError, ValueError, TypeError):
+        pass
+
+
 def profiles(path: Path = PROFILES) -> list[dict]:
     try:
         reg = json.loads(path.read_text(encoding="utf-8"))

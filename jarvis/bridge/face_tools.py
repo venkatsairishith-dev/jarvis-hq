@@ -100,7 +100,9 @@ CHAT_TOOLS: dict[str, str] = {
 # What the face's own panels and HUD call by name through the same MCP route (renderer: use-jarvis-hud, use-jarvis-spoken,
 # use-jarvis-memory, use-jarvis-preview). They are registered and callable, and left out of the list the chat model sees.
 PANEL_TOOLS = ("jarvis_status", "jarvis_spoken", "jarvis_remember_chat", "jarvis_outputs", "jarvis_output_get", "jarvis_preview_wanted",
-               "jarvis_notices")
+               "jarvis_notices",
+               # D60: the face asks this BEFORE it asks a chat model: a plain command is run by rules at once (handled=false costs nothing)
+               "desktop__quick_command")
 MAX_PARAM_DESCRIPTION = 160
 
 
@@ -220,10 +222,44 @@ def read_pc_operations(path=None, now=None) -> dict:
             "pc_stopping": any(o.get("state") in ("stopping", "stuck") for o in ops), "pc_ops": len(ops)}
 
 
+GOAL_STALE_S = 120.0                         # goal_progress.json is rewritten at every step; a step can take a minute, so older than two minutes = its process is gone
+GOAL_WORDS = ("planning", "running", "done", "failed", "waiting")
+GOAL_EXECUTORS = ("pc", "screen_read", "screen_locate", "doc_read", "deliverable_list", "deliverable_open", "recall", "tasks", "rules")
+
+
+def read_goal_progress(path=None, now=None) -> dict:
+    """D60: which step of a goal runs now (plugins/goal_progress.json, written by the desktop plugin), as fixed words and small numbers only.
+
+    The same rule as read_pc_operations: a missing, unreadable, stale or "idle" file means no goal, never an error; nothing but one of five state words,
+    two counts and one of the plugin's fixed executor ids leaves (not the goal, not a step's goal, not a result).
+    """
+    if path is None:
+        from jarvis.pluginapi.paths import data_dir
+        path = data_dir() / "plugins" / "goal_progress.json"
+    now = time.time() if now is None else now
+    none = {"goal_state": "none", "goal_n": 0, "goal_total": 0, "goal_exec": ""}
+    try:
+        snap = json.loads(path.read_text(encoding="utf-8"))
+        at = float(snap["at"])
+        state = snap["state"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return none
+    if now - at > GOAL_STALE_S or state not in GOAL_WORDS:
+        return none
+    def count(key):
+        try:
+            return max(0, min(int(snap.get(key) or 0), 99))
+        except (TypeError, ValueError):
+            return 0
+    ex = snap.get("executor")
+    return {"goal_state": state, "goal_n": count("n"), "goal_total": count("total"), "goal_exec": ex if ex in GOAL_EXECUTORS else ""}
+
+
 class FaceTools:
     """The tools as plain async functions; `build_server` only registers them. `client_factory` returns a JarvisClient."""
 
-    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None):
+    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None, goal_progress_path=None):
+        self.goal_progress_path = goal_progress_path
         self.console = console or _load_console_client()
         self.client_factory = client_factory or (lambda: self.console.JarvisClient())
         self.clean = clean or _cleaner()
@@ -274,6 +310,7 @@ class FaceTools:
         except Exception:                                                # noqa: BLE001 - a broken counter must not hide the rest
             pass
         out.update(await asyncio.to_thread(read_pc_operations, self.pc_ops_path))
+        out.update(await asyncio.to_thread(read_goal_progress, self.goal_progress_path))
         return self._out(out)
 
     async def do(self, task: str) -> dict:
@@ -377,7 +414,7 @@ def build_server(tools: FaceTools, views=None, port: int = DEFAULT_PORT, host=No
     if host is not None:
         tools.unread = lambda: len(host.outbox.unread())
         from jarvis.pluginapi.host import register_tools
-        register_tools(server, host, exclude=PLUGINS_NOT_EXPOSED, clean=tools.clean, include=set(CHAT_TOOLS) if profile == "chat" else None)
+        register_tools(server, host, exclude=PLUGINS_NOT_EXPOSED, clean=tools.clean, include=(set(CHAT_TOOLS) | {"desktop__quick_command"}) if profile == "chat" else None)
         # the read-only helpers desktop:do_goal may use for "what did we talk about" / "what is waiting": lent to the plugin, never listed as tools
         readers = {}
         if memory is not None:

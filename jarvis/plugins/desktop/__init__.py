@@ -19,7 +19,7 @@ from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_pl
 
 from jarvis.plugins._shared import screen_text
 
-from . import coordinator as coord, core, decide, goal as goal_mod
+from . import coordinator as coord, core, decide, goal as goal_mod, quick as quick_mod
 
 PROFILE_HELP = "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles."
 
@@ -121,6 +121,13 @@ class _PcLock:
 
     async def __aexit__(self, *exc):
         return self.__exit__(*exc)
+
+
+def _goal_progress_writer():
+    """D60: the callback that GoalRunner and the rules runner call as a goal moves on; it writes core.GOAL_PROGRESS (content-free) for the face."""
+    def write(note: dict) -> None:
+        core.set_goal_progress(str(note.get("state") or "idle"), int(note.get("n") or 0), int(note.get("total") or 0), str(note.get("executor") or ""))
+    return write
 
 
 def _cancel_quietly(pc, jid) -> None:
@@ -1231,9 +1238,47 @@ class DesktopPlugin(PluginBase):
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def do_goal(self, goal: str = "", **_):
-        hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}))
-        res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on())
-        return Ok(res)
+        started = time.monotonic()
+        progress = _goal_progress_writer()
+        try:
+            # D60: one plain command ("open notepad", "pause", "open notepad and write hello") needs no online plan: the rules plan it, the
+            # coordinator and the kernel run it exactly as before. Anything else is planned online and run by the local models as before.
+            quick = quick_mod.match(goal, core.profiles())
+            if quick is not None:
+                res = await quick_mod.run(quick, self._goal_pc, progress)
+                res["seconds"] = round(time.monotonic() - started, 2)
+                return Ok(res)
+            hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}), on_progress=progress)
+            res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on())
+            res["seconds"] = round(time.monotonic() - started, 2)
+            return Ok(res)
+        finally:
+            core.set_goal_progress("idle")
+
+    @plugin_entry(
+        id="quick_command",
+        name=tr("entry.quick_command.name", default="Run a plain command at once"),
+        description=tr("entry.quick_command.description", default=(
+            "Rules-first fast path for the face: when the owner's whole message is ONE plain command (open an app or a page, pause, volume, "
+            "minimize, play a song, type text into an app, what time or date it is) it is run at once with no model, through the same "
+            "coordinator and JARVIS kernel as every PC task, and the reply is returned. Anything else answers handled=false immediately "
+            "and costs nothing. Never used by a chat model; the face calls it before it asks one.")),
+        input_schema={"type": "object", "properties": {"text": {"type": "string", "description": "The owner's message"}}, "required": ["text"]},
+        timeout=300, llm_result_fields=["handled", "status", "reply", "planned_by", "approval_id", "label", "seconds"],
+    )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    async def quick_command(self, text: str = "", **_):
+        started = time.monotonic()
+        quick = quick_mod.match(text, core.profiles())
+        if quick is None:
+            return Ok({"handled": False})
+        progress = _goal_progress_writer()
+        try:
+            res = await quick_mod.run(quick, self._goal_pc, progress)
+        finally:
+            core.set_goal_progress("idle")
+        return Ok({"handled": True, "status": res["status"], "reply": res["summary"], "planned_by": res["planned_by"], "label": quick.ack,
+                   "approval_id": res.get("approval_id"), "seconds": round(time.monotonic() - started, 2)})
 
     @plugin_entry(
         id="stop_pc_task",
