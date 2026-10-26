@@ -30,11 +30,20 @@ the face would show it to the owner, sometimes for minutes. Other callers get th
 providers.json may carry `extra_body` (switches added to every request it receives) and `face_extra_body` (added only for the face),
 for example {"chat_template_kwargs": {"enable_thinking": false}}; they must have the exact shape of the provider switches above.
 
+Speed (D60): a per-message redaction cache (CachedRedaction) remembers, for each text, its redacted template and the private values it holds, so the
+history, the system prompt and the tool definitions that every round resends are not scanned again; placeholders are re-numbered through each request's
+own Mapping, a changed text is scanned afresh, and nothing is remembered while the decision model was unreachable (JARVIS_PRIVACY_MESSAGE_CACHE=0 turns
+it off). /health adds latency_p90_ms, latency_calls and redaction_cache beside latency_ms (redact_ms, queue_ms, first_ms, total_ms). Each model request
+also appends one content-free line (phase times, sizes, counts, the provider's name) to JARVIS_LATENCY_LOG or <data dir>/logs/latency.jsonl, which
+jarvis/tools/latency_report.py reads. A provider entry may set `face_tool_max_tokens` (off unless set) to cap the face's tool-carrying requests.
+
 The Authorization header is passed through untouched and never stored or logged. Logs hold counts by kind, never values.
 """
 from __future__ import annotations
 
 import argparse
+import collections
+import hashlib
 import json
 import os
 import re
@@ -47,6 +56,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import redactor as redactor_module  # noqa: E402
 from redactor import Mapping, Redactor, StreamRestorer, restore  # noqa: E402
 
 DEFAULT_UPSTREAM = os.environ.get("JARVIS_PRIVACY_UPSTREAM", "https://inference.dahl.global/v1")
@@ -57,6 +67,48 @@ MAX_BODY = 32 * 1024 * 1024
 STREAM_KEEPALIVE_S = 15.0           # while only reasoning arrives (and is hidden), an SSE comment goes out at this interval
 _lock = threading.Lock()
 STATS = {"requests": 0, "redacted": {}, "errors": 0, "started": time.time(), "inflight": 0, "last_call_end": 0.0}
+
+
+LATENCY_KEYS = ("redact_ms", "queue_ms", "first_ms", "total_ms")
+
+
+def _percentile(values, q: float):
+    """The q-quantile (0..1) of a list of numbers by rank; 0 for an empty list. p90 of the last 50 calls is what /health shows."""
+    ordered = sorted(values)
+    if not ordered:
+        return 0
+    return ordered[min(len(ordered) - 1, max(0, int(round(q * (len(ordered) - 1)))))]
+
+
+def latency_log_path() -> str:
+    """Where the content-free timing lines go (D60): JARVIS_LATENCY_LOG, else <data dir>/logs/latency.jsonl. "off" or "0" turns it off."""
+    env = os.environ.get("JARVIS_LATENCY_LOG", "").strip()
+    if env.lower() in ("off", "0", "no", "false"):
+        return ""
+    if env:
+        return env
+    base = (os.environ.get("JARVIS_DATA_DIR") or "").strip() or (r"D:\jarvis\data" if os.name == "nt" else os.path.join(os.path.expanduser("~"), ".jarvis", "data"))
+    return os.path.join(base, "logs", "latency.jsonl")
+
+
+_latency_write_lock = threading.Lock()
+
+
+def write_latency_line(row: dict) -> None:
+    """One JSON line: phase names and milliseconds, the provider's name, a few counts. No text, no ids, no header, no key. Never raises."""
+    path = latency_log_path()
+    if not path:
+        return
+    safe = {k: v for k, v in row.items() if isinstance(v, (int, float, bool)) or (isinstance(v, str) and len(v) <= 40 and re.fullmatch(r"[A-Za-z0-9_.:-]*", v))}
+    try:
+        with _latency_write_lock:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            if os.path.exists(path) and os.path.getsize(path) > 5 * 1024 * 1024:       # one rotation: the report reads the newest 5 MB
+                os.replace(path, path + ".1")
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps({"t": round(time.time(), 3), "src": "gateway", **safe}) + "\n")
+    except OSError:
+        pass
 
 
 def _count(mapping: Mapping):
@@ -198,6 +250,107 @@ def _withheld_note(kind: str) -> dict:
         STATS["withheld"] = STATS.get("withheld", 0) + 1
     return {"type": "text", "text": f"[{kind} was withheld for privacy: the privacy gateway never sends it to a public model. "
                                     "Tell the user you could not see it.]"}
+
+
+class CachedRedaction:
+    """A per-message redaction cache in front of any detector (D60). A chat resends its whole history every round (3 to 7 rounds a goal),
+    so the same system prompt, tool definitions and earlier messages arrive again and again. The detector (Presidio + spaCy + the PII model) already
+    remembers spans per text, but its cache is dropped whole at 512 entries and is not shared with the tool definitions' many short strings; this layer
+    keeps, per text, the redacted TEMPLATE and the private values it holds, keyed by a hash of (text, deep, names). A repeat costs one dictionary
+    look-up and a re-tag through THIS request's Mapping, so placeholder numbers stay correct for the request (the first new value is [X_1] in every
+    request, whatever earlier requests held) and restoring the reply works as before. A changed text has another hash, so it is scanned again.
+
+    Safety rules: a text that already holds something that looks like a placeholder is never cached (the template could not tell the owner's
+    literal "[PASSWORD_1]" from ours); a result made while the detector reported a degraded check (decision model unreachable, `stats.jev_unreachable`
+    grew) is not remembered, as in the detector itself; the cache lives in memory only, is bounded (entries and text size), and holds no more than
+    the detector's own cache already holds. Everything the detector exposes (model, names, stats ...) is passed through."""
+
+    MAX_ENTRIES = 4096
+    MAX_TEXT = 256 * 1024
+
+    def __init__(self, red, max_entries: int | None = None):
+        self._red = red
+        self._max = max_entries or self.MAX_ENTRIES
+        self._entries: "collections.OrderedDict[tuple, tuple]" = collections.OrderedDict()
+        self._lock = threading.Lock()
+        self.hits = 0
+        self.misses = 0
+        self.uncacheable = 0
+
+    def __getattr__(self, name):                      # model, names, stats, find ... (only called for what this class lacks)
+        return getattr(self._red, name)
+
+    @staticmethod
+    def _key(text: str, deep, names) -> tuple:
+        return (hashlib.sha256(text.encode("utf-8", "surrogatepass")).digest(), bool(deep), names if isinstance(names, str) else bool(names) if names is not None else None)
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return {"hits": self.hits, "misses": self.misses, "uncacheable": self.uncacheable, "size": len(self._entries)}
+
+    def redact(self, text, mapping: Mapping, deep: bool = True, names=None):
+        if not isinstance(text, str) or not text.strip() or len(text) > self.MAX_TEXT or redactor_placeholder(text):
+            if isinstance(text, str) and text.strip():
+                with self._lock:
+                    self.uncacheable += 1
+            return self._red.redact(text, mapping, deep, names)
+        key = self._key(text, deep, names)
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is not None:
+                self._entries.move_to_end(key)
+                self.hits += 1
+        if entry is not None:
+            template, values = entry
+            if not values:
+                return template
+            local = {}
+            for tag, entity, value in values:             # in order of first appearance, as the detector would have tagged them
+                local[tag] = mapping.tag(entity, value)
+            return redactor_placeholder_sub(lambda mm: local.get(mm.group(0), mm.group(0)), template)
+        # a miss: run the detector on a scratch mapping, so the template and its values can be kept; then tag them in the real one
+        scratch = Mapping()
+        before = _degraded_count(self._red)
+        out = self._red.redact(text, scratch, deep, names)
+        with self._lock:
+            self.misses += 1
+        values = []
+        for tag, value in scratch.to_value.items():
+            mm = redactor_placeholder_match(tag)
+            if mm is None:
+                values = None
+                break
+            values.append((tag, mm.group(1), value))
+        if values is None:
+            return self._red.redact(text, mapping, deep, names)        # cannot happen with our Mapping; fail safe: no cache
+        local = {tag: mapping.tag(entity, value) for tag, entity, value in values}
+        result = redactor_placeholder_sub(lambda mm: local.get(mm.group(0), mm.group(0)), out) if local else out
+        if _degraded_count(self._red) == before:          # not remembered while the checker is down
+            with self._lock:
+                self._entries[key] = (out, tuple(values))
+                self._entries.move_to_end(key)
+                while len(self._entries) > self._max:
+                    self._entries.popitem(last=False)
+        return result
+
+
+def _degraded_count(red) -> int:
+    try:
+        return int((getattr(red, "stats", None) or {}).get("jev_unreachable", 0))
+    except (TypeError, ValueError, AttributeError):
+        return 0
+
+
+def redactor_placeholder(text: str) -> bool:
+    return redactor_module.PLACEHOLDER.search(text) is not None
+
+
+def redactor_placeholder_match(tag: str):
+    return redactor_module.PLACEHOLDER.fullmatch(tag)
+
+
+def redactor_placeholder_sub(repl, text: str) -> str:
+    return redactor_module.PLACEHOLDER.sub(repl, text)
 
 
 class GatewayRefusal(Exception):
@@ -714,6 +867,19 @@ def is_face(headers) -> bool:
     return sent.strip().split()[-1:] == [LOCAL_KEY_TOKEN]
 
 
+def face_token_cap(prov: dict, body, face: bool) -> dict:
+    """D60, OFF unless a provider entry sets `face_tool_max_tokens` (an integer 64..8192): the face's request that offers tools and sets no limit
+    of its own gets `max_tokens` = that number, so a tool turn (which is a short call or a short sentence) cannot run on for a minute. Only safe
+    with a provider whose reasoning is off or cheap: a reasoning model counts its hidden thinking against the same limit and can answer with
+    nothing (MiniMax M2.x cannot switch thinking off at all, read 2026-10-26), so the entry stays unset until the laptop run shows it is safe."""
+    n = prov.get("face_tool_max_tokens")
+    if not face or isinstance(n, bool) or not isinstance(n, int) or not 64 <= n <= 8192 or not isinstance(body, dict):
+        return {}
+    if not body.get("tools") or body.get("max_tokens") is not None or body.get("max_completion_tokens") is not None:
+        return {}
+    return {"max_tokens": n}
+
+
 def read_key(p: dict) -> str:
     """A fallback provider's key from its file under the secrets folder (never logged, kept only in memory)."""
     if p["name"] in _keys:
@@ -756,6 +922,8 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
     with a stand-in detector that has no model."""
     providers = upstream if isinstance(upstream, list) else [{"name": "upstream", "base_url": upstream.rstrip("/"), "key": "from_request"}]
     upstream = providers[0]["base_url"]   # the caller's-key provider
+    if os.environ.get("JARVIS_PRIVACY_MESSAGE_CACHE", "1") != "0" and not isinstance(red, CachedRedaction):
+        red = CachedRedaction(red)        # D60: a repeated message (history, system prompt, tool definitions) is not scanned again
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -792,8 +960,12 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                                             "last_call_age_s": round(time.time() - last, 1) if last else None,
                                             "providers": [p["name"] for p in providers],
                                             "answered_by": dict(STATS.get("by_provider", {})),
-                                            "latency_ms": {n: {k: sorted(r[k] for r in rows)[len(rows) // 2] for k in ("redact_ms", "first_ms", "total_ms")}
+                                            "latency_ms": {n: {k: sorted(r[k] for r in rows)[len(rows) // 2] for k in LATENCY_KEYS}
                                                            for n, rows in STATS.get("latency", {}).items() if rows},     # median of the last 50 calls per provider
+                                            "latency_p90_ms": {n: {k: _percentile([r[k] for r in rows], 0.9) for k in LATENCY_KEYS}
+                                                               for n, rows in STATS.get("latency", {}).items() if rows},
+                                            "latency_calls": {n: len(rows) for n, rows in STATS.get("latency", {}).items() if rows},
+                                            "redaction_cache": red.snapshot() if isinstance(red, CachedRedaction) else None,
                                             "cooling_down": [n for n, t in _cooldown.items() if t > time.time()]})
             self._forward(None)
 
@@ -829,6 +1001,8 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             with _lock:
                 STATS["inflight"] += 1
             self._t0, self._t_fwd, self._t_first = time.time(), None, None
+            self._queue_s, self._trace, self._provider = 0.0, {}, None
+            cache = red.snapshot() if isinstance(red, CachedRedaction) else None
             try:
                 return self._forward_inner(raw)
             finally:
@@ -837,11 +1011,19 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     STATS["inflight"] -= 1
                     STATS["last_call_end"] = now
                     prov = getattr(self, "_provider", None)
+                    log_row = None
                     if prov and self._t_fwd:
                         rows = STATS.setdefault("latency", {}).setdefault(prov, [])
-                        rows.append({"redact_ms": round((self._t_fwd - self._t0) * 1000), "first_ms": round(((self._t_first or now) - self._t_fwd) * 1000),
-                                     "total_ms": round((now - self._t0) * 1000)})
+                        row = {"redact_ms": round((self._t_fwd - self._t0) * 1000), "first_ms": round(((self._t_first or now) - self._t_fwd) * 1000),
+                               "total_ms": round((now - self._t0) * 1000), "queue_ms": round(getattr(self, "_queue_s", 0.0) * 1000)}
+                        rows.append(row)
                         del rows[:-50]
+                        log_row = {**row, "provider": prov, **getattr(self, "_trace", {})}
+                        if cache is not None:
+                            now_cache = red.snapshot()
+                            log_row["cache_hits"], log_row["cache_misses"] = now_cache["hits"] - cache["hits"], now_cache["misses"] - cache["misses"]
+                if log_row:
+                    write_latency_line(log_row)
 
         def _lang_headers(self):
             ti = getattr(self, "_tinfo", None)
@@ -892,6 +1074,11 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                                                                  "the public model; this endpoint is not redacted, so it is refused"}})
                 stream = bool(body.get("stream"))
                 raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+                msgs = body.get("messages") if isinstance(body.get("messages"), list) else []
+                last_role = msgs[-1].get("role") if msgs and isinstance(msgs[-1], dict) else ""
+                # content-free facts for the timing line: sizes and counts only (what kind of round this was: after the owner's words or after a tool result)
+                self._trace = {"req_bytes": len(raw), "msgs": len(msgs), "tools": len(body.get("tools") or []), "stream": stream,
+                               "after": last_role if last_role in ("user", "tool", "assistant", "system") else ""}
             headers = {k: v for k, v in self.headers.items() if k.lower() in PASS_HEADERS}
             face = is_face(headers)
             if raw is not None:
@@ -920,6 +1107,8 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             # A caller that REASONS (D51: the goal planner) says "X-Jarvis-Route: online": it wants the online chain first, whatever its size. The local model
             # stays the last link, so a dead online chain is still answered (the reply's X-Jarvis-Provider header says who answered).
             online_first = (self.headers.get("X-Jarvis-Route") or "").strip().lower() == "online"
+            if online_first:
+                self._trace["route"] = "online"                # the goal planner's call (D51), told apart from the chat's rounds in the timing log
             chain = chain if online_first else sorted(chain, key=lambda p: not (p.get("prefer_first") and is_local_provider(p) and est <= int(p.get("prefer_max_tokens") or 3000)
                                                        and n_tools <= int(p.get("prefer_max_tools") or 3)))
             pin_name, pin_model = read_pin()
@@ -934,7 +1123,8 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 hdrs, data = dict(headers), raw
                 if pin_model and prov is first_own and len(chain) == 1 and body is not None:
                     data = json.dumps({**body, "model": pin_model}, ensure_ascii=False).encode("utf-8")
-                extra = {**clean_extra_body(prov.get("extra_body")), **(clean_extra_body(prov.get("face_extra_body")) if face else {})}
+                extra = {**clean_extra_body(prov.get("extra_body")), **(clean_extra_body(prov.get("face_extra_body")) if face else {}),
+                         **face_token_cap(prov, body, face)}
                 if extra and body is not None:
                     data = json.dumps({**body, **extra}, ensure_ascii=False).encode("utf-8")
                 if prov is not first_own:
@@ -954,11 +1144,13 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 # "max_concurrent": the provider admits only that many requests at once (Dahl: "model_concurrency", HTTP 429 for the second request of the face).
                 # Wait for a turn instead of being refused; a wait that runs out moves on to the next provider.
                 sem = _slots(prov)
+                waited = time.time()
                 if sem is not None and not sem.acquire(timeout=float(prov.get("queue_wait_s") or 90)):
                     tried.append(f"{prov['name']}: busy (queue)")
                     if not last:
                         continue
                     sem = None
+                self._queue_s = (self._queue_s if hasattr(self, "_queue_s") else 0.0) + (time.time() - waited if sem is not None else 0.0)
                 try:
                     req = urllib.request.Request(prov["base_url"] + self._path(), data=data, headers=hdrs,
                                                  method="POST" if data is not None else "GET")

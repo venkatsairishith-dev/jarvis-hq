@@ -155,10 +155,11 @@ def test_jarvis_status_is_content_free_and_degrades_to_down(tmp_path):
     import time as _t
     p = _ops_file(tmp_path, [{"id": "single:send mail to bob@example.com", "kind": "single:send mail to bob@example.com", "state": "running", "age_s": 12}], at=_t.time())
     c = FakeClient()
-    t = F.FaceTools(client_factory=lambda: c, console=CONSOLE, pc_ops_path=p, unread=lambda: 3)
+    t = F.FaceTools(client_factory=lambda: c, console=CONSOLE, pc_ops_path=p, unread=lambda: 3, goal_progress_path=tmp_path / "no-goal.json")
     up = asyncio.run(t.status())
     assert up == {"ok": True, "console_up": True, "kernel_up": True, "kill_switch_on": False, "console_busy": False, "approvals_waiting": 1,
-                  "messages_unread": 3, "pc_busy": True, "pc_kind": "action", "pc_age_s": 12, "pc_stopping": False, "pc_ops": 1}
+                  "messages_unread": 3, "pc_busy": True, "pc_kind": "action", "pc_age_s": 12, "pc_stopping": False, "pc_ops": 1,
+                  "goal_state": "none", "goal_n": 0, "goal_total": 0, "goal_exec": ""}
     assert "bob" not in json.dumps(up) and "a1" not in json.dumps(up) and "email send" not in json.dumps(up), "no id, title or text"
     down = asyncio.run(F.FaceTools(client_factory=lambda: FakeClient(fail="console down"), console=CONSOLE, pc_ops_path=tmp_path / "none.json").status())
     assert down["ok"] is False and down["console_up"] is False and down["kernel_up"] is False and down["pc_busy"] is False
@@ -575,3 +576,46 @@ def test_the_goal_tool_gets_the_face_side_readers_and_they_are_not_listed(tmp_pa
     assert set(readers) == {"recall", "tasks"} and "short answers" in readers["recall"](2)
     assert readers["tasks"]("waiting_approval", 500)[0]["limit"] == 20, "the limit is capped"
     assert "desktop__do_goal" in names and not names & {"recall", "tasks", "jarvis_tasks"}, "lent to the plugin, never offered as tools"
+
+
+# ---- D60: the goal's progress line for the face (fixed words and numbers only)
+def _goal_file(tmp_path, **kw):
+    p = tmp_path / "goal_progress.json"
+    p.write_text(json.dumps({"state": "running", "n": 2, "total": 3, "executor": "screen_read", "at": 1000.0, **kw}), encoding="utf-8")
+    return p
+
+
+def test_goal_progress_is_fixed_words_and_counts_only(tmp_path):
+    none = {"goal_state": "none", "goal_n": 0, "goal_total": 0, "goal_exec": ""}
+    assert F.read_goal_progress(_goal_file(tmp_path), now=1010.0) == {"goal_state": "running", "goal_n": 2, "goal_total": 3, "goal_exec": "screen_read"}
+    assert F.read_goal_progress(_goal_file(tmp_path), now=1000.0 + F.GOAL_STALE_S + 1) == none, "a plugin that stopped refreshing it"
+    assert F.read_goal_progress(_goal_file(tmp_path, state="idle"), now=1001.0) == none
+    assert F.read_goal_progress(tmp_path / "missing.json", now=1.0) == none
+    hostile = F.read_goal_progress(_goal_file(tmp_path, executor="C:/secret/plans.xlsx", n=500, total="x"), now=1001.0)
+    assert hostile == {"goal_state": "running", "goal_n": 99, "goal_total": 0, "goal_exec": ""}
+    bad = tmp_path / "bad.json"
+    bad.write_text("{nope", encoding="utf-8")
+    assert F.read_goal_progress(bad, now=1.0) == none
+
+
+def test_status_carries_the_goal_progress(tmp_path):
+    import time as _t
+    p = _goal_file(tmp_path, at=_t.time())
+    t = F.FaceTools(client_factory=lambda: FakeClient(), console=CONSOLE, pc_ops_path=tmp_path / "none.json", goal_progress_path=p)
+    got = asyncio.run(t.status())
+    assert (got["goal_state"], got["goal_n"], got["goal_total"], got["goal_exec"]) == ("running", 2, 3, "screen_read")
+
+
+def test_quick_command_is_callable_by_the_face_but_never_offered_to_the_chat_model(chat_stack):
+    build, stop = chat_stack
+
+    async def go():
+        try:
+            chat = {t.name for t in await (await build("chat")).list_tools()}
+            with_panel = {t.name for t in await (await build("chat", list_panel_tools=True)).list_tools()}
+            return chat, with_panel
+        finally:
+            await stop()
+    chat, with_panel = asyncio.run(go())
+    assert "desktop__quick_command" in F.PANEL_TOOLS and "desktop__quick_command" not in chat
+    assert "desktop__quick_command" in with_panel, "registered (callable by the face's own code) in the chat profile"

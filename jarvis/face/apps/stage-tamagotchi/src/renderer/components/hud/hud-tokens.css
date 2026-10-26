@@ -184,6 +184,7 @@
 .jhud-seg-task { --n: 13; color: var(--jhud-dim); }
 .jhud-seg-task[data-busy='true'] { color: var(--jhud-amber); }
 .jhud-seg-model { --n: 13; flex: 1 1 auto; color: var(--jhud-dim); }
+.jhud-seg-model[data-line='true'] { color: var(--jhud-amber); }
 .jhud-seg-notices { --n: 5; color: var(--jhud-dim); padding-right: 0; }
 /* the page's reset makes every svg a block: inline, so the bell and its count share one line (they stacked in the real 252 x 336 window) */
 .jhud-seg-notices svg { display: inline-block; vertical-align: -1px; margin-right: 3px; }
@@ -213,7 +214,7 @@
  * Nothing is hidden by clipping: every segment that shows has its full width.
  */
 @container jhudw (max-width: 716px) {
-  .jhud-seg-model { display: none; }
+  .jhud-seg-model:not([data-line='true']) { display: none; }       /* D60: the task line stays at every width, the model name does not */
   .jhud-seg-notices { margin-left: auto; }
 }
 @container jhudw (max-width: 604px) {
@@ -256,7 +257,7 @@
   .jhud-seg + .jhud-seg::before { display: none; }
   .jhud-seg-clock,
   .jhud-seg-task,
-  .jhud-seg-model { display: none; }
+  .jhud-seg-model:not([data-line='true']) { display: none; }
   .jhud-seg-state { font-weight: 700; }
   .jhud-seg-notices { margin-left: 0; }
 }
