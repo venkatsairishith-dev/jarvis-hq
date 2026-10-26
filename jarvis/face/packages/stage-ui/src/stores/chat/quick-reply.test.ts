@@ -122,6 +122,14 @@ describe('when the router is worth asking', () => {
     'what time is it',
     'What\'s the date today?',
     'tell me the time',
+    'what are you doing',
+    'Hey JARVIS, why did you stop?',
+    'what went wrong',
+    'try another way',
+    'skip this step',
+    'stop',
+    'what have you learned about Excel',
+    'forget that',
   ])('asks for %s', (text) => {
     expect(mightBeQuickCommand(text)).toBe(true)
   })
@@ -133,6 +141,9 @@ describe('when the router is worth asking', () => {
     'what is the weather',
     'explain what time complexity means',
     'write a poem about autumn',
+    'I will not stop the music',
+    'why did the roman empire stop expanding',
+    'forget the milk',
     '',
   ])('goes straight to the chat model for %s', (text) => {
     expect(mightBeQuickCommand(text)).toBe(false)

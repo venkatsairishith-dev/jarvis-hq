@@ -28,6 +28,8 @@ import traceback
 from pathlib import Path
 from typing import Callable
 
+from jarvis.plugins._shared import ask_form, closed_loop, final_answer
+
 from . import decide
 
 DATA = Path(os.environ.get("JARVIS_DATA_DIR", r"D:\jarvis\data"))
@@ -1591,6 +1593,62 @@ class Coordinator:
         self.on_progress = on_progress or (lambda s, d: None)
         self.tasks_dir, self.lock_path, self.budget_s, self.cancelled = tasks_dir, lock_path, budget_s, cancelled
 
+    def _closed_loop(self, step: dict, fn, entry: dict, i: int, who: str, op: "Operation", cancelled) -> tuple[dict, bool, str, str]:
+        """D59 lever a, wired (D65): ONE step is act -> verify by its EFFECT -> at most one retry by the next route -> otherwise it ends as not passed (the
+        caller turns that into the owner's question). Routes in order: the agent as it is (the structured route), a RETRY of it (only a transient failure of a
+        step that is safe to repeat, as before), then the agent's alternative route when it has one (type_text: paste; window: restore then focus). A step that was
+        held for the owner, denied or cancelled is never retried by anything. Returns (result, passed, what was checked, uncertainty) of the last attempt."""
+        box: dict = {"res": {}, "passed": False, "checked": "", "unc": "", "stop": False}
+        alts = getattr(self.agents, "alternates", {}).get(step["tool"]) if hasattr(self.agents, "alternates") else None
+
+        def run(call) -> None:
+            entry["attempts"] += 1
+            try:
+                res = call(step) or {}
+                if not isinstance(res, dict):          # an HTML error page, a list, a number: not a result
+                    res = {"ok": False, "error": f"the agent returned a {type(res).__name__}, not a result object"}
+                passed, checked, unc = verify(step, res)
+            except Exception as e:  # noqa: BLE001 - a failed agent is a failed step, not a crashed coordinator
+                res = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:160]}"}
+                last = traceback.extract_tb(e.__traceback__)[-1] if e.__traceback__ else None      # where, never what: the text of a message may hold screen text
+                LOG.warning("agent step %s raised %s at %s:%s", step.get("tool"), type(e).__name__, last.filename.rsplit("\\", 1)[-1] if last else "?", last.lineno if last else "?")
+                passed, checked, unc = False, "the action did not succeed", res["error"]
+            box.update(res=res, passed=passed, checked=checked, unc=unc)
+            entry.update(result=_slim(res), passed=passed, checked=checked, uncertainty=unc, finished=self.clock())
+            if res.get("state") in ("waiting_for_permission", "denied", "cancelled") or res.get("status") == "stopped_to_ask":
+                box["stop"] = True
+
+        def verify_effect() -> closed_loop.Verification:
+            if box["passed"]:
+                return closed_loop.Verification(closed_loop.VERIFIED, box["checked"][:200])
+            if box["stop"]:
+                return closed_loop.Verification(closed_loop.UNKNOWN, "held, denied, cancelled or the owner is needed")
+            return closed_loop.Verification(closed_loop.ABSENT, str(box["unc"] or box["checked"])[:200])
+
+        def retry_ok() -> bool:
+            err = str(box["res"].get("error") or "")
+            return bool(TRANSIENT.search(err)) and repeat_safe(step) and not box["stop"] and not cancelled() and not op.unconfirmed_jobs()
+
+        def alt_ok() -> bool:
+            return not box["stop"] and not cancelled() and not op.unconfirmed_jobs()
+
+        def retry_act() -> None:
+            self.on_progress("working", f"{who} agent: retrying step {i} once ({str(box['res'].get('error'))[:60]})")
+            run(fn)
+        routes = [closed_loop.Route("uia", lambda: run(fn)), closed_loop.Route("retry", retry_act, guard=retry_ok)]
+        for name, alt in (alts(step, box["res"]) if callable(alts) else []):
+            def go(alt=alt, name=name) -> None:
+                self.on_progress("working", f"{who} agent: step {i} did not show its effect; trying another way ({name})")
+                run(alt)
+            routes.append(closed_loop.Route(name, go, guard=alt_ok))
+        st = closed_loop.Step(f"s{i}", f"{step['tool']} step", routes, verify_effect, idempotent=repeat_safe(step), budget_s=float(self.budget_s), settle_s=0.0, poll_s=0.0,
+                              max_attempts=2, keep_order=True)
+        sr = closed_loop.run_step(st, sleep=lambda s: None, cancelled=lambda: False)
+        entry["route"] = sr.route_used or (sr.attempts[-1].route if sr.attempts else "")
+        if sr.attempts and sr.retried:
+            entry["retried_by"] = [a.route for a in sr.attempts if a.verification != "skipped"]
+        return box["res"], box["passed"], box["checked"], box["unc"]
+
     def _save(self, rec: dict):
         self.tasks_dir.mkdir(parents=True, exist_ok=True)
         (self.tasks_dir / f"{rec['id']}.json").write_text(json.dumps(rec, indent=1, default=str), encoding="utf-8")
@@ -1657,28 +1715,13 @@ class Coordinator:
                     entry.update(result={"ok": False, "error": "no agent for this step"}, passed=False, checked="", uncertainty="")
                     rec.update(status="failed", error=f"no agent can do {step['tool']}")
                     break
-                while True:
-                    entry["attempts"] += 1
-                    try:
-                        res = fn(step) or {}
-                        if not isinstance(res, dict):          # an HTML error page, a list, a number: not a result
-                            res = {"ok": False, "error": f"the agent returned a {type(res).__name__}, not a result object"}
-                        passed, checked, unc = verify(step, res)
-                    except Exception as e:  # noqa: BLE001 - a failed agent is a failed step, not a crashed coordinator
-                        res = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:160]}"}
-                        last = traceback.extract_tb(e.__traceback__)[-1] if e.__traceback__ else None      # where, never what: the text of a message may hold screen text
-                        LOG.warning("agent step %s raised %s at %s:%s", step.get("tool"), type(e).__name__, last.filename.rsplit("\\", 1)[-1] if last else "?", last.lineno if last else "?")
-                        passed, checked, unc = False, "the action did not succeed", res["error"]
-                    entry.update(result=_slim(res), passed=passed, checked=checked, uncertainty=unc, finished=self.clock())
-                    transient = not passed and TRANSIENT.search(str(res.get("error") or "")) and res.get("state") not in (
-                        "waiting_for_permission", "denied", "cancelled")
-                    if (transient and repeat_safe(step) and entry["attempts"] <= MAX_RETRIES and not cancelled()
-                            and not op.unconfirmed_jobs()):
-                        self.on_progress("working", f"{who} agent: retrying step {i} once ({str(res.get('error'))[:60]})")
-                        continue
-                    break
+                res, passed, checked, unc = self._closed_loop(step, fn, entry, i, who, op, cancelled)
                 if res.get("state") == "waiting_for_permission":
                     rec.update(status="waiting_for_permission", approval_id=res.get("approval_id"), how=res.get("how"))
+                    break
+                if not passed and res.get("status") == "stopped_to_ask" and res.get("question"):       # D65: the control loop needs the OWNER (a dialog it will not answer, UAC, a hung app, a full disk)
+                    rec.update(status="needs_clarification", question=str(res["question"])[:300], ask=res.get("ask"),
+                               error=f"step {i} ({step['tool']}): stopped to ask the owner")
                     break
                 if not passed and (res.get("state") == "cancelled" or cancelled()):
                     rec.update(status="cancelled", error=f"stopped by the owner during step {i} ({step['tool']})")
@@ -1711,7 +1754,21 @@ def _slim(r: dict) -> dict:
 
 
 def summary(rec: dict) -> str:
-    """One honest sentence for the owner."""
+    """One honest sentence for the owner. D59 lever b, wired (D65): the sentence below is checked against what the steps VERIFIED (final_answer.guard); when it overclaims,
+    underclaims, hides a wait for the owner or leaks an error, the deterministic sentence built from the verified results replaces it."""
+    text = _sentence(rec)
+    try:
+        status, effects = final_answer.effects_from_record(rec)
+        got = final_answer.guard(text, status, effects, approval_id=str(rec.get("approval_id") or ""), question=str(rec.get("question") or ""))
+        if got.source == final_answer.TEMPLATE:
+            LOG.info("final answer replaced by the template (%s)", ",".join(got.reasons))
+            return got.text
+    except Exception:  # noqa: BLE001 - the guard is a safety net: never a reason to lose the sentence
+        pass
+    return text
+
+
+def _sentence(rec: dict) -> str:
     st = rec.get("status")
     if st == "completed":
         done = "; ".join(s["checked"] for s in rec["steps"] if s.get("passed"))

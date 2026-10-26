@@ -140,7 +140,7 @@ _SUCCESS = re.compile(r"(?i)\b(done|completed?|finished|opened|saved|created|wri
                       r"|हो गया|कर दिया|खोल दिया|सेव कर दिया|పూర్తయింది|చేశాను|తెరిచాను|సేవ్ చేశాను")
 _FAILURE = re.compile(r"(?i)\b(couldn'?t|could not|can'?t|cannot|unable|failed|failure|didn'?t work|did not work|not able|wasn'?t able|was not able|"
                       r"no luck|something went wrong|sorry)\b|नहीं हो सका|नहीं कर सका|कर नहीं पाया|కాలేదు|చేయలేకపోయాను|సాధ్యం కాలేదు")
-_HEDGE = re.compile(r"(?i)not (?:everything|all)|not (?:been )?(?:checked|observed|confirmed|verified)|could not (?:confirm|verify|check)|"
+_HEDGE = re.compile(r"(?i)not (?:everything|all|certain)|uncertain|not (?:been )?(?:checked|observed|confirmed|verified)|could not (?:confirm|verify|check)|"
                     r"can'?t (?:confirm|verify)|reported|unverified|may |might |should be|i think|appears? to")
 _WAIT = re.compile(r"(?i)approv|\bPIN\b|permission|confirm in the|waiting for you|अनुमति|मंज़ूरी|అనుమతి|ఆమోదం")
 

@@ -155,7 +155,20 @@ class Runner:
             elif kind == "recycle_file":
                 env.write_file(op["path"], op.get("text", "recycled"))
                 env.recycle_file(op["path"])
-        if any(op["op"] in ("open_notepad_text", "open_image_text", "open_app", "message_box") for op in g.setup):
+            elif kind == "minimize":
+                self.sleep(1.0)                                          # the window has to exist before it can be minimised
+                env.minimize_window(op["title_contains"])
+            elif kind == "start_later":
+                env.start_later(op["program"], list(op.get("args", [])), float(op.get("delay_s", 3)))
+            elif kind == "message_box_later":
+                env.message_box_later(op.get("title", "Message"), op.get("text", ""), float(op.get("delay_s", 3)))
+            elif kind == "slow_form":
+                env.slow_form(op["title"], op["marker"], float(op.get("hang_s", 8)))
+            elif kind == "close_later":
+                env.close_later(op["title_contains"], float(op.get("delay_s", 6)))
+            elif kind == "type_unsaved":
+                env.type_unsaved(op.get("text", ""))
+        if any(op["op"] in ("open_notepad_text", "open_image_text", "open_app", "message_box", "minimize", "slow_form", "type_unsaved") for op in g.setup):
             self.sleep(self.setup_settle_s)
 
     def _snapshot(self, base: Baseline) -> None:

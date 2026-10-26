@@ -8,6 +8,14 @@
 #   envprobe.ps1 start <program> [args...]    start a program and return at once
 #   envprobe.ps1 msgbox <title> <text>        show a message box in a separate process (for "what does the dialog say" goals)
 #   envprobe.ps1 render-image <path> <text>   draw <text> big on a white picture and save it as PNG (for the vision goals)
+# D65 (problem_recovery goals: the problem is made on purpose; UNVERIFIED until `--selftest` has run on the laptop)
+#   envprobe.ps1 minimize <title-fragment>               minimise the visible windows whose title contains the fragment
+#   envprobe.ps1 start-later <seconds> <program> [args]  start a program after a delay (detached)
+#   envprobe.ps1 msgbox-later <seconds> <title> <text>   show a message box after a delay (detached)
+#   envprobe.ps1 slow-form <title> <marker-path> <secs>  a window whose UI thread does not answer for <secs> seconds, then answers; its OK button writes the marker file
+#   envprobe.ps1 close-later <seconds> <title-fragment>  close ONE window whose title contains the fragment after a delay (an app that closes itself)
+#   envprobe.ps1 close-title <title-fragment>            (used by close-later)
+#   envprobe.ps1 type-unsaved <text>                     start Notepad and type the text, so it has unsaved work
 # Written without a Windows machine at hand: `python -m jarvis.evals.reliability.runner --selftest` runs every command once.
 param([Parameter(Position = 0)][string]$Cmd, [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Rest)
 $ErrorActionPreference = 'Stop'
@@ -164,6 +172,58 @@ switch ($Cmd) {
     $g.DrawString([string]$Rest[1], $font, [System.Drawing.Brushes]::Black, $rect)
     $bmp.Save([string]$Rest[0], [System.Drawing.Imaging.ImageFormat]::Png)
     $g.Dispose(); $bmp.Dispose()
+    Out-Json ([pscustomobject]@{ ok = $true })
+  }
+
+  'minimize' {
+    $frag = [string]$Rest[0]
+    Add-Type -Namespace RelMin -Name W -MemberDefinition '[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int n);'
+    $n = 0
+    foreach ($w in @(Get-Windows)) { if ($w.title -like "*$frag*") { [void][RelMin.W]::ShowWindow([IntPtr]$w.hwnd, 6); $n++ } }
+    Out-Json ([pscustomobject]@{ minimized = $n })
+  }
+  'start-later' {
+    $secs = [int]$Rest[0]; $prog = [string]$Rest[1]
+    $argText = if ($Rest.Count -gt 2) { " -ArgumentList " + (($Rest[2..($Rest.Count - 1)] | ForEach-Object { "'" + ([string]$_).Replace("'", "''") + "'" }) -join ',') } else { '' }
+    $code = "Start-Sleep -Seconds $secs; Start-Process -FilePath '" + $prog.Replace("'", "''") + "'" + $argText
+    Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-Command', $code)
+    Out-Json ([pscustomobject]@{ ok = $true })
+  }
+  'msgbox-later' {
+    $secs = [int]$Rest[0]
+    $t = ([string]$Rest[1]).Replace("'", "''"); $m = ([string]$Rest[2]).Replace("'", "''")
+    $code = "Start-Sleep -Seconds $secs; Add-Type -AssemblyName System.Windows.Forms; [void][System.Windows.Forms.MessageBox]::Show('$m', '$t')"
+    Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-Command', $code)
+    Out-Json ([pscustomobject]@{ ok = $true })
+  }
+  'slow-form' {
+    $t = ([string]$Rest[0]).Replace("'", "''"); $marker = ([string]$Rest[1]).Replace("'", "''"); $secs = [int]$Rest[2]
+    $code = "Add-Type -AssemblyName System.Windows.Forms; `$f = New-Object System.Windows.Forms.Form; `$f.Text = '$t'; `$f.Width = 320; `$f.Height = 160; `$f.StartPosition = 'CenterScreen'; " +
+            "`$b = New-Object System.Windows.Forms.Button; `$b.Text = 'OK'; `$b.Name = 'OK'; `$b.Left = 90; `$b.Top = 50; " +
+            "`$b.Add_Click({ Set-Content -LiteralPath '$marker' -Value 'pressed'; `$f.Close() }); `$f.Controls.Add(`$b); " +
+            "`$f.Add_Shown({ Start-Sleep -Seconds $secs }); [void]`$f.ShowDialog()"
+    Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-Command', $code)
+    Out-Json ([pscustomobject]@{ ok = $true })
+  }
+  'close-title' {
+    $frag = [string]$Rest[0]
+    $w = @(Get-Windows | Where-Object { $_.title -like "*$frag*" })[0]
+    if ($w) { [void][RelWin]::SendMessage([IntPtr]$w.hwnd, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) }
+    Out-Json ([pscustomobject]@{ closed = [bool]$w })
+  }
+  'close-later' {
+    $secs = [int]$Rest[0]; $frag = ([string]$Rest[1]).Replace("'", "''")
+    $self = $MyInvocation.MyCommand.Path
+    $code = "Start-Sleep -Seconds $secs; & powershell -NoProfile -ExecutionPolicy Bypass -File '$self' close-title '$frag'"
+    Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-Command', $code)
+    Out-Json ([pscustomobject]@{ ok = $true })
+  }
+  'type-unsaved' {
+    Start-Process -FilePath notepad.exe
+    Start-Sleep -Seconds 2
+    Add-Type -AssemblyName System.Windows.Forms
+    $text = ([string]$Rest[0]) -replace '([\+\^%~\(\)\{\}\[\]])', '{$1}'
+    [System.Windows.Forms.SendKeys]::SendWait($text)
     Out-Json ([pscustomobject]@{ ok = $true })
   }
   default { throw "unknown command: $Cmd" }

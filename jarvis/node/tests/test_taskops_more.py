@@ -36,4 +36,5 @@ def test_windows_shortcuts_go_to_the_desktop_only_and_only_from_a_fixed_list(mon
         with pytest.raises(ValueError):
             winbackend.key(bad_target, {"text": chord})
     assert len(sent) == 2
-    assert set(winbackend.GLOBAL_KEYS) == {"win+d", "win+m", "win+left", "win+right", "win+up", "win+down"}
+    # D65 added exactly three: back to the previous window and next / previous virtual desktop (win+r, win+l and every other Windows chord stay refused)
+    assert set(winbackend.GLOBAL_KEYS) == {"win+d", "win+m", "win+left", "win+right", "win+up", "win+down", "alt+tab", "ctrl+win+left", "ctrl+win+right"}

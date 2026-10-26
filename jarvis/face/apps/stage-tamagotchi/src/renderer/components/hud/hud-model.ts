@@ -46,6 +46,8 @@ export interface JarvisStatus {
   goalN: number
   goalTotal: number
   goalExec: string
+  /** D65: what the PC control loop is doing right now, as a short fixed-phrase sentence made by the plugin ("I am typing into notepad"); '' when no PC task runs. Never typed text. */
+  pcLine?: string
 }
 
 export type GoalState = 'none' | 'planning' | 'running' | 'done' | 'failed' | 'waiting'
@@ -102,6 +104,7 @@ export function parseJarvisStatus(result: ToolResult | undefined | null): Jarvis
     goalN: count(d.goal_n),
     goalTotal: count(d.goal_total),
     goalExec: typeof d.goal_exec === 'string' ? d.goal_exec : '',
+    pcLine: typeof d.pc_line === 'string' && /^[\w .,()'-]{1,140}$/.test(d.pc_line) ? d.pc_line : '',
   }
 }
 
@@ -205,6 +208,8 @@ const EXECUTOR_WORDS: Record<string, string> = {
 export function goalLine(status: JarvisStatus | null): string {
   if (!status)
     return ''
+  if (status.pcLine && status.goalState !== 'waiting')
+    return status.pcLine.charAt(0).toUpperCase() + status.pcLine.slice(1)
   switch (status.goalState) {
     case 'planning': return 'Planning it'
     case 'running': {

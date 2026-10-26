@@ -37,7 +37,7 @@ PROC_BAR = re.compile(r"^[A-Za-z0-9_.\- ]{1,80}\|$")
 BROWSER_OPS = {"open": "open", "read": "snapshot", "tabs": "snapshot", "whoami": "snapshot", "find": "snapshot",
                "media": "snapshot", "play": "play", "click": "click", "type": "type", "press": "press"}
 DIAG_OPS = {"processes", "app_errors", "crashes", "services", "disk", "network", "app_info", "window_text",
-            "window_ocr", "window_locate", "battery"}   # 2026-10-16: OCR of one window / where a label is in it (read-only, text stays local)
+            "window_ocr", "window_locate", "window_vision", "battery"}   # D65: window_vision = the vision rung of the screen cascade (same read-only, local-text class as window_ocr). 2026-10-16: OCR of one window / where a label is in it (read-only, text stays local)
 REPAIR_OPS = {"restart_app", "edit_file", "restore", "install"}
 # Undo (D61): the owner's explicit "undo that" (or a click on Undo in the Timeline panel) reverses one step JARVIS did: move a new file to the Recycle Bin,
 # put a binned file back, move a moved file back, close a window JARVIS opened, set a setting back to its recorded value. The node checks the
@@ -146,7 +146,7 @@ def _check_params(kind: str, params: dict):
               and (op != "open" or params["url"] != "")
               and (op not in ("click", "type", "press", "play", "find") or params["target"] != "" or op == "press"))
     elif kind == "diag":
-        target_ok = (r"^[A-Za-z0-9_. :()-]{1,80}\|[^\r\n\0|]{1,120}$" if params.get("op") == "window_locate"   # "app|label"
+        target_ok = (r"^[A-Za-z0-9_. :()-]{1,80}\|[^\r\n\0|]{1,120}$" if params.get("op") in ("window_locate", "window_vision")   # "app|label" ("app|*" = read the whole window)
                      else r"^[A-Za-z0-9_. :()-]{0,80}$")
         ok = (keys == {"op", "target"} and params["op"] in DIAG_OPS and isinstance(params["target"], str)
               and re.match(target_ok, params["target"]) is not None)

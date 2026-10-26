@@ -10,6 +10,7 @@ import concurrent.futures
 import contextlib
 import contextvars
 import json
+import os
 import re
 import secrets
 import threading
@@ -20,9 +21,72 @@ from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_pl
 from jarvis.plugins._shared import decider, screen_text, translate
 from jarvis.plugins._shared import names as names_mod
 
-from . import composite, coordinator as coord, core, decide, drive as drive_mod, goal as goal_mod, journal_client as jc, quick as quick_mod, simple_tasks, undoer
+from . import composite, coordinator as coord, core, decide, drive as drive_mod, goal as goal_mod, journal_client as jc, lessons as lessons_mod, pcagent, pcport, quick as quick_mod, simple_tasks, taskstate, taskvoice, undoer
 
 PROFILE_HELP = "Chrome profile alias: 'default' or a name such as 'VenkatAMV'; see list_browser_profiles."
+
+
+class AgentSet(dict):
+    """The step runners by tool name, plus (D65) `alternates`: tool -> fn(step, last result) -> [(route name, runner)], the other way to do the step that the coordinator's
+    closed loop tries when the first route did not show its effect."""
+    alternates: dict = {}
+
+
+def _cascade_text(port, app: str, ocr_text: str):
+    """Read one window with the three rungs and the agreement rule: the accessibility tree and the OCR text already in hand are compared; the vision model is asked only
+    when they disagree or both are empty (it is the slowest and the one that can invent)."""
+    from jarvis.plugins._shared import screen_cascade as sc
+    from . import perceive
+    rungs = {"uia": lambda: perceive._uia_text(port.uia(app)), "ocr": lambda: ocr_text}
+    rd = sc.read(rungs, cross_check=True)
+    if rd.conflict or not rd.text:
+        rd = sc.read({**rungs, "vision": lambda: port.vision(app)}, cross_check=True)
+    return rd
+
+
+def _locate_cascade(port, app: str, label: str, first: dict) -> dict:
+    """Where is the label, with the rungs checking each other: the control's NAME in the accessibility tree (a click by name needs no pixels), and the OCR line against
+    the vision model's own point. `safe_to_click` is True for a named control or for two pixel rungs that agree; one pixel rung alone is a guess."""
+    from jarvis.plugins._shared import screen_cascade as sc
+    from . import ladder, perceive
+    n = ladder._n(label)
+    by_name = False
+    try:
+        rows = port.uia(app)
+        by_name = bool(n) and any(ladder._n(b) == n for r in rows for b in (r.get("buttons") or []))
+    except Exception:  # noqa: BLE001
+        pass
+    pt = first.get("x") is not None and {"x": first["x"], "y": first["y"]}
+    both = {}
+    try:
+        both = port.locate(app, label) or {}
+    except Exception:  # noqa: BLE001
+        pass
+    ocr_pt = (first["x"], first["y"]) if pt and first.get("found_by") == "ocr" else both.get("ocr")
+    vis_pt = both.get("vision") or ((first["x"], first["y"]) if pt and first.get("found_by") != "ocr" else None)
+    rungs = {}
+    if ocr_pt:
+        rungs["ocr"] = lambda _l, p=ocr_pt: sc.Hit(float(p[0]), float(p[1]), 60.0, 20.0, label)
+    if vis_pt:
+        rungs["vision"] = lambda _l, p=vis_pt: sc.Hit(float(p[0]), float(p[1]), 0.0, 0.0, label)
+    loc = sc.locate(label, rungs) if rungs else sc.Located(None, "", 0.0)
+    out = {"by_name": by_name, "agreement": "agreed" if loc.agreed_with else "disagreed" if loc.conflict else "single" if loc.hit else "none",
+           "confidence": loc.confidence, "safe_to_click": bool(by_name or (loc.safe_to_click and loc.source != "uia"))}
+    if by_name:
+        out["note"] = (str(first.get("note") or "") + " The control is listed by name in the accessibility tree, so it can be clicked by name.").strip()
+    elif loc.conflict:
+        out["note"] = (str(first.get("note") or "") + " The OCR and the vision model put it in different places: do not click from pixels.").strip()
+    return out
+
+
+async def _no_sleep(_s: float) -> None:
+    return None
+
+
+async def _then(*coros):
+    """Run several coroutines one after the other (a route that is two jobs: focus, then the key)."""
+    for c in coros:
+        await c
 
 
 class StepUnavailable(RuntimeError):
@@ -554,7 +618,7 @@ class DesktopPlugin(PluginBase):
             "target": {"type": "string", "description": "Start-menu app name for open_app; otherwise 'process|element' or 'process|x,y'"},
             "text": {"type": "string", "description": "Text to type, the key (e.g. ctrl+s, enter, playpause), or up/down"},
             "approval_id": {"type": "string"}}, "required": ["action", "target"]},
-        timeout=360, llm_result_fields=["state", "ok", "opened", "done", "verified", "window", "note", "error", "approval_id", "how"],
+        timeout=360, llm_result_fields=["state", "ok", "opened", "done", "verified", "window", "note", "error", "approval_id", "how", "route", "ask"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     @jc.journaled("run_pc_action")
@@ -564,9 +628,96 @@ class DesktopPlugin(PluginBase):
             body["approval_id"] = approval_id
         try:
             with _PcLock("run_pc_action", 360):
-                return await self._one(body, 60, f"{action} {target}"[:120])
+                return await DesktopPlugin._action_closed_loop(self, action, target, text, body)      # (not self._...: tests and hosts lend a stand-in `self`)
         except coord.Busy as e:
             return _err(e)
+
+    def _sync_port(self, loop) -> "pcport.PcPort":
+        """A perceive.Port for code that runs in a worker thread (the cascade is plain code): each call is one kernel job run on the entries' loop, in this operation's context."""
+        def pc(body, timeout=90.0, what="", keep_local=False):
+            res = asyncio.run_coroutine_threadsafe(self._run(self._pc(), dict(body), timeout, what), loop).result(timeout + 30)
+            r = dict(res.get("result") or {})
+            local = core.take_local(r.pop("local_result", None))
+            if keep_local:
+                r["_local"] = local
+            r["state"] = res.get("state")
+            r["ok"] = bool(r.get("ok")) and res.get("state") == "done"
+            for k in ("approval_id", "how"):
+                if res.get(k):
+                    r[k] = res[k]
+            return r
+        return pcport.PcPort(pc)
+
+    async def _action_closed_loop(self, action: str, target: str, text: str, body: dict):
+        """D59 lever a, wired (D65): ONE owner-named action is act -> check -> retry ONCE by the next route -> otherwise ask. Routes: the structured route (UIA invoke / set value), the
+        keyboard (a shortcut or menu mnemonic, or focus + paste), and coordinates from the pixels (only where the OCR line and the vision model agree). Only a node that said the
+        action did NOT work is retried; one that said ok is believed (a second click could do it twice); a hold, a denial or a stop ends it at once."""
+        from jarvis.plugins._shared import closed_loop as cl
+        from . import ladder, perceive
+        proc, _, element = target.partition("|")
+        box: dict = {"out": None, "stop": False}
+        loop = asyncio.get_running_loop()
+
+        def val() -> dict:
+            o = box["out"]
+            return dict(o.value) if isinstance(o, Ok) and isinstance(o.value, dict) else {"ok": False, "error": str(getattr(o, "error", "") or "no result")}
+
+        async def send(b: dict, what: str = ""):
+            box["out"] = await self._one(b, 60, what or f"{b.get('action') or b.get('op')} {target}"[:120])
+            v = val()
+            if v.get("state") in ("waiting_for_permission", "denied", "cancelled"):
+                box["stop"] = True
+
+        async def verify():
+            v = val()
+            if box["stop"]:
+                return cl.Verification(cl.UNKNOWN, "held, denied or cancelled")
+            return cl.Verification(cl.VERIFIED if v.get("ok") else cl.ABSENT, str(v.get("error") or "")[:80])
+
+        def keyboard_key() -> str:
+            if action == "click" and element:
+                return ladder.key_for_element(element) or ladder.mnemonic(element, element.lower() in ladder.MENU_NAMES)
+            return ""
+        routes = [cl.Route("uia", lambda: send(body))]
+        if action == "click" and element and keyboard_key():
+            routes.append(cl.Route("keyboard", lambda: _then(send({"op": "ui", "action": "focus", "target": f"{proc}|", "text": ""}), send({"op": "ui", "action": "key", "target": f"{proc}|", "text": keyboard_key()})),
+                                   guard=lambda: not box["stop"]))
+        if action == "click" and element:
+            located: dict = {}
+
+            async def guard_pixels() -> bool:
+                if box["stop"] or re.search(r"(?i)pay|delete|send|sign|install|buy|password", element):
+                    return False
+                loc = await asyncio.to_thread(perceive.locate, DesktopPlugin._sync_port(self, loop), proc, element)
+                located["loc"] = loc
+                return bool(loc.hit and loc.safe_to_click and loc.source != "uia")
+
+            async def pixels():
+                h = located["loc"].hit
+                await send({"op": "ui", "action": "click_at", "target": f"{proc}|{int(h.x)},{int(h.y)}", "text": ""})
+            routes.append(cl.Route("coordinates", pixels, guard=guard_pixels))
+        if action == "type":
+            routes.append(cl.Route("refocus", lambda: _then(send({"op": "ui", "action": "focus", "target": f"{proc}|", "text": ""}), send(body)), guard=lambda: not box["stop"]))
+            routes.append(cl.Route("paste", lambda: _then(send({"op": "ui", "action": "focus", "target": f"{proc}|", "text": ""}),
+                                                          send({"op": "ui", "action": "type_focused", "target": f"{proc}|", "text": text})), guard=lambda: not box["stop"] and bool(text)))
+        if action == "key":
+            from .ladder import menu_for_key
+            menu = menu_for_key(text)
+            if menu:
+                routes.append(cl.Route("menu", lambda: _then(*[send({"op": "ui", "action": "click", "target": f"{proc}|{m}", "text": ""}) for m in menu]), guard=lambda: not box["stop"]))
+        step = cl.Step("pc_action", f"{action} {proc}"[:60], routes, verify, idempotent=False, budget_s=120.0, settle_s=0.0, poll_s=0.0, max_attempts=3 if action in ("click", "type") else 2, keep_order=True)
+        sr = await cl.arun_step(step, sleep=_no_sleep, cancelled=lambda: bool(coord.current_op() and coord.current_op().stop_flag.is_set()))
+        out = box["out"]
+        if isinstance(out, Ok) and isinstance(out.value, dict):
+            v = dict(out.value)
+            v["route"] = sr.route_used or (sr.attempts[-1].route if sr.attempts else "")
+            if sr.retried:
+                v["retried"] = True
+            if sr.status == cl.ASKED and not v.get("ok") and not box["stop"]:
+                v["ask"] = sr.ask
+                v["note"] = "I tried " + " and ".join(a.route for a in sr.attempts if a.verification != "skipped") + " and it did not work. " + str(v.get("note") or "")
+            return Ok(v)
+        return out
 
     @plugin_entry(
         id="check_pc",
@@ -654,19 +805,31 @@ class DesktopPlugin(PluginBase):
             return Err(SdkError(_ocr_error(got, "read")))
         out = {"ok": True, "app": app, "lines": len(lines), "source": core.OCR_LABEL}
         joined = "\n".join(lines)
-        _, removed = core.scrub_text(joined)
+        reading = await asyncio.to_thread(_cascade_text, DesktopPlugin._sync_port(self, asyncio.get_running_loop()), app, joined)      # D65: the cascade (tree, OCR, vision) with its agreement rule
+        shown = reading.text if reading.text else joined
+        _, removed = core.scrub_text(shown)
+        label = {"ocr": core.OCR_LABEL, "uia": "from the accessibility tree", "vision": "from the vision model (a guess; check it)"}.get(reading.source, core.OCR_LABEL)
+        out = {"ok": True, "app": app, "lines": len(lines) if reading.source in ("ocr", "") else len([x for x in shown.splitlines() if x.strip()]), "source": label,
+               "confidence": reading.confidence, "read_by": [t.rung for t in reading.trace if t.ok]}
+        if reading.agreed_with:
+            out["agreed_with"] = reading.agreed_with
+            out["source"] = f"{label}; confirmed by {reading.agreed_with}"
+        if reading.conflict:
+            out["conflict"] = True
         if removed:
             out["removed"] = removed                                  # rule names only
-        if not lines:
+        if not shown.strip():
             out["text_note"] = "OCR found no text in the window"
         elif core.screen_text_allowed():
-            rel = await _release(joined)                              # secrets out, then the privacy gateway hides names and places
+            rel = await _release(shown)                               # secrets out, then the privacy gateway hides names and places
             if rel.allowed:
                 out["text"], out[screen_text.SCREEN_KEY], out["text_note"] = rel.text[:6000], True, rel.note
             else:
                 out["text_note"] = rel.note                           # withheld: a short neutral note, none of the text
         else:
             out["text_note"] = "the window text stayed on this laptop (set JARVIS_SCREEN_TEXT_TO_MODEL=1 to let the model read it)"
+        if reading.conflict and out.get("text_note"):
+            out["text_note"] += " The readings of the window disagreed, so treat this as uncertain."
         return Ok(out)
 
     @plugin_entry(
@@ -720,6 +883,10 @@ class DesktopPlugin(PluginBase):
                 out["note"] = "read by OCR (less reliable than the accessibility tree); the point is inside the window"
         else:
             out["note"] = str(got.get("note") or "not found by OCR or the vision model")[:200]
+        try:                                                              # D65: the cascade's agreement rule for a place (and the control's name in the tree)
+            out.update(await asyncio.to_thread(_locate_cascade, DesktopPlugin._sync_port(self, asyncio.get_running_loop()), app, text, out))
+        except Exception:  # noqa: BLE001 - the second opinion is a help; the first answer stands
+            pass
         return Ok(out)
 
     @plugin_entry(
@@ -1160,8 +1327,14 @@ class DesktopPlugin(PluginBase):
             def classify(ctx, app):
                 d = decider.classify_dialog(ctx, app)
                 return d.choice or "B", d.source
-            h = drive_mod.Hands(observe=drive_observe, act=act, propose=lambda task, obs, hist: drive_mod.propose_local(task, obs, hist), classify=classify)
-            out = drive_mod.Driver(h).run(goal, task=step.get("query") or goal, app=step.get("app", ""))
+            if os.environ.get("JARVIS_PC_AGENT", "1").strip().lower() in ("0", "off", "no", "false"):        # the older observe - decide - act loop (D54), kept as a switch
+                h = drive_mod.Hands(observe=drive_observe, act=act, propose=lambda task, obs, hist: drive_mod.propose_local(task, obs, hist), classify=classify)
+                out = drive_mod.Driver(h).run(goal, task=step.get("query") or goal, app=step.get("app", ""))
+            else:                                                       # D65: the human-like loop with the problem ladder (pcagent.py)
+                agent = pcagent.PcAgent(pcport.PcPort(pc),
+                                        lambda task, obs, hist: drive_mod.propose_local(task, obs, hist), classify=classify, lessons=lessons_mod.default(),
+                                        state=taskstate.TaskState(), goal=goal, stop=(op.stop_flag.is_set if op is not None else None), task_id=getattr(op, "id", "") or "")
+                out = agent.run(goal, task=step.get("query") or goal, app=step.get("app", ""))
             if out.get("status") == "waiting_for_permission":
                 out["state"] = "waiting_for_permission"
             return out
@@ -1278,7 +1451,21 @@ class DesktopPlugin(PluginBase):
             "troubleshoot": troubleshoot, "research": research, "open_output": open_output, "stop": stop,
             "open_in_vscode": open_in_vscode, "type_in_editor": type_in_editor, "save_as": save_as, "drive": drive, "simple_task": simple_task,
         }
-        return {k: jc.wrap_agent(k, _with_approval(fn)) for k, fn in agents.items()}       # D61: one journal line per step run
+        wrapped = AgentSet({k: jc.wrap_agent(k, _with_approval(fn)) for k, fn in agents.items()})       # D61: one journal line per step run
+
+        def other_way_type(step, last):
+            """D59 lever a (D65): the other route for typing - bring the window forward and PASTE the text (the clipboard route), when the first route could not put it there."""
+            if step.get("text") and step.get("app") and step.get("app") != decide.ACTIVE:
+                return [("paste", lambda s: editor_job(s, {"op": "ui", "action": "type_focused", "text": str(s.get("text", ""))}))]
+            return []
+
+        def other_way_window(step, last):
+            """The other route for a window action: restore it from minimised, then do the action again."""
+            if step.get("action") in ("focus", "maximize") and step.get("app") not in (None, "", decide.ACTIVE):
+                return [("restore", lambda s: (direct(s, {"op": "ui", "action": "restore", "target": "", "text": ""}), window(s))[1])]
+            return []
+        wrapped.alternates = {"type_text": other_way_type, "window": other_way_window}
+        return wrapped
 
     def _stop_pc_tasks(self) -> None:
         """The owner's stop reaches every registered PC operation (each has its own flag: a second request that is
@@ -1369,7 +1556,7 @@ class DesktopPlugin(PluginBase):
                    "plan_model": (rec.get("plan") or {}).get("model"), "plan_seconds": (rec.get("plan") or {}).get("seconds"),
                    "steps": [{k: s.get(k) for k in ("n", "tool", "agent", "attempts", "passed", "checked", "uncertainty")} for s in rec["steps"]],
                    "uncertain": rec.get("uncertain"), "approval_id": rec.get("approval_id"), "how": rec.get("how"),
-                   "route": rec.get("route")})
+                   "route": rec.get("route"), "ask": rec.get("ask")})
 
     goal_readers: dict = {}                 # face-side read-only helpers the host may lend (jarvis/bridge/face_tools.py): {"recall": fn, "tasks": fn}
 
@@ -1516,6 +1703,9 @@ class DesktopPlugin(PluginBase):
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def quick_command(self, text: str = "", **_):
         started = time.monotonic()
+        spoken = await asyncio.to_thread(taskvoice.handle, text, stop=lambda: coord.stop_all("stopped by the owner by voice", 10.0), ops_running=coord.operations)      # D65: "what are you doing", "try another way", "what have you learned"
+        if spoken is not None:
+            return Ok({**spoken, "approval_id": None, "seconds": round(time.monotonic() - started, 2)})
         said = await asyncio.to_thread(names_mod.quick_answer, text)           # D62: "what names do you know", "forget Priya": a rule; the names never reach a model
         if said is not None:
             return Ok({"handled": True, "status": "completed", "reply": said, "planned_by": "rules", "label": "One moment", "approval_id": None,
