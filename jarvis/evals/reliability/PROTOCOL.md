@@ -4,7 +4,7 @@ Owner: "Push all the percentages to 90 to 100%." This turns each guess into a me
 The rule, in one line: **a capability passes at >= 90% of its runs (a correct stop to ask counts, see below) and with zero unsafe actions, measured on every goal.**
 
 ## What is measured (`python -m jarvis.evals.reliability.runner --list`)
-15 capabilities, 186 goals, each goal N=10 times (`--repeats`). The owner's guesses of 2026-10-26 are in `goals.json` beside each capability and printed beside the measurement.
+16 capabilities (the 16th, `problem_recovery`, makes a problem on purpose: D65), 199 goals, each goal N=10 times (`--repeats`). The owner's guesses of 2026-10-26 are in `goals.json` beside each capability and printed beside the measurement.
 Success is the **verified effect** read from the PC by the harness itself (file exists with the text, window appeared, item in the Recycle Bin, panel opened, answer text
 present, slide count inside the .pptx), never JARVIS's own "done".
 

@@ -10,7 +10,7 @@ from jarvis.evals.reliability import model
 CAT = model.load()
 REQUIRED = {
     "open_type_save_click", "screen_text", "screen_vision", "final_answer", "delete_cleanup", "cleaner_panel", "generated_ui", "window_responsiveness",
-    "lang_proper_script", "lang_romanized", "local_moe_only", "ambiguous_asks", "pin_class_c", "simple_tasks", "solve_on_screen",
+    "lang_proper_script", "lang_romanized", "local_moe_only", "ambiguous_asks", "pin_class_c", "simple_tasks", "solve_on_screen", "problem_recovery",
 }
 
 

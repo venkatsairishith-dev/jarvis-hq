@@ -36,7 +36,9 @@ CHECKS = frozenset({
     "window_text", "recycle_bin_has", "recycle_bin_lacks", "answer_contains", "answer_nonempty", "ask_form", "approval_pending",
     "tool_called", "panel_open", "process_running", "output_made", "pptx", "window_absent",
 })
-SETUP_OPS = frozenset({"mkdir", "write_file", "make_junk", "open_notepad_text", "open_image_text", "render_image", "open_app", "message_box", "recycle_file", "write_script"})
+SETUP_OPS = frozenset({"mkdir", "write_file", "make_junk", "open_notepad_text", "open_image_text", "render_image", "open_app", "message_box", "recycle_file", "write_script",
+                       # D65 (problem_recovery): the problem is made on purpose
+                       "minimize", "start_later", "message_box_later", "slow_form", "close_later", "type_unsaved"})
 FIELDS = frozenset({"work", "sep", "tok", "num", "date", "weekday", "day", "month", "year", "outputs", "screenshots"})
 UNFORMATTED_KEYS = frozenset({"regex", "pattern"})
 

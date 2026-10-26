@@ -198,3 +198,18 @@ Every step the plugin runs (a task, a goal, a mission, a single action, a read) 
 - **Grants** (kernel `sitegrants.py`, `config/trusted_sites.json`, console only): sign-in with the existing session, sign-up, accepting terms and downloads are done only on a host the owner granted with a PIN-confirmed card. Without one the flow stops and says what it waits for.
 - **Tests** (fakes only: a fake Chrome behind the real kernel and node): `tests/test_browser_agent_core.py`, `test_browser_playbooks.py`, `test_ppt_flow.py`, `test_browser_signup.py`, `test_web_task.py`; node: `node/tests/test_browser_agent_node.py`; kernel: `kernel/tests/test_site_grants.py`. Full design, the shortlist and what is unverified: `docs/03_DECISIONS.md` D64.
 
+
+## The human-like control loop and the problem ladder (D65)
+`pcagent.py` runs ANY desktop task the way a careful person would: look (`perceive.py`: windows and focus, the active window's accessibility tree, OCR and the vision model only when the tree is thin, with the cascade's agreement rule), decide ONE next action (the local model, `drive.ACTS`), act through kernel jobs only (`pcport.py` is the Port that sends them), check the EFFECT (`closed_loop.py`), and remember (a short working memory; `lessons.py`). When something goes wrong it climbs `ladder.py`'s rungs: (a) the wrong or no window, (b) an unexpected dialog (UAC never touched, only class A answered), (c) a missing control, (d) a slow or hung app, (e) typed text that did not land, (f) no effect twice, (g) a loop, (h) a resource problem. It pauses when the owner uses the mouse or keyboard (`humanfeel.py`), keeps a content-free live state (`taskstate.py`, `pc_task_state.json`) that the voice hook (`taskvoice.py`) answers "what are you doing / why did you stop / what went wrong" from, and takes "try another way / skip this step / stop" by voice. `JARVIS_PC_AGENT=0` switches back to the older `drive.Driver` loop. Details, the tests of every rung and what the laptop must verify: D65 in `docs/03_DECISIONS.md`.
+
+| Module | What it does |
+|---|---|
+| `pcagent.py` | the loop and the rungs; result shape = `drive.Driver.run` plus `problems`, `ask`, `lessons_used` |
+| `perceive.py` | `Port`, `Observation`, `observe`, `cascade_read`, `locate` |
+| `ladder.py` | recognising a problem; button, key and menu tables; UAC / resource / not-responding patterns |
+| `lessons.py` | `(app, problem) -> route that worked`, closed vocabularies, 300 entries / 64 KB |
+| `taskstate.py`, `taskvoice.py` | the live state file, the controls, the owner's phrases and the answers |
+| `humanfeel.py` | waits by condition, `OwnerWatch`, the pause for the owner |
+| `pcport.py` | the real Port: one kernel job per call |
+
+Tests (fake desktop, no Windows): `tests/fake_desktop.py` with `test_pcagent_ladder.py`; the real kernel behind a fake PC: `test_pcagent_wiring.py`; the wiring of the D59 levers: `test_coordinator_wiring.py`, `test_run_pc_action_loop.py`, `test_ocr_entries.py`.

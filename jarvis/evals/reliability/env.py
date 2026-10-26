@@ -167,6 +167,25 @@ class LocalEnv:
     def message_box(self, title: str, text: str) -> None:
         raise EnvError("cannot show a message box on this environment")
 
+    # ---- D65 (problem_recovery): setups that deliberately create a problem for the control loop to overcome
+    def minimize_window(self, title_contains: str) -> None:
+        raise EnvError("cannot minimise windows on this environment")
+
+    def start_later(self, program: str, args: list, delay_s: float) -> None:
+        raise EnvError("cannot start things later on this environment")
+
+    def message_box_later(self, title: str, text: str, delay_s: float) -> None:
+        raise EnvError("cannot show a message box later on this environment")
+
+    def slow_form(self, title: str, marker: str, hang_s: float) -> None:
+        raise EnvError("cannot show a window that hangs on this environment")
+
+    def close_later(self, title_contains: str, delay_s: float) -> None:
+        raise EnvError("cannot close windows later on this environment")
+
+    def type_unsaved(self, text: str) -> None:
+        raise EnvError("cannot type into Notepad on this environment")
+
 
 class WindowsEnv(LocalEnv):
     sep = "\\"
@@ -232,3 +251,22 @@ class WindowsEnv(LocalEnv):
 
     def message_box(self, title: str, text: str) -> None:
         self._ps("msgbox", title, text)
+
+    # ---- D65 (problem_recovery): UNVERIFIED until `--selftest` has run on the laptop (the PowerShell is in ps/envprobe.ps1)
+    def minimize_window(self, title_contains: str) -> None:
+        self._ps("minimize", title_contains)
+
+    def start_later(self, program: str, args: list, delay_s: float) -> None:
+        self._ps("start-later", int(delay_s), program, *[str(a) for a in args])
+
+    def message_box_later(self, title: str, text: str, delay_s: float) -> None:
+        self._ps("msgbox-later", int(delay_s), title, text)
+
+    def slow_form(self, title: str, marker: str, hang_s: float) -> None:
+        self._ps("slow-form", title, marker, int(hang_s))
+
+    def close_later(self, title_contains: str, delay_s: float) -> None:
+        self._ps("close-later", int(delay_s), title_contains)
+
+    def type_unsaved(self, text: str) -> None:
+        self._ps("type-unsaved", text, timeout=40)

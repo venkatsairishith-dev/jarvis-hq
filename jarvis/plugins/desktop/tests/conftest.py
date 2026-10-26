@@ -52,3 +52,15 @@ def _quick_path_off_and_progress_in_tmp(tmp_path, monkeypatch):
     monkeypatch.setenv("JARVIS_QUICK_PATH", "0")
     monkeypatch.setattr(core, "GOAL_PROGRESS", tmp_path.parent / f"{tmp_path.name}-progress" / "goal_progress.json")
     yield
+
+
+@pytest.fixture(autouse=True)
+def _task_state_and_lessons_in_tmp(tmp_path, monkeypatch):
+    """D65: the control loop writes a live state file, reads a controls file and keeps lessons. Their default place is the data dir (D:\\jarvis\\... on the laptop, a junk
+    folder on this server): a test never touches it, and a state one test left must never be read by the next."""
+    from jarvis.plugins.desktop import lessons, taskstate
+    monkeypatch.setattr(taskstate, "STATE_FILE", tmp_path.parent / f"{tmp_path.name}-state" / "pc_task_state.json")
+    monkeypatch.setattr(taskstate, "CONTROL_FILE", tmp_path.parent / f"{tmp_path.name}-state" / "pc_task_control.json")
+    monkeypatch.setattr(lessons, "FILE", tmp_path.parent / f"{tmp_path.name}-state" / "lessons.json")
+    monkeypatch.setattr(lessons, "_DEFAULT", None)
+    yield

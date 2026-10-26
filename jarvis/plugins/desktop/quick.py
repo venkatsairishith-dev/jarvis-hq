@@ -261,6 +261,15 @@ def result_for(cmd: Quick, rec: dict | None) -> dict:
         summary = f"I could not {_verb_phrase(first)}: {why}"
     steps = [{"n": i, "id": f"s{i}", "executor": "pc", "kind": "ui_decide", "goal": _verb_phrase(s), "status": status if i == len(plan_steps) or status != "completed" else "completed",
               "model": "rule", "result": "", "verified": verified} for i, s in enumerate(plan_steps, 1)]
+    try:                                                         # D59 lever b, wired (D65): the sentence is checked against what the coordinator verified
+        from jarvis.plugins._shared import final_answer
+        st, fx = final_answer.effects_from_record(rec)
+        if fx or st in (final_answer.WAITING, final_answer.CLARIFY):
+            guarded = final_answer.guard(summary, st, fx, approval_id=str(rec.get("approval_id") or ""), question=str(rec.get("question") or ""))
+            if guarded.source == final_answer.TEMPLATE:
+                summary = guarded.text
+    except Exception:  # noqa: BLE001
+        pass
     out = {"status": status, "planned_by": PLANNED_BY, "summary": summary[:600], "steps": steps}
     if rec.get("approval_id"):
         out["approval_id"] = rec["approval_id"]

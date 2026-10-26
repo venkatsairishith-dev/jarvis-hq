@@ -94,7 +94,10 @@ def test_read_window_text_goes_through_the_kernel_job_and_returns_scrubbed_text(
     con = env.use(Console(env.local, {"ok": True}, ["Disk full", f"token {FAKE_TOKEN}", f"card {CARD}", "PASSWORD = hunter2hunter2"]))
     r = call("read_window_text", app="notepad")
     assert not is_err(r), r
-    assert con.bodies == [{"op": "diag", "check": "window_ocr", "target": "notepad"}]      # the kernel's own job, nothing else
+    # CHANGED ON PURPOSE (D65, the screen cascade is wired): the OCR job is still first and unchanged; the accessibility tree is read as the second rung (the agreement rule),
+    # and the vision model is NOT asked here because the tree and OCR did not conflict and OCR gave text. All of them are the kernel's own read-only diag jobs.
+    assert con.bodies[0] == {"op": "diag", "check": "window_ocr", "target": "notepad"}
+    assert [b["check"] for b in con.bodies] == ["window_ocr", "window_text"] and all(b["op"] == "diag" for b in con.bodies)
     v = r.value
     assert v["ok"] and v["lines"] == 4 and "less reliable" in v["source"]
     assert "Disk full" in v["text"] and len(gw.redact_requests) == 1 and gw.redact_requests[0]["names"] is True
@@ -172,7 +175,9 @@ def test_find_on_screen_returns_an_observed_point(env):
     con = env.use(Console(env.local, {"ok": True, "point": {"x": 120, "y": 44}, "found_by": "ocr", "basis": "observed",
                                       "size": {"width": 800, "height": 600}}, ["Save", "Cancel"]))
     r = call("find_on_screen", app="notepad", text="Save")
-    assert con.bodies == [{"op": "diag", "check": "window_locate", "target": "notepad|Save"}]
+    # CHANGED ON PURPOSE (D65): the locate job is first and unchanged; the cascade then reads the tree (is the control listed by name?) and asks the vision rung for ITS point
+    assert con.bodies[0] == {"op": "diag", "check": "window_locate", "target": "notepad|Save"}
+    assert [b["check"] for b in con.bodies] == ["window_locate", "window_text", "window_vision"]
     v = r.value
     assert (v["found"], v["x"], v["y"], v["basis"], v["found_by"]) == (True, 120, 44, "observed", "ocr")
     assert "less reliable" in v["source"] and v["window"] == {"width": 800, "height": 600}

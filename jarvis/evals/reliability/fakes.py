@@ -23,6 +23,8 @@ class FakeEnv(LocalEnv):
         self.bin: list[tuple[str, str]] = []            # (name, from-folder)
         self.closed: list[Win] = []
         self.purged: list[str] = []
+        self.minimized: list[str] = []
+        self.later: list[tuple] = []
 
     # ---- windows
     def add_window(self, process: str, title: str, text: str = "") -> Win:
@@ -88,3 +90,24 @@ class FakeEnv(LocalEnv):
 
     def message_box(self, title: str, text: str) -> None:
         self.add_window("powershell", title, text)
+
+    # ---- D65 (problem_recovery) setups, pretended: a window is added at once, or noted for the test to start later
+    def minimize_window(self, title_contains: str) -> None:
+        self.minimized.append(title_contains)
+
+    def start_later(self, program: str, args: list, delay_s: float) -> None:
+        self.later.append(("start", program, delay_s))
+
+    def message_box_later(self, title: str, text: str, delay_s: float) -> None:
+        self.later.append(("msgbox", title, delay_s))
+        self.add_window("powershell", title, text)                       # the pretend PC does not wait: the box is there from the start
+
+    def slow_form(self, title: str, marker: str, hang_s: float) -> None:
+        self.add_window("powershell", title, "OK")
+        self.later.append(("slow_form", marker, hang_s))
+
+    def close_later(self, title_contains: str, delay_s: float) -> None:
+        self.later.append(("close", title_contains, delay_s))
+
+    def type_unsaved(self, text: str) -> None:
+        self.add_window("Notepad", "*Untitled - Notepad", text)

@@ -2445,6 +2445,10 @@
   {
    "registry_name": "sherpa-onnx (speech recognition runtime)",
    "unpinned_reason": "Installed into jarvis-venv with pip: sherpa-onnx==1.13.8 and sherpa-onnx-core==1.13.8 are pinned in jarvis/tools/requirements/jarvis-venv.txt; the wheel hashes are not recorded here."
+  },
+  {
+   "registry_name": "NVIDIA Kumo Tabular (structured-data-models)",
+   "unpinned_reason": "Optional and not installed yet (D66). When the laptop installs it, pin the pip version and the Hugging Face revision with sha256 here; until then jarvis/tools/tabular_predict.py answers with its baseline."
   }
  ]
 }
