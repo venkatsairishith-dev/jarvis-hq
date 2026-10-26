@@ -34,28 +34,22 @@ Not measured yet.
 
 ## Window responsiveness (`window_responsiveness`)
 
-**INCOMPLETE** - pass rate 57% (95% lower bound 36%), effect verified in 57% (owner estimate before measuring: 60%). 21 valid runs of 30; unsafe 0; asked/stopped 0; p50 6.2s, p90 25.0s.
-Why: 0 of 10 goals have 5+ valid runs; 30% of the runs were invalid (the harness could not run them).
-Samples: 306, p50 7.4 ms, p90 492.8 ms, worst 992.5 ms.
+**INCOMPLETE** - pass rate 100% (95% lower bound 89%), effect verified in 100% (owner estimate before measuring: 60%). 30 valid runs of 30; unsafe 0; asked/stopped 0; p50 4.5s, p90 23.0s.
+Why: 0 of 10 goals have 5+ valid runs.
+Samples: 546, p50 1.4 ms, p90 14.7 ms, worst 25.2 ms.
 
 | goal | kind | lang | runs | pass | graceful | fail | unsafe | rate | p50 | p90 |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| wr-input-idle | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 3.2s | 3.3s |
-| wr-input-local-model | probe | en | 0/3 | 0 | 0 | 0 | 0 | n/a | - | - |
-| wr-input-online-stream | probe | en | 1/3 | 1 | 0 | 0 | 0 | 100% | 39.5s | 39.5s |
-| wr-input-pc-task | probe | en | 3/3 | 2 | 0 | 1 | 0 | 67% | 6.2s | 6.4s |
-| wr-input-document-read | probe | en | 3/3 | 2 | 0 | 1 | 0 | 67% | 6.5s | 6.5s |
-| wr-click-chat-idle | probe | en | 3/3 | 2 | 0 | 1 | 0 | 67% | 2.8s | 2.8s |
-| wr-click-main-idle | probe | en | 2/3 | 2 | 0 | 0 | 0 | 100% | 2.9s | 3.0s |
-| wr-click-main-local-model | probe | en | 0/3 | 0 | 0 | 0 | 0 | n/a | - | - |
-| wr-startup-interactive | probe | en | 3/3 | 0 | 0 | 3 | 0 | 0% | 24.4s | 25.1s |
-| wr-startup-input-ignored | probe | en | 3/3 | 0 | 0 | 3 | 0 | 0% | 24.2s | 24.8s |
-
-Failure causes, most frequent first:
-
-| cause | runs | meaning |
-|---|---:|---|
-| over_limit | 9 |  |
+| wr-input-idle | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 22.2s | 22.4s |
+| wr-input-local-model | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 8.5s | 8.5s |
+| wr-input-online-stream | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 65.6s | 65.9s |
+| wr-input-pc-task | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 6.5s | 6.5s |
+| wr-input-document-read | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 6.4s | 6.6s |
+| wr-click-chat-idle | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 2.9s | 2.9s |
+| wr-click-main-idle | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 2.8s | 2.9s |
+| wr-click-main-local-model | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 4.5s | 7.3s |
+| wr-startup-interactive | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 4.5s | 4.5s |
+| wr-startup-input-ignored | probe | en | 3/3 | 3 | 0 | 0 | 0 | 100% | 4.5s | 4.6s |
 
 ## Telugu and Hindi in their own scripts (`lang_proper_script`)
 

@@ -34,6 +34,7 @@ HERE = Path(__file__).resolve().parent
 PROBE_UI = HERE / "drive" / "probe_ui.mjs"
 PROBE_STARTUP = HERE / "drive" / "probe_startup.mjs"
 GATEWAY = os.environ.get("JARVIS_GATEWAY_URL", "http://127.0.0.1:48950")
+LOCAL_SWAP = os.environ.get("JARVIS_LOCAL_MODEL_URL", "http://127.0.0.1:8080")
 
 
 @dataclass
@@ -72,7 +73,7 @@ class Load:
 class StreamLoad(Load):
     """A long streamed chat completion through the privacy gateway: the local model (default route for a plain request) or the online chain."""
 
-    def __init__(self, name: str, online: bool = False, prompt: str = "Write a long, detailed story about a lighthouse keeper, at least 600 words.",
+    def __init__(self, name: str, online: bool = False, prompt: str = "Write a very long, detailed story about a lighthouse keeper, at least 1200 words, with many chapters.",
                  opener: Callable[..., Any] | None = None, url: str = GATEWAY):
         self.name, self.online, self.prompt, self._open, self.url = name, online, prompt, opener or loopback_http.urlopen, url
         self._stop, self._thread = threading.Event(), None
@@ -81,7 +82,10 @@ class StreamLoad(Load):
         self.error = ""
 
     def _run(self) -> None:
-        body = {"model": os.environ.get("JARVIS_AGENT_MODEL", "zai-org/GLM-5.3-Flash"), "stream": True, "max_tokens": 900, "temperature": 0.7,
+        # The local load talks to the local model server itself (llama-swap): through the gateway a plain request goes to whichever online provider is free,
+        # and the first run on the laptop (2026-10-26) saw the "local" load end after a few seconds, before the samples. The online load goes through the gateway.
+        model = os.environ.get("JARVIS_AGENT_MODEL", "zai-org/GLM-5.3-Flash") if self.online or self.url != LOCAL_SWAP else "local-chat"
+        body = {"model": model, "stream": True, "max_tokens": 1800, "temperature": 0.7,
                 "messages": [{"role": "user", "content": self.prompt}]}
         headers = {"Content-Type": "application/json", "Authorization": "Bearer jarvis-local"}
         if self.online:
@@ -141,7 +145,7 @@ def make_load(kind: str, driver: Any = None, opener: Callable[..., Any] | None =
     if kind in ("", "idle"):
         return Load()
     if kind == "local_model":
-        return StreamLoad("local_model", online=False, opener=opener)
+        return StreamLoad("local_model", online=False, opener=opener, url=LOCAL_SWAP)
     if kind == "online_stream":
         return StreamLoad("online_stream", online=True, opener=opener)
     if kind == "pc_task" and driver is not None:

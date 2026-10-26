@@ -1,6 +1,6 @@
 # JARVIS reliability: where each thing stands against 90%
 
-Written 2026-10-26 22:20. A bar fills to the measured pass rate; the : is the 90% line. 'not measured yet' means no run has been made: it is not a good or a bad number.
+Written 2026-10-26 22:54. A bar fills to the measured pass rate; the : is the 90% line. 'not measured yet' means no run has been made: it is not a good or a bad number.
 
 **0 of 15 capabilities are at 90% or better** with zero unsafe actions.
 
@@ -13,7 +13,7 @@ Written 2026-10-26 22:20. A bar fills to the measured pass rate; the : is the 90
 | Delete, restore and safe cleanup | 85% | not measured yet | `[....................]` | - | 0 | - |
 | Cleaner panel | 85% | not measured yet | `[....................]` | - | 0 | - |
 | Generated decks, reports and the Preview panel | 80% | not measured yet | `[....................]` | - | 0 | - |
-| Window responsiveness | 60% | 57% | `[###########.......:..]` | incomplete | 21 | reliability-2026-10-26.json |
+| Window responsiveness | 60% | 100% | `[##################:##]` | incomplete | 30 | reliability-2026-10-26.json |
 | Telugu and Hindi in their own scripts | 60% | not measured yet | `[....................]` | - | 0 | - |
 | Tenglish and Hinglish (Telugu / Hindi in English letters) | 40% | not measured yet | `[....................]` | - | 0 | - |
 | The local MoE model as the only brain | 30% | not measured yet | `[....................]` | - | 0 | - |
@@ -24,7 +24,7 @@ Written 2026-10-26 22:20. A bar fills to the measured pass rate; the : is the 90
 
 ## What is holding each one back
 
-- **Window responsiveness**: 0 of 10 goals have 5+ valid runs; 30% of the runs were invalid (the harness could not run them). Top failure causes: over_limit x9. Lever: responsiveness: D56 (face exempt from throttling); measure with probes before/after
+- **Window responsiveness**: 0 of 10 goals have 5+ valid runs. Top failure causes: 0 of 10 goals have 5+ valid runs.
 
 ## Not measured yet
 
@@ -56,3 +56,8 @@ Open, type, save and click, Reading the screen (text), Reading pictures on the s
 - Not met: first token p50 5.5 s (target 2 s) with a FRESH face per run (the first message pays the tool-list read); in one running session turn 1 and 2 had first token 2.1 and 3.4 s. Dahl rounds: gateway first_ms p50 1.2 s but total_ms p50 8.0 s (p90 22.8 s): GLM's hidden thinking; tool goals that need a model decision stay about 22 s (done_with_tools p50 22.7 s). gateway redact_ms p50 351 -> 275 ms (cache hits 51 of 52 strings), queue_ms 0.
 - One change: pin `dahl deepseek-ai/DeepSeek-V4-Flash-0731` (3 x weather, screen, joke): first_ms p50 2.3 s (GLM 1.2 s), total_ms p50 7.3 s (8.0), done p50 10.1 s but p90 82 s (weather 82.6 / 79.6 / 9 s, screen 10.5 / 97.6 / 40.5 s): not better, NOT adopted; GLM stays first.
 - Bug found and fixed by measuring: the quick-command answer is wrapped {ok, result} by the tool server and the face read the wrong level, so every plain command went to a model (fixed, test added). The screenshot per step costs about 0.9 to 1.0 s each (PowerShell), 13 to 32 KB.
+
+## Phase 3 (2026-10-26, responsiveness, D57 trace procedure on the laptop): DONE, one real bug found and fixed
+- Found: the avatar window opened OUTSIDE every display (saved bounds x -2379, y -3140, 1536 x 920; the app re-saved them at every start): the owner saw no avatar. Root of the saved value not found (no setBounds on that window was seen at start); fixed at the use: saved bounds that no display shows or that cover a whole display are dropped and never saved again (usableSavedBounds, 4 tests). After the fix the window opens at 543,160 (450 x 600).
+- Measured with raw DevTools input (6 restarts, 5 with a local model loaded, 1 without; the harness's Playwright probe said 24 s for "first click" and was wrong: connectOverCDP itself returned after 20 s): window visible 0.9 s after launch, first accepted click 0.9 to 1.0 s (about 0.25 s of it is the launch call), 6 long tasks of 0.84 to 1.0 s in total (longest 240 to 350 ms, Live2D shader set-up), then input p50 6 to 8 ms, p90 13 ms, max 84 to 104 ms over 30 s, with and without the model. Harness (fixed probe, fresh, 3 repeats each): input p90 14.7 ms, worst 25 ms under idle, local model generating, online stream, PC task, document read; 30 of 30 valid runs pass.
+- Processes: main process idle (busy 438 ms in the first second, then under 80 ms a second); avatar renderer about 20 to 30% of a core (rAF 60 per second while idle: the 30 fps idle cap is not visible there), GPU process about 40% of a core, steady. Priority: face (17 processes), gateway, tool server, console, node agent, speech are Normal with EcoQoS off (governor log `interactive`); llama-server, llama-swap, muse runner, verdict and watchdog are BelowNormal with EcoQoS (D56 as designed).
