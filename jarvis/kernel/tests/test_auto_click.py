@@ -61,3 +61,15 @@ def test_the_rules_files_are_protected_from_an_agent_push():
     from jarvis_kernel import push_gate
     for f in ("jarvis/config/auto_click.json", "jarvis/config/specialists.json", "jarvis/config/simple_tasks.json", "jarvis/config/providers.json"):
         assert push_gate.PROTECTED.search(f), f
+
+
+def test_the_real_config_lists_the_playwright_extensions_allow_and_select_and_nothing_broad():
+    """Read from the real connect page on 2026-10-26 (UI Automation): the button is named "Allow & select", in chrome."""
+    policy._auto_click_cache.update(mtime=None, rules=[])
+    rules = json.loads(open(policy.AUTO_CLICK_FILE, encoding="utf-8").read())["rules"]
+    assert policy._auto_click_rules()                                                       # the file loads
+    assert any(r.get("process") == "chrome" and r.get("element") == "Allow & select" for r in rules)
+    assert decide("chrome|Allow & select").level == policy.YELLOW_AUTO
+    assert decide("chrome|Allow & select all tabs").level == policy.YELLOW_APPROVAL       # the whole name must match
+    assert decide("notepad|Allow & select").level == policy.YELLOW_APPROVAL
+    assert not any(r.get("element") in (".*", ".+", "") or r.get("process") in (".*", ".+", "") for r in rules)
