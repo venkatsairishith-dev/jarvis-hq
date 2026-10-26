@@ -13,6 +13,7 @@ import { onScopeDispose, shallowRef, watch } from 'vue'
 
 import { useVoiceController } from '../composables/audio/voice-controller'
 import { traceSpeechOutput } from '../composables/speech-output-trace'
+import { offerOwnerSpeech } from '../composables/voice-command-sink'
 import { useVoiceDrafts } from '../composables/voice-drafts'
 import { useVoiceEndJudge } from '../composables/voice-end-judge'
 import { createVoiceInputTracer } from '../composables/voice-input-trace'
@@ -82,6 +83,8 @@ export const useVoiceStore = defineStore('voice', () => {
   const composerInputs = new Map<string, string | undefined>()
   let presentedInput: { requestId: string, attempt: SpeechInputAttempt } | undefined
 
+  /** How each speech input began (`control`, `wake-word`, or ambient `speech`), by attempt ID, until it settles. */
+  const inputCauses = new Map<string, string>()
   const inputTracer = createVoiceInputTracer()
   const { controller, state, snapshot: transcript, error } = useVoiceController({
     transcriber: () => hearing.createTranscriber(),
@@ -94,8 +97,13 @@ export const useVoiceStore = defineStore('voice', () => {
       return trace.output
     },
     submit: async (submission, signal) => {
-      if (!composerInputs.has(submission.submissionId))
+      if (!composerInputs.has(submission.submissionId)) {
+        // D63: the open ask panel may take these words as a command for its form (push-to-talk and wake word only, never ambient speech), and a
+        // spoken PIN or password is dropped here. Words that nobody claims go on to the chat exactly as before.
+        if (await offerOwnerSpeech(submission.text, inputCauses.get(submission.submissionId) ?? 'speech'))
+          return { status: 'drafted' as const, draftId: submission.submissionId }
         return acceptSpeech(submission, signal)
+      }
 
       // The composer owns this text as its own draft. No voice draft or message is created.
       composerInputs.set(submission.submissionId, submission.text)
@@ -129,6 +137,9 @@ export const useVoiceStore = defineStore('voice', () => {
   }
 
   controller.onInput((attempt) => {
+    inputCauses.set(attempt.id, attempt.cause === 'control' || attempt.cause === 'wake-word' ? attempt.cause : 'speech')
+    const forget = () => void inputCauses.delete(attempt.id)
+    void attempt.done.then(forget, forget)
     presentedInput = { requestId: attempt.id, attempt }
     // A control begins with `control`, and the voice activity rule begins with `speech` or `wake-word`.
     // An input that another caller began without a cause is traced as speech.

@@ -14,7 +14,12 @@ import process from 'node:process'
  *   - there is horizontal scroll at 360, 480 or 1280 px wide, in dark or light,
  *   - the keyboard does not work (focus into the panel, Space toggles, Enter = primary, Escape = cancel, arrows in a choice, focus back),
  *   - a long list is not virtualized (more than 120 rows in the page, or the last row cannot be reached),
- *   - reduced motion does not stop the animations.
+ *   - reduced motion does not stop the animations,
+ *   - (D63, voice) a form cannot be used by voice as it can by keyboard: every text, number, date and heading field has a microphone, the
+ *     recognizer starts only when a microphone is pressed and stops when the form closes, interim text shows in the field and the final text
+ *     replaces it, Alt+M / Alt+R / Alt+Z and Escape work, a spoken command is highlighted and can be undone, "Did you mean A or B?" shows,
+ *     "clean" presses the primary button only with something ticked, a PIN, "approve" and ambient speech do nothing, and none of it adds
+ *     a horizontal scroll at 360, 480 or 1280 px in dark or light (a fake transcript source stands in for the recognizer; no network).
  * Needs Chromium (Playwright's own, or CHROMIUM_PATH), python3 with Pillow, and no network.
  */
 import { execFileSync } from 'node:child_process'
@@ -234,6 +239,172 @@ try {
   await show('steps')
   const animations = await page.evaluate(() => [...document.querySelectorAll('.ask, .ask-step-running .ask-stepmark')].map(e => getComputedStyle(e).animationName))
   check('prefers-reduced-motion stops the animations', animations.every(a => a === 'none'), animations.join(','))
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+
+  // ---- D63: the form used by voice (fake transcript source) ----
+  await page.setViewportSize({ width: 360, height: 640 })
+  await setTheme('dark')
+  const A = fn => page.evaluate(fn)
+  await A(() => { window.__ask.calls.length = 0 })
+  await show('voice-schedule')
+  check('opening a form starts no recognizer', await A(() => window.__ask.stats.starts === 0 && window.__ask.voice.mode.value === 'off'))
+  const mics = await page.locator('.ask-body .ask-mic').count()
+  check('every text, date and heading field has a microphone (heading, day, time, note = 4)', mics === 4, String(mics))
+  check('the header has a microphone for commands and a button that reads the form', await page.locator('.ask-head .ask-mic').count() === 1 && await page.locator('.ask-head .ask-read').count() === 1)
+  check('the editable heading is a plain input with the heading look', await page.locator('input.ask-heading-input').count() === 1 && (await page.locator('input.ask-heading-input').inputValue()) === 'Call the dentist')
+  const headFits = await page.evaluate(() => { const h = document.querySelector('.ask-head'); return h.scrollWidth <= h.clientWidth + 1 })
+  check('the header with its two voice buttons fits in 360 px', headFits)
+
+  // dictation into the heading with the mouse
+  await page.locator('.ask-heading-field .ask-mic').click()
+  await page.waitForTimeout(80)
+  check('pressing a field microphone starts the recognizer once and marks it listening', await A(() => window.__ask.stats.starts === 1 && window.__ask.voice.mode.value === 'dictate') && (await page.locator('.ask-heading-field .ask-mic').getAttribute('aria-pressed')) === 'true')
+  check('a field that is listening cannot be typed in (it is read-only while the words come)', await page.locator('input.ask-heading-input').getAttribute('readonly') !== null)
+  await A(() => window.__ask.hear('call the dent'))
+  await page.waitForTimeout(40)
+  check('interim words show live in the field', (await page.locator('input.ask-heading-input').inputValue()) === 'Call the dentist call the dent')
+  await page.screenshot({ path: join(shots, 'ask-voice-dictating-360x640-dark.png') })
+  await page.evaluate(() => window.__ask.say('call the dentist at five'))
+  await page.waitForTimeout(80)
+  check('the final text replaces the interim words', (await page.locator('input.ask-heading-input').inputValue()) === 'Call the dentist call the dentist at five')
+  await page.evaluate(() => window.__ask.say('clear'))
+  await page.waitForTimeout(80)
+  check('"clear" empties the field', (await page.locator('input.ask-heading-input').inputValue()) === '')
+  await page.keyboard.press('Alt+z')
+  await page.waitForTimeout(40)
+  check('Alt+Z undoes the last change made by voice', (await page.locator('input.ask-heading-input').inputValue()).startsWith('Call the dentist'))
+  await page.evaluate(() => window.__ask.say('next field'))
+  await page.waitForTimeout(80)
+  check('"next field" moves the dictation and the focus to the next field', await A(() => window.__ask.voice.activeField.value === 'day') && await page.evaluate(() => document.activeElement?.dataset?.voiceInput === 'day'))
+  await page.evaluate(() => window.__ask.say('tomorrow'))
+  await page.waitForTimeout(80)
+  const day = await page.locator('input[type=date]').inputValue()
+  check('a date field takes "tomorrow" as a date', /^\d{4}-\d{2}-\d{2}$/.test(day), day)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(60)
+  check('Escape stops the microphone first', await A(() => window.__ask.voice.mode.value === 'off'))
+  check('and does not cancel the form', await page.locator('.ask').count() === 1 && !(await A(() => window.__ask.calls.some(c => c.name.endsWith('jarvis_ask_submit')))), JSON.stringify(await A(() => window.__ask.calls.map(c => c.name))))
+  check('the recognizer was told to stop', await A(() => window.__ask.stats.cancels >= 1))
+
+  // keyboard parity: Alt+M in a focused field dictates, Alt+M again stops
+  await page.locator('input[data-voice-input="note"]').focus()
+  await page.keyboard.press('Alt+m')
+  await page.waitForTimeout(80)
+  check('Alt+M dictates into the field that has the focus', await A(() => window.__ask.voice.mode.value === 'dictate' && window.__ask.voice.activeField.value === 'note'))
+  await page.keyboard.press('Alt+m')
+  await page.waitForTimeout(60)
+  check('Alt+M again stops it', await A(() => window.__ask.voice.mode.value === 'off'))
+
+  // the form closing ends listening
+  await page.locator('.ask-heading-field .ask-mic').click()
+  await page.waitForTimeout(60)
+  const cancelsBefore = await A(() => window.__ask.stats.cancels)
+  await A(() => window.__ask.clear())
+  await page.waitForTimeout(60)
+  check('closing the form stops the recognizer', await A(() => window.__ask.voice.mode.value === 'off') && await A(() => window.__ask.stats.cancels) > cancelsBefore)
+
+  // spoken commands on the cleaner
+  await show('cleanup-ready')
+  await A(() => { window.__ask.calls.length = 0; window.__ask.spoken.length = 0; window.__ask.setReply({ ok: true, done: false }) })
+  check('ambient speech (voice activity detection only) changes nothing', (await page.evaluate(() => window.__ask.command('untick browser cache', 'speech'))) === false)
+  check('a PIN said aloud is refused and goes nowhere', (await page.evaluate(() => window.__ask.command('my pin is 4821'))) === true && (await page.locator('.ask-voice').textContent()).includes('JARVIS console') && !(await page.locator('.ask-voice').textContent()).includes('4821'))
+  await page.evaluate(() => window.__ask.command('approve it'))
+  await page.evaluate(() => window.__ask.command('say submit now'))
+  check('"approve it" and "say submit now" press nothing', !(await A(() => window.__ask.calls.some(c => c.name.endsWith('jarvis_ask_submit')))))
+  const totalBefore = await page.locator('.ask-total strong').textContent()
+  await page.evaluate(() => window.__ask.command('temp files tick teesey'))
+  await page.waitForTimeout(60)
+  check('a Tenglish command unticks the row, shows what was heard and highlights it', await page.locator('.ask-hit').count() >= 1 && (await page.locator('.ask-voice').textContent()).includes('Unticking Temporary files') && (await page.locator('.ask-total strong').textContent()) !== totalBefore)
+  await page.screenshot({ path: join(shots, 'ask-voice-heard-360x640-dark.png') })
+  check('it was confirmed in words', await A(() => window.__ask.spoken.some(t => t.startsWith('Unticking'))))
+  await page.waitForTimeout(900) // the echo window of what was just spoken
+  await page.evaluate(() => window.__ask.command('undo that change'))
+  await page.waitForTimeout(40)
+  check('"undo that change" puts the total back', (await page.locator('.ask-total strong').textContent()) === totalBefore)
+  await page.waitForTimeout(900)
+  await page.evaluate(() => window.__ask.command('tick temp'))
+  await page.waitForTimeout(80)
+  check('two rows fit "temp": the panel asks "Did you mean A or B?" in words and on screen', (await page.locator('.ask-voice-qtext').textContent()).startsWith('Did you mean') && await page.locator('.ask-voice-choice').count() >= 3 && await A(() => window.__ask.spoken.some(t => t.startsWith('Did you mean'))))
+  await page.screenshot({ path: join(shots, 'ask-voice-question-360x640-dark.png') })
+  await page.locator('.ask-voice-choice').first().click()
+  await page.waitForTimeout(60)
+  check('answering the question by click does the action', await page.locator('.ask-voice-qtext').count() === 0)
+  await page.waitForTimeout(900)
+  await page.evaluate(() => window.__ask.command('tick printer drivers'))
+  check('a field that is not there: "I did not find that field."', (await page.locator('.ask-voice').textContent()).includes('I did not find that field.'))
+  await A(() => { window.__ask.calls.length = 0 })
+  await page.waitForTimeout(900)
+  await page.evaluate(() => window.__ask.command('tick browser cache and clean'))
+  check('a submit mixed with ticking only ticks', !(await A(() => window.__ask.calls.some(c => c.name.endsWith('jarvis_ask_submit')))))
+  await page.waitForTimeout(900)
+  await page.evaluate(() => window.__ask.command('do not clean yet'))
+  check('"do not clean yet" presses nothing', !(await A(() => window.__ask.calls.some(c => c.name.endsWith('jarvis_ask_submit')))))
+  await page.waitForTimeout(900)
+  await page.evaluate(() => window.__ask.command('టెంపరరీ ఫైల్స్ టిక్ చేయి'))
+  check('a Telugu command is translated on this laptop (fake) and then understood', (await page.locator('.ask-voice').textContent()).includes('understood as'))
+  await page.waitForTimeout(900)
+  await page.evaluate(() => window.__ask.command('clean'))
+  await page.waitForTimeout(100)
+  const cleanCall = await A(() => window.__ask.calls.find(c => c.name.endsWith('jarvis_ask_submit')))
+  check('"clean" at last presses the primary button with what is ticked', cleanCall?.args?.button === 'clean' && Array.isArray(cleanCall?.args?.values?.safe) && cleanCall.args.values.safe.length > 0, JSON.stringify(cleanCall?.args?.button))
+
+  // nothing ticked: no clean
+  await show('cleanup-ready')
+  await A(() => { window.__ask.calls.length = 0 })
+  await A(() => window.__ask.controller.setValue('safe', []))
+  await page.evaluate(() => window.__ask.command('clean'))
+  check('"clean" with nothing ticked does not run', !(await A(() => window.__ask.calls.some(c => c.name.endsWith('jarvis_ask_submit')))))
+
+  // read aloud, with a Telugu value that is not spoken
+  await show('voice-schedule')
+  await A(() => window.__ask.controller.setValue('what', 'డాక్టర్‌కి ఫోన్ చేయి'))
+  await A(() => { window.__ask.spoken.length = 0 })
+  await page.locator('.ask-body').focus().catch(() => {})
+  await page.locator('.ask-heading-input').focus()
+  await page.keyboard.press('Alt+r')
+  await page.waitForTimeout(200)
+  const readText = await page.locator('.ask-voice-read').textContent()
+  check('Alt+R reads the form: heading, labels and values are shown and spoken, short', await A(() => window.__ask.spoken.some(t => t.startsWith('Remind me'))) && readText.includes('Reminder') && readText.includes('డాక్టర్'))
+  check('the Telugu text is shown but not spoken, and the panel says which', !(await A(() => window.__ask.spoken.join(' ').includes('డాక్టర్'))) && readText.includes('not spoken'))
+  await page.screenshot({ path: join(shots, 'ask-voice-read-360x640-dark.png') })
+
+  // the look of the voice parts at every size and theme
+  for (const theme of THEMES) {
+    await setTheme(theme)
+    for (const [w, h] of SIZES) {
+      await page.setViewportSize({ width: w, height: h })
+      await show('voice-schedule')
+      await snap('voice-form', w, h, theme, 0)
+      await page.locator('.ask-heading-field .ask-mic').click()
+      await A(() => window.__ask.hear('call the dentist at'))
+      await page.waitForTimeout(260)
+      await snap('voice-listening', w, h, theme, 0)
+      await page.keyboard.press('Escape')
+      await show('cleanup-ready')
+      await page.evaluate(() => window.__ask.command('temp files tick teesey'))
+      await page.waitForTimeout(80)
+      await snap('voice-heard', w, h, theme, 0)
+      await page.waitForTimeout(900)
+      await page.evaluate(() => window.__ask.command('tick temp'))
+      await page.waitForTimeout(80)
+      await snap('voice-question', w, h, theme, 0)
+      await show('voice-save')
+      await A(() => window.__ask.voice.readAloud())
+      await page.waitForTimeout(100)
+      await snap('voice-read', w, h, theme, 0)
+    }
+  }
+  check('no horizontal scroll with the voice parts at 360, 480 and 1280 px, dark and light', overflow.length === 0, overflow.join('; '))
+
+  // reduced motion also calms the microphone
+  await page.setViewportSize({ width: 360, height: 640 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await show('voice-schedule')
+  await page.locator('.ask-heading-field .ask-mic').click()
+  await page.waitForTimeout(80)
+  const micAnim = await page.evaluate(() => getComputedStyle(document.querySelector('.ask-heading-field .ask-mic'), '::after').animationName)
+  check('prefers-reduced-motion stops the listening ring', micAnim === 'none', micAnim)
+  await page.keyboard.press('Escape')
   await page.emulateMedia({ reducedMotion: 'no-preference' })
 
   check('no request left the harness', unexpected.length === 0, unexpected.join(', '))

@@ -9,8 +9,11 @@
  * only the open tab is drawn, so a form with hundreds of rows paints and scrolls at once.
  */
 import type { AskNode, AskOption, AskValue, ListRow } from '../../composables/jarvis-ask-logic'
+import type { AskVoice } from '../../composables/use-jarvis-ask-voice'
 
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, inject, nextTick, ref, watch } from 'vue'
+
+import AskMic from './AskMic.vue'
 
 import {
   barGeometry,
@@ -30,7 +33,9 @@ import {
   VIRTUAL_FROM,
   windowRange,
 } from '../../composables/jarvis-ask-logic'
+import { dictatable, joinDictation } from '../../composables/jarvis-ask-voice-logic'
 import { imageDataUrl } from '../../composables/jarvis-preview-logic'
+import { ASK_VOICE_KEY } from '../../composables/use-jarvis-ask-voice'
 
 defineOptions({ name: 'AskNode' })
 
@@ -42,12 +47,25 @@ const uid = `ask-${Date.now().toString(36)}-${++counter}-${Math.random().toStrin
 const ROW_H = 48
 const VIEW_H = 336
 
+// Voice (D63): present only in a window that has a voice host. `hit` marks what a spoken command just changed.
+const voice = inject<AskVoice | null>(ASK_VOICE_KEY, null)
+function hit(key: string): boolean {
+  return voice?.hit.value === key
+}
 const node = computed(() => props.node)
 const id = computed(() => node.value.id ?? '')
+const micOk = computed(() => !!voice && dictatable(node.value))
+const listening = computed(() => voice?.listeningOn(id.value) ?? false)
+const interimText = computed(() => voice?.interimFor(id.value) ?? '')
 const value = computed(() => props.values[id.value])
 const options = computed<AskOption[]>(() => node.value.options ?? [])
 const picked = computed(() => new Set(Array.isArray(value.value) ? value.value as string[] : []))
 const single = computed(() => typeof value.value === 'string' ? value.value : '')
+/** The text a field shows: what is in it, and while it is being dictated the interim words after it. The final text replaces the interim. */
+const shownText = computed(() => {
+  const base = String(value.value ?? '')
+  return interimText.value && node.value.type === 'text' ? joinDictation(base, interimText.value) : base
+})
 
 function set(v: AskValue) {
   if (id.value)
@@ -233,7 +251,7 @@ function size(o: { size?: number | string }): string {
   </div>
 
   <!-- checkbox group -->
-  <fieldset v-else-if="node.type === 'checkbox_group'" class="ask-field" :disabled="disabled">
+  <fieldset v-else-if="node.type === 'checkbox_group'" class="ask-field" :class="{ 'ask-hit': hit(`f:${id}`) }" :data-voice-key="`f:${id}`" :disabled="disabled">
     <legend class="ask-sr">
       {{ node.label }}
     </legend>
@@ -251,7 +269,7 @@ function size(o: { size?: number | string }): string {
           <span class="ask-row-text"><span class="ask-row-title">{{ r.group }}</span></span>
           <span class="ask-row-size">{{ r.groupCount }} items</span>
         </label>
-        <label v-else class="ask-row" :class="{ 'ask-row-on': picked.has(r.option!.id), 'ask-row-indent': !!r.option!.group }">
+        <label v-else class="ask-row" :class="{ 'ask-row-on': picked.has(r.option!.id), 'ask-row-indent': !!r.option!.group, 'ask-hit': hit(`o:${id}/${r.option!.id}`) }" :data-voice-key="`o:${id}/${r.option!.id}`">
           <input type="checkbox" :checked="picked.has(r.option!.id)" @change="set(toggleIn(value, r.option!.id))">
           <span class="ask-row-text">
             <span class="ask-row-title">{{ r.option!.label }}</span>
@@ -277,6 +295,8 @@ function size(o: { size?: number | string }): string {
         type="button"
         role="radio"
         class="ask-seg"
+        :class="{ 'ask-hit': hit(`o:${id}/${o.id}`) }"
+        :data-voice-key="`o:${id}/${o.id}`"
         :data-opt="o.id"
         :aria-checked="single === o.id"
         :tabindex="tabbable(o, i)"
@@ -306,7 +326,8 @@ function size(o: { size?: number | string }): string {
           v-for="(r, i) in virtual ? visible : rows"
           :key="r.key"
           class="ask-row ask-radio-row"
-          :class="{ 'ask-row-on': single === r.option?.id, 'ask-group-row': r.kind === 'header' }"
+          :class="{ 'ask-row-on': single === r.option?.id, 'ask-group-row': r.kind === 'header', 'ask-hit': !!r.option && hit(`o:${id}/${r.option.id}`) }"
+          :data-voice-key="r.option ? `o:${id}/${r.option.id}` : undefined"
           :role="r.kind === 'header' ? undefined : 'radio'"
           :data-opt="r.option?.id"
           :aria-checked="r.kind === 'header' ? undefined : single === r.option?.id"
@@ -353,6 +374,8 @@ function size(o: { size?: number | string }): string {
         type="button"
         :role="node.multiple ? 'checkbox' : 'radio'"
         class="ask-card"
+        :class="{ 'ask-hit': hit(`o:${id}/${o.id}`) }"
+        :data-voice-key="`o:${id}/${o.id}`"
         :data-opt="o.id"
         :aria-checked="node.multiple ? picked.has(o.id) : single === o.id"
         :tabindex="tabbable(o, i)"
@@ -382,6 +405,8 @@ function size(o: { size?: number | string }): string {
         type="button"
         :role="node.multiple ? 'checkbox' : 'radio'"
         class="ask-tile"
+        :class="{ 'ask-hit': hit(`o:${id}/${o.id}`) }"
+        :data-voice-key="`o:${id}/${o.id}`"
         :data-opt="o.id"
         :aria-checked="node.multiple ? picked.has(o.id) : single === o.id"
         :tabindex="tabbable(o, i)"
@@ -398,7 +423,7 @@ function size(o: { size?: number | string }): string {
     </div>
   </div>
 
-  <div v-else-if="node.type === 'select'" class="ask-field">
+  <div v-else-if="node.type === 'select'" class="ask-field" :class="{ 'ask-hit': hit(`f:${id}`) || options.some(o => hit(`o:${id}/${o.id}`)) }" :data-voice-key="`f:${id}`">
     <label :for="`${uid}-i`" class="ask-label">{{ node.label }}</label>
     <select :id="`${uid}-i`" class="ask-input" :value="single" :disabled="disabled" @change="set(($event.target as HTMLSelectElement).value)">
       <option v-if="!node.required" value="">
@@ -411,8 +436,11 @@ function size(o: { size?: number | string }): string {
   </div>
 
   <!-- simple inputs -->
-  <div v-else-if="node.type === 'text'" class="ask-field">
-    <label :for="`${uid}-i`" class="ask-label">{{ node.label }}</label>
+  <div v-else-if="node.type === 'text'" class="ask-field" :class="{ 'ask-heading-field': node.heading === true, 'ask-hit': hit(`f:${id}`), 'ask-listening': listening }" :data-voice-key="`f:${id}`">
+    <div class="ask-labelrow">
+      <label :for="`${uid}-i`" class="ask-label">{{ node.label }}</label>
+      <AskMic v-if="micOk" :field-id="id" :label="node.label ?? ''" :disabled="disabled" />
+    </div>
     <textarea
       v-if="node.multiline"
       :id="`${uid}-i`"
@@ -420,7 +448,9 @@ function size(o: { size?: number | string }): string {
       rows="4"
       :maxlength="Number(node.max_len)"
       :placeholder="String(node.placeholder ?? '')"
-      :value="String(value ?? '')"
+      :value="shownText"
+      :readonly="listening"
+      :data-voice-input="micOk ? id : undefined"
       :disabled="disabled"
       @input="set(($event.target as HTMLTextAreaElement).value)"
     />
@@ -428,18 +458,24 @@ function size(o: { size?: number | string }): string {
       v-else
       :id="`${uid}-i`"
       class="ask-input"
+      :class="{ 'ask-heading-input': node.heading === true }"
       type="text"
       autocomplete="off"
       :maxlength="Number(node.max_len)"
       :placeholder="String(node.placeholder ?? '')"
-      :value="String(value ?? '')"
+      :value="shownText"
+      :readonly="listening"
+      :data-voice-input="micOk ? id : undefined"
       :disabled="disabled"
       @input="set(($event.target as HTMLInputElement).value)"
     >
   </div>
 
-  <div v-else-if="node.type === 'number'" class="ask-field">
-    <label :for="`${uid}-i`" class="ask-label">{{ node.label }}<span v-if="node.unit" class="ask-dim"> ({{ node.unit }})</span></label>
+  <div v-else-if="node.type === 'number'" class="ask-field" :class="{ 'ask-hit': hit(`f:${id}`), 'ask-listening': listening }" :data-voice-key="`f:${id}`">
+    <div class="ask-labelrow">
+      <label :for="`${uid}-i`" class="ask-label">{{ node.label }}<span v-if="node.unit" class="ask-dim"> ({{ node.unit }})</span></label>
+      <AskMic v-if="micOk" :field-id="id" :label="node.label ?? ''" :disabled="disabled" />
+    </div>
     <input
       :id="`${uid}-i`"
       class="ask-input ask-mono"
@@ -448,12 +484,17 @@ function size(o: { size?: number | string }): string {
       :max="Number(node.max)"
       :step="Number(node.step)"
       :value="value === null || value === undefined ? '' : String(value)"
+      :readonly="listening"
+      :data-voice-input="micOk ? id : undefined"
       :disabled="disabled"
       @input="set(($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
     >
+    <p v-if="interimText" class="ask-voice-interim" aria-hidden="true">
+      {{ interimText }}
+    </p>
   </div>
 
-  <div v-else-if="node.type === 'slider'" class="ask-field">
+  <div v-else-if="node.type === 'slider'" class="ask-field" :class="{ 'ask-hit': hit(`f:${id}`) }" :data-voice-key="`f:${id}`">
     <label :for="`${uid}-i`" class="ask-label ask-between">
       <span>{{ node.label }}</span>
       <output class="ask-mono ask-live" :for="`${uid}-i`">{{ value ?? node.value }}{{ node.unit ? ` ${node.unit}` : '' }}</output>
@@ -471,7 +512,7 @@ function size(o: { size?: number | string }): string {
     >
   </div>
 
-  <div v-else-if="node.type === 'toggle'" class="ask-field ask-toggle-row">
+  <div v-else-if="node.type === 'toggle'" class="ask-field ask-toggle-row" :class="{ 'ask-hit': hit(`f:${id}`) }" :data-voice-key="`f:${id}`">
     <span :id="`${uid}-l`" class="ask-label">{{ node.label }}</span>
     <button
       type="button"
@@ -486,16 +527,24 @@ function size(o: { size?: number | string }): string {
     </button>
   </div>
 
-  <div v-else-if="node.type === 'date'" class="ask-field">
-    <label :for="`${uid}-i`" class="ask-label">{{ node.label }}</label>
+  <div v-else-if="node.type === 'date'" class="ask-field" :class="{ 'ask-hit': hit(`f:${id}`), 'ask-listening': listening }" :data-voice-key="`f:${id}`">
+    <div class="ask-labelrow">
+      <label :for="`${uid}-i`" class="ask-label">{{ node.label }}</label>
+      <AskMic v-if="micOk" :field-id="id" :label="node.label ?? ''" :disabled="disabled" />
+    </div>
     <input
       :id="`${uid}-i`"
       class="ask-input ask-mono"
       :type="node.mode === 'time' ? 'time' : node.mode === 'datetime' ? 'datetime-local' : 'date'"
       :value="String(value ?? '')"
+      :readonly="listening"
+      :data-voice-input="micOk ? id : undefined"
       :disabled="disabled"
       @input="set(($event.target as HTMLInputElement).value)"
     >
+    <p v-if="interimText" class="ask-voice-interim" aria-hidden="true">
+      {{ interimText }}
+    </p>
   </div>
 
   <!-- table -->

@@ -11,7 +11,7 @@ is not an object at all, or that asks for a PIN / password / code, is refused. S
 Types
   layout   section{children, collapsed}  row{children}  column{children}  tabs{tabs:[{id,label,children}]}  grid{children}
            split{options:[{id,label,detail,body}]}  (a list on one side, the chosen item's text on the other; an input)
-  input    checkbox_group  radio{variant: list|segmented}  select  text{multiline}  number  slider{unit}  toggle  date{mode: date|time|datetime}
+  input    checkbox_group  radio{variant: list|segmented}  select  text{multiline, heading}  number  slider{unit}  toggle  date{mode: date|time|datetime}
            file_choice{source}  gallery{source, multiple}  table{columns, rows, select: none|one|many}  cards{options with pros/cons, multiple}
   display  info_table{rows}  chart{kind: bar|line|pie, labels, series}  code_view{text, language}  diff_view{before, after}
            steps{items:[{label, status}]}  progress{value, max, label}  callout{level: info|warn, text}
@@ -333,6 +333,8 @@ def clean_node(raw: Any, ctx: _Ctx, depth: int = 0) -> dict | None:
         out["multiple"] = t == "gallery" and raw.get("multiple") is True
     elif t == "text":
         out.update(max_len=int(min(max(number(raw.get("max_len"), 200) or 200, 1), 2000)), multiline=raw.get("multiline") is True)
+        if raw.get("heading") is True and not out["multiline"]:     # D63: an editable heading (a deck title, a file name, a reminder text); still plain text
+            out["heading"] = True
         if raw.get("placeholder"):
             out["placeholder"] = ctx.text(raw["placeholder"], 80)
         if raw.get("value"):

@@ -4,6 +4,7 @@
                                       {answered: false, reason}. `pattern` ids are in config/ui_patterns.json.
   jarvis_cleaner(action, items)       the chat model's tool for the cleaner panel (open, check, uncheck, list, clean).
   jarvis_ask_wanted / _submit / _close   the panel's own calls (listed neither to the chat model nor in its persona).
+  jarvis_ask_voice(form_id, token, op, ...)   D63, the panel's read-only voice help (translate, decide among candidates, speech plan): ask_voice.py.
 
 A form only collects choices. It never grants an approval: those stay in the JARVIS console with the PIN (D27).
 """
@@ -12,11 +13,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from jarvis.bridge import ui_patterns
+from jarvis.bridge import ask_voice, ui_patterns
 from jarvis.bridge.ask_spec import AskError
 
 ASK_TOOLS = ("jarvis_ask", "jarvis_cleaner")
-PANEL_ASK_TOOLS = ("jarvis_ask_wanted", "jarvis_ask_submit", "jarvis_ask_close")
+PANEL_ASK_TOOLS = ("jarvis_ask_wanted", "jarvis_ask_submit", "jarvis_ask_close", "jarvis_ask_voice")
 
 
 async def ask(broker: Any, service: Any, spec: Any = None, pattern: str = "", data: Any = None) -> dict:
@@ -40,7 +41,7 @@ async def ask(broker: Any, service: Any, spec: Any = None, pattern: str = "", da
 
 
 def register(server: Any, broker: Any, service: Any, look: Any) -> None:
-    """Adds the five tools. `look` is the read-only ToolAnnotations of the server."""
+    """Adds the tools (six, with the panel's voice help). `look` is the read-only ToolAnnotations of the server."""
     from mcp_types import ToolAnnotations
 
     @server.tool(name="jarvis_ask", description=("Show the owner a form and wait for the answer. pattern (%s) + data, or a full spec. "
@@ -66,6 +67,11 @@ def register(server: Any, broker: Any, service: Any, look: Any) -> None:
                  annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False))
     async def jarvis_ask_submit(form_id: str, token: str, button: str, values: dict | None = None) -> dict:
         return await asyncio.to_thread(broker.submit, form_id, token, button, values or {})
+
+    @server.tool(name="jarvis_ask_voice", description=("FOR THE FACE'S ASK PANEL ONLY, do not call: read-only help for a form used by voice "
+                                                       "(translate a phrase, pick among candidate controls, speech plan)."), annotations=look)
+    async def jarvis_ask_voice(form_id: str, token: str, op: str, text: str = "", phrase: str = "", candidates: list | None = None) -> dict:
+        return await asyncio.to_thread(ask_voice.understand, broker, form_id, token, op, text, phrase, candidates)
 
     @server.tool(name="jarvis_ask_close", description="FOR THE FACE'S ASK PANEL ONLY, do not call: the owner closed the form.",
                  annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False))

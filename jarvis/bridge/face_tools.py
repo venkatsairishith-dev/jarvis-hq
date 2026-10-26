@@ -103,7 +103,7 @@ CHAT_TOOLS: dict[str, str] = {
 # What the face's own panels and HUD call by name through the same MCP route (renderer: use-jarvis-hud, use-jarvis-spoken,
 # use-jarvis-memory, use-jarvis-preview). They are registered and callable, and left out of the list the chat model sees.
 PANEL_TOOLS = ("jarvis_status", "jarvis_spoken", "jarvis_remember_chat", "jarvis_outputs", "jarvis_output_get", "jarvis_preview_wanted",
-               "jarvis_notices", "jarvis_ask_wanted", "jarvis_ask_submit", "jarvis_ask_close",
+               "jarvis_notices", "jarvis_ask_wanted", "jarvis_ask_submit", "jarvis_ask_close", "jarvis_ask_voice",
                "jarvis_timeline_wanted", "jarvis_timeline_shot", "jarvis_timeline_undo",
                # D60: the face asks this BEFORE it asks a chat model: a plain command is run by rules at once (handled=false costs nothing)
                "desktop__quick_command")

@@ -14,6 +14,7 @@ import pytest
 from jarvis.bridge import ask as A
 from jarvis.bridge import ask_spec as S
 from jarvis.bridge import ask_tool as T
+from jarvis.bridge import ask_voice as V
 from jarvis.bridge import ui_patterns as U
 
 
@@ -309,7 +310,7 @@ def test_a_handler_that_raises_gives_the_panel_a_sentence_not_a_stack():
 
 
 def test_the_ask_module_cannot_approve_anything():
-    for mod in (A, S, T, U):
+    for mod in (A, S, T, U, V):
         src = Path(mod.__file__).read_text(encoding="utf-8")
         for forbidden in ("jarvis.plugins.jarvis_bridge", "client.approve", "kernel.policy", "pin_hash", "approve("):
             assert forbidden not in src, (mod.__name__, forbidden)
