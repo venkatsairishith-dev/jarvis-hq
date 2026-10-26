@@ -49,6 +49,11 @@ interface FloatingChatWindow {
   open: () => Promise<void>
   /** Folds a shown chat, or opens a folded or hidden one. The chat button calls this. */
   toggle: () => Promise<void>
+  /**
+   * Creates the window folded and hidden, so the first press of the chat button only has to show it. A press while it is still
+   * being created joins that creation. It changes nothing the owner sees.
+   */
+  prewarm: () => Promise<void>
   /** Closes the window, including one that is still being created. */
   close: () => void
   /** Returns the window without creating one. */
@@ -549,6 +554,9 @@ export function setupFloatingChatWindow(params: {
 
   return {
     open,
+    async prewarm() {
+      await reusable.getWindow()
+    },
     async toggle() {
       const window = reusable.getOpenWindow()
       // The chat button shows the fold state, so a press always flips it. A

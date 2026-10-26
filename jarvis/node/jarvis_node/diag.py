@@ -101,7 +101,10 @@ foreach ($w in $A::RootElement.FindAll([System.Windows.Automation.TreeScope]::Ch
 }
 @($out) | ConvertTo-Json -Compress -Depth 4
 """
-SCRIPTS = {"processes": PROCESSES, "app_errors": APP_ERRORS, "crashes": CRASHES, "services": SERVICES, "disk": DISK,
+BATTERY = r"""
+@(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ percent = [int]$_.EstimatedChargeRemaining; charging = ($_.BatteryStatus -in 2, 6, 7, 8, 9); minutes_left = $(if ($_.EstimatedRunTime -lt 71582788) { [int]$_.EstimatedRunTime } else { $null }) } }) | ConvertTo-Json -Compress
+"""
+SCRIPTS = {"battery": BATTERY, "processes": PROCESSES, "app_errors": APP_ERRORS, "crashes": CRASHES, "services": SERVICES, "disk": DISK,
            "network": NETWORK, "app_info": APP_INFO, "window_text": WINDOW_TEXT}
 NEEDS_NAME = {"services", "app_info", "window_text"}
 LOCAL_ONLY = {"app_errors", "window_text"}           # free text from the screen or from event messages

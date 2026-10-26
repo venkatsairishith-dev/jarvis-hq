@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest'
 import {
   formatClock,
   formatDuration,
+  goalLine,
   HUD_DEFAULT_MODE,
   hudAriaLabel,
+  hudLine,
   hudLook,
   hudStateLabel,
   kernelLabel,
@@ -83,6 +85,10 @@ describe('parseJarvisStatus', () => {
       pcKind: 'task',
       pcAgeS: 71,
       pcStopping: false,
+      goalState: 'none',
+      goalN: 0,
+      goalTotal: 0,
+      goalExec: '',
     })
     const viaText = parseJarvisStatus({ content: [{ type: 'text', text: JSON.stringify(wire().structuredContent) }] })
     expect(viaText?.kernelUp).toBe(true)
@@ -201,5 +207,47 @@ describe('settings', () => {
     expect(full.scan).toBeGreaterThan(subtle.scan)
     expect(subtle.frame).toBe(false)
     expect(full.frame).toBe(true)
+  })
+})
+
+describe('jARVIS D60: the instant acknowledgement and the progress line', () => {
+  const goal = (over: Record<string, unknown>) => parseJarvisStatus(wire(over))
+
+  it('shows the ring at work as soon as a task message is acknowledged, before a model answers or the status is polled', () => {
+    expect(resolveHudState({ ...base, ack: true })).toBe('acting')
+    expect(resolveHudState({ ...base, ack: true, thinking: true })).toBe('acting')
+    expect(resolveHudState({ ...base, thinking: true })).toBe('thinking')
+  })
+
+  it('lets what the owner hears and says win, and never claims work while JARVIS is down or halted', () => {
+    expect(resolveHudState({ ...base, ack: true, speaking: true })).toBe('speaking')
+    expect(resolveHudState({ ...base, ack: true, listening: true })).toBe('listening')
+    expect(resolveHudState({ ...base, ack: true, link: 'down' })).toBe('offline')
+    expect(resolveHudState({ ...base, ack: true, link: 'killed' })).toBe('offline')
+    expect(resolveHudState({ ...base, ack: true, link: 'unknown' })).toBe('acting')
+  })
+
+  it('reads the goal fields of the status and treats anything unknown as no goal', () => {
+    expect(goal({ goal_state: 'running', goal_n: 2, goal_total: 3, goal_exec: 'screen_read' })).toMatchObject({ goalState: 'running', goalN: 2, goalTotal: 3, goalExec: 'screen_read' })
+    expect(goal({ goal_state: 'rm -rf', goal_n: 'x', goal_total: -1 })).toMatchObject({ goalState: 'none', goalN: 0, goalTotal: 0 })
+  })
+
+  it('says the step that runs, from fixed words', () => {
+    expect(goalLine(goal({ goal_state: 'planning' }))).toBe('Planning it')
+    expect(goalLine(goal({ goal_state: 'running', goal_n: 2, goal_total: 3, goal_exec: 'screen_read' }))).toBe('Step 2 of 3: reading the window')
+    expect(goalLine(goal({ goal_state: 'running', goal_n: 1, goal_total: 1, goal_exec: 'pc' }))).toBe('Working on the PC')
+    expect(goalLine(goal({ goal_state: 'running', goal_n: 1, goal_total: 2, goal_exec: 'something new' }))).toBe('Step 1 of 2: working')
+    expect(goalLine(goal({ goal_state: 'waiting' }))).toBe('Waiting for your approval')
+    expect(goalLine(goal({ goal_state: 'done' }))).toBe('')
+    expect(goalLine(goal({}))).toBe('')
+    expect(goalLine(null)).toBe('')
+  })
+
+  it('prefers the goal step over the acknowledgement and shows the acknowledgement until there is one', () => {
+    const running = goal({ goal_state: 'running', goal_n: 1, goal_total: 2, goal_exec: 'pc' })
+    expect(hudLine('On it', running)).toBe('Step 1 of 2: working on the PC')
+    expect(hudLine('On it', goal({}))).toBe('On it')
+    expect(hudLine(null, goal({}))).toBe('')
+    expect(hudLine(undefined, null)).toBe('')
   })
 })

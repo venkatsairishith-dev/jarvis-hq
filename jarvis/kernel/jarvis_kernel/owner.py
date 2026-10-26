@@ -23,6 +23,7 @@ import time
 import urllib.parse
 
 from .scrub import scrub
+from . import lang
 
 # What the owner asks JARVIS to do changes the computer; what it looked like a few minutes ago may not be true now.
 STATE_RULE = ("[JARVIS rule: the state of the computer changes. Never answer that something is already open, running or done from "
@@ -167,6 +168,9 @@ class Owner:
         clean, _, blocked = scrub(text, deep=True)
         if blocked:
             raise OwnerError("refused: the command contains a private key", 400)
+        # D58: the console, the face and the voice path translate on the laptop BEFORE the text reaches here, so this is normally English. Text that still is
+        # not (a client that skips the layer) is translated here only if a local translator is enabled on this server, else flagged in the audit log and kept.
+        clean, tr_status = lang.english_for_agent(clean, source=source)
         if self.k.killed():
             raise OwnerError("the kill switch is on", 503)
         wait = self.lane_wait("private") if self.lane_wait else 0
@@ -180,7 +184,7 @@ class Owner:
         try:
             self.k.db.execute("INSERT INTO owner_commands(id, ts, source, text, state) VALUES (?,?,?,?,?)",
                               (cid, now, source[:20], clean[:MAX_COMMAND], "running"))
-            self.k.audit.append("owner_command", {"id": cid, "source": source[:20], "chars": len(clean)})
+            self.k.audit.append("owner_command", {"id": cid, "source": source[:20], "chars": len(clean), **({"translated": tr_status} if tr_status != "no" else {})})
         except BaseException:
             self.busy.release()
             raise
@@ -654,7 +658,7 @@ class Owner:
         with what it actually observed. Ordinary actions run at once (owner_direct); one that needs the owner's approval
         comes back as {"status": "needs_approval", "approval_id"}: approve it with the PIN, then send the same request again
         with that approval_id (it is bound to exactly this action and used once)."""
-        from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, action_for
+        from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, UNDO_OPS, FILE_OPS, SETTING_OPS, CLIPBOARD_OPS, FILE_TEXT_MAX, action_for
         from .store import Killed
         holder, dup = self._pc_holder(body.get("holder"))
         if dup is not None:                                           # the same request delivered twice: the job it made, no second one
@@ -673,7 +677,25 @@ class Owner:
         elif op == "project_check":
             kind, params = "project_check", {"project": target}
         elif op == "ui" and body.get("action") in UI_OPS:
-            kind, params = "ui_action", {"agent": "owner", "op": body["action"], "target": s("target", 120), "text": s("text", 500)}
+            kind, params = "ui_action", {"agent": "owner", "op": body["action"], "target": s("target", 120),
+                                         "text": s("text", 4000 if body["action"] == "type_focused" else 500)}
+            if body.get("goal"):                 # D54: the owner's own goal (task-scoped consent); the kernel computes the grant from these words
+                params["goal"] = s("goal", 1000)
+            if body.get("ctx") is not None:      # the dialog text this click or key is aimed at ("" and "(unreadable dialog)" are asked about)
+                params["ctx"] = s("ctx", 600)
+        elif op == "file" and body.get("action") in FILE_OPS:        # D54: files in the known folders; the owner's own words ride along (the grant)
+            kind, params = "file_op", {"agent": "owner", "op": body["action"], "target": s("target", 120), "path": s("path", 200), "dest": s("dest", 200),
+                                       "text": s("text", FILE_TEXT_MAX)}
+            if body.get("goal"):
+                params["goal"] = s("goal", 1000)
+        elif op == "setting" and body.get("action") in SETTING_OPS:
+            kind, params = "setting", {"agent": "owner", "op": body["action"], "text": s("text", 300)}
+            if body.get("goal"):
+                params["goal"] = s("goal", 1000)
+        elif op == "clipboard" and body.get("action") in CLIPBOARD_OPS:
+            kind, params = "clipboard", {"agent": "owner", "op": body["action"], "text": s("text", 4000)}
+            if body.get("goal"):
+                params["goal"] = s("goal", 1000)
         elif op == "browser" and body.get("action") in BROWSER_OPS:
             kind, params = "browser_ext", {"profile": s("profile", 32).lower() or "default", "op": body["action"], "url": s("url", 2000),
                                            "target": s("target", 300), "text": s("text", 500)}
@@ -684,14 +706,16 @@ class Owner:
             kind, params = "repair", {"op": body["action"], "target": s("target", 260), "args": args}
         elif op == "media":
             kind, params = "media_state", {}
+        elif op == "undo" and body.get("action") in UNDO_OPS:      # D61: one journaled step reversed (the node re-checks it)
+            kind, params = "pc_undo", {"agent": "owner", "op": body["action"], "target": s("target", 260), "path": s("path", 260), "expect": s("expect", 64)}
         else:
             raise OwnerError("op must be open_app, open_folder, open_file, list_folder, windows, snapshot, screenshot, project_check, "
                              "ui (action: " + "|".join(sorted(UI_OPS)) + "), browser (action: " + "|".join(sorted(BROWSER_OPS)) +
                              "), diag (check: " + "|".join(sorted(DIAG_OPS)) + "), repair (action: " + "|".join(sorted(REPAIR_OPS)) +
-                             ") or media")
+                             "), undo (action: " + "|".join(sorted(UNDO_OPS)) + ") or media")
         aid = str(body.get("approval_id") or "")[:40] or None
         try:
-            if aid is None and kind in ("ui_action", "browser_ext", "diag", "repair", "media_state"):
+            if aid is None and kind in ("ui_action", "browser_ext", "diag", "repair", "media_state", "file_op", "setting", "clipboard", "pc_undo"):
                 from .jobs import _check_params
                 _check_params(kind, params)
                 a = action_for(kind, params, "private", untrusted=False, owner_direct=True)

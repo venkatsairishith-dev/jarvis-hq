@@ -66,9 +66,10 @@ def test_a_custom_file_is_used(tmp_path):
     p = tmp_path / "s.json"
     p.write_text(json.dumps(table_of(doc_read={"alias": "my-ocr", "fallback": "docreader", "max_tokens": 900})), encoding="utf-8")
     t = S.load(p)
-    assert S.resolve("doc_read", t).aliases == ("my-ocr", "docreader") and set(t) == {"doc_read"}
+    assert S.resolve("doc_read", t).aliases == ("my-ocr", "docreader")
+    assert set(t) == set(S.KINDS) and S.resolve("ui_decide", t).alias == "decider"          # a partial file keeps the built-in rows of the other kinds (review 2026-10-26)
     with pytest.raises(S.SpecialistError):
-        S.resolve("ui_decide", t)
+        S.resolve("not_a_kind", t)
 
 
 def test_an_alias_the_swap_file_lacks_is_reported_not_failed(tmp_path):

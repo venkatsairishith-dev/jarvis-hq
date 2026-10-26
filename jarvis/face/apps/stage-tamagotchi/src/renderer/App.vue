@@ -38,9 +38,11 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { toast, Toaster } from 'vue-sonner'
 
+import AskHost from './components/ask/AskHost.vue'
 import JarvisHud from './components/hud/JarvisHud.vue'
 import PreviewHost from './components/PreviewHost.vue'
 import ResizeHandler from './components/ResizeHandler.vue'
+import TimelineHost from './components/timeline/TimelineHost.vue'
 
 import {
   electronGetServerChannelConfig,
@@ -73,6 +75,7 @@ import { electronPluginToolsChanged } from '../shared/eventa/plugin/tools'
 import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
 import { initializeIOTraceHubBridge } from './bridges/io-trace-hub'
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
+import { pageIsHidden, POLL_CALL_TIMEOUT_MS } from './composables/poll-guard'
 import { useJarvisHud } from './composables/use-jarvis-hud'
 import { conversationTurns, createMemorySaver, memoryEnabled } from './composables/use-jarvis-memory'
 import { createSpokenPoller, proactiveEnabled } from './composables/use-jarvis-spoken'
@@ -390,7 +393,8 @@ function markOwnerActive() {
 const memorySaver = fullStageRuntime
   ? createMemorySaver({
       turns: () => conversationTurns(chatSessionForSpoken.getSessionMessages(chatSessionForSpoken.activeSessionId).map(m => ({ role: m.role, text: extractMessageText(m) }))),
-      save: turns => callMcpTool({ name: 'jarvis::jarvis_remember_chat', arguments: { turns } }),
+      save: turns => callMcpTool({ name: 'jarvis::jarvis_remember_chat', arguments: { turns }, timeoutMs: 30_000 }),
+      paused: pageIsHidden,
       busy: () => chatStore.activeTurns.length > 0,
       lastOwnerActivity: () => lastOwnerActivity,
       enabled: () => memoryEnabled(globalThis.localStorage),
@@ -399,7 +403,8 @@ const memorySaver = fullStageRuntime
   : null
 const spokenPoller = fullStageRuntime
   ? createSpokenPoller({
-      call: name => callMcpTool({ name }),
+      call: name => callMcpTool({ name, timeoutMs: POLL_CALL_TIMEOUT_MS }),
+      paused: pageIsHidden,
       say: text => chatStore.send({ sessionId: chatSessionForSpoken.activeSessionId, text, tools: [] }),
       busy: () => chatStore.activeTurns.length > 0,
       lastOwnerActivity: () => lastOwnerActivity,
@@ -485,6 +490,8 @@ onUnmounted(() => {
   <RouterView />
   <JarvisHud v-if="hudVisible" />
   <PreviewHost v-if="fullStageRuntime" />
+  <AskHost v-if="fullStageRuntime" />
+  <TimelineHost v-if="fullStageRuntime" />
 </template>
 
 <style>

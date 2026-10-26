@@ -93,12 +93,18 @@ const props = withDefaults(defineProps<{
   showAxes?: boolean
   idleAnimation?: string
   paused?: boolean
+  /**
+   * Frame rate the host asks for while the owner has not set a limit of their own (`settings/stage-ui-three/max-fps`). 0 draws every
+   * frame the display offers. The desktop app passes 30 while the character is idle and 60 while it is in use.
+   */
+  fpsCap?: number
 }>(), {
   presence: () => presenceBubbleIdle,
   enableOrbitControls: true,
   showAxes: false,
   idleAnimation: new URL('../assets/vrm/animations/idle_loop.vrma', import.meta.url).href,
   paused: false,
+  fpsCap: 0,
 })
 
 const emit = defineEmits<{
@@ -208,6 +214,12 @@ const {
   renderScale,
   multisampling,
 } = storeToRefs(modelStore)
+
+/** The owner's own limit wins; otherwise the host's; otherwise every frame. */
+const fpsLimit = computed(() => {
+  const limit = maxFps.value > 0 ? maxFps.value : props.fpsCap
+  return limit > 0 ? limit : Infinity
+})
 
 type VrmFrameRuntimeHook = (vrm: VRM, delta: number) => void
 
@@ -1027,7 +1039,7 @@ defineExpose({
       :camera="camera"
       :antialias="true"
       :dpr="renderScale"
-      :fps-limit="maxFps > 0 ? maxFps : Infinity"
+      :fps-limit="fpsLimit"
       :tone-mapping="ACESFilmicToneMapping"
       :tone-mapping-exposure="1"
       :clear-alpha="0"

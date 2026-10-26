@@ -1,0 +1,6 @@
+{
+  "_note": "On-screen permission buttons JARVIS may click by itself when the OWNER asked for the task (owner, 2026-10-25). Both patterns must match the whole name. Only the soft words accept/agree/allow/grant/authorize/confirm are waived; money, deleting, sending, installing, signing in and passwords still wait for the owner's PIN. Console-only file: agents cannot edit it. Add the real button name after looking at the dialog on screen.",
+  "rules": [
+    {"process": "chrome", "element": "Connect"}
+  ]
+}

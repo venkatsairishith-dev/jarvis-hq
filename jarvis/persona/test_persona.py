@@ -29,7 +29,7 @@ def test_card_prompt_is_safe_and_complete():
     for rule in ("only when a tool result says so", "call desktop__do_goal", "Use jarvis_do only for work on the server", "jarvis_recall", "jarvis_show",
                  "doc_reader__read_document", "doc_tools__read_document"):
         assert rule in p, rule
-    assert len(p) <= 3_800, "the persona is part of every face request (budget test: jarvis/face/packages/stage-ui/src/stores/chat/request-budget.test.ts)"
+    assert len(p) <= 4_800, "D60: 4,800 (was 3,800: the deck, report, invoice and one-call do_goal rules had been added); the persona is part of every face request (budget test: jarvis/face/packages/stage-ui/src/stores/chat/request-budget.test.ts)"
     assert not re.search(r"\b(he|him|his|she|her|hers)\b", p, re.IGNORECASE)   # no gendered pronouns for JARVIS or the owner
 
 

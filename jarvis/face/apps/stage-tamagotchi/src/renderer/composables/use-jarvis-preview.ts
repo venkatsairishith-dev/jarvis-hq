@@ -15,6 +15,8 @@ import type { Preview, PreviewItem, ToolResult } from './jarvis-preview-logic'
 
 import { computed, ref, shallowRef } from 'vue'
 
+import { POLL_WAIT_MS, withDeadline } from './poll-guard'
+
 import {
   isPreviewId,
   JARVIS_OPEN_OUTPUT_TOOL,
@@ -34,6 +36,8 @@ const MAX_POLL_MS = 60_000
 export interface PreviewDeps {
   call: (name: string, args?: Record<string, unknown>) => Promise<ToolResult>
   enabled?: () => boolean
+  /** True while nobody sees the window (minimized, hidden): the poll skips its turn and asks again at the usual time. */
+  paused?: () => boolean
   onError?: (error: unknown) => void
   pollMs?: number
   setTimer?: (fn: () => void, ms: number) => unknown
@@ -189,11 +193,11 @@ export function usePreviewController(deps: PreviewDeps) {
 
   /** One check for items the chat model queued with jarvis_show; opens the newest one. Returns how many were waiting. */
   async function pollWanted(): Promise<number> {
-    if (running || (deps.enabled && !deps.enabled()))
+    if (running || (deps.enabled && !deps.enabled()) || deps.paused?.())
       return 0
     running = true
     try {
-      const ids = parseWanted(await deps.call(JARVIS_WANTED_TOOL))
+      const ids = parseWanted(await withDeadline(deps.call(JARVIS_WANTED_TOOL), POLL_WAIT_MS, 'the preview poll'))
       failures = 0
       if (ids.length) {
         await refresh()

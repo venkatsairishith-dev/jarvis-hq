@@ -17,14 +17,32 @@ NAME = re.compile(r"^[A-Za-z0-9_.-]{1,40}$")
 # Output files: a plain name with a known text extension (no folders, no hidden files). The node re-checks the same rule.
 OUTPUT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,79}\.(md|txt|html|json|csv|log|py)$")
 MAX_OUTPUT = 200_000    # characters per saved output
-UI_OPS = {"launch", "click", "type", "focus", "key", "scroll", "click_at", "minimize", "maximize", "restore"}
-PC_OPS = {"open_app", "open_folder", "open_file", "list_folder"}   # "open Spotify", "open the X folder in Downloads"
+# D54 (2026-10-26): save_as = Save As + file name + Save, verified on disk, never over an existing file (text "folder|file name[|digest]");
+# type_focused = paste text (up to 4000 characters) into the focused editor of a window. open_code = VS Code on a known folder.
+UI_OPS = {"launch", "click", "type", "focus", "key", "scroll", "click_at", "minimize", "maximize", "restore", "save_as", "type_focused", "drag", "close"}
+PC_OPS = {"open_app", "open_folder", "open_file", "list_folder", "open_code"}   # "open Spotify", "open the X folder in Downloads"
+# D54, simple tasks: the node does exactly these file / setting / clipboard operations and nothing else (node/jarvis_node/taskops.py)
+FILE_OPS = {"mkdir", "create_file", "rename", "move", "copy", "zip", "unzip", "sort_downloads", "find", "reveal", "undo", "trash", "delete_permanent",
+            "cleanup", "empty_bin"}
+SETTING_OPS = {"dark_mode", "light_mode", "wallpaper", "lock", "dnd", "brightness", "night_light", "wifi", "bluetooth", "airplane"}
+CLIPBOARD_OPS = {"get", "set"}
+FILE_NEEDS_PATH = {"mkdir", "create_file", "rename", "move", "copy", "zip", "unzip", "reveal", "trash", "delete_permanent"}
+FILE_NEEDS_DEST = {"rename", "move", "copy"}
+FILE_TEXT_MAX = 20000
+PLAIN = re.compile(r"^[^\0\r\n]*$")
+FOCUSED_MAX = 4000                                                  # characters of one type_focused job (the node's winbackend.MAX_FOCUSED)
+SAVE_AS_TEXT = re.compile(r"^[^|\r\n\0]{1,120}\|[A-Za-z0-9][A-Za-z0-9 _.()\-]{0,79}(\|[0-9a-f]{12})?$")
+PROC_BAR = re.compile(r"^[A-Za-z0-9_.\- ]{1,80}\|$")
 # JARVIS's PC control (2026-10-16). Browser: the owner's EXISTING Chrome profiles, by alias; the node keeps the registry.
 BROWSER_OPS = {"open": "open", "read": "snapshot", "tabs": "snapshot", "whoami": "snapshot", "find": "snapshot",
                "media": "snapshot", "play": "play", "click": "click", "type": "type", "press": "press"}
 DIAG_OPS = {"processes", "app_errors", "crashes", "services", "disk", "network", "app_info", "window_text",
-            "window_ocr", "window_locate"}   # 2026-10-16: OCR of one window / where a label is in it (read-only, text stays local)
+            "window_ocr", "window_locate", "battery"}   # 2026-10-16: OCR of one window / where a label is in it (read-only, text stays local)
 REPAIR_OPS = {"restart_app", "edit_file", "restore", "install"}
+# Undo (D61): the owner's explicit "undo that" (or a click on Undo in the Timeline panel) reverses one step JARVIS did: move a new file to the Recycle Bin,
+# put a binned file back, move a moved file back, close a window JARVIS opened, set a setting back to its recorded value. The node checks the
+# thing is still what the journal recorded (size+mtime) and refuses otherwise; the kernel treats it like any ordinary owner-direct PC action.
+UNDO_OPS = {"recycle", "restore_bin", "move", "close_window", "setting"}
 URL = re.compile(r"^https?://[^\s\"'<>\\]{1,2000}$")
 SAFE_TEXT = re.compile(r"^[^\r\n\0]*$")
 KINDS = {
@@ -34,6 +52,9 @@ KINDS = {
     "output_show": ("output", "show"),
     "ui_action": ("ui", None),
     "pc_open": ("pc", None),
+    "file_op": ("file", None),         # D54: create / rename / move / copy / zip / sort / find / delete family, in the known folders only
+    "setting": ("setting", None),      # D54: a few small reversible settings
+    "clipboard": ("clipboard", None),  # D54: read or set the clipboard text
     "lab_run": ("lab", "dispatch"),        # an outcome task's work, run, verified and repaired by the lab runner
     # Observation of the owner's Windows desktop (2026-10-11): read-only, the node answers from its own Win32/UIA calls.
     "ui_windows": ("ui", "list_windows"),  # visible top-level windows: title, process, size, foreground
@@ -47,6 +68,7 @@ KINDS = {
     "diag": ("diag", None),
     "repair": ("repair", None),
     "media_state": ("media", "state"),
+    "pc_undo": ("undo", None),             # D61: reverse one journaled step (the node re-checks it; the policy rule is tool `undo`)
     # projectfix (2026-10-18): apply an owner-approved fix (a git patch from the lab) to an allowlisted project. Its own rule
     # project.apply_patch (YELLOW_APPROVAL): the approval binds the patch digest and its file list; the policy's secret-path
     # rule (DENY), agent-rule files and, when the project is JARVIS itself, its safety files (RED) see every file name. The
@@ -86,11 +108,34 @@ def _check_params(kind: str, params: dict):
     elif kind == "output_show":
         ok = keys == {"agent", "name"} and NAME.match(str(params["agent"])) and OUTPUT_NAME.match(str(params["name"])) and ".." not in params["name"]
     elif kind == "ui_action":
-        ok = (keys == {"agent", "op", "target", "text"} and NAME.match(str(params["agent"])) and params["op"] in UI_OPS
-              and isinstance(params["target"], str) and 0 < len(params["target"]) <= 120 and isinstance(params["text"], str) and len(params["text"]) <= 500
+        # goal / ctx (D54) are optional: the owner's own words for the task, and the visible text of the dialog the action is aimed at
+        optional = keys - {"agent", "op", "target", "text"}
+        ok = (keys >= {"agent", "op", "target", "text"} and optional <= {"goal", "ctx"}
+              and all(isinstance(params[k], str) and len(params[k]) <= (1000 if k == "goal" else 600) and "\0" not in params[k] for k in optional)
+              and NAME.match(str(params["agent"])) and params["op"] in UI_OPS
+              and isinstance(params["target"], str) and 0 < len(params["target"]) <= 120 and isinstance(params["text"], str)
+              and len(params["text"]) <= (FOCUSED_MAX if params["op"] == "type_focused" else 500)
+              and (params["op"] != "save_as" or (PROC_BAR.match(params["target"]) is not None and SAVE_AS_TEXT.match(params["text"]) is not None))
+              and (params["op"] != "type_focused" or (PROC_BAR.match(params["target"]) is not None and params["text"] != ""))
               and (params["op"] != "key" or re.match(r"^[a-z0-9]+(\+[a-z0-9]+){0,3}$", params["text"]) is not None)
               and (params["op"] != "scroll" or params["text"] in ("up", "down"))
-              and (params["op"] != "click_at" or re.match(r"^[A-Za-z0-9_.\- ]{1,80}\|\d{1,5},\d{1,5}$", params["target"]) is not None))
+              and (params["op"] != "click_at" or re.match(r"^[A-Za-z0-9_.\- ]{1,80}\|\d{1,5},\d{1,5}$", params["target"]) is not None)
+              and (params["op"] != "drag" or re.match(r"^[A-Za-z0-9_.\- ]{1,80}\|\d{1,5},\d{1,5},\d{1,5},\d{1,5}$", params["target"]) is not None))
+    elif kind == "file_op":
+        op = params.get("op")
+        ok = (keys >= {"agent", "op", "target", "path", "dest", "text"} and (keys - {"agent", "op", "target", "path", "dest", "text"}) <= {"goal"}
+              and op in FILE_OPS and NAME.match(str(params["agent"])) is not None
+              and all(isinstance(params[k], str) for k in ("target", "path", "dest", "text", *(["goal"] if "goal" in keys else [])))
+              and 0 < len(params["target"]) <= 120 and len(params["path"]) <= 200 and len(params["dest"]) <= 200 and len(params["text"]) <= FILE_TEXT_MAX
+              and PLAIN.match(params["target"] + params["path"] + params["dest"]) is not None and len(params.get("goal", "")) <= 1000
+              and (op not in FILE_NEEDS_PATH or params["path"] != "") and (op not in FILE_NEEDS_DEST or params["dest"] != ""))
+    elif kind == "setting":
+        ok = (keys >= {"agent", "op", "text"} and (keys - {"agent", "op", "text"}) <= {"goal"} and params.get("op") in SETTING_OPS
+              and NAME.match(str(params["agent"])) is not None and isinstance(params["text"], str) and len(params["text"]) <= 300
+              and PLAIN.match(params["text"]) is not None and len(str(params.get("goal", ""))) <= 1000)
+    elif kind == "clipboard":
+        ok = (keys >= {"agent", "op", "text"} and (keys - {"agent", "op", "text"}) <= {"goal"} and params.get("op") in CLIPBOARD_OPS
+              and NAME.match(str(params["agent"])) is not None and isinstance(params["text"], str) and len(params["text"]) <= FOCUSED_MAX)
     elif kind == "browser_ext":
         op = params.get("op")
         ok = (keys == {"profile", "op", "url", "target", "text"} and op in BROWSER_OPS
@@ -119,6 +164,10 @@ def _check_params(kind: str, params: dict):
             ok = re.match(r"^[A-Za-z0-9][A-Za-z0-9.+_-]{1,80}$", t) is not None and args == {}
     elif kind == "media_state":
         ok = keys == set()
+    elif kind == "pc_undo":
+        ok = (keys == {"agent", "op", "target", "path", "expect"} and NAME.match(str(params["agent"])) is not None and params["op"] in UNDO_OPS
+              and all(isinstance(params[k], str) and SAFE_TEXT.match(params[k]) is not None for k in ("target", "path", "expect"))
+              and 0 < len(params["target"]) <= 260 and len(params["path"]) <= 260 and len(params["expect"]) <= 64)
     elif kind == "pc_open":
         ok = (keys == {"agent", "op", "target", "path"} and NAME.match(str(params["agent"])) and params["op"] in PC_OPS
               and isinstance(params["target"], str) and 0 < len(params["target"].strip()) <= 80
@@ -159,6 +208,9 @@ def action_for(kind: str, params: dict, lane: str = "private", untrusted: bool =
     requester: the agent that asked (its token name), "" for the owner. It is part of the action's digest, so an approval
     is for that agent's request only (audit SEC-D3). Both the request step and Jobs.create must pass the same value."""
     a = _action_for(kind, params, lane, untrusted)
+    if kind in ("ui_action", "file_op", "setting", "clipboard"):     # D54: the owner's goal and the dialog text ride with the action (part of its digest)
+        a.goal = str(params.get("goal") or "")
+        a.ctx = str(params["ctx"]) if "ctx" in params else None
     a.owner_direct = bool(owner_direct) and not untrusted
     a.requester = str(requester or "")[:80]
     return a
@@ -202,6 +254,21 @@ def _action_for(kind: str, params: dict, lane: str, untrusted: bool):
         return Action("connector", "manage", params["connector"], {}, lane, untrusted)
     if kind == "pc_open":
         return Action("pc", params["op"], params["target"], {"path": params["path"]} if params["path"] else {}, lane, untrusted)
+    if kind == "pc_undo":                     # the target and the second path are part of it: an approval binds to exactly this reversal
+        return Action("undo", params["op"], params["target"], {k: params[k] for k in ("path", "expect") if params[k]}, lane, untrusted)
+    if kind == "file_op":                     # the content of a new file is the owner's: the action binds its digest and size, not the words
+        p = {k: params[k] for k in ("path", "dest") if params[k]}
+        if params["text"]:
+            p["content"] = f"sha256:{hashlib.sha256(params['text'].encode()).hexdigest()[:16]} ({len(params['text'])} characters)"
+        return Action("file", params["op"], params["target"], p, lane, untrusted)
+    if kind == "setting":
+        return Action("setting", params["op"], params["op"], {"value": params["text"]} if params["text"] else {}, lane, untrusted)
+    if kind == "clipboard":
+        return Action("clipboard", params["op"], "clipboard", {"chars": len(params["text"])} if params["text"] else {}, lane, untrusted)
+    if kind == "ui_action" and params["op"] == "save_as":     # D54: folder and file name are separate leaves, so the secrets-path rules see each part
+        folder, _, rest = params["text"].partition("|")
+        name, _, digest = rest.partition("|")
+        return Action("ui", "save_as", params["target"], {"folder": folder, "file": name, **({"digest": digest} if digest else {})}, lane, untrusted)
     return Action("ui", params["op"], params["target"], {"text": params["text"]} if params["text"] else {}, lane, untrusted)
 
 

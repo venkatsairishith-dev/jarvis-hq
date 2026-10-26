@@ -41,7 +41,15 @@ export interface JarvisStatus {
   pcKind: PcKind
   pcAgeS: number
   pcStopping: boolean
+  /** D60: which step of a goal runs now (jarvis_status goal_*): a state word, two counts and one fixed executor id. Never text. */
+  goalState: GoalState
+  goalN: number
+  goalTotal: number
+  goalExec: string
 }
+
+export type GoalState = 'none' | 'planning' | 'running' | 'done' | 'failed' | 'waiting'
+const GOAL_STATES: readonly GoalState[] = ['none', 'planning', 'running', 'done', 'failed', 'waiting']
 
 interface ToolResult {
   structuredContent?: Record<string, unknown>
@@ -90,6 +98,10 @@ export function parseJarvisStatus(result: ToolResult | undefined | null): Jarvis
     pcKind: pcBusy ? kind : 'none',
     pcAgeS: pcBusy ? count(d.pc_age_s) : 0,
     pcStopping: pcBusy && d.pc_stopping === true,
+    goalState: GOAL_STATES.includes(d.goal_state as GoalState) ? d.goal_state as GoalState : 'none',
+    goalN: count(d.goal_n),
+    goalTotal: count(d.goal_total),
+    goalExec: typeof d.goal_exec === 'string' ? d.goal_exec : '',
   }
 }
 
@@ -132,6 +144,8 @@ export interface HudSignals {
   link: HudLink
   /** A PC task runs (from the desktop plugin's registry). */
   pcBusy: boolean
+  /** D60: the owner's message is a PC, screen or document task and the instant "On it" is showing; no model has answered yet. */
+  ack?: boolean
 }
 
 /**
@@ -146,6 +160,8 @@ export function resolveHudState(s: HudSignals): HudState {
     return 'speaking'
   if (s.listening)
     return 'listening'
+  if (s.ack && (s.link === 'up' || s.link === 'unknown'))
+    return 'acting' // D60: "On it" at once; the ring does not wait for the model or for the next status poll
   if (s.thinking)
     return 'thinking'
   if (s.link === 'up' && s.pcBusy)
@@ -168,6 +184,41 @@ export function hudStateLabel(state: HudState, link: HudLink = 'up'): string {
   if (state === 'offline')
     return link === 'killed' ? 'HALTED' : link === 'down' ? 'OFFLINE' : 'FAULT'
   return STATE_LABELS[state]
+}
+
+// ---- the progress line (D60)
+
+/** What each fixed executor id of a goal's plan is called in a progress line. The plan's own words never reach the face (they can hold file names). */
+const EXECUTOR_WORDS: Record<string, string> = {
+  pc: 'working on the PC',
+  screen_read: 'reading the window',
+  screen_locate: 'looking for it on screen',
+  doc_read: 'reading the document',
+  deliverable_list: 'checking what I made',
+  deliverable_open: 'opening it',
+  recall: 'recalling',
+  tasks: 'checking tasks',
+  rules: 'doing it',
+}
+
+/** One short line for the step that runs now, or '' when no goal is under way ("Planning it", "Step 2 of 3: reading the window"). */
+export function goalLine(status: JarvisStatus | null): string {
+  if (!status)
+    return ''
+  switch (status.goalState) {
+    case 'planning': return 'Planning it'
+    case 'running': {
+      const what = EXECUTOR_WORDS[status.goalExec] ?? 'working'
+      return status.goalTotal > 1 && status.goalN > 0 ? `Step ${status.goalN} of ${status.goalTotal}: ${what}` : `${what.charAt(0).toUpperCase()}${what.slice(1)}`
+    }
+    case 'waiting': return 'Waiting for your approval'
+    default: return ''
+  }
+}
+
+/** The line the HUD shows: the goal's step when there is one, else the instant acknowledgement, else nothing. */
+export function hudLine(ack: string | null | undefined, status: JarvisStatus | null): string {
+  return goalLine(status) || (ack ?? '')
 }
 
 // ---- the strip

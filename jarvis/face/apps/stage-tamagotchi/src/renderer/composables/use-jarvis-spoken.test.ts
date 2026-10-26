@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { POLL_WAIT_MS } from './poll-guard'
 import { buildSpokenTurn, createSpokenPoller, JARVIS_SPOKEN_TOOL, parseSpoken, proactiveEnabled } from './use-jarvis-spoken'
 
 const result = (notices: unknown[]) => ({ structuredContent: { count: notices.length, notices } })
@@ -65,6 +66,38 @@ describe('createSpokenPoller', () => {
     })
     expect(await down.poller.pollOnce()).toBe(0)
     expect(onError).toHaveBeenCalledOnce()
+  })
+
+  it('skips its turn while the window cannot be seen (D57)', async () => {
+    const hidden = make({ paused: () => true })
+    expect(await hidden.poller.pollOnce()).toBe(0)
+    expect(hidden.call).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting for a tool server that never answers, and polls again afterwards (D57)', async () => {
+    vi.useFakeTimers()
+    try {
+      const onError = vi.fn()
+      let calls = 0
+      const stuck = make({
+        call: () => {
+          calls += 1
+          return calls === 1 ? new Promise(() => {}) : Promise.resolve(result([]))
+        },
+        onError,
+      })
+      const first = stuck.poller.pollOnce()
+      await vi.advanceTimersByTimeAsync(POLL_WAIT_MS + 10)
+      expect(await first).toBe(0)
+      expect(onError).toHaveBeenCalledOnce()
+      expect(String((onError.mock.calls[0][0] as Error).message)).toContain('did not answer')
+      // the stuck poll released the lock: the next one runs
+      expect(await stuck.poller.pollOnce()).toBe(0)
+      expect(calls).toBe(2)
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 
   it('never runs two polls at once', async () => {

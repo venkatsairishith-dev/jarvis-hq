@@ -1,0 +1,17 @@
+{
+  "name": "@proj-airi/font-indic",
+  "type": "module",
+  "version": "0.12.0",
+  "private": true,
+  "description": "JARVIS: Noto Sans Telugu and Noto Sans Devanagari (Latin-free subsets, weights 400 and 700), so Telugu and Hindi text renders the same on every PC. SIL Open Font License 1.1.",
+  "license": "OFL-1.1",
+  "exports": {
+    ".": {
+      "default": "./index.css"
+    },
+    "./index.css": {
+      "default": "./index.css"
+    }
+  },
+  "main": "./index.css"
+}

@@ -7,12 +7,15 @@ approvals, risk rules, lane separation and audit all happen there.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
+
+from jarvis.plugins._shared import translate
 
 DEFAULT_URL = "http://127.0.0.1:8799"
 LOOPBACK = ("127.0.0.1", "localhost", "::1")
@@ -144,6 +147,8 @@ class JarvisClient:
         text = str(task or "").strip()
         if not text:
             raise BridgeError("There is no task to hand over.", 400)
+        # D58: the agent on the server (Hermes and its models) reads English only, and the translator lives on THIS laptop: translate before the text leaves.
+        text = await asyncio.to_thread(translate.english, text, source="bridge")
         if len(text) > MAX_TASK_CHARS:
             raise BridgeError(f"The task is too long ({len(text)} characters; at most {MAX_TASK_CHARS}). Say it in fewer words.", 413)
         data = await self._request("POST", "/api/owner/command", {"text": text, "source": source})

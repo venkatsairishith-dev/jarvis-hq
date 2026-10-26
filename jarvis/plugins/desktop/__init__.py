@@ -17,11 +17,11 @@ import time
 
 from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_plugin, plugin_entry, timer_interval, tr
 
-from jarvis.plugins._shared import screen_text
+from jarvis.plugins._shared import decider, screen_text, translate
 
-from . import coordinator as coord, core, decide, goal as goal_mod
+from . import composite, coordinator as coord, core, decide, drive as drive_mod, goal as goal_mod, journal_client as jc, quick as quick_mod, simple_tasks, undoer
 
-PROFILE_HELP = "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles."
+PROFILE_HELP = "Chrome profile alias: 'default' or a name such as 'VenkatAMV'; see list_browser_profiles."
 
 
 class StepUnavailable(RuntimeError):
@@ -121,6 +121,13 @@ class _PcLock:
 
     async def __aexit__(self, *exc):
         return self.__exit__(*exc)
+
+
+def _goal_progress_writer():
+    """D60: the callback that GoalRunner and the rules runner call as a goal moves on; it writes core.GOAL_PROGRESS (content-free) for the face."""
+    def write(note: dict) -> None:
+        core.set_goal_progress(str(note.get("state") or "idle"), int(note.get("n") or 0), int(note.get("total") or 0), str(note.get("executor") or ""))
+    return write
 
 
 def _cancel_quietly(pc, jid) -> None:
@@ -231,7 +238,9 @@ class DesktopPlugin(PluginBase):
 
         def work():
             try:
-                return pc.run(body, timeout, what)
+                res = pc.run(body, timeout, what)
+                jc.note_job(res.get("job") if isinstance(res, dict) else None)      # D61: the journal finds the node's before/after pictures by job id
+                return res
             finally:
                 if op is not None:
                     op.worker_done()                      # the operation's lock may be released here ...
@@ -435,6 +444,7 @@ class DesktopPlugin(PluginBase):
                                         "profile_name_matches", "note", "error"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("open_website")
     async def open_website(self, url: str = "", profile: str = "default", **_):
         try:
             with _PcLock("open_website", 120):
@@ -455,6 +465,7 @@ class DesktopPlugin(PluginBase):
                                         "windows_media", "error", "needs"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("play_youtube")
     async def play_youtube(self, query: str = "", profile: str = "default", **_):
         try:
             with _PcLock("play_youtube", 180):
@@ -503,6 +514,7 @@ class DesktopPlugin(PluginBase):
                                         "page", "page_note"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("run_browser_action")
     async def run_browser_action(self, action: str = "read", profile: str = "default", target: str = "", text: str = "",
                                  approval_id: str = "", **_):
         body = {"op": "browser", "action": action, "profile": profile, "target": target, "text": text}
@@ -544,6 +556,7 @@ class DesktopPlugin(PluginBase):
         timeout=360, llm_result_fields=["state", "ok", "opened", "done", "verified", "window", "note", "error", "approval_id", "how"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("run_pc_action")
     async def run_pc_action(self, action: str = "", target: str = "", text: str = "", approval_id: str = "", **_):
         body = {"op": "open_app", "target": target} if action == "open_app" else {"op": "ui", "action": action, "target": target, "text": text}
         if approval_id:
@@ -566,6 +579,7 @@ class DesktopPlugin(PluginBase):
         timeout=120, llm_result_fields=["state", "ok", "rows", "sessions", "playing", "error"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("check_pc")
     async def check_pc(self, check: str = "disk", target: str = "", **_):
         body = {"op": "media"} if check == "media" else {"op": "diag", "check": check, "target": target}
         return await self._one(body, 90)
@@ -582,6 +596,7 @@ class DesktopPlugin(PluginBase):
         timeout=60, llm_result_fields=["ok", "in_front", "windows", "count", "hint"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("whats_on_screen")
     async def whats_on_screen(self, **_):
         res = await self._one({"op": "windows"}, 30, "list windows")
         if not isinstance(res, Ok):
@@ -615,6 +630,7 @@ class DesktopPlugin(PluginBase):
         timeout=120, llm_result_fields=["ok", "app", "lines", "text", "text_note", "source", "removed", "error"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("read_window_text")
     async def read_window_text(self, app: str = "", **_):
         """OCR of one window through the kernel job diag/window_ocr (policy, approvals and audit apply).
         UNVERIFIED on real hardware. The node keeps the text in a local file; it is read once here, deleted, scrubbed, and returned only when the
@@ -667,6 +683,7 @@ class DesktopPlugin(PluginBase):
         timeout=180, llm_result_fields=["ok", "found", "app", "x", "y", "found_by", "basis", "window", "source", "note", "error"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("find_on_screen")
     async def find_on_screen(self, app: str = "", text: str = "", **_):
         """Locate a label in one window through the kernel job diag/window_locate (policy, approvals and audit apply).
         UNVERIFIED on real hardware. A point is in the window's own pixels; basis says observed (OCR) or inferred (model)."""
@@ -718,6 +735,7 @@ class DesktopPlugin(PluginBase):
         timeout=900, llm_result_fields=["outcome", "cause", "verified", "evidence", "fix", "backup", "undo", "verification", "steps", "approval_id", "how"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("run_troubleshooter")
     async def run_troubleshooter(self, app: str = "", start_name: str = "", apply_fix: bool = True, **_):
         # It clicks, starts the app and edits a file: it takes the PC lock like a task. A task's own troubleshoot step
         # already holds that lock and calls the flow below directly (taking it again would wait on itself forever).
@@ -898,7 +916,7 @@ class DesktopPlugin(PluginBase):
                     return p.run(body, timeout, what)            # asked again: the owner approves the same action anew
                 raise
 
-        def pc(body, timeout=90.0, what=""):
+        def pc(body, timeout=90.0, what="", keep_local=False):
             # The step's PC job belongs to the task or mission operation that is current on this thread (so Stop reaches
             # its node job and its pending approval); without one (an agent called outside a task) it is an operation of
             # its own for the length of the call.
@@ -907,15 +925,19 @@ class DesktopPlugin(PluginBase):
             op = op or own
             p = op.attach_pc(core.Pc(on_state=core.set_activity))
             active.append(p)
+            pre, t_job = jc.before_job(body), time.time()                # D61: a setting job reads its current value first (what an undo puts back)
             try:
                 res = run_pc(p, body, timeout, what)
+                jc.note_job(res.get("job"))                              # D61: pictures of this step, found by job id
             finally:
                 active.remove(p)
                 op.detach_pc(p)
                 if own is not None:
                     own.entry_exit()
             r = dict(res.get("result") or {})
-            core.take_local(r.pop("local_result", None))            # screen/page text: read by nobody here, deleted
+            local = core.take_local(r.pop("local_result", None))    # screen/page text: read by nobody here, deleted (drive() keeps it, for the local model)
+            if keep_local:
+                r["_local"] = local
             r["state"] = res.get("state")
             r["ok"] = bool(r.get("ok")) and res.get("state") == "done"
             for k in ("approval_id", "how"):
@@ -923,6 +945,7 @@ class DesktopPlugin(PluginBase):
                     r[k] = res[k]
             if res.get("state") == "waiting_for_permission":
                 r["approval_body"] = dict(body)                     # which job the approval is for (missions.resume)
+            jc.after_job(body, r, pre, t_job)                       # D61: a file or setting job that worked is one journal line with its undo recipe
             return r
 
         def alias(folder):
@@ -1045,6 +1068,125 @@ class DesktopPlugin(PluginBase):
                     return last
             return last
 
+        def editor_job(step, body):
+            """One kernel job against the app's window: its likely process name first (one job), the looked-up window if the node found none."""
+            r = direct(step, dict(body, target=""))
+            if r is None:
+                r = dict(pc(dict(body, target=f"{need_proc(step)}|"), 90))
+            return r
+
+        def open_in_vscode(step):
+            """D54: VS Code on a folder inside Documents, Desktop, Downloads, outputs or a project (the node checks the folder and finds Code.exe)."""
+            root, _, rel = str(step.get("folder", "")).partition("/")
+            return pc({"op": "open_code", "target": root, "path": rel}, 90)
+
+        def type_in_editor(step):
+            """D54: paste the text into the app's editor (a new file first when asked). Several jobs for a long text; the first one the kernel
+            holds or the node refuses ends the step, and the result says how much had been pasted."""
+            text, done, chunks_n, read_back = str(step.get("text", "")), 0, 0, True
+            if not text:
+                return {"ok": False, "error": "there was no text to type"}
+            if step.get("new_file") or composite.is_code_app(step.get("app", "")):
+                # VS Code always gets a NEW untitled file first: the keyboard focus may be in its terminal, where a paste would run the lines
+                r = editor_job(step, {"op": "ui", "action": "key", "text": "ctrl+n"})        # a new, empty, focused editor
+                if not r.get("ok"):
+                    return r
+                time.sleep(0.8)
+            for piece in composite.chunks(text):
+                r = editor_job(step, {"op": "ui", "action": "type_focused", "text": piece})
+                if not r.get("ok"):
+                    return dict(r, typed_chars=done, error=r.get("error") or ("only %d of %d characters were pasted" % (done, len(text))))
+                done, chunks_n = done + len(piece), chunks_n + 1
+                read_back = read_back and bool(r.get("observed"))
+            return {"ok": True, "typed_chars": done, "chunks": chunks_n, "read_back": read_back, "process": r.get("process")}
+
+        def save_as(step):
+            """D54: Save As in the app's window; the node picks a free file name, saves and checks the disk. Never over an existing file."""
+            text = f"{step.get('folder', '')}|{step.get('name', '')}" + (f"|{step['digest']}" if step.get("digest") else "")
+            return editor_job(step, {"op": "ui", "action": "save_as", "text": text})
+
+        OWN_PROCS = {"jarvis", "electron", "jarvisface"}
+
+        def drive_observe(app_hint):
+            """What the observe - decide - act loop looks at: the windows, the dialogs of the app being worked in (title, texts, buttons) and its
+            text (accessibility tree first, OCR when that gives little). Local only; the text is shown to the local model by drive.propose_local."""
+            ws = [w for w in (pc({"op": "windows"}, 30).get("windows") or []) if isinstance(w, dict) and not w.get("minimized")]
+            front = next((w for w in ws if w.get("foreground") and _re.sub(r"[^a-z]", "", str(w.get("process", "")).lower()) not in OWN_PROCS), None)
+            proc = (find_process(app_hint) if app_hint else None) or (front or {}).get("process")
+            obs = {"windows": [{"process": w.get("process"), "title": w.get("title")} for w in ws[:10]], "dialogs": [], "text": "", "source": "none"}
+            if not proc or not core.APP_PROCESS.match(str(proc)):
+                return obs
+            r = pc({"op": "diag", "check": "window_text", "target": str(proc)}, 60, keep_local=True)
+            rows = core.rows(r.get("_local"))
+            texts = []
+            for w in rows:
+                if w.get("dialog"):
+                    obs["dialogs"].append({"process": proc, "title": str(w.get("title") or "")[:120],
+                                           "texts": [str(t)[:200] for t in (w.get("texts") or [])[:12]], "buttons": [str(b)[:60] for b in (w.get("buttons") or [])[:8]]})
+                else:
+                    texts += [str(w.get("title") or "")] + [str(t) for t in (w.get("texts") or [])]
+            text = "\n".join(t for t in texts if t)
+            obs["source"] = "accessibility tree" if text else "none"
+            if len(text.strip()) < 40:                                   # the accessibility tree gave little: the pixels
+                o = pc({"op": "diag", "check": "window_ocr", "target": str(proc)}, 90, keep_local=True)
+                lines = core.ocr_lines(o.get("_local"))
+                if lines:
+                    text, obs["source"] = "\n".join(lines), "OCR"
+            obs["text"] = core.scrub_text(text)[0][:6000]
+            return obs
+
+        def drive(step):
+            """D54, the general rule: any task as observe - decide - act with a step budget. Every act is one kernel job carrying the owner's goal
+            (the Pc adds it) and, for a dialog, the dialog's text; what the kernel holds ends the loop with its approval id."""
+            op = coord.current_op()
+            goal = (op.goal if op is not None else "") or step.get("query", "")
+
+            def act(body):
+                r = pc(dict(body), 120)
+                if body.get("op") == "list_folder":
+                    r["items"] = (r.get("items") or [])[:200]
+                return r
+            def classify(ctx, app):
+                d = decider.classify_dialog(ctx, app)
+                return d.choice or "B", d.source
+            h = drive_mod.Hands(observe=drive_observe, act=act, propose=lambda task, obs, hist: drive_mod.propose_local(task, obs, hist), classify=classify)
+            out = drive_mod.Driver(h).run(goal, task=step.get("query") or goal, app=step.get("app", ""))
+            if out.get("status") == "waiting_for_permission":
+                out["state"] = "waiting_for_permission"
+            return out
+
+        def front_process():
+            ws = [w for w in (pc({"op": "windows"}, 30).get("windows") or []) if isinstance(w, dict) and not w.get("minimized")]
+            front = next((w for w in ws if w.get("foreground") and _re.sub(r"[^a-z]", "", str(w.get("process", "")).lower()) not in OWN_PROCS), None)
+            return (front or {}).get("process")
+
+        def window_text_of(app):
+            """One window's text, read locally with the accessibility tree (never sent anywhere): for 'copy the text to the clipboard' and answer checks."""
+            proc = find_process(app) if app else front_process()
+            if not proc or not core.APP_PROCESS.match(str(proc)):
+                return ""
+            r = pc({"op": "diag", "check": "window_text", "target": str(proc)}, 60, keep_local=True)
+            rows = [w for w in core.rows(r.get("_local")) if not w.get("dialog")]
+            text = "\n".join(t for w in rows for t in [str(w.get("title") or "")] + [str(x) for x in (w.get("texts") or [])] if t)
+            return core.scrub_text(text)[0]
+
+        def simple_task(step):
+            """D54: a task from the catalogue (config/simple_tasks.json). Every effect is one kernel job carrying the owner's goal (the Pc adds it); the
+            handler verifies by effect and returns facts, never the model's say-so."""
+            import datetime as _dt
+            import os as _os
+            env = simple_tasks.Env(
+                pc=lambda body, timeout=90.0, keep_local=False: pc(dict(body), timeout, keep_local=keep_local),
+                agent=lambda tool, s: agents[tool](s),
+                process=lambda app: find_process(app) if app else None,
+                front=front_process, window_text=window_text_of,
+                now=lambda: _dt.datetime.now().astimezone(),
+                scheduler_create=lambda d: core.owner("POST", "automations", {"definition": d}),
+                scheduler_list=lambda: (core.owner("GET", "automations")[1] or {}).get("automations") or [],
+                vault_dir=lambda: _os.environ.get("JARVIS_VAULT_DIR") or r"D:\jarvis\vault",
+                scrub=lambda t: core.scrub_text(t)[0])
+            return simple_tasks.run(step, env)
+
         def check(step):
             if step.get("check") == "media":
                 return pc({"op": "media"}, 30)
@@ -1123,8 +1265,9 @@ class DesktopPlugin(PluginBase):
             "open_app": open_app,
             "window": window, "type_text": type_text, "press_key": press_key, "open_file": open_file, "check_pc": check,
             "troubleshoot": troubleshoot, "research": research, "open_output": open_output, "stop": stop,
+            "open_in_vscode": open_in_vscode, "type_in_editor": type_in_editor, "save_as": save_as, "drive": drive, "simple_task": simple_task,
         }
-        return {k: _with_approval(fn) for k, fn in agents.items()}
+        return {k: jc.wrap_agent(k, _with_approval(fn)) for k, fn in agents.items()}       # D61: one journal line per step run
 
     def _stop_pc_tasks(self) -> None:
         """The owner's stop reaches every registered PC operation (each has its own flag: a second request that is
@@ -1148,8 +1291,20 @@ class DesktopPlugin(PluginBase):
         # answered its clarification question passes it (pending-input contract, main_agent/input_request.py).
         if isinstance(answers, dict) and isinstance(answers.get("clarification"), str) and answers["clarification"].strip():
             request = f"{request}\n(The owner's clarification: {screen_text.clean_message(answers['clarification'], 300)})"
+        # D58: the decider and every model below it understand English only. The owner's words are translated on this PC first (English costs nothing);
+        # a doubtful translation is shown to him as a question instead of being acted on, unless he already answered one.
+        request, tr_info = await asyncio.to_thread(translate.entry_text, request, confirmed=bool(isinstance(answers, dict) and answers.get("clarification")),
+                                                    source="pc_task")
+        if tr_info and tr_info.get("clarify"):
+            return Ok(translate.clarification_result(tr_info["clarify"]))
         rec = await DesktopPlugin._run_task(self, request)         # (not self._run_task: tests and hosts lend a stand-in `self`)
-        return DesktopPlugin._task_result(rec)
+        res = DesktopPlugin._task_result(rec)
+        if tr_info and isinstance(getattr(res, "value", None), dict):
+            # (the "note" key is the plugin's own words and passes the screen-text cleaner; an "english" field would be withheld as screen text)
+            res.value["translation"] = {k: tr_info.get(k) for k in ("source_lang", "confidence", "translated")}
+            res.value["note"] = translate.understood_note(tr_info)
+            res.value["summary"] = translate.skipped_note(tr_info) + str(res.value.get("summary") or "")
+        return res
 
     async def _run_task(self, request: str, plan: "decide.Plan | None" = None) -> dict:
         """One PC task as a registered operation (planning included): the coordinator's record. `plan`: a plan already made (D51: the
@@ -1160,7 +1315,9 @@ class DesktopPlugin(PluginBase):
         # denies its pending approval, and waits for its worker thread. abort: the owner's stop also ends a step waiting on
         # another plugin (research), as in missions.
         op = coord.begin("task", "task-" + secrets.token_hex(3))
+        op.goal = core.OWNER_GOAL.get() or request          # the owner's own words (do_goal sets them); never a step an online plan wrote
         tok = coord.bind(op)
+        jtok = jc.enter_task(core.OWNER_GOAL.get() or request)       # D61: the owner's request is the journal's task (inside a goal, the goal's task)
         c = coord.Coordinator(self._agents(loop, abort=op.stop_flag.is_set), core.profiles(), on_progress=core.set_activity,
                               cancelled=op.stop_flag.is_set, op=op)
         ctx = contextvars.copy_context()
@@ -1183,6 +1340,7 @@ class DesktopPlugin(PluginBase):
             await asyncio.to_thread(ended.wait, coord.STOP_WAIT_S)
             raise
         finally:
+            jc.exit_task(jtok)
             coord.unbind(tok)
             op.entry_exit()
             core.set_activity("idle")
@@ -1207,14 +1365,86 @@ class DesktopPlugin(PluginBase):
     async def _goal_pc(self, goal: str, plan) -> dict:
         return await self._run_task(goal, plan)
 
+    # ---- the solve path (D54): the one window to read, and the editor to type into. Local work only; nothing here sends text anywhere.
+    SOLVE_OWN = {"jarvis", "electron", "jarvisface", "python", "pythonw", "windowsterminal"}      # JARVIS's own windows are never "the window with the problem"
+    EDITORS = {"code", "notepad", "notepad++", "wordpad", "sublimetext", "pycharm64", "idea64", "devenv", "idle", "gvim", "atom"}
+
+    @staticmethod
+    def _wname(w: dict) -> str:
+        proc = str(w.get("process") or "")
+        if proc.lower() == "applicationframehost":                        # a modern app's window belongs to the frame host: named by its title
+            return re.sub(r"[^A-Za-z0-9_.\- ]", "", str(w.get("title") or ""))[:40]
+        return proc
+
+    @staticmethod
+    def _wkey(name: str) -> str:
+        return re.sub(r"[^a-z0-9+]", "", str(name).lower().removesuffix(".exe"))
+
+    async def _goal_windows(self) -> list[dict]:
+        res = await self._one({"op": "windows"}, 30, "list windows")
+        got = res.value if isinstance(res, Ok) and isinstance(res.value, dict) else {}
+        return [w for w in (got.get("windows") or []) if isinstance(w, dict) and not w.get("minimized")]
+
+    async def _goal_read_window(self, app: str | None = None, avoid: str | None = None) -> dict:
+        """The text of ONE window for a solve goal, read locally: the app the owner named, else the front window that is not JARVIS's own and not
+        the editor he will type into. Rungs: the accessibility tree, then OCR (the local vision model only locates, it does not transcribe). The
+        text is scrubbed of secret patterns and returned to the goal runner only; it is never logged, and it leaves the PC only through
+        goal.GoalRunner._solve (the gateway)."""
+        ws = await self._goal_windows()
+        key, skip = self._wkey, self._wkey(avoid or "")
+        cands = [w for w in ws if core.APP_PROCESS.match(self._wname(w) or "!") and key(self._wname(w)) not in {key(x) for x in self.SOLVE_OWN}
+                 and not (skip and key(self._wname(w)) == skip)]
+        if app:
+            want = key(app)
+            pick = next((w for w in cands if want and want in key(self._wname(w) + " " + str(w.get("title") or ""))), None)
+            if pick is None:
+                return {"ok": False, "error": f"no open window of {core.APP_PROCESS.match(app) and app or 'that app'} to read"}
+        else:
+            pick = next((w for w in cands if w.get("foreground")), cands[0] if cands else None)
+            if pick is None:
+                return {"ok": False, "error": "no window other than JARVIS's own is open, so there is nothing to read"}
+        proc = self._wname(pick)
+        ui_text, ocr_text = "", ""
+        with coord.operation("solve_read", f"solve-{proc}"[:40]):
+            res = await self._run(self._pc(), {"op": "diag", "check": "window_text", "target": proc}, 60, f"read {proc}")
+            r = res.get("result") if isinstance(res.get("result"), dict) else {}
+            try:
+                wins = core.rows(core.take_local(r.get("local_result")))
+            except core.DesktopError:
+                wins = []
+            ui_text = "\n".join(str(t) for w in wins for t in ([w.get("title")] if w.get("title") else []) + list(w.get("texts") or []) if isinstance(t, str))
+            if len(ui_text.strip()) < 200:                                 # too little to be a problem statement: the pixels instead
+                lines, _note = await _ocr_fallback(lambda p, b, t, w: self._run(p, b, t, w), self._pc(), proc)
+                ocr_text = "\n".join(lines)
+        text, source = (ocr_text, "OCR") if len(ocr_text.strip()) > len(ui_text.strip()) else (ui_text, "accessibility tree")
+        if not text.strip():
+            return {"ok": False, "app": proc, "error": f"nothing readable was found in the {proc} window (accessibility and OCR found no text)"}
+        return {"ok": True, "app": proc, "text": core.scrub_text(text)[0][:screen_text.MAX_TEXT * 4], "source": source}
+
+    async def _goal_pick_editor(self, named: str | None = None, read_app: str | None = None) -> dict:
+        """The app to type the solution into: the one the owner named, else the front editor window (an editor other than the window that was read)."""
+        if named:
+            return {"ok": True, "app": named}
+        ws = await self._goal_windows()
+        skip = self._wkey(read_app or "")
+        for w in ws:                                                       # the list is front to back
+            name = self._wname(w)
+            if self._wkey(name) in self.EDITORS and self._wkey(name) != skip and core.APP_PROCESS.match(name or "!"):
+                return {"ok": True, "app": name}
+        return {"ok": False, "error": "no editor window is open (VS Code, Notepad ...); say which app to type the solution in"}
+
     async def _goal_call(self, ref: str, args: dict) -> tuple[bool, dict, str]:
         """One local helper entry (another plugin's, or this one's) through the plugin router: (ok, value, error text)."""
         if self.plugins is None:
             return False, {}, "the plugin router is not available"
+        t0 = time.time()
         res = await self.plugins.call_entry_json(ref, args, timeout=900.0 if ref.startswith("doc_reader:") else 180.0)
         if isinstance(res, Ok):
             value = res.value if isinstance(res.value, dict) else {}
-            return True, (value["data"] if isinstance(value.get("data"), dict) else value), ""
+            data = value["data"] if isinstance(value.get("data"), dict) else value
+            jc.record_call(ref, args, True, data, "", int((time.time() - t0) * 1000))
+            return True, data, ""
+        jc.record_call(ref, args, False, {}, str(getattr(res, "error", res))[:200], int((time.time() - t0) * 1000))
         return False, {}, str(getattr(res, "error", res))[:300]
 
     @plugin_entry(
@@ -1227,13 +1457,105 @@ class DesktopPlugin(PluginBase):
             "Reports each step, which model ran it and what was observed.")),
         input_schema={"type": "object", "properties": {"goal": {"type": "string", "description": "What the owner wants done, in their words"}},
                       "required": ["goal"]},
-        timeout=900, llm_result_fields=["status", "planned_by", "summary", "steps", "approval_id", "fallback_reason"],
+        timeout=900, llm_result_fields=["status", "planned_by", "summary", "steps", "approval_id", "reason", "provider", "question"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def do_goal(self, goal: str = "", **_):
-        hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}))
-        res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on())
-        return Ok(res)
+        goal, tr_info = await asyncio.to_thread(translate.entry_text, goal, source="goal")       # D58: English only below this line
+        if tr_info and tr_info.get("clarify"):
+            return Ok(translate.clarification_result(tr_info["clarify"]))
+        started = time.monotonic()
+        progress = _goal_progress_writer()
+        jtok = jc.enter_task(core.OWNER_UTTERANCE.get() or goal)       # D61: the goal is one task in the journal; its steps group under the owner's own words
+        try:
+            # D60: one plain command ("open notepad", "pause", "open notepad and write hello") needs no online plan: the rules plan it, the
+            # coordinator and the kernel run it exactly as before. Anything else is planned online and run by the local models as before.
+            quick = quick_mod.match(goal, core.profiles())
+            if quick is not None:
+                res = await quick_mod.run(quick, self._goal_pc, progress)
+            else:
+                hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}), on_progress=progress,
+                                       read_window=getattr(self, "_goal_read_window", None), pick_editor=getattr(self, "_goal_pick_editor", None))      # a host without them never takes the solve path
+                utterance = " ".join(str(core.OWNER_UTTERANCE.get() or goal or "").split())[:goal_mod.MAX_GOAL]     # his own words when the host has them, else the goal given
+                token = core.OWNER_GOAL.set(utterance)
+                try:
+                    res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on(), utterance=utterance)
+                finally:
+                    core.OWNER_GOAL.reset(token)
+            res["seconds"] = round(time.monotonic() - started, 2)
+            if tr_info and isinstance(res, dict):
+                res["translation"] = {k: tr_info.get(k) for k in ("source_lang", "confidence", "translated")}
+                res["note"] = translate.understood_note(tr_info)
+            return Ok(res)
+        finally:
+            jc.exit_task(jtok)
+            core.set_goal_progress("idle")
+
+    @plugin_entry(
+        id="quick_command",
+        name=tr("entry.quick_command.name", default="Run a plain command at once"),
+        description=tr("entry.quick_command.description", default=(
+            "Rules-first fast path for the face: when the owner's whole message is ONE plain command (open an app or a page, pause, volume, "
+            "minimize, play a song, type text into an app, what time or date it is) it is run at once with no model, through the same "
+            "coordinator and JARVIS kernel as every PC task, and the reply is returned. Anything else answers handled=false immediately "
+            "and costs nothing. Never used by a chat model; the face calls it before it asks one.")),
+        input_schema={"type": "object", "properties": {"text": {"type": "string", "description": "The owner's message"}}, "required": ["text"]},
+        timeout=300, llm_result_fields=["handled", "status", "reply", "planned_by", "approval_id", "label", "seconds"],
+    )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    async def quick_command(self, text: str = "", **_):
+        started = time.monotonic()
+        quick = quick_mod.match(text, core.profiles())
+        if quick is None:
+            return Ok({"handled": False})
+        progress = _goal_progress_writer()
+        try:
+            res = await quick_mod.run(quick, self._goal_pc, progress)
+        finally:
+            core.set_goal_progress("idle")
+        return Ok({"handled": True, "status": res["status"], "reply": res["summary"], "planned_by": res["planned_by"], "label": quick.ack,
+                   "approval_id": res.get("approval_id"), "seconds": round(time.monotonic() - started, 2)})
+
+    @plugin_entry(
+        id="undo_steps",
+        name=tr("entry.undo_steps.name", default="Undo what JARVIS did"),
+        description=tr("entry.undo_steps.description", default=(
+            "Reverse steps from the journal (what JARVIS did on this PC), ONLY when the owner asked to undo: the last n steps that changed something, "
+            "the steps of one task, or named steps. A new file goes to the Recycle Bin, a binned file comes back, a move is reversed, a window JARVIS opened is "
+            "closed, a setting goes back. Each is checked first (it must be unchanged since) and afterwards; it says exactly what was and was not undone.")),
+        input_schema={"type": "object", "properties": {
+            "n": {"type": "integer", "description": "undo the newest n steps that changed something"},
+            "task": {"type": "string", "description": "undo every undoable step of this task id"},
+            "ids": {"type": "array", "items": {"type": "string"}, "description": "journal step ids"}}},
+        timeout=300, llm_result_fields=["ok", "undone", "not_undone", "results", "summary"],
+    )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    async def undo_steps(self, n: int = 0, task: str = "", ids: list | None = None, **_):
+        j = jc.get_journal()
+        if j is None:
+            return Err(SdkError("the journal is not available here"))
+        if ids:
+            steps = [s for s in (j.get(str(i)) for i in list(ids)[:50]) if s and s.get("undo")]
+        elif task:
+            steps = j.undoable(task_id=str(task)[:60])[:50]
+        else:
+            steps = j.undoable(max(1, min(int(n or 1), 20)))
+        steps.sort(key=lambda s: s.get("ts") or 0, reverse=True)           # newest first: a task is taken back in reverse order
+        if not steps:
+            return Ok({"ok": False, "undone": 0, "not_undone": 0, "results": [], "summary": "There was nothing to undo."})
+        loop = asyncio.get_running_loop()
+        pc = self._pc()
+        pc.approval_wait_s = 0.0                            # an undo that would need the PIN says so and stops; it never waits for it
+
+        class _Hand:
+            def run(_self, body, timeout, what):
+                return asyncio.run_coroutine_threadsafe(DesktopPlugin._run(self, pc, body, timeout, what), loop).result(timeout + 30)
+        try:
+            with _PcLock("undo_steps", 300):
+                report = await asyncio.to_thread(undoer.run, steps, _Hand(), j)
+        except coord.Busy as e:
+            return _err(e)
+        return Ok(report)
 
     @plugin_entry(
         id="stop_pc_task",

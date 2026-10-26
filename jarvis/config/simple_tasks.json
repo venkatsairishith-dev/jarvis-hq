@@ -1,0 +1,2243 @@
+{
+ "_note": "The catalogue of everyday simple PC tasks (D54). Each entry: id, name, group, class (A ordinary; B only with the owner's own words; C always the PIN; ask = explained and not done), phrases (regular expressions; {kind:group} placeholders: item file folder text rest n app site when), examples (a phrase and the arguments it must give), how (a handler from plugins/desktop/simple_tasks.py plus its parameters), verify (what the PC is asked to confirm), needs_laptop (true = the real behaviour could only be checked on the laptop). Add a task by adding an entry that uses an existing handler: no code. The grant still comes from the owner's goal words in the kernel (policy.py); a catalogue entry never widens it.",
+ "version": 1,
+ "tasks": [
+  {
+   "id": "mkdir",
+   "name": "Create a folder",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:create|make|add|new) (?:a |the )?(?:new )?folder (?:called |named )?{item:path} (?:in|inside|under|on) {folder:target}",
+    "(?:create|make|add|new) (?:a |the )?(?:new )?folder (?:called |named )?{item:path}"
+   ],
+   "examples": [
+    {
+     "say": "create a folder Projects in Documents",
+     "args": {
+      "path": "Projects",
+      "target": "Documents"
+     }
+    },
+    {
+     "say": "make a new folder called Taxes 2026 on the desktop",
+     "args": {
+      "path": "Taxes 2026",
+      "target": "Desktop"
+     }
+    },
+    {
+     "say": "make a folder notes",
+     "args": {
+      "path": "notes"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "mkdir",
+      "target": "$target|Documents",
+      "path": "$path"
+     }
+    ]
+   },
+   "verify": "the folder exists (listed by the PC); a name that exists gets a number",
+   "needs_laptop": false
+  },
+  {
+   "id": "create_file",
+   "name": "Create a text, markdown or HTML file with content",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:create|make|write|save) (?:a |an |the )?(?:new )?(?:text |markdown |html |md )?(?:file|note|page|document) (?:called |named )?{file:path}(?: (?:in|inside|under|on) {folder:target})? (?:with|containing|that says|saying) (?:the )?(?:text |content )?{text:text}",
+    "(?:create|make|write) (?:a |an |the )?(?:new )?(?:text |markdown |html |md )?(?:file|note|page) (?:called |named )?{file:path}(?: (?:in|inside|under|on) {folder:target})?"
+   ],
+   "examples": [
+    {
+     "say": "create a text file notes.txt in Documents with buy milk and eggs",
+     "args": {
+      "path": "notes.txt",
+      "target": "Documents",
+      "text": "buy milk and eggs"
+     }
+    },
+    {
+     "say": "make a markdown file plan.md on the desktop containing # Plan",
+     "args": {
+      "path": "plan.md",
+      "target": "Desktop",
+      "text": "# Plan"
+     }
+    },
+    {
+     "say": "write an html page index.html in downloads with <h1>Hello</h1>",
+     "args": {
+      "path": "index.html",
+      "target": "Downloads",
+      "text": "<h1>Hello</h1>"
+     }
+    },
+    {
+     "say": "create a file empty.txt",
+     "args": {
+      "path": "empty.txt"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "create_file",
+      "target": "$target|Documents",
+      "path": "$path",
+      "text": "$text|"
+     }
+    ]
+   },
+   "verify": "the file exists and its text read back from disk equals the text; a name that exists gets a number",
+   "needs_laptop": false
+  },
+  {
+   "id": "rename",
+   "name": "Rename a file or folder",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "rename (?:the )?(?:file |folder )?{item:path}(?: (?:in|inside|under|on|from) {folder:target})? to {item:dest}"
+   ],
+   "examples": [
+    {
+     "say": "rename report.docx in Documents to final",
+     "args": {
+      "path": "report.docx",
+      "target": "Documents",
+      "dest": "final"
+     }
+    },
+    {
+     "say": "rename the folder Old to Archive",
+     "args": {
+      "path": "Old",
+      "dest": "Archive"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "rename",
+      "target": "$target|Documents",
+      "path": "$path",
+      "dest": "$dest"
+     }
+    ]
+   },
+   "verify": "the old name is gone and the new name exists; a new name that already exists gets a number (class B avoided: nothing is replaced)",
+   "needs_laptop": false
+  },
+  {
+   "id": "move",
+   "name": "Move a file or folder into a folder",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "move (?:the )?(?:file |folder )?{item:path}(?: (?:from|in) {folder:target})? (?:in)?to (?:the )?{folder:dest}"
+   ],
+   "examples": [
+    {
+     "say": "move report.docx from Downloads to Documents",
+     "args": {
+      "path": "report.docx",
+      "target": "Downloads",
+      "dest": "Documents"
+     }
+    },
+    {
+     "say": "move notes.txt into Documents/backup",
+     "args": {
+      "path": "notes.txt",
+      "dest": "Documents/backup"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "move",
+      "target": "$target|Documents",
+      "path": "$path",
+      "dest": "$dest"
+     }
+    ]
+   },
+   "verify": "it is in the new folder and gone from the old one; a name that would overwrite gets a number",
+   "needs_laptop": false
+  },
+  {
+   "id": "copy",
+   "name": "Copy a file or folder into a folder",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "copy (?:the )?(?:file |folder )?{item:path}(?: (?:from|in) {folder:target})? (?:in)?to (?:the )?{folder:dest}"
+   ],
+   "examples": [
+    {
+     "say": "copy report.docx from Documents to Desktop",
+     "args": {
+      "path": "report.docx",
+      "target": "Documents",
+      "dest": "Desktop"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "copy",
+      "target": "$target|Documents",
+      "path": "$path",
+      "dest": "$dest"
+     }
+    ]
+   },
+   "verify": "the copy exists and the original is still there; a name that would overwrite gets a number",
+   "needs_laptop": false
+  },
+  {
+   "id": "copy_into_new_folder",
+   "name": "Copy a file into a NEW subfolder",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "copy (?:the )?(?:file )?{item:path}(?: (?:from|in) {folder:target})? (?:in)?to a new (?:sub)?folder (?:called |named )?{item:newdir}"
+   ],
+   "examples": [
+    {
+     "say": "copy report.txt from Documents into a new folder called backup",
+     "args": {
+      "path": "report.txt",
+      "target": "Documents",
+      "newdir": "backup"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "mkdir",
+      "target": "$target|Documents",
+      "path": "$newdir"
+     },
+     {
+      "op": "copy",
+      "target": "$target|Documents",
+      "path": "$path",
+      "dest": "$target|Documents/$result.created"
+     }
+    ]
+   },
+   "verify": "the new folder exists and the copy is listed in it",
+   "needs_laptop": false
+  },
+  {
+   "id": "open_file",
+   "name": "Open a file with its default app",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "open (?:the )?(?:file |document )?{file:path}(?: (?:in|from) {folder:target})?"
+   ],
+   "examples": [
+    {
+     "say": "open budget.xlsx",
+     "args": {
+      "path": "budget.xlsx"
+     }
+    },
+    {
+     "say": "open the file report.pdf from Downloads",
+     "args": {
+      "path": "report.pdf",
+      "target": "Downloads"
+     }
+    }
+   ],
+   "how": {
+    "handler": "open_file",
+    "name": "$path",
+    "folder": "$target|"
+   },
+   "verify": "a window showing the file appeared (the node looks for it)",
+   "needs_laptop": false
+  },
+  {
+   "id": "find_and_show",
+   "name": "Find a file by name and show it in Explorer",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:find|locate) (?:the |my |a )?(?:file |folder )?(?:called |named )?{item:path}(?: (?:in|inside|under|on) {folder:target})? and (?:show|reveal|open) (?:it|the folder)(?: in (?:file )?explorer)?",
+    "search for (?:the |my |a )?(?:file|folder) (?:called |named )?{item:path}(?: (?:in|inside|under|on) {folder:target})? and (?:show|reveal|open) (?:it|the folder)(?: in (?:file )?explorer)?"
+   ],
+   "examples": [
+    {
+     "say": "find tax2025.pdf and show it in Explorer",
+     "args": {
+      "path": "tax2025.pdf"
+     }
+    },
+    {
+     "say": "locate the file budget in Documents and show it",
+     "args": {
+      "path": "budget",
+      "target": "Documents"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "find",
+      "target": "$target|all",
+      "path": "$path"
+     }
+    ],
+    "reveal_first": true
+   },
+   "verify": "it was found by the PC's search and Explorer was asked to show it",
+   "needs_laptop": false,
+   "beats": [
+    "find_by_name",
+    "find_filtered"
+   ]
+  },
+  {
+   "id": "find_filtered",
+   "name": "Find files by name, size or age in the known folders",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?=.*(?:bigger|larger|older than|last \\d))(?:find|list|show) (?:me )?(?:the |my |all )?(?:files|documents|pdfs|photos)?(?: (?:called|named|with|containing) {item:path})?(?: (?:that are|which are))? ?(?P<size>(?:bigger|larger) than \\d{1,4} ?(?:kb|mb|gb))?(?: (?:modified |changed )?(?P<age>(?:in the )?last \\d{1,3} days|older than \\d{1,4} days))?(?: (?:in|inside|under|on) {folder:target})?"
+   ],
+   "examples": [
+    {
+     "say": "find files bigger than 100 mb in Downloads",
+     "args": {
+      "target": "Downloads",
+      "size": "bigger than 100 mb"
+     }
+    },
+    {
+     "say": "find files called tax older than 90 days",
+     "args": {
+      "path": "tax",
+      "age": "older than 90 days"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "find",
+      "target": "$target|all",
+      "path": "$path|",
+      "text": "$filters|"
+     }
+    ]
+   },
+   "verify": "the PC's search found them; names, sizes and dates are listed",
+   "needs_laptop": false,
+   "beats": [
+    "find_by_name"
+   ]
+  },
+  {
+   "id": "find_by_name",
+   "name": "Find a file by name",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:find|locate) (?:the |my |a )?(?:file |folder )?(?:called |named )?{item:path}(?: (?:in|inside|under|on) {folder:target})?",
+    "search for (?:the |my |a )?(?:file|folder) (?:called |named )?{item:path}(?: (?:in|inside|under|on) {folder:target})?"
+   ],
+   "examples": [
+    {
+     "say": "find tax2025.pdf",
+     "args": {
+      "path": "tax2025.pdf"
+     }
+    },
+    {
+     "say": "search for the file budget in Documents",
+     "args": {
+      "path": "budget",
+      "target": "Documents"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "find",
+      "target": "$target|all",
+      "path": "$path"
+     }
+    ]
+   },
+   "verify": "the PC's search found it; names and folders are listed",
+   "needs_laptop": false
+  },
+  {
+   "id": "zip",
+   "name": "Zip a file or folder into a NEW archive",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:zip|compress) (?:up )?(?:the )?(?:file |folder )?{item:path}(?: (?:in|inside|under|on|from) {folder:target})?"
+   ],
+   "examples": [
+    {
+     "say": "zip the folder photos in Documents",
+     "args": {
+      "path": "photos",
+      "target": "Documents"
+     }
+    },
+    {
+     "say": "compress report.docx",
+     "args": {
+      "path": "report.docx"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "zip",
+      "target": "$target|Documents",
+      "path": "$path"
+     }
+    ]
+   },
+   "verify": "the new .zip exists and passes its integrity test; the original is untouched",
+   "needs_laptop": false
+  },
+  {
+   "id": "unzip",
+   "name": "Unzip into a NEW folder",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:unzip|extract|unpack|decompress) (?:the )?(?:archive |file )?{file:path}(?: (?:in|inside|under|on|from) {folder:target})?"
+   ],
+   "examples": [
+    {
+     "say": "unzip pack.zip in Downloads",
+     "args": {
+      "path": "pack.zip",
+      "target": "Downloads"
+     }
+    },
+    {
+     "say": "extract the archive data.zip",
+     "args": {
+      "path": "data.zip"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "unzip",
+      "target": "$target|Downloads",
+      "path": "$path"
+     }
+    ]
+   },
+   "verify": "every file of the archive exists in the new folder; a path that would leave it is refused",
+   "needs_laptop": false
+  },
+  {
+   "id": "sort_downloads",
+   "name": "Sort Downloads into subfolders by type",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:sort|organi[sz]e|tidy(?: up)?|clean up) (?:my |the )?downloads(?: folder)?(?: by (?:type|kind))?"
+   ],
+   "examples": [
+    {
+     "say": "sort my downloads by type",
+     "args": {}
+    },
+    {
+     "say": "tidy up the downloads folder",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "sort_downloads",
+      "target": "Downloads"
+     }
+    ]
+   },
+   "verify": "the PC reports what moved (counts by type), files still downloading are left, and an undo list is kept",
+   "needs_laptop": false
+  },
+  {
+   "id": "undo_last",
+   "name": "Undo the last file change",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "undo (?:the )?last (?:sort|move|copy|rename|file change|change)"
+   ],
+   "examples": [
+    {
+     "say": "undo the last sort",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "undo",
+      "target": "Documents",
+      "path": "last"
+     }
+    ]
+   },
+   "verify": "the journal's last operation was reversed (refused if the file changed since)",
+   "needs_laptop": false
+  },
+  {
+   "id": "delete_permanent",
+   "name": "Delete for good (cannot be undone; only when you say so)",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:permanently|completely|irreversibly) (?:delete|erase|remove) (?:the )?(?:file |folder )?{item:path}(?: (?:in|inside|under|on|from) {folder:target})?",
+    "(?:delete|erase|remove) (?:the )?(?:file |folder )?{item:path}(?: (?:in|inside|under|on|from) {folder:target})? (?:permanently|for good|forever)",
+    "shift[- ]delete (?:the )?(?:file |folder )?{item:path}(?: (?:in|inside|under|on|from) {folder:target})?",
+    "erase (?:the )?(?:file |folder )?{item:path}(?: (?:in|inside|under|on|from) {folder:target})?"
+   ],
+   "examples": [
+    {
+     "say": "permanently delete old.txt in Documents",
+     "args": {
+      "path": "old.txt",
+      "target": "Documents"
+     }
+    },
+    {
+     "say": "delete old.txt from Downloads for good",
+     "args": {
+      "path": "old.txt",
+      "target": "Downloads"
+     }
+    },
+    {
+     "say": "erase draft.docx",
+     "args": {
+      "path": "draft.docx"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "delete_permanent",
+      "target": "$target|",
+      "path": "$path"
+     }
+    ]
+   },
+   "verify": "the named item is gone from its folder (a real deletion; only what you named, only in the known folders)",
+   "needs_laptop": false,
+   "beats": [
+    "trash"
+   ]
+  },
+  {
+   "id": "empty_bin",
+   "name": "Empty the Recycle Bin (cannot be undone)",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:empty|clear) (?:the |my )?(?:recycle )?bin"
+   ],
+   "examples": [
+    {
+     "say": "empty the recycle bin",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "empty_bin",
+      "target": "pc"
+     }
+    ]
+   },
+   "verify": "the Recycle Bin lists zero items afterwards (permanent)",
+   "needs_laptop": false
+  },
+  {
+   "id": "cleanup",
+   "name": "Clean up the PC (the fixed safe list only; caches cannot be put back)",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:clean up|clean) (?:my |the |this )?(?:pc|computer|laptop|machine)",
+    "clean everything(?: up)?",
+    "free up (?:some )?(?:disk )?space",
+    "make (?:some )?(?:disk )?space",
+    "clean ?up"
+   ],
+   "examples": [
+    {
+     "say": "clean up my PC",
+     "args": {}
+    },
+    {
+     "say": "free up some space",
+     "args": {}
+    },
+    {
+     "say": "clean everything",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "cleanup",
+      "target": "pc"
+     }
+    ]
+   },
+   "verify": "only the fixed safe list was removed (temp, browser caches without cookies or passwords, thumbnails, crash dumps, old logs, update cache, package caches, the bin); the freed space is measured; other removable things are listed with sizes and none is deleted",
+   "needs_laptop": false
+  },
+  {
+   "id": "trash",
+   "name": "Delete (to the Recycle Bin)",
+   "group": "files",
+   "class": "A",
+   "phrases": [
+    "(?:delete|remove|trash|bin|get rid of|throw away|throw out) (?:the |my )?(?:file |folder )?{item:path}(?: (?:in|inside|under|on|from) {folder:target})?"
+   ],
+   "examples": [
+    {
+     "say": "delete old.txt in Documents",
+     "args": {
+      "path": "old.txt",
+      "target": "Documents"
+     }
+    },
+    {
+     "say": "remove the folder Old Notes from Desktop",
+     "args": {
+      "path": "Old Notes",
+      "target": "Desktop"
+     }
+    },
+    {
+     "say": "get rid of draft.docx",
+     "args": {
+      "path": "draft.docx"
+     }
+    }
+   ],
+   "how": {
+    "handler": "file_op",
+    "steps": [
+     {
+      "op": "trash",
+      "target": "$target|",
+      "path": "$path"
+     }
+    ]
+   },
+   "verify": "the item is gone from its folder AND present in the Recycle Bin (both are checked and reported); only the item you named",
+   "needs_laptop": false
+  },
+  {
+   "id": "open_site",
+   "name": "Open a website",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:go to|open|visit) (?:the )?(?:website |site |web page )?{site:site}(?: (?:website|site))?"
+   ],
+   "examples": [
+    {
+     "say": "open the website example.com",
+     "args": {
+      "site": "example.com"
+     }
+    }
+   ],
+   "how": {
+    "handler": "open_site",
+    "site": "$site"
+   },
+   "verify": "a Chrome window of the chosen profile shows the page",
+   "needs_laptop": false
+  },
+  {
+   "id": "search_web",
+   "name": "Search the web",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:search|google|look up|search the web) (?:for )?{text:text}",
+    "search (?:google |the web |online )for {text:text}"
+   ],
+   "examples": [
+    {
+     "say": "search for best pasta recipe",
+     "args": {
+      "text": "best pasta recipe"
+     }
+    },
+    {
+     "say": "google weather in Hyderabad",
+     "args": {
+      "text": "weather in Hyderabad"
+     }
+    }
+   ],
+   "how": {
+    "handler": "open_site",
+    "search": "$text"
+   },
+   "verify": "a Chrome window shows the results page",
+   "needs_laptop": false
+  },
+  {
+   "id": "window_minimize",
+   "name": "Minimize a window",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "minimi[sz]e (?:the )?{app:app}(?: window)?"
+   ],
+   "examples": [
+    {
+     "say": "minimize notepad",
+     "args": {
+      "app": "notepad"
+     }
+    }
+   ],
+   "how": {
+    "handler": "window",
+    "action": "minimize",
+    "app": "$app"
+   },
+   "verify": "Windows reports the window minimized (read back)",
+   "needs_laptop": true
+  },
+  {
+   "id": "window_maximize",
+   "name": "Maximize a window",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "maxi[mz]i[sz]e (?:the )?{app:app}(?: window)?"
+   ],
+   "examples": [
+    {
+     "say": "maximise chrome",
+     "args": {
+      "app": "chrome"
+     }
+    }
+   ],
+   "how": {
+    "handler": "window",
+    "action": "maximize",
+    "app": "$app"
+   },
+   "verify": "Windows reports the window maximized (read back)",
+   "needs_laptop": true
+  },
+  {
+   "id": "window_restore",
+   "name": "Restore a window",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "restore (?:the )?{app:app}(?: window)?"
+   ],
+   "examples": [
+    {
+     "say": "restore excel",
+     "args": {
+      "app": "excel"
+     }
+    }
+   ],
+   "how": {
+    "handler": "window",
+    "action": "restore",
+    "app": "$app"
+   },
+   "verify": "Windows reports the window in its normal state (read back)",
+   "needs_laptop": true
+  },
+  {
+   "id": "window_switch",
+   "name": "Switch to a window",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:switch to|go to|bring up|bring) (?:the )?{app:app}(?: window)?(?: to the front)?"
+   ],
+   "examples": [
+    {
+     "say": "switch to chrome",
+     "args": {
+      "app": "chrome"
+     }
+    },
+    {
+     "say": "bring notepad to the front",
+     "args": {
+      "app": "notepad"
+     }
+    }
+   ],
+   "how": {
+    "handler": "window",
+    "action": "focus",
+    "app": "$app"
+   },
+   "verify": "Windows says the window is in front",
+   "needs_laptop": true
+  },
+  {
+   "id": "snap_left",
+   "name": "Snap a window to the left",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "snap (?:the )?{app:app}(?: window)? (?:to the )?left",
+    "put (?:the )?{app:app}(?: window)? on the left"
+   ],
+   "examples": [
+    {
+     "say": "snap notepad to the left",
+     "args": {
+      "app": "notepad"
+     }
+    }
+   ],
+   "how": {
+    "handler": "snap",
+    "side": "left",
+    "app": "$app"
+   },
+   "verify": "the window was brought forward and Win+Left was sent (not read back)",
+   "needs_laptop": true
+  },
+  {
+   "id": "snap_right",
+   "name": "Snap a window to the right",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "snap (?:the )?{app:app}(?: window)? (?:to the )?right",
+    "put (?:the )?{app:app}(?: window)? on the right"
+   ],
+   "examples": [
+    {
+     "say": "snap chrome to the right",
+     "args": {
+      "app": "chrome"
+     }
+    }
+   ],
+   "how": {
+    "handler": "snap",
+    "side": "right",
+    "app": "$app"
+   },
+   "verify": "the window was brought forward and Win+Right was sent (not read back)",
+   "needs_laptop": true
+  },
+  {
+   "id": "arrange_side_by_side",
+   "name": "Arrange two windows side by side",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:arrange|put|tile) (?:the )?{app:app} and (?:the )?{app:app2}(?: windows?)? side by side"
+   ],
+   "examples": [
+    {
+     "say": "arrange notepad and chrome side by side",
+     "args": {
+      "app": "notepad",
+      "app2": "chrome"
+     }
+    }
+   ],
+   "how": {
+    "handler": "arrange",
+    "apps": [
+     "$app",
+     "$app2"
+    ]
+   },
+   "verify": "each window was brought forward and snapped (not read back)",
+   "needs_laptop": true
+  },
+  {
+   "id": "show_desktop",
+   "name": "Show the desktop",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "show (?:me )?(?:the )?desktop",
+    "minimi[sz]e (?:all|everything)(?: windows)?"
+   ],
+   "examples": [
+    {
+     "say": "show the desktop",
+     "args": {}
+    },
+    {
+     "say": "minimize everything",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "keys",
+    "keys": "win+d"
+   },
+   "verify": "Win+D was sent (not read back)",
+   "needs_laptop": true
+  },
+  {
+   "id": "close_app",
+   "name": "Close an app (asks if it has unsaved work)",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "close (?:the )?{app:app}(?: window| app)?"
+   ],
+   "examples": [
+    {
+     "say": "close notepad",
+     "args": {
+      "app": "notepad"
+     }
+    }
+   ],
+   "how": {
+    "handler": "close_app",
+    "app": "$app"
+   },
+   "verify": "the window is gone a moment later; an app that asks to save is left open and the question is yours",
+   "needs_laptop": true,
+   "note": "class B when the window shows unsaved work (a * or 'unsaved' in its title): asked first"
+  },
+  {
+   "id": "media_pause",
+   "name": "Pause the music or video",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:pause|stop)(?: the)?(?: music| video| song| playback)?"
+   ],
+   "examples": [
+    {
+     "say": "pause the music",
+     "args": {}
+    },
+    {
+     "say": "pause",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "media_key",
+    "key": "playpause",
+    "intent": "pause"
+   },
+   "verify": "the media session state is read first; nothing is pressed if nothing plays",
+   "needs_laptop": true
+  },
+  {
+   "id": "media_play",
+   "name": "Resume the music or video",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:resume|unpause|continue)(?: the)?(?: music| video| song| playback)?"
+   ],
+   "examples": [
+    {
+     "say": "resume the music",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "media_key",
+    "key": "playpause",
+    "intent": "play"
+   },
+   "verify": "the media session state is read first; nothing is pressed if it already plays",
+   "needs_laptop": true
+  },
+  {
+   "id": "media_next",
+   "name": "Next track",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:next|skip)(?: the)?(?: song| track| video)?"
+   ],
+   "examples": [
+    {
+     "say": "skip the song",
+     "args": {}
+    },
+    {
+     "say": "next track",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "media_key",
+    "key": "nexttrack"
+   },
+   "verify": "the media key was sent (the next view shows the change)",
+   "needs_laptop": true
+  },
+  {
+   "id": "media_prev",
+   "name": "Previous track",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:previous|go back a)(?: song| track| video)"
+   ],
+   "examples": [
+    {
+     "say": "previous song",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "media_key",
+    "key": "prevtrack"
+   },
+   "verify": "the media key was sent (the next view shows the change)",
+   "needs_laptop": true
+  },
+  {
+   "id": "volume_up",
+   "name": "Volume up",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:turn )?(?:the )?volume up|louder|turn it up"
+   ],
+   "examples": [
+    {
+     "say": "volume up",
+     "args": {}
+    },
+    {
+     "say": "louder",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "media_key",
+    "key": "volumeup"
+   },
+   "verify": "the key was sent",
+   "needs_laptop": true
+  },
+  {
+   "id": "volume_down",
+   "name": "Volume down",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:turn )?(?:the )?volume down|quieter|turn it down"
+   ],
+   "examples": [
+    {
+     "say": "volume down",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "media_key",
+    "key": "volumedown"
+   },
+   "verify": "the key was sent",
+   "needs_laptop": true
+  },
+  {
+   "id": "mute",
+   "name": "Mute or unmute",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:un)?mute(?: the)?(?: sound| volume| audio)?"
+   ],
+   "examples": [
+    {
+     "say": "mute",
+     "args": {}
+    },
+    {
+     "say": "unmute the sound",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "media_key",
+    "key": "mute"
+   },
+   "verify": "the key was sent",
+   "needs_laptop": true
+  },
+  {
+   "id": "screenshot",
+   "name": "Take a screenshot",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "(?:take|grab|capture) (?:a |the )?screenshot(?: of (?:the )?(?:screen|desktop|{app:app}(?: window)?))?",
+    "screenshot(?: the screen)?"
+   ],
+   "examples": [
+    {
+     "say": "take a screenshot",
+     "args": {}
+    },
+    {
+     "say": "take a screenshot of the screen",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "screenshot"
+   },
+   "verify": "a PNG was written to the outputs folder (name, size and folder reported); a window-only shot is the whole screen for now",
+   "needs_laptop": true,
+   "note": "a screenshot of one window is the whole desktop today"
+  },
+  {
+   "id": "copy_screen_text",
+   "name": "Copy the text of a window to the clipboard",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "copy (?:the )?text (?:from|in|of) (?:the )?{app:app}(?: window)? to (?:the )?clipboard"
+   ],
+   "examples": [
+    {
+     "say": "copy the text from notepad to the clipboard",
+     "args": {
+      "app": "notepad"
+     }
+    }
+   ],
+   "how": {
+    "handler": "copy_screen_text",
+    "app": "$app"
+   },
+   "verify": "the clipboard was set from the window's text (read locally, never sent to a model) and read back",
+   "needs_laptop": true
+  },
+  {
+   "id": "paste",
+   "name": "Paste the clipboard",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "paste(?: it| the clipboard| that)?(?: (?:in|into) (?:the )?{app:app})?"
+   ],
+   "examples": [
+    {
+     "say": "paste it into notepad",
+     "args": {
+      "app": "notepad"
+     }
+    },
+    {
+     "say": "paste",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "paste",
+    "app": "$app|"
+   },
+   "verify": "Ctrl+V was sent to the window (the text is read back where the app allows it)",
+   "needs_laptop": true
+  },
+  {
+   "id": "type_active",
+   "name": "Type text in the active field",
+   "group": "apps",
+   "class": "A",
+   "phrases": [
+    "type {text:text} (?:in|into) (?:the )?(?:active|current|open|front) (?:field|window|box|app)"
+   ],
+   "examples": [
+    {
+     "say": "type hello there into the active field",
+     "args": {
+      "text": "hello there"
+     }
+    }
+   ],
+   "how": {
+    "handler": "type_active",
+    "text": "$text"
+   },
+   "verify": "the text was pasted into the front window's focused control (read back where the app allows it)",
+   "needs_laptop": true
+  },
+  {
+   "id": "dark_mode",
+   "name": "Dark mode",
+   "group": "settings",
+   "class": "A",
+   "phrases": [
+    "(?:turn on |switch to |enable |use |set )?(?:the )?dark (?:mode|theme)(?: on)?"
+   ],
+   "examples": [
+    {
+     "say": "dark mode",
+     "args": {}
+    },
+    {
+     "say": "switch to dark theme",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "dark_mode"
+   },
+   "verify": "the registry values were read back",
+   "needs_laptop": true
+  },
+  {
+   "id": "light_mode",
+   "name": "Light mode",
+   "group": "settings",
+   "class": "A",
+   "phrases": [
+    "(?:turn on |switch to |enable |use |set )?(?:the )?light (?:mode|theme)(?: on)?"
+   ],
+   "examples": [
+    {
+     "say": "light mode",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "light_mode"
+   },
+   "verify": "the registry values were read back",
+   "needs_laptop": true
+  },
+  {
+   "id": "brightness",
+   "name": "Set the brightness",
+   "group": "settings",
+   "class": "A",
+   "phrases": [
+    "(?:set|change|turn) (?:the )?brightness (?:to|at) {n:n}(?: ?%| percent)?"
+   ],
+   "examples": [
+    {
+     "say": "set brightness to 60",
+     "args": {
+      "n": "60"
+     }
+    },
+    {
+     "say": "change the brightness to 30 percent",
+     "args": {
+      "n": "30"
+     }
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "brightness",
+    "value": "$n"
+   },
+   "verify": "the brightness was read back (laptop screens only)",
+   "needs_laptop": true
+  },
+  {
+   "id": "dnd_on",
+   "name": "Do not disturb on",
+   "group": "settings",
+   "class": "A",
+   "phrases": [
+    "(?:turn on |enable |start )?(?:do not disturb|focus assist|dnd)(?: on)?",
+    "mute (?:the )?notifications"
+   ],
+   "examples": [
+    {
+     "say": "do not disturb",
+     "args": {}
+    },
+    {
+     "say": "turn on focus assist",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "dnd",
+    "value": "on"
+   },
+   "verify": "the setting was read back",
+   "needs_laptop": true
+  },
+  {
+   "id": "dnd_off",
+   "name": "Do not disturb off",
+   "group": "settings",
+   "class": "A",
+   "phrases": [
+    "(?:turn off |disable |stop )(?:do not disturb|focus assist|dnd)",
+    "(?:do not disturb|focus assist|dnd) off"
+   ],
+   "examples": [
+    {
+     "say": "turn off do not disturb",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "dnd",
+    "value": "off"
+   },
+   "verify": "the setting was read back",
+   "needs_laptop": true
+  },
+  {
+   "id": "night_light",
+   "name": "Night light",
+   "group": "settings",
+   "class": "A",
+   "phrases": [
+    "(?:turn on |turn off |toggle )?night ?light(?: on| off)?"
+   ],
+   "examples": [
+    {
+     "say": "night light",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "night_light"
+   },
+   "verify": "PARTIAL: the Night light page is opened; flipping the switch is not built yet",
+   "needs_laptop": true,
+   "note": "partial"
+  },
+  {
+   "id": "wallpaper",
+   "name": "Change the wallpaper to a named picture",
+   "group": "settings",
+   "class": "A",
+   "phrases": [
+    "(?:change|set) (?:my |the )?(?:wallpaper|background) to {file:path}(?: (?:in|from) {folder:target})?"
+   ],
+   "examples": [
+    {
+     "say": "change the wallpaper to sea.jpg",
+     "args": {
+      "path": "sea.jpg"
+     }
+    },
+    {
+     "say": "set my background to forest.png from Pictures",
+     "args": {
+      "path": "forest.png",
+      "target": "Pictures"
+     }
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "wallpaper",
+    "value": "$target|Pictures|$path"
+   },
+   "verify": "Windows' wallpaper value was read back; the picture must be in a known folder",
+   "needs_laptop": true
+  },
+  {
+   "id": "lock_screen",
+   "name": "Lock the screen",
+   "group": "settings",
+   "class": "A",
+   "phrases": [
+    "lock (?:the |my )?(?:screen|computer|pc|laptop)"
+   ],
+   "examples": [
+    {
+     "say": "lock the screen",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "lock"
+   },
+   "verify": "the lock was requested (Windows gives no read-back)",
+   "needs_laptop": true
+  },
+  {
+   "id": "reminder",
+   "name": "Set a reminder, timer or alarm in the JARVIS scheduler",
+   "group": "settings",
+   "class": "A",
+   "phrases": [
+    "remind me in {n:n} (?P<unit>seconds?|minutes?|hours?|days?)(?: (?:to|that|about) {text:text})?",
+    "remind me (?:at|on) {when:when} (?:to|that|about) {text:text}",
+    "set (?:a |an )?(?:timer|alarm) for {n:n} (?P<unit>seconds?|minutes?|hours?)(?: (?:called|named|for) {text:text})?",
+    "set (?:an? )?alarm (?:for|at) {when:when}(?: (?:called|named|for) {text:text})?"
+   ],
+   "examples": [
+    {
+     "say": "remind me in 10 minutes to stretch",
+     "args": {
+      "n": "10",
+      "unit": "minutes",
+      "text": "stretch"
+     }
+    },
+    {
+     "say": "remind me at 17:30 to call mum",
+     "args": {
+      "when": "17:30",
+      "text": "call mum"
+     }
+    },
+    {
+     "say": "set a timer for 5 minutes",
+     "args": {
+      "n": "5",
+      "unit": "minutes"
+     }
+    },
+    {
+     "say": "set an alarm for 07:00",
+     "args": {
+      "when": "07:00"
+     }
+    }
+   ],
+   "how": {
+    "handler": "reminder"
+   },
+   "verify": "the scheduler returned the new reminder with its time; it is listed in the console",
+   "needs_laptop": false,
+   "note": "uses the kernel's scheduler (Automations); the notification itself is the owner's channel"
+  },
+  {
+   "id": "wifi_off",
+   "name": "Turn Wi-Fi off (class B: only because you said so)",
+   "group": "settings",
+   "class": "B",
+   "phrases": [
+    "(?:turn|switch) (?:off|the) (?:my |the )?(?:wi-?fi|wifi)(?: off)?",
+    "(?:disable) (?:my |the )?(?:wi-?fi|wifi)"
+   ],
+   "examples": [
+    {
+     "say": "turn off the wifi",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "wifi",
+    "value": "off"
+   },
+   "verify": "the radio state was read back; it can cut the connection JARVIS needs, so it is done only because you asked in so many words",
+   "needs_laptop": true
+  },
+  {
+   "id": "wifi_on",
+   "name": "Turn Wi-Fi on",
+   "group": "settings",
+   "class": "B",
+   "phrases": [
+    "(?:turn|switch) on (?:my |the )?(?:wi-?fi|wifi)",
+    "(?:enable) (?:my |the )?(?:wi-?fi|wifi)"
+   ],
+   "examples": [
+    {
+     "say": "turn on the wifi",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "wifi",
+    "value": "on"
+   },
+   "verify": "the radio state was read back",
+   "needs_laptop": true
+  },
+  {
+   "id": "bluetooth_off",
+   "name": "Turn Bluetooth off (class B: only because you said so)",
+   "group": "settings",
+   "class": "B",
+   "phrases": [
+    "(?:turn|switch) (?:off|the) (?:my |the )?(?:bluetooth)(?: off)?",
+    "(?:disable) (?:my |the )?(?:bluetooth)"
+   ],
+   "examples": [
+    {
+     "say": "turn off the bluetooth",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "bluetooth",
+    "value": "off"
+   },
+   "verify": "the radio state was read back; it can cut the connection JARVIS needs, so it is done only because you asked in so many words",
+   "needs_laptop": true
+  },
+  {
+   "id": "bluetooth_on",
+   "name": "Turn Bluetooth on",
+   "group": "settings",
+   "class": "B",
+   "phrases": [
+    "(?:turn|switch) on (?:my |the )?(?:bluetooth)",
+    "(?:enable) (?:my |the )?(?:bluetooth)"
+   ],
+   "examples": [
+    {
+     "say": "turn on the bluetooth",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "bluetooth",
+    "value": "on"
+   },
+   "verify": "the radio state was read back",
+   "needs_laptop": true
+  },
+  {
+   "id": "airplane_mode_on",
+   "name": "Turn Airplane mode off (class B: only because you said so)",
+   "group": "settings",
+   "class": "B",
+   "phrases": [
+    "(?:turn on|enable|switch on) (?:the |my )?(?:airplane mode|flight mode|aeroplane mode)",
+    "(?:disable) (?:my |the )?(?:airplane mode|flight mode|aeroplane mode)"
+   ],
+   "examples": [
+    {
+     "say": "turn on airplane mode",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "airplane",
+    "value": "on"
+   },
+   "verify": "the radio state was read back; it can cut the connection JARVIS needs, so it is done only because you asked in so many words",
+   "needs_laptop": true
+  },
+  {
+   "id": "airplane_mode_off",
+   "name": "Turn Airplane mode on",
+   "group": "settings",
+   "class": "B",
+   "phrases": [
+    "(?:turn off|disable|switch off) (?:the |my )?(?:airplane mode|flight mode|aeroplane mode)"
+   ],
+   "examples": [
+    {
+     "say": "turn off airplane mode",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "setting",
+    "op": "airplane",
+    "value": "off"
+   },
+   "verify": "the radio state was read back",
+   "needs_laptop": true
+  },
+  {
+   "id": "ask_security",
+   "name": "Settings for Windows security or antivirus (always asks)",
+   "group": "settings",
+   "class": "ask",
+   "phrases": [
+    "(?:change|turn on|turn off|disable|enable|set|open|edit|switch)(?: the| my)? (?:windows security|defender|antivirus|virus protection)(?:.*)?"
+   ],
+   "examples": [
+    {
+     "say": "turn off the windows security",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "ask",
+    "say": "I do not change Windows security or antivirus by myself: it can weaken the PC or lock you out. Change it in Settings yourself, or tell me exactly what to change and approve it with your PIN."
+   },
+   "verify": "nothing is changed; you are told why",
+   "needs_laptop": false
+  },
+  {
+   "id": "ask_firewall",
+   "name": "Settings for the firewall (always asks)",
+   "group": "settings",
+   "class": "ask",
+   "phrases": [
+    "(?:change|turn on|turn off|disable|enable|set|open|edit|switch)(?: the| my)? (?:firewall)(?:.*)?"
+   ],
+   "examples": [
+    {
+     "say": "turn off the firewall",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "ask",
+    "say": "I do not change the firewall by myself: it can weaken the PC or lock you out. Change it in Settings yourself, or tell me exactly what to change and approve it with your PIN."
+   },
+   "verify": "nothing is changed; you are told why",
+   "needs_laptop": false
+  },
+  {
+   "id": "ask_updates",
+   "name": "Settings for Windows updates (always asks)",
+   "group": "settings",
+   "class": "ask",
+   "phrases": [
+    "(?:change|turn on|turn off|disable|enable|set|open|edit|switch)(?: the| my)? (?:windows update|updates)(?:.*)?"
+   ],
+   "examples": [
+    {
+     "say": "turn off the windows update",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "ask",
+    "say": "I do not change Windows updates by myself: it can weaken the PC or lock you out. Change it in Settings yourself, or tell me exactly what to change and approve it with your PIN."
+   },
+   "verify": "nothing is changed; you are told why",
+   "needs_laptop": false
+  },
+  {
+   "id": "ask_accounts",
+   "name": "Settings for accounts or passwords (always asks)",
+   "group": "settings",
+   "class": "ask",
+   "phrases": [
+    "(?:change|turn on|turn off|disable|enable|set|open|edit|switch)(?: the| my)? (?:accounts?|my password|pin|windows hello)(?:.*)?"
+   ],
+   "examples": [
+    {
+     "say": "turn off the accounts",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "ask",
+    "say": "I do not change accounts or passwords by myself: it can weaken the PC or lock you out. Change it in Settings yourself, or tell me exactly what to change and approve it with your PIN."
+   },
+   "verify": "nothing is changed; you are told why",
+   "needs_laptop": false
+  },
+  {
+   "id": "ask_privacy",
+   "name": "Settings for privacy settings (always asks)",
+   "group": "settings",
+   "class": "ask",
+   "phrases": [
+    "(?:change|turn on|turn off|disable|enable|set|open|edit|switch)(?: the| my)? (?:privacy(?: settings)?|camera access|microphone access|location access)(?:.*)?"
+   ],
+   "examples": [
+    {
+     "say": "turn off the privacy settings",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "ask",
+    "say": "I do not change privacy settings by myself: it can weaken the PC or lock you out. Change it in Settings yourself, or tell me exactly what to change and approve it with your PIN."
+   },
+   "verify": "nothing is changed; you are told why",
+   "needs_laptop": false
+  },
+  {
+   "id": "ask_startup",
+   "name": "Settings for startup apps (always asks)",
+   "group": "settings",
+   "class": "ask",
+   "phrases": [
+    "(?:change|turn on|turn off|disable|enable|set|open|edit|switch)(?: the| my)? (?:startup apps?|apps? at startup|startup programs)(?:.*)?"
+   ],
+   "examples": [
+    {
+     "say": "turn off the startup apps",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "ask",
+    "say": "I do not change startup apps by myself: it can weaken the PC or lock you out. Change it in Settings yourself, or tell me exactly what to change and approve it with your PIN."
+   },
+   "verify": "nothing is changed; you are told why",
+   "needs_laptop": false
+  },
+  {
+   "id": "ask_power",
+   "name": "Settings for the power plan (always asks)",
+   "group": "settings",
+   "class": "ask",
+   "phrases": [
+    "(?:change|turn on|turn off|disable|enable|set|open|edit|switch)(?: the| my)? (?:power plan|power mode|sleep settings)(?:.*)?"
+   ],
+   "examples": [
+    {
+     "say": "turn off the power plan",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "ask",
+    "say": "I do not change the power plan by myself: it can weaken the PC or lock you out. Change it in Settings yourself, or tell me exactly what to change and approve it with your PIN."
+   },
+   "verify": "nothing is changed; you are told why",
+   "needs_laptop": false
+  },
+  {
+   "id": "vault_note",
+   "name": "Write a note into the vault inbox",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "(?:add|write|make|take|save) (?:a |the )?note(?: to (?:the )?(?:vault|inbox))?[:,]? (?:that |saying |to say )?{text:text}",
+    "note down {text:text}"
+   ],
+   "examples": [
+    {
+     "say": "write a note: call the plumber on Friday",
+     "args": {
+      "text": "call the plumber on Friday"
+     }
+    },
+    {
+     "say": "note down buy bulbs",
+     "args": {
+      "text": "buy bulbs"
+     }
+    }
+   ],
+   "how": {
+    "handler": "vault_note"
+   },
+   "verify": "a new .md file exists in the vault's inbox folder and its text was read back (never over an existing note)",
+   "needs_laptop": false
+  },
+  {
+   "id": "read_clipboard",
+   "name": "Read the clipboard",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "(?:read|what(?:'s| is) on|show me) (?:the |my )?clipboard"
+   ],
+   "examples": [
+    {
+     "say": "read the clipboard",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "clipboard_get"
+   },
+   "verify": "the clipboard text was read on the laptop; it reaches the chat only under the screen-text rule",
+   "needs_laptop": true,
+   "note": "the text is released like any screen text (JARVIS_SCREEN_TEXT_TO_MODEL)"
+  },
+  {
+   "id": "time_now",
+   "name": "Tell the time",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "what(?:'s| is) the time(?: now)?",
+    "what time is it(?: now)?",
+    "tell me the time"
+   ],
+   "examples": [
+    {
+     "say": "what time is it",
+     "args": {}
+    },
+    {
+     "say": "what's the time",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "status",
+    "what": "time"
+   },
+   "verify": "read from this PC's clock",
+   "needs_laptop": false
+  },
+  {
+   "id": "battery",
+   "name": "Battery status",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "(?:what(?:'s| is) )?(?:my |the )?battery(?: level| status| percentage)?",
+    "how much battery(?: is left| do i have)?"
+   ],
+   "examples": [
+    {
+     "say": "battery",
+     "args": {}
+    },
+    {
+     "say": "how much battery is left",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "status",
+    "what": "battery"
+   },
+   "verify": "read from Windows' battery record (a desktop PC has none and says so)",
+   "needs_laptop": true
+  },
+  {
+   "id": "disk_space",
+   "name": "Disk space",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "(?:how much )?(?:free )?(?:disk )?space(?: do i have| is left| is there)?(?: on (?:my )?(?:pc|computer|disk))?",
+    "disk space"
+   ],
+   "examples": [
+    {
+     "say": "disk space",
+     "args": {}
+    },
+    {
+     "say": "how much space is left",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "status",
+    "what": "disk"
+   },
+   "verify": "read from Windows (free and total GB per drive)",
+   "needs_laptop": false
+  },
+  {
+   "id": "network_status",
+   "name": "Network status",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "(?:is )?(?:my )?(?:wi-?fi|wifi|internet|network)(?: working| connected| ok| down| up)?",
+    "am i (?:online|connected)"
+   ],
+   "examples": [
+    {
+     "say": "is my internet working",
+     "args": {}
+    },
+    {
+     "say": "am i online",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "status",
+    "what": "network"
+   },
+   "verify": "adapters, DNS and an outbound connection were tested",
+   "needs_laptop": false
+  },
+  {
+   "id": "today_folder",
+   "name": "Open today's folder",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "open today(?:'s|s)? folder",
+    "open the folder (?:for )?today"
+   ],
+   "examples": [
+    {
+     "say": "open today's folder",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "today_folder"
+   },
+   "verify": "a folder named with today's date was found in a known folder and opened; none found means none is guessed",
+   "needs_laptop": false
+  },
+  {
+   "id": "quick_list",
+   "name": "Make a quick list",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "(?:make|write|create) (?:a |me a )?(?:quick )?(?:shopping |to-?do )?list(?: called {item:path})?[:,]? (?:of |with )?{text:text}"
+   ],
+   "examples": [
+    {
+     "say": "make a quick list: milk, eggs, bread",
+     "args": {
+      "text": "milk, eggs, bread"
+     }
+    },
+    {
+     "say": "create a shopping list called groceries with rice and dal",
+     "args": {
+      "path": "groceries",
+      "text": "rice and dal"
+     }
+    }
+   ],
+   "how": {
+    "handler": "quick_list"
+   },
+   "verify": "a new .md list file exists in Documents with one bullet per item, read back from disk",
+   "needs_laptop": false
+  },
+  {
+   "id": "calculate",
+   "name": "Calculate in Calculator",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "(?:calculate|compute|work out|what(?:'s| is)) {text:text} (?:in|on|using|with) (?:the )?calculator",
+    "open calculator and (?:calculate|compute|work out) {text:text}"
+   ],
+   "examples": [
+    {
+     "say": "calculate 12 times 7 in calculator",
+     "args": {
+      "text": "12 times 7"
+     }
+    },
+    {
+     "say": "open calculator and work out 15 plus 27",
+     "args": {
+      "text": "15 plus 27"
+     }
+    }
+   ],
+   "how": {
+    "handler": "drive",
+    "app": "calculator"
+   },
+   "verify": "the answer is checked against what the Calculator window shows",
+   "needs_laptop": true
+  },
+  {
+   "id": "convert_units",
+   "name": "Convert units",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "convert {n:n} ?(?P<from>[a-z°/ ]{1,20}?) (?:to|into|in) (?P<to>[a-z°/ ]{1,20})"
+   ],
+   "examples": [
+    {
+     "say": "convert 5 km to miles",
+     "args": {
+      "n": "5",
+      "from": "km",
+      "to": "miles"
+     }
+    },
+    {
+     "say": "convert 100 celsius to fahrenheit",
+     "args": {
+      "n": "100",
+      "from": "celsius",
+      "to": "fahrenheit"
+     }
+    }
+   ],
+   "how": {
+    "handler": "convert"
+   },
+   "verify": "computed on this PC from a fixed table (no model)",
+   "needs_laptop": false
+  },
+  {
+   "id": "read_window_aloud",
+   "name": "Read a window aloud",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "read (?:the )?{app:app}(?: window)? (?:aloud|out loud|to me)"
+   ],
+   "examples": [
+    {
+     "say": "read notepad aloud",
+     "args": {
+      "app": "notepad"
+     }
+    }
+   ],
+   "how": {
+    "handler": "unavailable",
+    "say": "Reading a window aloud is not built yet: the window's text stays on this PC unless you ask me to solve or read something from the screen, and the speech path is not wired. I can copy its text to the clipboard."
+   },
+   "verify": "not built: said plainly",
+   "needs_laptop": true,
+   "note": "needs a local speech path"
+  },
+  {
+   "id": "summarize_window",
+   "name": "Summarize a window",
+   "group": "daily",
+   "class": "A",
+   "phrases": [
+    "summari[sz]e (?:the )?{app:app}(?: window)?"
+   ],
+   "examples": [
+    {
+     "say": "summarize chrome",
+     "args": {
+      "app": "chrome"
+     }
+    }
+   ],
+   "how": {
+    "handler": "unavailable",
+    "say": "Summarizing a window needs its text to go to an online model through the privacy gateway, and the answer cannot come back to you yet under the screen-text rule. Say 'solve what is on the screen' for that path, or ask me to copy the text."
+   },
+   "verify": "not built: said plainly",
+   "needs_laptop": true,
+   "note": "needs a screen-text answer path"
+  },
+  {
+   "id": "send_message",
+   "name": "Send mail or a message",
+   "group": "held",
+   "class": "C",
+   "phrases": [
+    "(?:send|email|mail|text|message|whatsapp|dm)\\b.*"
+   ],
+   "examples": [
+    {
+     "say": "send an email to the bank",
+     "args": {}
+    },
+    {
+     "say": "whatsapp mom hello",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "held"
+   },
+   "verify": "this is class C (money, other people, accounts, installs): the kernel holds the step for your PIN, whatever the goal says",
+   "needs_laptop": false
+  },
+  {
+   "id": "post_online",
+   "name": "Post or share online",
+   "group": "held",
+   "class": "C",
+   "phrases": [
+    "(?:post|tweet|publish|share|upload)\\b.*"
+   ],
+   "examples": [
+    {
+     "say": "post this on twitter",
+     "args": {}
+    },
+    {
+     "say": "share the file with Ravi",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "held"
+   },
+   "verify": "this is class C (money, other people, accounts, installs): the kernel holds the step for your PIN, whatever the goal says",
+   "needs_laptop": false
+  },
+  {
+   "id": "pay_buy",
+   "name": "Pay or buy",
+   "group": "held",
+   "class": "C",
+   "phrases": [
+    "(?:pay|buy|purchase|order|checkout|check out|subscribe|donate)\\b.*"
+   ],
+   "examples": [
+    {
+     "say": "buy a laptop on amazon",
+     "args": {}
+    },
+    {
+     "say": "pay the electricity bill",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "held"
+   },
+   "verify": "this is class C (money, other people, accounts, installs): the kernel holds the step for your PIN, whatever the goal says",
+   "needs_laptop": false
+  },
+  {
+   "id": "install_software",
+   "name": "Install software",
+   "group": "held",
+   "class": "C",
+   "phrases": [
+    "install\\b.*",
+    "(?:download and install|set up)\\b.*"
+   ],
+   "examples": [
+    {
+     "say": "install vlc",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "held"
+   },
+   "verify": "this is class C (money, other people, accounts, installs): the kernel holds the step for your PIN, whatever the goal says",
+   "needs_laptop": false
+  },
+  {
+   "id": "uninstall_software",
+   "name": "Uninstall software",
+   "group": "held",
+   "class": "C",
+   "phrases": [
+    "(?:uninstall|remove the app|remove the program)\\b.*"
+   ],
+   "examples": [
+    {
+     "say": "uninstall chrome",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "held"
+   },
+   "verify": "this is class C (money, other people, accounts, installs): the kernel holds the step for your PIN, whatever the goal says",
+   "needs_laptop": false
+  },
+  {
+   "id": "sign_in",
+   "name": "Sign in or out, accounts and passwords",
+   "group": "held",
+   "class": "C",
+   "phrases": [
+    "(?:sign|log) ?(?:in|out)\\b.*",
+    "(?:change|reset|enter) (?:my |the )?password\\b.*"
+   ],
+   "examples": [
+    {
+     "say": "sign in to my bank",
+     "args": {}
+    },
+    {
+     "say": "log out of gmail",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "held"
+   },
+   "verify": "this is class C (money, other people, accounts, installs): the kernel holds the step for your PIN, whatever the goal says",
+   "needs_laptop": false
+  },
+  {
+   "id": "run_download",
+   "name": "Run an unknown download",
+   "group": "held",
+   "class": "C",
+   "phrases": [
+    "(?:run|open|start|launch) (?:the |that |this )?(?:downloaded |unknown )?(?:installer|setup|download|exe|script)\\b.*"
+   ],
+   "examples": [
+    {
+     "say": "run the downloaded installer",
+     "args": {}
+    },
+    {
+     "say": "run the setup",
+     "args": {}
+    }
+   ],
+   "how": {
+    "handler": "held"
+   },
+   "verify": "this is class C (money, other people, accounts, installs): the kernel holds the step for your PIN, whatever the goal says",
+   "needs_laptop": false
+  }
+ ]
+}

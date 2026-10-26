@@ -189,24 +189,24 @@ def enforcer(win, **kw):
     return e, logs
 
 
-def test_every_jarvis_process_gets_low_priority_ecoqos_and_the_job():
+def test_every_background_jarvis_process_gets_low_priority_ecoqos_and_the_job():
     win = FakeWin()
     e, logs = enforcer(win)
-    res = e.apply({300: "face", 431: "llama-server", 700: "supervisor"})
+    res = e.apply({300: "muse-runner", 431: "llama-server", 700: "jarvis-other"})
     assert res == {"new": 3, "throttled": 3, "in_job": 3, "job_refused": {}}
     assert win.throttled == [300, 431, 700] and win.adopted == [300, 431, 700]
     limits, name = win.jobs[0]
     assert len(win.jobs) == 1 and name.startswith("Local\\")
     assert limits.cpu_percent == 20.0 and limits.kill_on_close is False and limits.throttle         # closing the governor's handle must not kill JARVIS
     assert not limits.job_memory_bytes                                                            # no hard memory ceiling by default
-    assert e.apply({300: "face", 431: "llama-server"})["new"] == 0                                # each pid once
+    assert e.apply({300: "muse-runner", 431: "llama-server"})["new"] == 0                                # each pid once
     assert sum(1 for k, _ in logs if k == "enforce") == 3
 
 
 def test_a_process_in_another_job_is_reported_honestly_and_still_throttled():
     win = FakeWin(refuse={431})
     e, logs = enforcer(win)
-    res = e.apply({300: "face", 431: "llama-server"})
+    res = e.apply({300: "muse-runner", 431: "llama-server"})
     assert res["job_refused"] == {431: 5} and res["in_job"] == 1 and res["throttled"] == 2
     rec = [d for k, d in logs if k == "enforce" and d["pid"] == 431][0]
     assert rec["job"] is False and rec["job_error"] == 5 and rec["priority"] and rec["eco"]
@@ -215,7 +215,7 @@ def test_a_process_in_another_job_is_reported_honestly_and_still_throttled():
 def test_memory_cap_can_be_left_off():
     win = FakeWin()
     e, _ = enforcer(win, mem_cap=False)
-    e.apply({1: "face"})
+    e.apply({1: "muse-runner"})
     assert win.jobs[0][0].job_memory_bytes is None
 
 
@@ -223,22 +223,34 @@ def test_dry_run_changes_nothing():
     win = FakeWin()
     logs = []
     e = G.Enforcer(BUD, lambda kind, **d: logs.append(kind), dry_run=True, throttle=win.throttle, adopt=win.adopt, in_job=win.in_job, make_job=win.make_job, windows=True)
-    e.apply({1: "face"})
+    e.apply({1: "muse-runner"})
     assert win.throttled == [] and win.jobs == [] and logs == ["would-enforce"]
 
 
 def test_off_windows_enforcer_does_not_touch_anything():
     win = FakeWin()
     e = G.Enforcer(BUD, lambda *a, **k: None, throttle=win.throttle, adopt=win.adopt, in_job=win.in_job, make_job=win.make_job, windows=False)
-    assert e.apply({1: "face"})["throttled"] == 0 and win.throttled == [] and win.jobs == []
+    assert e.apply({1: "muse-runner"})["throttled"] == 0 and win.throttled == [] and win.jobs == []
 
 
 def test_forget_lets_a_reused_pid_be_enforced_again():
     win = FakeWin()
     e, _ = enforcer(win)
-    e.apply({1: "face"})
+    e.apply({1: "muse-runner"})
     e.forget(set())
-    assert e.apply({1: "face"})["new"] == 1
+    assert e.apply({1: "muse-runner"})["new"] == 1
+
+
+
+def test_the_face_window_is_never_throttled_or_capped():
+    """2026-10-26 (owner: 'the Windows widget is very non responsive'): EcoQoS + BELOW_NORMAL + the CPU-capped job starved the face while a model ran."""
+    win = FakeWin()
+    e, logs = enforcer(win)
+    res = e.apply({300: "face", 301: "face", 431: "llama-server", 440: "privacy-gateway", 441: "node-agent"})
+    assert win.throttled == [431] and win.adopted == [431]       # only the model server is capped; the chat path stays responsive
+    assert res["new"] == 5 and res["throttled"] == 1 and res["in_job"] == 1
+    assert [d.get("interactive") for k, d in logs if k == "enforce" and d["pid"] in (300, 301)] == [True, True]
+    assert e.apply({300: "face"})["new"] == 0
 
 
 # ---- threads file, log, llama-swap -----------------------------------------------------------------------------------------------------
@@ -291,4 +303,4 @@ def test_enforce_once_is_callable_from_a_launcher():
     win = FakeWin()
     e, _ = enforcer(win)
     res = G.enforce_once(BUD, log=lambda *a, **k: None, sampler=s, enforcer=e)
-    assert res["components"] == {300: "face"} and win.throttled == [300]            # the owner's Chrome is never touched
+    assert res["components"] == {300: "face"} and win.throttled == []               # the owner's Chrome is never touched, and the face window is exempt (interactive)

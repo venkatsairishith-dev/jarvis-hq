@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import contextvars
 import threading
 import time
 import urllib.error
@@ -38,6 +39,13 @@ STATES = ("inspecting", "diagnosing", "researching", "waiting_for_permission", "
 
 class DesktopError(Exception):
     pass
+
+
+# D54 (task-scoped consent): the owner's OWN goal, as he said it. Every PC job of a task carries it (body["goal"]) and the kernel computes what the task
+# may do without the PIN from these words alone (policy.grant_from_goal). A plan, a screen, a page or a file can never put words here: only the entry
+# that received the owner's goal sets it, and the plan steps an online model wrote are not the goal.
+OWNER_GOAL: "contextvars.ContextVar[str]" = contextvars.ContextVar("owner_goal", default="")
+OWNER_UTTERANCE: "contextvars.ContextVar[str]" = contextvars.ContextVar("owner_utterance", default="")      # the owner's own sentence, when the host knows it (the face's model may have reworded the goal)
 
 
 class NotSent(Exception):
@@ -173,6 +181,7 @@ class Pc:
         self.holder: Callable[[], "dict | None"] | None = None
         self._seq = 0
         self.on_approval: Callable[[str, str], None] | None = None     # ("pending"|"resolved", approval id): the owning operation tracks it
+        self.goal = ""                                                 # the owner's goal for this task (OWNER_GOAL); sent with every job request
         self.pending_approval: str | None = None
         self.submitting = False
         self._cancel_lock = threading.Lock()
@@ -236,6 +245,8 @@ class Pc:
                 if not holds:
                     self.fence_reason = "this task no longer holds the PC lock (another task took it over, or it was recovered)"
                     raise NotSent(self.fence_reason)
+            if self.goal and "goal" not in body:
+                body = dict(body, goal=self.goal[:1000])
             self.submitting = True        # while a request is on the wire the kernel may create a job whose id is not yet known
             hf = self.holder
             if hf is not None:
@@ -498,6 +509,25 @@ def set_activity(state: str, detail: str = "", path: Path = ACTIVITY):
         # the widget shows this line and the file is read by other programs: no secret and no file name in it, ever
         path.write_text(json.dumps({"state": state, "detail": screen_text.clean_message(detail, 200), "at": time.time()}), encoding="utf-8")
     except OSError:
+        pass
+
+
+GOAL_PROGRESS = DATA / "plugins" / "goal_progress.json"
+GOAL_STATES = ("planning", "running", "done", "failed", "waiting", "idle")
+GOAL_EXECUTORS = ("pc", "screen_read", "screen_locate", "doc_read", "deliverable_list", "deliverable_open", "recall", "tasks", "rules")
+
+
+def set_goal_progress(state: str, n: int = 0, total: int = 0, executor: str = "", path: Path | None = None) -> None:
+    """D60: which step of a goal runs now, for the face's progress line (the status tool reads this file). Content-free by construction: one
+    of six state words, two small numbers and one of the fixed executor ids; never the goal's words, a step's goal, a file name or a result."""
+    state = state if state in GOAL_STATES else "idle"
+    executor = executor if executor in GOAL_EXECUTORS else ""
+    path = path or GOAL_PROGRESS
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"state": state, "n": max(0, min(int(n), 99)), "total": max(0, min(int(total), 99)), "executor": executor,
+                                    "at": time.time()}), encoding="utf-8")
+    except (OSError, ValueError, TypeError):
         pass
 
 

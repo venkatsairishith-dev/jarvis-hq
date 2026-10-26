@@ -42,3 +42,13 @@ def _no_pc_state_survives_a_test():
     C._PUB_WAKE.set()
     for t in [t for t in threading.enumerate() if t.name.startswith(("pc-lock-heartbeat", "pc-ops-publisher"))]:
         t.join(5)
+
+
+@pytest.fixture(autouse=True)
+def _quick_path_off_and_progress_in_tmp(tmp_path, monkeypatch):
+    """D60: the rules-first router answers 'open notepad' without the online plan. The older goal tests are about the online plan, so they run with
+    the router off (test_quick.py turns it on); and the goal-progress file for the face goes to the test's own folder, never to the data dir."""
+    from jarvis.plugins.desktop import core
+    monkeypatch.setenv("JARVIS_QUICK_PATH", "0")
+    monkeypatch.setattr(core, "GOAL_PROGRESS", tmp_path.parent / f"{tmp_path.name}-progress" / "goal_progress.json")
+    yield

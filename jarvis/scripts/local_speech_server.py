@@ -154,10 +154,12 @@ def activity(now: float | None = None) -> dict:
             "speaking_estimate": bool(tts_age is not None and tts_age <= a["tts_audio_s"] + 1.0)}
 
 
-def make_handler(synthesize, transcribe=None, secret=None, readiness=None):
+def make_handler(synthesize, transcribe=None, secret=None, readiness=None, english=None):
     """`synthesize(text, lang) -> wav_bytes` and `transcribe(wav_bytes, lang) -> text`; both raise ValueError for unusable
     input (the message is safe to return). Without `transcribe` the recognition endpoint answers 501. `secret`: the control
-    secret for POST /interrupt (a fresh random one when not given; read it back from `Handler.control_secret`)."""
+    secret for POST /interrupt (a fresh random one when not given; read it back from `Handler.control_secret`).
+    `english(text, lang) -> dict|None` (D58): for a Telugu or Hindi transcript, {"english": ..., "translated": bool, ...} from the local translator; the
+    answer then carries "language" and "english" beside "text" (the original transcript stays in "text": the owner's own words)."""
     control_secret = secret or control_auth.new_secret()
 
     class Handler(BaseHTTPRequestHandler):
@@ -250,12 +252,23 @@ def make_handler(synthesize, transcribe=None, secret=None, readiness=None):
                     return self._json(400, {"error": {"message": "no audio file in the request"}})
                 if fmt not in ("json", "text"):
                     return self._json(400, {"error": {"message": "response_format must be json or text"}})
-                text = transcribe(wav, LANG_ALIASES.get(language.strip().lower(), "en"))
+                lang_code = LANG_ALIASES.get(language.strip().lower(), "en")
+                text = transcribe(wav, lang_code)
                 import time as _t
                 _ACTIVITY["asr_at"] = _t.time()
                 if fmt == "text":
                     return self._send(200, text.encode("utf-8"), "text/plain; charset=utf-8")
-                return self._json(200, {"text": text})
+                out = {"text": text}
+                if lang_code != "en" and english is not None and text.strip():
+                    try:
+                        tr = english(text, lang_code) or {}
+                    except Exception:                                   # noqa: BLE001 - the transcript is returned whatever the translator does
+                        tr = {}
+                    out["language"] = lang_code
+                    if tr.get("translated"):
+                        out["english"] = tr.get("english")
+                    out["translated"] = bool(tr.get("translated"))
+                return self._json(200, out)
             except ValueError as exc:
                 return self._json(400, {"error": {"message": str(exc)[:200]}})
             except Exception as exc:                                    # never a traceback to the caller
@@ -328,12 +341,41 @@ def make_handler(synthesize, transcribe=None, secret=None, readiness=None):
     return Handler
 
 
+def shared_translate():
+    """The shared language layer (jarvis/plugins/_shared/translate.py, standard library only), loaded by path; None when it cannot be."""
+    try:
+        import importlib.util
+        if "jarvis_translate" in sys.modules:
+            return sys.modules["jarvis_translate"]
+        spec = importlib.util.spec_from_file_location("jarvis_translate", os.path.join(HERE, "..", "plugins", "_shared", "translate.py"))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["jarvis_translate"] = mod
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:                                      # noqa: BLE001
+        sys.modules.pop("jarvis_translate", None)
+        return None
+
+
+def local_english(text: str, lang: str):
+    """The voice path's hook (D58): the English of a Telugu or Hindi transcript, on this PC. None when the layer is not available."""
+    mod = shared_translate()
+    return None if mod is None else mod.english_info(text, source="voice")
+
+
 def build_engines():
     from jarvis_console.voice import Voice, VoiceError
 
     voice = Voice()
 
     def synthesize(text: str, lang: str) -> bytes:
+        if lang in ("hi", "te"):                           # D58: a Telugu or Hindi reply is spoken only if its voice is installed AND verified by the owner
+            mod = shared_translate()
+            if mod is not None:
+                tts = (voice.status().get("tts") or {}).get(lang) or {}
+                plan = mod.voice_plan(lang, {lang: bool(tts.get("available"))})
+                if not plan["speak"]:
+                    raise ValueError(plan["note"])
         try:
             wav, _info = voice.speak(text, lang=lang)
             return wav
@@ -364,7 +406,7 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=48930)
     args = ap.parse_args()
     synthesize, transcribe = build_engines()
-    handler = make_handler(synthesize, transcribe)
+    handler = make_handler(synthesize, transcribe, english=local_english)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     try:
         control_auth.publish("speech", handler.control_secret)       # for the wake listener's POST /interrupt

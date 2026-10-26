@@ -298,15 +298,22 @@ def ui_action(p: dict, backend=None, lister=None) -> dict:
         why = sensitive.sensitive_window(target.partition("|")[0], lister)
     if why:
         return {"ok": False, "error": "refused: that window belongs to a password manager, wallet, bank, broker or payment app"}
+    from . import savefile
+    stuck = savefile.refuse_replace_answer(op, target, text, lister)     # D54: Yes on a Replace prompt is never JARVIS's to press
+    if stuck:
+        return {"ok": False, "error": stuck}
     try:
         seen = backend[op](str(p.get("target", "")), {"text": str(p.get("text", ""))} if p.get("text") else {})
+    except savefile.SafeError as e:                         # a refusal worded by savefile.py itself (never screen text): reported as it is
+        return {"ok": False, "error": e.public, **{k: v for k, v in e.extra.items() if isinstance(v, (str, bool)) and len(str(v)) <= 80}}
     except Exception as e:      # the kind of failure only: its text could contain screen content
         return {"ok": False, "error": type(e).__name__}
     # What the node itself checked before it said ok (audit PC-D11): a backend that read the result back (the typed text,
     # the foreground window, the window state) returns it; a click, a key press or a scroll has nothing to read, so the
     # plugin must call those "reported ok, not observed". Only short fixed keys are passed on, never screen content.
     obs = {k: v for k, v in (seen if isinstance(seen, dict) else {}).items()
-           if k in ("observed", "window_state", "foreground") and isinstance(v, (str, bool)) and len(str(v)) <= 80}
+           if k in ("observed", "window_state", "foreground", "saved", "folder", "file_ok", "title_ok", "content_ok", "renamed", "closed")
+           and isinstance(v, (str, bool)) and len(str(v)) <= 80}
     return {"ok": True, "done": op, **obs}
 
 
@@ -430,7 +437,8 @@ def run_job(job: dict, projects: dict = None) -> dict:
     runtime.begin(job.get("id"))
     try:
         runtime.check()                       # cancelled between being handed over and starting: no side effect at all
-        result = _run_job(job, projects)
+        from . import journal
+        result = journal.around(job, lambda: _run_job(job, projects))      # D61: a before/after picture of the one window a changing job acts on
     except runtime.Cancelled:
         result = {}
     finally:
@@ -460,15 +468,27 @@ def _run_job(job: dict, projects: dict = None) -> dict:
         if kind == "pc_open":
             from .pcopen import pc_open
             before = None
-            if params.get("op") in ("open_app", "open_folder", "open_file"):
+            if params.get("op") in ("open_app", "open_folder", "open_file", "open_code"):
                 try:
                     from . import windows
                     before = {w["hwnd"] for w in windows.list_windows()}
                 except Exception:
                     before = None
+            from . import windowpick
+            windowpick.take_launched()                      # nothing left over from an earlier job
             out = pc_open(params)
             from .pcopen import take_path
-            return _verify_open(out, params, before=before, path=take_path())
+            res = _verify_open(out, params, before=before, path=take_path())
+            launched = windowpick.take_launched()
+            if launched and res.get("ok") and res.get("verified") == "verified" and not res.get("note"):
+                res["launched"] = launched[:3]          # D61: the window(s) this job opened (process, pid): the journal's undo closes exactly those
+            return res
+        if kind == "pc_undo":                    # D61: one journaled step reversed; the node re-checks it (undo.py)
+            from .undo import run as undo_run
+            return undo_run(params)
+        if kind in ("file_op", "setting", "clipboard"):       # D54: simple tasks (taskops.py): the kernel authorized exactly this job
+            from .taskops import run as task_run
+            return task_run(kind, params)
         if kind == "ui_windows":
             return ui_windows(params)
         if kind == "ui_snapshot":
