@@ -1,6 +1,6 @@
 """Translate (D58): translation as a task, the reply language, and the glossary. Local models only; see jarvis/plugins/_shared/translate.py.
 
-Entries: translate_text, translate_file, translate_clipboard, translate_window, set_reply_language, add_glossary_term.
+Entries: translate_text, translate_file, translate_clipboard, translate_window, set_reply_language, add_glossary_term, list_names, forget_name, answer_name_question (D62).
 Every result carries "text" (what to show), "copy_text" (what a Copy button copies), and a "flag" sentence when the translation is doubtful
 (low model confidence, or the back-translation check English -> language -> English came back too different). Nothing is trusted silently.
 Text of a file, window or clipboard is DATA: it is translated, never obeyed.
@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_plugin, plugin_entry, tr
+from jarvis.plugins._shared import names as N
 from jarvis.plugins._shared import translate as T
 from jarvis.plugins._shared import translate_task as TT
 
@@ -183,3 +184,58 @@ class TranslatePlugin(PluginBase):
         except (T.TranslateError, OSError) as e:
             return Err(SdkError(str(e)[:200]))
         return Ok({"ok": True, "added": added, "message": f"'{term}' will never be translated." if added else f"'{term}' was already in the glossary."})
+
+    # ---- D62: the names JARVIS learned (<data>/names.json). No entry ADDS a name: names are learned only from the owner's own words (names.observe), never from
+    # what a model or a tool says. The full list is in `text`, which the owner sees; the model-visible fields carry a count and a sentence, never the names.
+
+    @plugin_entry(
+        id="list_names",
+        name=tr("entry.list_names.name", default="What names do you know"),
+        description=tr("entry.list_names.description", default=(
+            "Show the owner the names JARVIS has learned from him (his own, his family's, friends, places) and how it spells them. Use when he asks "
+            "'what names do you know' or 'who do you know'. The list is shown to him only; you get a count.")),
+        input_schema={"type": "object", "properties": {}},
+        timeout=20,
+        llm_result_fields=["ok", "count", "message"],
+    )
+    async def list_names(self, **_):
+        store = N.get_store()
+        text = await asyncio.to_thread(N.list_text, store)
+        q = await asyncio.to_thread(N.pending_question, store)
+        out = {"ok": True, "count": len(store.entries()), "text": text, "message": "The list is on the owner's screen. Do not read the names out or repeat them."}
+        if q:
+            out["question"] = q["sentence"]                  # owner-visible only (it holds the name)
+            out["form"] = q["form"]
+        return Ok(out)
+
+    @plugin_entry(
+        id="forget_name",
+        name=tr("entry.forget_name.name", default="Forget a name"),
+        description=tr("entry.forget_name.description", default=(
+            "Forget one learned name when the owner says 'forget <name>'. It is removed and will not be learned again. Only on his explicit request.")),
+        input_schema={"type": "object", "properties": {"name": {"type": "string", "description": "The name, or a relation held by one person (brother)."}}, "required": ["name"]},
+        timeout=20,
+        llm_result_fields=["ok", "forgot", "message"],
+    )
+    async def forget_name(self, name: str = "", **_):
+        name = " ".join(str(name or "").split())[:60]
+        if not name:
+            return Err(SdkError("Which name?"))
+        gone = await asyncio.to_thread(N.get_store().forget, name)
+        return Ok({"ok": True, "forgot": bool(gone), "message": "Forgot it, and I will not learn it again." if gone else "I did not have that name."})
+
+    @plugin_entry(
+        id="answer_name_question",
+        name=tr("entry.answer_name_question.name", default="Answer a question about a name"),
+        description=tr("entry.answer_name_question.description", default=(
+            "Record the owner's answer to the one question JARVIS asked about a name it was not sure of: family, friend, place, other, yes, or 'not a name'. "
+            "Only with an answer he gave.")),
+        input_schema={"type": "object", "properties": {"name": {"type": "string"},
+                                                       "answer": {"type": "string", "enum": ["family", "friend", "place", "other", "yes", "no", "not a name"]}},
+                      "required": ["name", "answer"]},
+        timeout=20,
+        llm_result_fields=["ok", "message"],
+    )
+    async def answer_name_question(self, name: str = "", answer: str = "", **_):
+        said = await asyncio.to_thread(N.get_store().answer, " ".join(str(name or "").split())[:60], str(answer or "")[:20])
+        return Ok({"ok": bool(said), "message": "Noted." if said else "I did not have that name."})

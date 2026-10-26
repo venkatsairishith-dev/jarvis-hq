@@ -1,10 +1,10 @@
 [plugin]
 id = "translate"
 name = "Translate"
-description = "Translation between English, Telugu and Hindi on this PC only (a local model, never an online service): translate text, a file (a NEW file is written, nothing is overwritten), the clipboard or one window the owner names; set the language JARVIS replies in; keep a glossary of names that are never translated. Doubtful translations are flagged, not used silently."
+description = "Translation between English, Telugu and Hindi on this PC only (a local model, never an online service): translate text, a file (a NEW file is written, nothing is overwritten), the clipboard or one window the owner names; set the language JARVIS replies in; keep a glossary of names that are never translated, and the names it has learned from the owner (list them, forget one). Doubtful translations are flagged, not used silently."
 short_description = "Local English, Telugu and Hindi translation, and the reply language."
 keywords = [
-    "translate", "translation", "telugu", "hindi", "english", "language", "reply in telugu", "what does this say", "glossary"
+    "names", "forget", "translate", "translation", "telugu", "hindi", "english", "language", "reply in telugu", "what does this say", "glossary"
 ]
 version = "0.1.0"
 type = "plugin"

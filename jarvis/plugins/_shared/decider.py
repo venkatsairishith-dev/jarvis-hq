@@ -571,4 +571,12 @@ def resolve(kind: str, phrase: str, candidates: list, context: str = "", *, post
     """Which known folder / file / app does a vague phrase mean? choice is one of `candidates`, or None with ask True (then ask the owner, offering `alternatives`)."""
     if kind not in ("folder", "file", "app"):
         raise DeciderError("resolve is for folder, file or app")
+    if kind in ("folder", "file"):                           # D62: "Priya's folder", "my brother's photos": the local model gets the known people the phrase points to
+        try:
+            from . import names
+            people = names.hint_for(phrase)
+        except Exception:  # noqa: BLE001 - the hint is a help, never a reason to fail
+            people = ""
+        if people:
+            context = (str(context or "") + f" Known people (data): {people}.").strip()
     return decide(kind, phrase, candidates, context, post=post, use_model=use_model)

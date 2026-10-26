@@ -536,8 +536,23 @@ def profiles(path: Path = PROFILES) -> list[dict]:
         reg = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
-    return [{"profile": p["dir"], "name": p.get("name"), "account": p.get("account"), "default": p.get("default"),
-             "say": sorted(a for a in p.get("aliases", []) if not a.startswith("profile"))[:4]} for p in reg.get("profiles", [])]
+    out = [{"profile": p["dir"], "name": p.get("name"), "account": p.get("account"), "default": p.get("default"),
+            "say": sorted(a for a in p.get("aliases", []) if not a.startswith("profile"))[:4]} for p in reg.get("profiles", [])]
+    if path == PROFILES:                                   # the node's real registry, not a file a test or a tool passed in
+        _learn_profile_names(out)
+    return out
+
+
+def _learn_profile_names(profile_list: list[dict]) -> None:
+    """D62: the Chrome profile names and accounts the node read from the owner's own browser are facts JARVIS already has: they feed the learned-names store
+    (source "profile", the lowest rank). Best effort, unchanged registry costs one hash, never raises."""
+    if not profile_list or os.environ.get("JARVIS_LEARNED_NAMES", "1") == "0":
+        return
+    try:
+        from jarvis.plugins._shared import names
+        names.learn_profiles(profile_list)
+    except Exception:                                                  # noqa: BLE001 - learning names must never break listing profiles
+        pass
 
 
 # ---------------------------------------------------------------- OCR / vision rung (audit PRO-D10, 2026-10-18)

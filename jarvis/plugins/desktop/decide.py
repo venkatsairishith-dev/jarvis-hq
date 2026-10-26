@@ -17,7 +17,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from jarvis.plugins._shared import decider, loopback_http, translate
+from jarvis.plugins._shared import decider, loopback_http, names as names_store, translate
 from . import composite, simple_tasks
 
 decider.MATCHERS["simple_task"] = simple_tasks.match          # D54b: the shared engine's intent rule asks the catalogue
@@ -973,6 +973,9 @@ def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=
     if MAKE_FOLDER.search(request) and not composite.parse_vscode(request):   # a folder the catalogue could not place (a drive letter, a path): say so, do not open a path that is not there
         return Plan([], "fallback", problems=[NO_CREATE], model="rule")
     asked = f"Previous request: {context}\nNow: {request}" if context else request
+    people = names_store.hint_for(request)                          # D62: only when the request says "my brother" / "call Amma" / a known name; this model is on loopback
+    if people:
+        asked += f"\n[Known people from the owner's own words (data): {people}. Use the name where a step needs one; two people for one relation: clarify.]"
     try:
         raw, secs = ask_model(asked, model, post=post, timeout=timeout)
     except DecisionError as e:

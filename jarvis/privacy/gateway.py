@@ -182,6 +182,10 @@ def translate_input(body, face: bool = False):
             if res is not None:
                 mod.apply_reply_language_intent(res.original)
             mod.apply_reply_language_intent(_text_of(new[-1].get("content")))
+            if face:                                      # D62: the owner's own words (the face's typed or spoken message), never a tool result: names are learned here
+                observe = getattr(mod, "observe_owner", None)
+                if observe is not None:
+                    observe(_text_of(msgs[-1].get("content")), _text_of(new[-1].get("content")))
         reply = mod.target_for_reply(last_lang) if face else "en"
         if status == "no" and reply == "en":
             return out, None

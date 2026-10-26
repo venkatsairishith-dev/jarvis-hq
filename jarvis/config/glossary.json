@@ -1,5 +1,5 @@
 {
-  "_note": "D58: names and terms the language layer NEVER translates (masked before translation, restored after). The owner extends this file or says 'never translate <word>'. Matching is whole-word and case-insensitive. Add your own name and your family's names under owner_names and family_names exactly as you write them (Latin and Telugu/Hindi script spellings both).",
+  "_note": "D58/D62: the shipped and manual list of names and terms the language layer NEVER translates (masked before translation, restored after). Matching is whole-word and case-insensitive. Nobody needs to edit this file for the owner's or his family's names: JARVIS learns them from conversation into names.json in the data folder and merges both; a term listed here always wins. Say 'never translate <word>' to add one.",
   "terms": ["JARVIS", "Hermes", "Hermes Agent", "llama-swap", "Parakeet", "IndicTrans2", "Kokoro", "Piper", "Playwright", "OmniRoute", "Dahl", "Groq", "Cerebras"],
   "apps": ["Notepad", "Calculator", "Chrome", "Spotify", "WhatsApp", "Telegram", "Excel", "Word", "PowerPoint", "Paint", "File Explorer", "VS Code"],
   "owner_names": [],

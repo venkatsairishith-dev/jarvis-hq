@@ -18,6 +18,7 @@ import time
 from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_plugin, plugin_entry, timer_interval, tr
 
 from jarvis.plugins._shared import decider, screen_text, translate
+from jarvis.plugins._shared import names as names_mod
 
 from . import composite, coordinator as coord, core, decide, drive as drive_mod, goal as goal_mod, journal_client as jc, quick as quick_mod, simple_tasks, undoer
 
@@ -1505,6 +1506,10 @@ class DesktopPlugin(PluginBase):
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def quick_command(self, text: str = "", **_):
         started = time.monotonic()
+        said = await asyncio.to_thread(names_mod.quick_answer, text)           # D62: "what names do you know", "forget Priya": a rule; the names never reach a model
+        if said is not None:
+            return Ok({"handled": True, "status": "completed", "reply": said, "planned_by": "rules", "label": "One moment", "approval_id": None,
+                       "seconds": round(time.monotonic() - started, 2)})
         quick = quick_mod.match(text, core.profiles())
         if quick is None:
             return Ok({"handled": False})

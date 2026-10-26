@@ -33,6 +33,7 @@ import json
 import os
 import re
 import secrets
+import sys
 import threading
 import time
 import unicodedata
@@ -328,8 +329,52 @@ def _term_pattern(terms: Sequence[str]) -> re.Pattern | None:
     return _mask_cache[terms]
 
 
-def mask(text: str, glossary: Iterable[str] | None = None) -> Masked:
-    """Replace everything that must survive translation with tokens like JVX3Q. Idempotent on text without such items."""
+def _names_module():
+    """The learned-names module (D62), imported by name or loaded by path like this file; None when it cannot be (the layer then works as before)."""
+    try:
+        from jarvis.plugins._shared import names as mod
+        return mod
+    except ImportError:
+        pass
+    try:
+        import importlib.util
+        import sys
+        if "jarvis_names" in sys.modules:
+            return sys.modules["jarvis_names"]
+        spec = importlib.util.spec_from_file_location("jarvis_names", Path(__file__).with_name("names.py"))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["jarvis_names"] = mod
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:                                              # noqa: BLE001
+        sys.modules.pop("jarvis_names", None)
+        return None
+
+
+def learned_index(glossary: Iterable[str] | None = None):
+    """The index of the names JARVIS has learned (<data>/names.json), or None when there are none. The manual glossary wins over it."""
+    if os.environ.get("JARVIS_LEARNED_NAMES", "1") == "0":
+        return None
+    mod = _names_module()
+    return mod.index(manual=list(glossary or [])) if mod is not None else None
+
+
+def observe_owner(original: str, english: str | None = None) -> list[str]:
+    """Learn names from ONE message of the owner (D62): `original` as he said it, `english` as it was translated. Call it ONLY with his own typed or spoken words
+    (the gateway's face path); never with a tool result, a page, a file, screen text or a model's answer. Returns the canonical names newly stored. Never raises."""
+    if os.environ.get("JARVIS_LEARNED_NAMES", "1") == "0":
+        return []
+    try:
+        mod = _names_module()
+        return mod.observe(original, english, manual=load_glossary()).learned if mod is not None else []
+    except Exception:                                              # noqa: BLE001
+        return []
+
+
+def mask(text: str, glossary: Iterable[str] | None = None, names: Any = None) -> Masked:
+    """Replace everything that must survive translation with tokens like JVX3Q. Idempotent on text without such items. `names` is a learned-names index
+    (names.NameIndex): a learned name is kept as written, a known alias of it goes back as ONE canonical English spelling; the glossary is masked first, so
+    a manual term always wins."""
     glossary = list(glossary if glossary is not None else load_glossary())
     prefix = "JVX"
     while prefix in text.upper() and len(prefix) < 8:
@@ -350,6 +395,14 @@ def mask(text: str, glossary: Iterable[str] | None = None) -> Masked:
     out = master.sub(sub, text)
     if terms is not None:
         out = terms.sub(lambda m: put("name", m.group(0)), out)
+    if names is not None and not getattr(names, "empty", True):
+        spans = names.find(out)
+        if spans:
+            pieces, last = [], 0
+            for a, b, restore in spans:
+                pieces += [out[last:a], put("name", restore)]
+                last = b
+            out = "".join(pieces) + out[last:]
     return Masked(out, items, prefix)
 
 
@@ -624,12 +677,13 @@ class Translator:
     """Backends in order of preference, a cache, a budget and a circuit breaker. Thread safe."""
 
     def __init__(self, backends: Sequence[Backend] | None = None, config: dict | None = None, glossary: Iterable[str] | None = None,
-                 clock: Callable[[], float] = time.monotonic):
+                 clock: Callable[[], float] = time.monotonic, names: Any = None):
         self.cfg = {**DEFAULTS, **(config or {})}
         self.backends: list[Backend] = []
         for b in backends or []:
             self.add_backend(b)
         self._glossary = None if glossary is None else list(glossary)
+        self._names = names                    # None: the learned names of this PC (names.json); False: none; or a names.NameIndex
         self._cache: OrderedDict[tuple, tuple] = OrderedDict()
         self._lock = threading.Lock()
         self._down: dict[str, float] = {}
@@ -648,6 +702,12 @@ class Translator:
 
     def glossary(self) -> list[str]:
         return self._glossary if self._glossary is not None else load_glossary()
+
+    def learned(self):
+        """The learned-names index to mask with (D62), or None."""
+        if self._names is False:
+            return None
+        return self._names if self._names is not None else learned_index(self.glossary())
 
     def _budget(self, backend: Backend) -> float:
         per = self.cfg.get("backend_budget_s") or {}
@@ -684,7 +744,7 @@ class Translator:
 
     def _convert(self, text: str, src: str, tgt: str, romanized: bool, started: float) -> tuple[str, Backend, list[dict], list[int], str]:
         """Mask, translate with the first backend that works, unmask. Returns (output, backend, preserved, lost ids, reason of the last failure)."""
-        masked = mask(text, self.glossary())
+        masked = mask(text, self.glossary(), self.learned())
         reason = "no translator installed" if not self.backends else "no backend supports this language"
         total_budget = float(self.cfg.get("budget_s", 3.0))
         for b in self.backends:
