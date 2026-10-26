@@ -414,7 +414,16 @@ def chat_stack(tmp_path, monkeypatch):
         await host.start()
         hosts.append(host)
         outputs = OutputPreview(tmp_path / f"outputs-{len(hosts)}")
-        server = F.build_server(tools(FakeClient()), None, F.DEFAULT_PORT, host, _Spoken(), _Memory(), outputs, profile, **kw)
+        from jarvis.bridge.ask import AskBroker
+        from jarvis.bridge.cleaner import Cleaner, Env
+        from jarvis.bridge.cleaner_ui import CleanerService
+        root = tmp_path / f"pc-{len(hosts)}"
+        env = Env(home=root / "Users" / "me", user_temp=[root / "Temp"], windows=root / "Windows", local_appdata=root / "Users" / "me" / "AppData" / "Local",
+                  appdata=root / "Users" / "me" / "AppData" / "Roaming", program_files=[root / "Program Files"], program_data=root / "ProgramData",
+                  users_root=root / "Users")
+        broker = AskBroker(home=env.home)
+        server = F.build_server(tools(FakeClient()), None, F.DEFAULT_PORT, host, _Spoken(), _Memory(), outputs, profile,
+                                asker=broker, cleaner=CleanerService(Cleaner(env=env), broker), **kw)
         return server
 
     async def stop():
@@ -449,6 +458,12 @@ def test_the_chat_list_has_only_what_a_chat_goal_needs_and_is_under_12_kb(chat_s
         assert hidden not in names
     assert not any(n.startswith(("workbench__", "learn_vault__", "main_agent__")) for n in names)
     size = len(_serialized(listed))
+    import os
+    if os.environ.get("SNAPSHOT_OUT"):          # regenerate the face's request-budget snapshot: SNAPSHOT_OUT=<path> pytest -k 12_kb, then reformat it as JSON (indent 1)
+        Path(os.environ["SNAPSHOT_OUT"]).write_bytes(_serialized(listed))
+    if os.environ.get("SHOW_SIZES"):            # which tools take the bytes
+        for t in sorted(listed, key=lambda t: -len(_serialized([t]))):
+            print(len(_serialized([t])), t.name)
     print(f"chat tools/list: {len(listed)} tools, {size} bytes")
     assert size < CHAT_LIST_LIMIT
     assert size <= 7_600, f"the chat tool list is {size} bytes; the budget is 7.6 KB (shorten a description before adding a tool)"
