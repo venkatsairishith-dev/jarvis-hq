@@ -68,6 +68,7 @@ def handle(text: str, *, state_path=None, control_path=None, lessons: lessons_mo
     if kind == "forget_last":
         if not taskstate.recent(d, now) and not live:
             return None                                             # "forget that" with no PC task behind it is about something else (memory, chat)
-        n = les.forget(last=True)
-        return out("Forgot the last thing I learned." if n else "There is nothing recent to forget.")
+        if not les.forget(last=True):
+            return None                                             # nothing was learned just now: "forget it" is the names store's or the chat's (D62)
+        return out("Forgot the last thing I learned.")
     return None

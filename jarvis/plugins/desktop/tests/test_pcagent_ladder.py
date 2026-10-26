@@ -514,3 +514,36 @@ def test_every_job_a_rung_sends_is_an_ordinary_kernel_job(fd, mk):
     for j in fd.jobs:
         assert j["op"] in ("ui", "open_app"), j
         assert j.get("action") in (None, "focus", "restore", "key", "type", "type_focused", "click", "scroll"), j
+
+
+def test_skip_this_step_drops_the_step_the_loop_would_take_and_ends_a_search_that_is_going_nowhere(fd, mk):
+    app = notepad(fd)
+    agent = mk(lambda v: (taskstate.push_control("skip", agent.ts.control_file), {"act": "type", "app": "notepad", "element": "", "text": "a"})[1],
+               {"act": "type", "app": "notepad", "element": "", "text": "skipped"}, {"act": "type", "app": "notepad", "element": "", "text": "c"}, {"act": "done"})
+    r = go(agent)
+    assert r["status"] == "completed" and app.doc == "c" and any(h.get("effect") == "skipped_by_owner" for h in r["actions"]), r["actions"]
+    fd2 = FakeDesktop()
+    fd2.add_app("notepad", "Untitled - Notepad")
+    ts = taskstate.TaskState(None, None)
+    seen = {"n": 0}
+
+    def sleeper(s):
+        fd2.sleep(s)
+        if fd2.t > 1.0 and not seen["n"]:
+            seen["n"] = 1
+            taskstate.push_control("skip", ts.control_file)
+    ag = pcagent.PcAgent(fd2, Script({"act": "click", "app": "notepad", "element": "Ghost"}, {"act": "done"}), classify=classify_by_words, state=ts, clock=fd2.clock, sleep=sleeper)
+    r2 = ag.run("x")
+    assert r2["status"] == "completed" and fd2.t < 6.0, "the 6 s wait for the control was cut short by 'skip this step'"
+
+
+def test_an_app_is_found_under_the_names_windows_gives_it_so_it_is_not_launched_twice(fd, mk):
+    from jarvis.plugins.desktop import perceive
+    ws = [{"process": "PaintStudio.View", "title": "Untitled - Paint", "foreground": True}, {"process": "ApplicationFrameHost", "title": "Calculator", "foreground": False},
+          {"process": "WINWORD", "title": "Doc1 - Word", "foreground": False}, {"process": "Code", "title": "main.py - Visual Studio Code", "foreground": False}]
+    for app in ("paint", "mspaint", "Paint", "calc", "calculator", "word", "winword", "vs code", "code"):
+        assert perceive.pick_target(ws, app) is not None, app
+    assert perceive.pick_target(ws, "excel") is None
+    fd.add_app("PaintStudio.View", "Untitled - Paint")
+    r = go(mk({"act": "drag", "app": "paint", "x1": 1, "y1": 1, "x2": 5, "y2": 5}, {"act": "done"}))
+    assert r["status"] == "completed" and not [j for j in fd.jobs if j["op"] == "open_app"], "the running Paint was found, a second one was not started"

@@ -188,3 +188,19 @@ The plan call is small and deterministic: temperature 0, `max_tokens` 500 (`JARV
 
 ## What JARVIS did, and Undo (D61)
 Every step the plugin runs (a task, a goal, a mission, a single action, a read) is one line in a local, append-only journal (`D:\jarvis\data\journal\`, `jarvis/node/jarvis_node/journal.py`; this plugin's side is `journal_client.py`): the owner's words, a fixed step label, the class (the kernel's effect class: A ordinary and local, B changes something that was there or a setting, C a delete, a repair or held for the PIN), verified / unconfirmed / failed, the time it took, before and after pictures of the one window it acted on (kept 7 days; off with `journal_screenshots = false` in `plugin.toml`), and an undo recipe. `undoer.py` runs a recipe as a kernel job (`op: undo`), only on the owner's explicit request, exactly what he named, and says what was and was not undone; the entry is `undo_steps`. The face's Timeline panel and the chat tool `jarvis_timeline` read it (`jarvis/bridge/timeline.py`). Typed text is never in the journal; a failing or missing journal never stops an action. The file and setting jobs of the D54 tasks are journaled by what they did (one line each, with its undo recipe; `pc()` calls `journal_client.before_job` / `after_job`). Tests: `tests/test_journal_client.py`, `tests/test_journal_effects.py`, `tests/test_undoer.py`; the decision and what the laptop must check on screen: D61 in `docs/03_DECISIONS.md`.
+
+
+## The human-like control loop and the problem ladder (D65)
+`pcagent.py` runs ANY desktop task the way a careful person would: look (`perceive.py`: windows and focus, the active window's accessibility tree, OCR and the vision model only when the tree is thin, with the cascade's agreement rule), decide ONE next action (the local model, `drive.ACTS`), act through kernel jobs only (`pcport.py` is the Port that sends them), check the EFFECT (`closed_loop.py`), and remember (a short working memory; `lessons.py`). When something goes wrong it climbs `ladder.py`'s rungs: (a) the wrong or no window, (b) an unexpected dialog (UAC never touched, only class A answered), (c) a missing control, (d) a slow or hung app, (e) typed text that did not land, (f) no effect twice, (g) a loop, (h) a resource problem. It pauses when the owner uses the mouse or keyboard (`humanfeel.py`), keeps a content-free live state (`taskstate.py`, `pc_task_state.json`) that the voice hook (`taskvoice.py`) answers "what are you doing / why did you stop / what went wrong" from, and takes "try another way / skip this step / stop" by voice. `JARVIS_PC_AGENT=0` switches back to the older `drive.Driver` loop. Details, the tests of every rung and what the laptop must verify: D65 in `docs/03_DECISIONS.md`.
+
+| Module | What it does |
+|---|---|
+| `pcagent.py` | the loop and the rungs; result shape = `drive.Driver.run` plus `problems`, `ask`, `lessons_used` |
+| `perceive.py` | `Port`, `Observation`, `observe`, `cascade_read`, `locate` |
+| `ladder.py` | recognising a problem; button, key and menu tables; UAC / resource / not-responding patterns |
+| `lessons.py` | `(app, problem) -> route that worked`, closed vocabularies, 300 entries / 64 KB |
+| `taskstate.py`, `taskvoice.py` | the live state file, the controls, the owner's phrases and the answers |
+| `humanfeel.py` | waits by condition, `OwnerWatch`, the pause for the owner |
+| `pcport.py` | the real Port: one kernel job per call |
+
+Tests (fake desktop, no Windows): `tests/fake_desktop.py` with `test_pcagent_ladder.py`; the real kernel behind a fake PC: `test_pcagent_wiring.py`; the wiring of the D59 levers: `test_coordinator_wiring.py`, `test_run_pc_action_loop.py`, `test_ocr_entries.py`.

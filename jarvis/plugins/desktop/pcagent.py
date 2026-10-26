@@ -478,14 +478,14 @@ class PcAgent:
         def clicked() -> bool:
             return bool(send(dict(body)).get("ok"))
         for step in self._lesson_order(proc, "element_missing", ["wait", "scroll", "expand_menu", "palette"]):
-            if self._cancelled():
+            if self._cancelled() or "skip" in self.pending_ctl:        # Stop, or "skip this step" by voice: stop looking
                 return
             if "try_another" in self.pending_ctl:
                 self.pending_ctl.remove("try_another")
                 continue
             ok = False
             if step == "wait":
-                got, _ = humanfeel.wait_for(clicked, timeout=WAIT_ELEMENT_S, clock=self.clock, sleep=self._sleep, stop=self._cancelled)
+                got, _ = humanfeel.wait_for(clicked, timeout=WAIT_ELEMENT_S, clock=self.clock, sleep=self._sleep, stop=lambda: self._cancelled() or "skip" in self.pending_ctl)
                 ok = bool(got)
             elif step == "scroll":
                 for d in ("down", "up"):
@@ -588,16 +588,14 @@ class PcAgent:
             return self._result("failed", False, error=f"the control loop stopped unexpectedly ({type(e).__name__})")
 
     def _run(self, task: str, app_hint: str) -> dict:
-        last_act = ""
         for n in range(1, self.budget + 1):
             if self.clock() - self.t0 > self.deadline_s:
                 return self._result("budget", False, error="the task ran out of time")
             if self._cancelled():
                 return self._cancel_result()
-            if "skip" in self.pending_ctl:
+            skip_next = "skip" in self.pending_ctl                      # "skip this step" by voice: the step the loop would take next is not taken
+            if skip_next:
                 self.pending_ctl.remove("skip")
-                self.history.append({"n": n, "act": "skip", "ok": True, "effect": "skipped_by_owner"})
-                self.unverified.append("a step was skipped because the owner said so")
             self._say(phase="perceive")
             obs = self.observe(app_hint)
             obs = self._owner_gate(obs)
@@ -620,6 +618,10 @@ class PcAgent:
                 raise self._ask(str(action.get("question") or "What should I do next?")[:200], ["Carry on", "Stop here"], why="asked", reason="I need your answer to go on.")
             if action["act"] == "done":
                 return self._finish(action, obs)
+            if skip_next:
+                self.history.append({"n": n, "act": action["act"], "app": str(action.get("app") or "")[:40], "ok": True, "effect": "skipped_by_owner"})
+                self.unverified.append("a step was skipped because the owner said so")
+                continue
             try:
                 body = drive.to_body(action, self.typed)
             except drive.DriveError as e:
@@ -657,6 +659,11 @@ class PcAgent:
             self.watch.acted()
             if res.get("state") == "waiting_for_permission":
                 return self._result("waiting_for_permission", False, approval_id=res.get("approval_id"), how=res.get("how"), state="waiting_for_permission")
+            if "skip" in self.pending_ctl and outcome == "failed":      # he said "skip this step" while it was struggling with it
+                self.pending_ctl.remove("skip")
+                self.history[-1]["effect"] = "skipped_by_owner"
+                self.unverified.append("a step was skipped because the owner said so")
+                continue
             if outcome == "failed":
                 self._on_failure(n, action, sig, res, h)                  # (e)/(f)/(h): changes strategy, re-plans, asks; returns when the loop may go on
                 continue
@@ -676,7 +683,6 @@ class PcAgent:
             else:
                 self.replan_sig = ""
             self._account(action, body, res, outcome, said, expect, h)
-            last_act = action["act"]
         return self._result("budget", False, error=f"the task was not finished within {self.budget} steps")
 
     def _alternate_strategy(self, action: dict, obs: perceive.Observation, h: dict) -> bool:

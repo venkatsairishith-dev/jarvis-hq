@@ -21,8 +21,10 @@ NAME = re.compile(r"^[A-Za-z0-9_.\- :()]{1,80}$")
 
 
 class PcPort:
-    def __init__(self, pc: Callable[..., dict]):
+    def __init__(self, pc: Callable[..., dict], sleep: Callable[[float], None] | None = None):
+        import time
         self.pc = pc                                     # pc(body, timeout=90, what="", keep_local=False) -> flat result dict (the plugin's own helper)
+        self.sleep = sleep or time.sleep
 
     def _safe(self, app: str) -> str:
         a = str(app or "").strip()
@@ -66,6 +68,19 @@ class PcPort:
             return {"ok": False, "state": "denied", "error": str(e)[:200]}
 
     def app_info(self, app: str) -> dict:
-        r = self.pc({"op": "diag", "check": "app_info", "target": self._safe(app)}, 60)
+        """Does the app respond, and is it BUSY (its CPU time grew between two looks a second apart)? A busy app is waited for longer than a stuck one."""
+        name = self._safe(app)
+        r = self.pc({"op": "diag", "check": "app_info", "target": name}, 60)
         rows = [x for x in r.get("rows") or [] if isinstance(x, dict)]
-        return {"responding": rows[0].get("responding") if rows else None, "busy": False}
+        out = {"responding": rows[0].get("responding") if rows else None, "busy": False}
+        try:
+            def cpu() -> float:
+                p = self.pc({"op": "diag", "check": "processes", "target": ""}, 60)
+                key = re.sub(r"\.exe$", "", name.lower())
+                return sum(float(x.get("cpu_s") or 0) for x in p.get("rows") or [] if isinstance(x, dict) and str(x.get("name") or "").lower() == key)
+            first = cpu()
+            self.sleep(1.0)
+            out["busy"] = cpu() - first > 0.3
+        except Exception:  # noqa: BLE001 - "busy" is a hint that lengthens a wait; without it the normal budget applies
+            pass
+        return out

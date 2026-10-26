@@ -74,16 +74,25 @@ def norm_app(app: str) -> str:
     return PROCESS_OF.get(a, a)
 
 
+# other process names an app may run under (Windows 11 Paint is "PaintStudio.View", Calculator is "CalculatorApp" inside an ApplicationFrameHost frame ...)
+ALIASES = {"mspaint": ("paintstudio.view", "paint"), "calculator": ("calculatorapp", "calc"), "winword": ("word",), "powerpnt": ("powerpoint",), "msedge": ("edge",),
+           "code": ("vscode", "code - insiders"), "windowsterminal": ("wt", "terminal")}
+
+
 def window_matches(w: dict, app: str) -> bool:
     a = norm_app(app)
     if not a:
         return False
     proc = re.sub(r"\.exe$", "", str(w.get("process") or "").lower())
     title = str(w.get("title") or "").lower()
-    if proc == a or proc.replace(" ", "") == a.replace(" ", ""):
+    if proc == a or proc.replace(" ", "") == a.replace(" ", "") or proc in ALIASES.get(a, ()):
         return True
-    words = [x for x in re.split(r"\W+", a) if len(x) > 2]
-    return bool(words) and all(x in title for x in words) or (proc == "applicationframehost" and a in title)
+    raw = re.sub(r"\.exe$", "", str(app or "").strip().lower())
+    for name in {a, raw}:                                   # the words the model used, and the process name they stand for, against the title
+        words = [x for x in re.split(r"\W+", name) if len(x) > 2]
+        if words and all(x in title for x in words):
+            return True
+    return proc == "applicationframehost" and (a in title or raw in title)
 
 
 def pick_target(windows: list[dict], app: str) -> dict | None:
