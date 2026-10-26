@@ -38,6 +38,7 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { toast, Toaster } from 'vue-sonner'
 
+import AskHost from './components/ask/AskHost.vue'
 import JarvisHud from './components/hud/JarvisHud.vue'
 import PreviewHost from './components/PreviewHost.vue'
 import ResizeHandler from './components/ResizeHandler.vue'
@@ -488,6 +489,7 @@ onUnmounted(() => {
   <RouterView />
   <JarvisHud v-if="hudVisible" />
   <PreviewHost v-if="fullStageRuntime" />
+  <AskHost v-if="fullStageRuntime" />
 </template>
 
 <style>
