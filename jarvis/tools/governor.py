@@ -77,8 +77,13 @@ class JsonLog:
 
 # ---- layer 1: hard limits -----------------------------------------------------------------------------------------------------------
 
+# Windows the owner clicks and watches (owner, 2026-10-26: "the Windows widget is very non responsive"). BELOW_NORMAL + EcoQoS + the CPU-capped job
+# starved the face while a model ran, so these components are left alone: normal priority, no efficiency mode, outside the capped job.
+INTERACTIVE = frozenset({"face"})
+
+
 class Enforcer:
-    """Priority, EcoQoS and the adoption job for every JARVIS pid it is shown, each pid once."""
+    """Priority, EcoQoS and the adoption job for every JARVIS pid it is shown, each pid once. Interactive windows (INTERACTIVE) are never throttled."""
 
     def __init__(self, bud: B.Budget, log: Callable = JsonLog(echo=False), dry_run: bool = False, mem_cap: bool = True,
                  throttle=J.throttle_pid, adopt=J.adopt_pid, in_job=J.in_job, make_job=J.create_job, windows: bool = J.IS_WINDOWS) -> None:
@@ -107,6 +112,12 @@ class Enforcer:
                 continue
             res["new"] += 1
             rec = {"comp": comp, "priority": False, "eco": False, "job": None}
+            if comp in INTERACTIVE:
+                rec["interactive"] = True
+                if not self.dry and self.windows:
+                    self.log("enforce", pid=pid, **rec)
+                self.done[pid] = rec
+                continue
             if self.dry:
                 self.log("would-enforce", pid=pid, comp=comp)
             elif self.windows:
