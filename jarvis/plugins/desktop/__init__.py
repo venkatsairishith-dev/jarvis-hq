@@ -1418,15 +1418,16 @@ class DesktopPlugin(PluginBase):
             "Reports each step, which model ran it and what was observed.")),
         input_schema={"type": "object", "properties": {"goal": {"type": "string", "description": "What the owner wants done, in their words"}},
                       "required": ["goal"]},
-        timeout=900, llm_result_fields=["status", "planned_by", "summary", "steps", "approval_id", "fallback_reason"],
+        timeout=900, llm_result_fields=["status", "planned_by", "summary", "steps", "approval_id", "reason", "provider", "question"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def do_goal(self, goal: str = "", **_):
         hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}),
                                read_window=getattr(self, "_goal_read_window", None), pick_editor=getattr(self, "_goal_pick_editor", None))      # a host without them never takes the solve path
-        token = core.OWNER_GOAL.set(" ".join(str(goal or "").split())[:goal_mod.MAX_GOAL])
+        utterance = " ".join(str(core.OWNER_UTTERANCE.get() or goal or "").split())[:goal_mod.MAX_GOAL]     # his own words when the host has them, else the goal given
+        token = core.OWNER_GOAL.set(utterance)
         try:
-            res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on())
+            res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on(), utterance=utterance)
         finally:
             core.OWNER_GOAL.reset(token)
         return Ok(res)

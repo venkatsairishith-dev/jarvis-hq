@@ -45,6 +45,7 @@ class DesktopError(Exception):
 # may do without the PIN from these words alone (policy.grant_from_goal). A plan, a screen, a page or a file can never put words here: only the entry
 # that received the owner's goal sets it, and the plan steps an online model wrote are not the goal.
 OWNER_GOAL: "contextvars.ContextVar[str]" = contextvars.ContextVar("owner_goal", default="")
+OWNER_UTTERANCE: "contextvars.ContextVar[str]" = contextvars.ContextVar("owner_utterance", default="")      # the owner's own sentence, when the host knows it (the face's model may have reworded the goal)
 
 
 class NotSent(Exception):

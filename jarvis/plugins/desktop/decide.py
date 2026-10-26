@@ -919,7 +919,7 @@ def fast_path(request: str, profiles: list[dict]) -> Plan | None:
 # "make a folder test-live on D:", "create a new directory": the desktop agent opens, types and reads; it has no operation that creates a folder or a
 # file (a write needs its own approval rule in the kernel). Without this the model maps it to open_file and the owner hears "no single file matches".
 MAKE_FOLDER = re.compile(r"(?i)\b(?:create|make|new|add)\b(?:\W+\w+){0,3}?\W+(?:folder|directory)\b|\bmkdir\b")
-NO_CREATE = "I can create a folder only inside Documents, Desktop, Downloads, Pictures, Videos, Music, outputs or one of your projects: say which of them (and the name), so nothing was changed"
+NO_CREATE = "I cannot create a folder or file there: I make them only inside Documents, Desktop, Downloads, Pictures, Videos, Music, outputs or one of your projects. Say which of them and the name, so nothing was changed"
 
 
 def simple_task_plan(request: str, profiles: list[dict]) -> "Plan | None":

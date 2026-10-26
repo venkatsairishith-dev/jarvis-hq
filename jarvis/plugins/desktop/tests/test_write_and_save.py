@@ -94,10 +94,10 @@ def test_a_bare_ctrl_s_after_typing_is_replaced_by_the_save_as_step():
     assert [s["tool"] for s in p.steps] == ["open_app", "type_text", "save_as"]
 
 
-@pytest.mark.parametrize("where", [r"C:\Windows", r"C:\Users\x\AppData", "D:/jarvis-secrets", "/etc", "Pictures", "System32", r"\\server\share", "~/x", "Documents/.."])
+@pytest.mark.parametrize("where", [r"C:\Windows", r"C:\Users\x\AppData", "D:/jarvis-secrets", "/etc", "Games", "System32", r"\\server\share", "~/x", "Documents/.."])
 def test_a_folder_outside_the_known_ones_is_a_question_and_no_step(where):
     p = plan_for(f"type hi into notepad and save it as a.txt in {where}", {"tool": "type_text", "app": "notepad", "text": "hi"})
-    assert p.status == "clarify" and "Documents, Desktop, Downloads, outputs" in p.question, (where, p.status, p.question)
+    assert p.status == "clarify" and "Documents, Desktop, Downloads" in p.question, (where, p.status, p.question)
 
 
 @pytest.mark.parametrize("name", ["run.bat", "x.cmd", "go.ps1", "setup.exe", "a.vbs", "a.lnk"])
@@ -132,7 +132,7 @@ def test_a_fenced_code_block_is_typed_as_it_is():
 
 
 @pytest.mark.parametrize("req", ["open VS Code, create hello.py and type hi", "open VS Code in C:\\Windows, create a.py and type hi",
-                                 "open VS Code in Pictures, create a.py and type hi", "open VS Code in ../.., create a.py and type hi"])
+                                 "open VS Code in Games, create a.py and type hi", "open VS Code in ../.., create a.py and type hi"])
 def test_vs_code_without_a_known_folder_is_a_question(req):
     p = D.composite_rule(req, PROFILES)
     assert p.status == "clarify" and p.steps == [] or p.status == "clarify"
@@ -231,7 +231,7 @@ def test_vs_code_is_never_pasted_into_without_a_new_file_first(pc):
 
 
 def test_vs_code_is_started_only_on_a_known_folder(pc):
-    for folder in ("Windows", "C:\\", "Documents/nope", "Pictures"):
+    for folder in ("Windows", "C:\\", "Documents/nope", "Games"):
         rec = pc.run(D.Plan([{"tool": "open_in_vscode", "app": "vs code", "folder": folder, "post": ""}], "ok"))
         assert rec["status"] == "failed", folder
     assert pc.launched == []

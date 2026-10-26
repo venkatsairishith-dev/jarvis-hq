@@ -214,12 +214,12 @@ class Driver:
                 ctx = dialog_ctx(obs, action.get("app", ""), action.get("element", "") if action["act"] == "click" else "")
                 if ctx is not None:
                     body["ctx"] = ctx
-                    if self.h.classify is not None and ctx != UNREADABLE:     # D54b: the engine may only RAISE: a class C, or a B only the model saw, asks the owner first
+                    if self.h.classify is not None and ctx != UNREADABLE:     # D54b: the engine may only RAISE: a B or C that only the model saw (the kernel holds what the words show) asks the owner first
                         try:
                             cls, how = self.h.classify(ctx, str(action.get("app") or ""))
                         except Exception:  # noqa: BLE001 - a broken helper is a missing helper
                             cls, how = "A", "rule"
-                        if cls == "C" or (cls == "B" and how in ("model", "raised", "cache")):
+                        if cls in ("B", "C") and how in ("model", "raised", "cache"):
                             return result("stopped_to_ask", False, question=f"This dialog looks like it could be consequential (class {cls}). Should I go ahead with it?")
             res = self.h.act(body)
             entry = {"n": n, "act": action["act"], "app": str(action.get("app") or "")[:40], "ok": bool(res.get("ok")), "state": res.get("state")}

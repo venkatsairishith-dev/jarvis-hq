@@ -1248,9 +1248,9 @@ def effect_of(a: Action) -> tuple:
     proc, _, element = str(a.target).partition("|")
     skip = CONTENT_KEYS.get(tool, {}).get(op, ())
     params = {k: v for k, v in (a.params or {}).items() if k not in skip}
-    words = " ".join(_leaves(a.target, [], False) + _leaves(params, [], False))
-    inner = " ".join([element] + _leaves(params, [], False))
-    ctx = a.ctx if isinstance(a.ctx, str) else ""
+    words = clean_words(" ".join(_leaves(a.target, [], False) + _leaves(params, [], False)))        # NFKC, no invisible characters: full-width "Ｐａｙ" reads as pay
+    inner = clean_words(" ".join([element] + _leaves(params, [], False)))
+    ctx = clean_words(a.ctx) if isinstance(a.ctx, str) else ""
     if C_NEVER.search(words) or C_NEVER.search(ctx):
         return "C", "", "it could pay, send, delete, install, sign in or out, use a code or password, or need admin rights"
     if C_TERMS.search(words) or C_TERMS.search(ctx):
@@ -1267,9 +1267,9 @@ def _ui_level(a: Action, op: str):
     """The decision for an owner-direct ui action under the general rule. Returns (level, reason)."""
     cls, tag, why = effect_of(a)
     proc = str(a.target).partition("|")[0]
-    words = " ".join(_leaves(a.target, [], False) + _leaves(a.params, [], False))
+    words = clean_words(" ".join(_leaves(a.target, [], False) + _leaves(a.params, [], False)))
     if cls == "C":
-        if op == "click" and C_TERMS.search(words + " " + (a.ctx or "")) and not C_NEVER.search(words + " " + (a.ctx or "")) and auto_click_ok(a.target, words):
+        if op == "click" and C_TERMS.search(words + " " + clean_words(a.ctx or "")) and not C_NEVER.search(words + " " + clean_words(a.ctx or "")) and auto_click_ok(a.target, words):
             return YELLOW_AUTO, "the owner listed this on-screen permission button in config/auto_click.json: JARVIS clicks it itself"
         return YELLOW_APPROVAL, f"class C, always the owner's: {why}"
     if cls == "B":
@@ -1280,7 +1280,7 @@ def _ui_level(a: Action, op: str):
         if op == "click" and auto_click_ok(a.target, words):
             return YELLOW_AUTO, "the owner listed this on-screen button in config/auto_click.json: JARVIS clicks it itself"
         return YELLOW_APPROVAL, "a dialog that cannot be read, or that is not from an app the goal opened or named: the owner decides"
-    if SOFT_OK.search(" ".join([str(a.target).partition("|")[2]] + _leaves(a.params, [], False))) and not (
+    if SOFT_OK.search(clean_words(" ".join([str(a.target).partition("|")[2]] + _leaves(a.params, [], False)))) and not (
             a.ctx is not None and dialog_readable(a.ctx) and app_named(proc, a.goal)):
         if op == "click" and auto_click_ok(a.target, words):
             return YELLOW_AUTO, "the owner listed this on-screen permission button in config/auto_click.json: JARVIS clicks it itself"

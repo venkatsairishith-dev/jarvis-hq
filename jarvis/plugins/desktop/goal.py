@@ -30,6 +30,7 @@ import asyncio
 import json
 import os
 import re
+import secrets
 import tomllib
 import urllib.error
 import urllib.request
@@ -40,7 +41,7 @@ from typing import Any, Awaitable, Callable
 from jarvis.plugins._shared import loopback_http, screen_text, specialists
 from jarvis.plugins.main_agent import planner
 
-from . import composite, decide
+from . import composite, coordinator as coord, decide
 
 FLAG = "plan_online_execute_local"
 ENV_FLAG = "JARVIS_PLAN_ONLINE_EXECUTE_LOCAL"
@@ -53,7 +54,10 @@ ONLINE_PLAN = "online_plan_local_execution"      # result.planned_by: one plain 
 LOCAL_ALONE = "local_alone"
 LOCAL_KEY = "jarvis-local"                     # the placeholder key the gateway knows (it adds the real one itself)
 ROUTE_HEADER = "X-Jarvis-Route"                # "online": the gateway puts the online chain first (a reasoning call, not a simple local one)
-PLAN_TIMEOUT_S = 90.0
+PLAN_TIMEOUT_S = 120.0                         # the floor: plan_timeout() raises it above the longest wait for a provider's queue slot (the gateway waits that long before it fails over)
+QUEUE_MARGIN_S = 45.0
+MAX_BODY = 1 << 20                             # the most of any model's reply that is read (a gateway can relay a whole upstream body)
+PROVIDERS_FILE = Path(__file__).resolve().parents[2] / "privacy" / "providers.json"
 REASON_TIMEOUT_S = 180.0
 REASON_TOKENS = 3000                           # the solution text (code) fits; the plan call needs only 900
 SOLVED = "read_reason_type"                    # result.planned_by of a solve goal
@@ -64,6 +68,28 @@ PLUGIN_TOML = Path(__file__).with_name("plugin.toml")
 
 class GoalError(RuntimeError):
     """The online plan could not be had, or a local pick failed. The message holds none of the goal's text."""
+
+
+class Stopped(Exception):
+    """The owner said Stop while the goal was planning, between steps or inside a helper step."""
+
+
+def plan_timeout(providers_file: Path | str | None = None) -> float:
+    """How long the online plan call may take: above the longest `queue_wait_s` of an enabled provider (default 90 s when a provider names none), because the
+    gateway waits that long for a busy provider's slot BEFORE it fails over to the next; a shorter timeout here would always expire first."""
+    try:
+        data = json.loads(Path(providers_file or PROVIDERS_FILE).read_text(encoding="utf-8-sig"))
+        waits = [float(p.get("queue_wait_s") or 90) for p in data.get("providers") or [] if isinstance(p, dict) and p.get("enabled", True)]
+    except (OSError, ValueError, TypeError, AttributeError):
+        waits = []
+    return max(PLAN_TIMEOUT_S, (max(waits) if waits else 0.0) + QUEUE_MARGIN_S)
+
+
+def _read_capped(r) -> bytes:
+    raw = r.read(MAX_BODY + 1)
+    if len(raw) > MAX_BODY:
+        raise ValueError("the reply was too large")
+    return raw
 
 
 # ---------------------------------------------------------------------------------------------------------------- the flag
@@ -149,7 +175,7 @@ def _gateway_base() -> str:
     return f"http://127.0.0.1:{port}"
 
 
-def ask_online(messages: list[dict], post: Callable[[dict, dict], tuple[str, str]] | None = None, timeout: float = PLAN_TIMEOUT_S,
+def ask_online(messages: list[dict], post: Callable[[dict, dict], tuple[str, str]] | None = None, timeout: float | None = None,
                max_tokens: int = 900) -> tuple[str, str]:
     """(plan text, provider that answered) from the privacy gateway's online chain. The body holds messages and a few numbers: no `tools`,
     no `tool_choice`, no image part, no streaming. `post(body, headers)` is the test seam."""
@@ -162,9 +188,9 @@ def ask_online(messages: list[dict], post: Callable[[dict, dict], tuple[str, str
         raise GoalError(f"the privacy gateway is not ready ({why})")
     req = urllib.request.Request(_gateway_base() + "/v1/chat/completions", data=json.dumps(body).encode(), headers=headers)
     try:
-        with loopback_http.urlopen(req, timeout=timeout) as r:
+        with loopback_http.urlopen(req, timeout=plan_timeout() if timeout is None else timeout) as r:
             provider = r.headers.get("X-Jarvis-Provider", "") or "gateway"
-            out = json.loads(r.read().decode("utf-8", "replace"))
+            out = json.loads(_read_capped(r).decode("utf-8", "replace"))
         content = out["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
         raise GoalError(f"the online model answered HTTP {e.code}") from None
@@ -173,6 +199,19 @@ def ask_online(messages: list[dict], post: Callable[[dict, dict], tuple[str, str
     if not isinstance(content, str) or not content.strip():
         raise GoalError("the online model returned no plan")
     return content, provider
+
+
+def online_refusal(text: str) -> str | None:
+    """The online planner's own words when it answered with a well-formed plan that has NO steps (its "cannot", or a question back to the owner); None for
+    anything else (not JSON, wrong shape, too many steps, an unknown executor stay what they were: a format failure the local model may then cover)."""
+    try:
+        data = planner._extract_json(text)
+    except planner.PlanError:
+        return None
+    steps = data.get("steps")
+    if isinstance(steps, list) and not steps:
+        return str(data.get("summary") or "")
+    return None
 
 
 @dataclass
@@ -202,16 +241,22 @@ def _local_chat(body: dict, post: Callable[[dict], str] | None, timeout: float =
     req = urllib.request.Request(decide.LOCAL, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     try:
         with loopback_http.urlopen(req, timeout=timeout) as r:
-            out = json.loads(r.read().decode("utf-8", "replace"))
+            out = json.loads(_read_capped(r).decode("utf-8", "replace"))
         content = out["choices"][0]["message"]["content"]
     except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
         raise GoalError(f"the local model did not answer ({type(e).__name__})") from None
     return content if isinstance(content, str) else ""
 
 
-def _same_text(needle: str, haystack: str) -> bool:
-    norm = lambda s: re.sub(r"[\s\\/]+", "", str(s)).lower()           # noqa: E731
-    return bool(norm(needle)) and norm(needle) in norm(haystack)
+def written_by_owner(path: str, text: str) -> bool:
+    """Is this path one the owner wrote? The WHOLE path (slash kinds and case do not matter, spaces do) or, for a bare file name, the whole name, standing on its
+    own in his words: not letters inside another word ('e' is not in 'the deck for Q3'), not the end of a longer name ('x.pdf' is not in 'box.pdf'), not a
+    folder-less guess at a file inside folders he did not name."""
+    norm = lambda s: re.sub(r"\s+", " ", re.sub(r"[\\/]+", "/", str(s))).strip().strip("\"'").casefold()           # noqa: E731
+    p, t = norm(path), norm(text)
+    if len(p) < 3 or not t:
+        return False
+    return bool(re.search(r"(?<![\w.~:/-])" + re.escape(p) + r"(?![\w/-]|\.\w)", t))
 
 
 def pick_args(ex: Executor, spec: specialists.Specialist, step_goal: str, request: str, post: Callable[[dict], str] | None = None) -> dict:
@@ -246,7 +291,7 @@ def pick_args(ex: Executor, spec: specialists.Specialist, step_goal: str, reques
             raise GoalError(f"the request does not say {', '.join(missing)}")
         if any(not planner._type_ok(v, props[k]) for k, v in args.items()):
             raise GoalError("the local model gave an argument of the wrong type")
-        if "path" in args and not _same_text(args["path"], request):
+        if "path" in args and not written_by_owner(args["path"], request):
             raise GoalError("the file path is not one the owner wrote, so it was not used")
         if any(isinstance(v, str) and (re.search(r"[\r\n\0]", v) or len(v) > 300) for v in args.values()):
             raise GoalError("an argument was not one plain short line")
@@ -343,10 +388,53 @@ class GoalRunner:
         self.decide_fn = hands.decide_fn or (lambda goal, model: decide.decide(goal, _profiles(), model=model, post=hands.local_post))
 
     # ---- the whole goal
-    async def run(self, goal: str, enabled: bool = True) -> dict:
+    async def run(self, goal: str, enabled: bool = True, utterance: str = "") -> dict:
+        """The goal as one registered PC operation: the owner's Stop reaches it while it plans, between steps and inside a helper step; a stopped goal
+        reports what had been done and starts nothing more. `utterance`: the owner's own sentence when the host has it (a path must be one HE wrote)."""
         goal = " ".join(str(goal or "").split())[:MAX_GOAL]
         if not goal:
             return {"status": "failed", "planned_by": "none", "summary": "Say what you want done on the PC.", "steps": []}
+        self.utterance = " ".join(str(utterance or goal).split())[:MAX_GOAL]
+        self.done_steps: list[dict] = []
+        self.op = coord.begin("goal", "goal-" + secrets.token_hex(3))
+        self.op.goal = self.utterance
+        self.op.worker_start()
+        tok = coord.bind(self.op)
+        try:
+            return await self._run(goal, enabled)
+        except Stopped:
+            return self._stopped()
+        finally:
+            coord.unbind(tok)
+            self.op.worker_done()
+            self.op.entry_exit()
+
+    def _stopped(self) -> dict:
+        done = [s for s in self.done_steps if s.get("status") == "completed"]
+        before = " ".join(f"Step {s['n']}: {s.get('done_text') or s.get('result') or 'done'}." for s in done)
+        return {"status": "cancelled", "planned_by": getattr(self, "planned_by", "none"), "steps": [{k: v for k, v in s.items() if k not in ("done_text", "check")} for s in self.done_steps],
+                "summary": ("Stopped, as you asked. " + (f"Before the stop: {before}" if before else "Nothing had been done yet."))[:1500]}
+
+    def _check_stop(self) -> None:
+        if self.op.stop_flag.is_set():
+            raise Stopped()
+
+    async def _guard(self, aw):
+        """Await `aw`, but give up the moment the owner's Stop arrives (a thread already running cannot be killed; nothing waits for it and nothing follows it)."""
+        task = asyncio.ensure_future(aw)
+        try:
+            while True:
+                done, _ = await asyncio.wait({task}, timeout=0.25)
+                if done:
+                    return task.result()
+                if self.op.stop_flag.is_set():
+                    task.cancel()
+                    raise Stopped()
+        except asyncio.CancelledError:
+            task.cancel()
+            raise
+
+    async def _run(self, goal: str, enabled: bool) -> dict:
         if not enabled:
             return await self._local_alone(goal, "the online-plan option is off")
         solve = solve_request(goal) if self.h.read_window is not None and self.h.pick_editor is not None else None
@@ -354,7 +442,10 @@ class GoalRunner:
             return await self._solve(goal, solve)
         caps = catalogue(self.h.readers)
         try:
-            text, provider = await asyncio.to_thread(self.h.ask_online, plan_messages(goal, caps))
+            text, provider = await self._guard(asyncio.to_thread(self.h.ask_online, plan_messages(goal, caps)))
+            refusal = online_refusal(text)
+            if refusal is not None:                                 # a "cannot" from the online planner is an answer, not a failure: it is not overridden by the small model
+                return self._declined(refusal, provider)
             plan = parse_online_plan(text, caps)
             plan.provider = provider
         except GoalError as e:
@@ -363,6 +454,15 @@ class GoalRunner:
             return await self._local_alone(goal, f"the online plan was not usable ({e})")
         return await self._execute(goal, plan)
 
+    def _declined(self, summary: str, provider: str) -> dict:
+        """The online planner said it cannot do this (or asked a question): the owner hears that, and no local model plans the same goal alone."""
+        self.planned_by = ONLINE_PLAN
+        said = screen_text.scrub_text(" ".join(summary.split())[:200])[0] or "it has no step for that"
+        asks = "?" in said
+        return {"status": "needs_clarification" if asks else "failed", "planned_by": ONLINE_PLAN, "provider": provider or "gateway", "steps": [],
+                "summary": (said if asks else f"The planning model could not plan this: {said}. I did not hand it to the local model alone; say it another way or tell me exactly what to do.")[:1500],
+                **({"question": said} if asks else {})}
+
     async def _solve(self, goal: str, req: dict) -> dict:
         """Read the one window, ask the online model for the solution (text only, through the gateway), type it locally, save it if asked."""
         steps: list[dict] = [
@@ -370,6 +470,7 @@ class GoalRunner:
             {"n": 2, "id": "s2", "executor": "reason", "kind": "reason", "goal": "ask the online model for the solution text", "model": "online"},
             {"n": 3, "id": "s3", "executor": "type_solution", "kind": "ui_decide", "goal": "type the solution into the editor and save it if asked", "model": ""}]
         head = "Solve what is on the screen: read locally, reasoned online (redacted text only), typed locally."
+        self.planned_by, self.done_steps = SOLVED, steps
 
         def stop(i: int, status: str, why: str, **extra) -> dict:
             steps[i].update(status=status, result=why[:RESULT_CHARS], **extra)
@@ -390,7 +491,9 @@ class GoalRunner:
             save = (name, spec)
         # 1. read ---------------------------------------------------------------------------------------------------------------
         try:
-            got = await self.h.read_window(req["read_app"], req["type_app"])
+            got = await self._guard(self.h.read_window(req["read_app"], req["type_app"]))
+        except Stopped:
+            raise
         except Exception as e:  # noqa: BLE001 - a failed read is a failed step; the class only
             return stop(0, "failed", f"the window could not be read ({type(e).__name__})")
         if not isinstance(got, dict) or got.get("ok") is not True or not str(got.get("text") or "").strip():
@@ -399,15 +502,17 @@ class GoalRunner:
         steps[0].update(status="completed", result=f"read {len(text)} characters from the {got.get('app') or 'front'} window ({got.get('source') or 'screen'})",
                         verified=False)
         # 2. reason: only through the gateway, only this one window's text, only because the owner asked -----------------------------
-        rel = await asyncio.to_thread(self.h.release_text, text)
+        self._check_stop()
+        rel = await self._guard(asyncio.to_thread(self.h.release_text, text))
         if not getattr(rel, "allowed", False) or not str(getattr(rel, "text", "")).strip():
             note = str(getattr(rel, "note", "") or "redaction could not be confirmed, so the window's text was not sent")
             return stop(1, "failed", f"{note}. Nothing was sent online and nothing was typed.", sent_chars=0)
         sent = rel.text
         try:
-            answer, provider = await asyncio.to_thread(self.h.ask_reason, reason_messages(goal, sent))
+            answer, provider = await self._guard(asyncio.to_thread(self.h.ask_reason, reason_messages(goal, sent)))
         except GoalError as e:
             return stop(1, "failed", f"{e}. The text was not typed.", sent_chars=len(sent))
+        self._check_stop()                                       # the owner stopped while the model was thinking: nothing is typed
         solution = clean_solution(answer)
         if not solution or solution.strip().upper() == "CANNOT_SOLVE":
             return stop(1, "failed", "the online model could not work out a solution from that window, so nothing was typed", sent_chars=len(sent))
@@ -418,7 +523,9 @@ class GoalRunner:
                                + (f" (the window held {len(text)} characters; only the first {screen_text.MAX_TEXT} were sent)" if len(text) > screen_text.MAX_TEXT else ""))
         # 3. type locally -------------------------------------------------------------------------------------------------------
         try:
-            ed = await self.h.pick_editor(req["type_app"], got.get("app"))
+            ed = await self._guard(self.h.pick_editor(req["type_app"], got.get("app")))
+        except Stopped:
+            raise
         except Exception as e:  # noqa: BLE001
             return stop(2, "failed", f"the editor could not be found ({type(e).__name__})")
         if not isinstance(ed, dict) or ed.get("ok") is not True or not ed.get("app"):
@@ -429,7 +536,8 @@ class GoalRunner:
         if save:
             plan_steps.append({"tool": "save_as", "app": app, "name": save[0], "folder": save[1], "digest": composite.text_digest(solution),
                                "post": decide.POST["save_as"].format(name=save[0], folder=save[1])})
-        rec = await self.h.run_pc(goal, decide.Plan(plan_steps, "ok", model="solve"))
+        self._check_stop()
+        rec = await self._guard(self.h.run_pc(goal, decide.Plan(plan_steps, "ok", model="solve")))
         done = self._pc_step(steps[2], rec, "")
         steps[2] = done
         out = self._result(steps, SOLVED, head, rec)
@@ -439,8 +547,10 @@ class GoalRunner:
     async def _local_alone(self, goal: str, why: str) -> dict:
         """The local model plans by itself (decide.py, as run_pc_task always did) and says so."""
         spec = specialists.resolve("ui_decide", self.table)
+        self.planned_by = LOCAL_ALONE
         plan = await self._decide(goal, spec)
-        rec = await self.h.run_pc(goal, plan)
+        self._check_stop()
+        rec = await self._guard(self.h.run_pc(goal, plan))
         step = self._pc_step({"n": 1, "executor": "pc", "kind": "ui_decide", "goal": goal, "check": ""}, rec, spec.alias)
         out = self._result([step], LOCAL_ALONE, f"Planned by the local model alone: {why}.", rec)
         out["reason"] = why[:200]
@@ -449,22 +559,25 @@ class GoalRunner:
     async def _decide(self, goal: str, spec: specialists.Specialist) -> decide.Plan:
         plan = None
         for alias in spec.aliases:
-            plan = await asyncio.to_thread(self.decide_fn, goal, alias)
+            plan = await self._guard(asyncio.to_thread(self.decide_fn, goal, alias))
             if plan.status != "fallback" or not plan.problems or "did not answer" not in " ".join(plan.problems):
                 return plan
         return plan
 
     async def _execute(self, goal: str, plan: GoalPlan) -> dict:
         done: list[dict] = []
+        self.planned_by, self.done_steps = ONLINE_PLAN, done
         last_rec: dict | None = None
         for s in plan.steps:
+            self._check_stop()
             ex, spec = EXECUTORS[s["executor"]], specialists.resolve(EXECUTORS[s["executor"]].kind, self.table)
             if ex.entry == "":
                 dplan = await self._decide(s["goal"], spec)
-                last_rec = rec = await self.h.run_pc(s["goal"], dplan)
+                self._check_stop()
+                last_rec = rec = await self._guard(self.h.run_pc(s["goal"], dplan))
                 step = self._pc_step(s, rec, spec.alias)
             else:
-                step = await self._helper_step(s, ex, spec, goal)
+                step = await self._helper_step(s, ex, spec, self.utterance)
             done.append(step)
             if step["status"] != "completed":
                 break
@@ -485,20 +598,25 @@ class GoalRunner:
         if rec.get("approval_id"):
             out["approval_id"] = rec["approval_id"]
         out["verified"] = bool(steps) and all(x.get("passed") for x in steps) and not rec.get("uncertain")
+        # what coordinator.summary says too: a step that passed on the node's "ok" alone, and the parts of the request the plan had to leave out
+        out["uncertain"] = [_short(u) for u in (rec.get("uncertain") or [])][:5]
+        out["dropped"] = [_short(p) for p in ((rec.get("plan") or {}).get("problems") or []) if p][:5]
         return out
 
     async def _helper_step(self, s: dict, ex: Executor, spec: specialists.Specialist, request: str) -> dict:
         base = {**s, "model": spec.alias}
         try:
-            args = await asyncio.to_thread(pick_args, ex, specialists.resolve("chat_simple", self.table), s["goal"], request, self.h.local_post)   # arguments are simple text work
+            args = await self._guard(asyncio.to_thread(pick_args, ex, specialists.resolve("chat_simple", self.table), s["goal"], request, self.h.local_post))   # arguments are simple text work
             if ex.entry.startswith("reader:"):
                 fn = self.h.readers[ex.entry.split(":", 1)[1]]
-                value = await asyncio.to_thread(lambda: fn(**args))
+                value = await self._guard(asyncio.to_thread(lambda: fn(**args)))
                 ok, val, err = True, ({"text": value} if not isinstance(value, dict) else value), ""
                 if isinstance(value, list):
                     val = {"count": len(value), "text": _short(value)}
             else:
-                ok, val, err = await self.h.call(ex.entry, args)
+                ok, val, err = await self._guard(self.h.call(ex.entry, args))
+        except Stopped:
+            raise
         except GoalError as e:
             return {**base, "status": "failed", "result": str(e)[:RESULT_CHARS]}
         except Exception as e:  # noqa: BLE001 - a failed helper is a failed step
@@ -516,9 +634,21 @@ class GoalRunner:
             if s.get("check"):
                 s["note"] = "success check from the plan: " + s["check"]          # next to what the executor observed, not instead of it
         if bad is None:
-            # a helper's own text (a window's words, a document) stays in the step's `result`, which is cleaned as screen text; the summary has none of it
+            # a helper's own text (a window's words, a document) stays in the step's `result`, which is cleaned as screen text; the summary has none of it.
+            # A PC step is "done" only as far as it was OBSERVED (the owner's rule after "Calculator is open" was said while it was not): one that passed on the
+            # node's word alone, or that is not verified, is reported as such, and the parts of the request the plan dropped are listed as not done.
+            pc = [s for s in steps if s.get("executor") in ("pc", "type_solution")]
+            doubts = [u for s in pc for u in s.get("uncertain") or []]
+            unseen = [s for s in pc if not s.get("verified") and not s.get("uncertain")]
+            dropped = [p for s in pc for p in s.get("dropped") or []]
             tail = " ".join(f"Step {s['n']}: {s['done_text']}." if s.get("done_text") else f"Step {s['n']} ({s['executor']}) done." for s in steps)
-            summary = f"{head} Done. {tail}".strip()
+            if doubts or unseen:
+                tail = " ".join((f"Step {s['n']}: {s['done_text']}." if s.get("done_text") else f"Step {s['n']} ({s['executor']}) was sent.") for s in steps)
+                tail += (" Not certain: " + "; ".join(doubts)[:300] + ".") if doubts else " Nothing about its effect could be checked on the PC."
+            if dropped:
+                tail += " Not done: " + "; ".join(dropped)[:300] + "."
+            lead = "Done, but not everything was observed" if (doubts or unseen) else "Done"
+            summary = f"{head} {lead}. {tail}".strip()
         elif status == "waiting_for_permission":
             aid = bad.get("approval_id") or (rec or {}).get("approval_id")
             summary = (f"{head} Step {bad['n']} needs your approval first. Approve it in the JARVIS console with your PIN"
