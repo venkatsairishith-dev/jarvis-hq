@@ -1,0 +1,27 @@
+{
+ "time": "2026-10-27 00:20:54",
+ "rows": [
+  {
+   "model": "decider-qwen3-4b-ngl24",
+   "gpu_mb_before_load": 1018,
+   "first_answer_s": 3.8,
+   "first_reply": "OK.",
+   "tokens_per_s": 15.1,
+   "prompt_tokens_per_s": 37.7,
+   "generated_tokens": 200,
+   "peak_ram_mb": 3123,
+   "peak_gpu_mb": 2865
+  },
+  {
+   "model": "decider-qwen3-4b-ngl18",
+   "gpu_mb_before_load": 1022,
+   "first_answer_s": 3.9,
+   "first_reply": "OK.",
+   "tokens_per_s": 10.7,
+   "prompt_tokens_per_s": 27.7,
+   "generated_tokens": 200,
+   "peak_ram_mb": 3123,
+   "peak_gpu_mb": 2526
+  }
+ ]
+}

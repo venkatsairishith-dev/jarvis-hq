@@ -1,0 +1,734 @@
+{
+ "when": "2026-10-27 00:00:29",
+ "cases": 121,
+ "kinds": [
+  "app",
+  "dialog_class",
+  "file",
+  "folder",
+  "intent",
+  "specialist"
+ ],
+ "models": {
+  "decider": {
+   "engine": {
+    "app": {
+     "n": 4,
+     "accuracy": 0.5,
+     "asked": 0,
+     "sure_but_wrong": [
+      "P02",
+      "P03"
+     ],
+     "p50_ms": 476,
+     "p95_ms": 969,
+     "lowered_class": [],
+     "failed": [
+      "P02",
+      "P03"
+     ],
+     "by_tag": {
+      "vague": 0.0
+     }
+    },
+    "dialog_class": {
+     "n": 16,
+     "accuracy": 1.0,
+     "asked": 0,
+     "sure_but_wrong": [],
+     "p50_ms": 0,
+     "p95_ms": 5141,
+     "lowered_class": [],
+     "failed": [],
+     "by_tag": {
+      "hindi": 1.0,
+      "mixed": 1.0,
+      "injection": 1.0,
+      "vague": 1.0
+     }
+    },
+    "file": {
+     "n": 4,
+     "accuracy": 1.0,
+     "asked": 2,
+     "sure_but_wrong": [],
+     "p50_ms": 968,
+     "p95_ms": 1219,
+     "lowered_class": [],
+     "failed": [],
+     "by_tag": {
+      "vague": 1.0
+     }
+    },
+    "folder": {
+     "n": 5,
+     "accuracy": 0.6,
+     "asked": 0,
+     "sure_but_wrong": [
+      "F04",
+      "F05"
+     ],
+     "p50_ms": 0,
+     "p95_ms": 5094,
+     "lowered_class": [],
+     "failed": [
+      "F04",
+      "F05"
+     ],
+     "by_tag": {
+      "hindi": 1.0,
+      "mixed": 1.0,
+      "vague": 0.0
+     }
+    },
+    "intent": {
+     "n": 87,
+     "accuracy": 0.989,
+     "asked": 0,
+     "sure_but_wrong": [
+      "I29"
+     ],
+     "p50_ms": 0,
+     "p95_ms": 1141,
+     "lowered_class": [],
+     "failed": [
+      "I29"
+     ],
+     "by_tag": {
+      "hindi": 1.0,
+      "telugu": 1.0,
+      "mixed": 1.0,
+      "injection": 1.0,
+      "vague": 1.0
+     }
+    },
+    "specialist": {
+     "n": 5,
+     "accuracy": 1.0,
+     "asked": 0,
+     "sure_but_wrong": [],
+     "p50_ms": 0,
+     "p95_ms": 0,
+     "lowered_class": [],
+     "failed": []
+    }
+   },
+   "model": {
+    "app": {
+     "n": 4,
+     "accuracy": 0.25,
+     "asked": 0,
+     "sure_but_wrong": [
+      "P01",
+      "P02",
+      "P03"
+     ],
+     "p50_ms": 6140,
+     "p95_ms": 6329,
+     "lowered_class": [],
+     "failed": [
+      "P01",
+      "P02",
+      "P03"
+     ],
+     "by_tag": {
+      "vague": 0.0
+     }
+    },
+    "dialog_class": {
+     "n": 16,
+     "accuracy": 0.812,
+     "asked": 0,
+     "sure_but_wrong": [
+      "D06",
+      "D09",
+      "D15"
+     ],
+     "p50_ms": 8344,
+     "p95_ms": 17704,
+     "lowered_class": [
+      "D09",
+      "D15"
+     ],
+     "failed": [
+      "D06",
+      "D09",
+      "D15"
+     ],
+     "by_tag": {
+      "hindi": 1.0,
+      "mixed": 1.0,
+      "injection": 1.0,
+      "vague": 0.0
+     }
+    },
+    "file": {
+     "n": 4,
+     "accuracy": 1.0,
+     "asked": 2,
+     "sure_but_wrong": [],
+     "p50_ms": 6289,
+     "p95_ms": 7188,
+     "lowered_class": [],
+     "failed": [],
+     "by_tag": {
+      "vague": 1.0
+     }
+    },
+    "folder": {
+     "n": 5,
+     "accuracy": 0.6,
+     "asked": 0,
+     "sure_but_wrong": [
+      "F04",
+      "F05"
+     ],
+     "p50_ms": 6109,
+     "p95_ms": 16390,
+     "lowered_class": [],
+     "failed": [
+      "F04",
+      "F05"
+     ],
+     "by_tag": {
+      "hindi": 1.0,
+      "mixed": 1.0,
+      "vague": 0.0
+     }
+    },
+    "intent": {
+     "n": 87,
+     "accuracy": 0.368,
+     "asked": 0,
+     "sure_but_wrong": [
+      "I06",
+      "I07",
+      "I11",
+      "I14",
+      "I25",
+      "I26",
+      "I27",
+      "I29",
+      "T-mkdir",
+      "T-create_file",
+      "T-rename",
+      "T-move",
+      "T-copy",
+      "T-copy_into_new_folder",
+      "T-find_and_show",
+      "T-find_filtered",
+      "T-find_by_name",
+      "T-zip",
+      "T-unzip",
+      "T-sort_downloads",
+      "T-undo_last",
+      "T-delete_permanent",
+      "T-empty_bin",
+      "T-cleanup",
+      "T-trash",
+      "T-snap_left",
+      "T-snap_right",
+      "T-arrange_side_by_side",
+      "T-show_desktop",
+      "T-close_app",
+      "T-screenshot",
+      "T-copy_screen_text",
+      "T-paste",
+      "T-type_active",
+      "T-dark_mode",
+      "T-brightness",
+      "T-dnd_on",
+      "T-dnd_off",
+      "T-wallpaper",
+      "T-lock_screen",
+      "T-wifi_off",
+      "T-wifi_on",
+      "T-bluetooth_off",
+      "T-bluetooth_on",
+      "T-airplane_mode_on",
+      "T-read_clipboard",
+      "T-time_now",
+      "T-battery",
+      "T-disk_space",
+      "T-network_status",
+      "T-today_folder",
+      "T-calculate",
+      "T-convert_units",
+      "T-read_window_aloud",
+      "T-summarize_window"
+     ],
+     "p50_ms": 6813,
+     "p95_ms": 9906,
+     "lowered_class": [],
+     "failed": [
+      "I06",
+      "I07",
+      "I11",
+      "I14",
+      "I25",
+      "I26",
+      "I27",
+      "I29",
+      "T-mkdir",
+      "T-create_file",
+      "T-rename",
+      "T-move",
+      "T-copy",
+      "T-copy_into_new_folder",
+      "T-find_and_show",
+      "T-find_filtered",
+      "T-find_by_name",
+      "T-zip",
+      "T-unzip",
+      "T-sort_downloads",
+      "T-undo_last",
+      "T-delete_permanent",
+      "T-empty_bin",
+      "T-cleanup",
+      "T-trash",
+      "T-snap_left",
+      "T-snap_right",
+      "T-arrange_side_by_side",
+      "T-show_desktop",
+      "T-close_app",
+      "T-screenshot",
+      "T-copy_screen_text",
+      "T-paste",
+      "T-type_active",
+      "T-dark_mode",
+      "T-brightness",
+      "T-dnd_on",
+      "T-dnd_off",
+      "T-wallpaper",
+      "T-lock_screen",
+      "T-wifi_off",
+      "T-wifi_on",
+      "T-bluetooth_off",
+      "T-bluetooth_on",
+      "T-airplane_mode_on",
+      "T-read_clipboard",
+      "T-time_now",
+      "T-battery",
+      "T-disk_space",
+      "T-network_status",
+      "T-today_folder",
+      "T-calculate",
+      "T-convert_units",
+      "T-read_window_aloud",
+      "T-summarize_window"
+     ],
+     "by_tag": {
+      "hindi": 0.857,
+      "telugu": 0.5,
+      "mixed": 0.727,
+      "injection": 1.0,
+      "vague": 0.0
+     }
+    },
+    "specialist": {
+     "n": 5,
+     "accuracy": 0.8,
+     "asked": 0,
+     "sure_but_wrong": [
+      "S04"
+     ],
+     "p50_ms": 5969,
+     "p95_ms": 13390,
+     "lowered_class": [],
+     "failed": [
+      "S04"
+     ]
+    }
+   }
+  },
+  "decider-qwen3-1.7b": {
+   "engine": {
+    "app": {
+     "n": 4,
+     "accuracy": 0.5,
+     "asked": 0,
+     "sure_but_wrong": [
+      "P02",
+      "P03"
+     ],
+     "p50_ms": 297,
+     "p95_ms": 797,
+     "lowered_class": [],
+     "failed": [
+      "P02",
+      "P03"
+     ],
+     "by_tag": {
+      "vague": 0.0
+     }
+    },
+    "dialog_class": {
+     "n": 16,
+     "accuracy": 1.0,
+     "asked": 0,
+     "sure_but_wrong": [],
+     "p50_ms": 0,
+     "p95_ms": 14406,
+     "lowered_class": [],
+     "failed": [],
+     "by_tag": {
+      "hindi": 1.0,
+      "mixed": 1.0,
+      "injection": 1.0,
+      "vague": 1.0
+     }
+    },
+    "file": {
+     "n": 4,
+     "accuracy": 0.75,
+     "asked": 1,
+     "sure_but_wrong": [
+      "L04"
+     ],
+     "p50_ms": 812,
+     "p95_ms": 1234,
+     "lowered_class": [],
+     "failed": [
+      "L04"
+     ],
+     "by_tag": {
+      "vague": 0.5
+     }
+    },
+    "folder": {
+     "n": 5,
+     "accuracy": 0.6,
+     "asked": 0,
+     "sure_but_wrong": [
+      "F04",
+      "F05"
+     ],
+     "p50_ms": 0,
+     "p95_ms": 5766,
+     "lowered_class": [],
+     "failed": [
+      "F04",
+      "F05"
+     ],
+     "by_tag": {
+      "hindi": 1.0,
+      "mixed": 1.0,
+      "vague": 0.0
+     }
+    },
+    "intent": {
+     "n": 87,
+     "accuracy": 0.966,
+     "asked": 0,
+     "sure_but_wrong": [
+      "I10",
+      "I22",
+      "I23"
+     ],
+     "p50_ms": 0,
+     "p95_ms": 2313,
+     "lowered_class": [],
+     "failed": [
+      "I10",
+      "I22",
+      "I23"
+     ],
+     "by_tag": {
+      "hindi": 0.714,
+      "telugu": 0.75,
+      "mixed": 0.727,
+      "injection": 1.0,
+      "vague": 1.0
+     }
+    },
+    "specialist": {
+     "n": 5,
+     "accuracy": 1.0,
+     "asked": 0,
+     "sure_but_wrong": [],
+     "p50_ms": 0,
+     "p95_ms": 0,
+     "lowered_class": [],
+     "failed": []
+    }
+   },
+   "model": {
+    "app": {
+     "n": 4,
+     "accuracy": 0.5,
+     "asked": 0,
+     "sure_but_wrong": [
+      "P02",
+      "P03"
+     ],
+     "p50_ms": 953,
+     "p95_ms": 1344,
+     "lowered_class": [],
+     "failed": [
+      "P02",
+      "P03"
+     ],
+     "by_tag": {
+      "vague": 0.0
+     }
+    },
+    "dialog_class": {
+     "n": 16,
+     "accuracy": 0.375,
+     "asked": 0,
+     "sure_but_wrong": [
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D15"
+     ],
+     "p50_ms": 1546,
+     "p95_ms": 15656,
+     "lowered_class": [
+      "D05",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D15"
+     ],
+     "failed": [
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D15"
+     ],
+     "by_tag": {
+      "hindi": 1.0,
+      "mixed": 1.0,
+      "injection": 1.0,
+      "vague": 0.0
+     }
+    },
+    "file": {
+     "n": 4,
+     "accuracy": 0.5,
+     "asked": 2,
+     "sure_but_wrong": [
+      "L04"
+     ],
+     "p50_ms": 875,
+     "p95_ms": 1281,
+     "lowered_class": [],
+     "failed": [
+      "L03",
+      "L04"
+     ],
+     "by_tag": {
+      "vague": 0.5
+     }
+    },
+    "folder": {
+     "n": 5,
+     "accuracy": 0.6,
+     "asked": 0,
+     "sure_but_wrong": [
+      "F04",
+      "F05"
+     ],
+     "p50_ms": 718,
+     "p95_ms": 813,
+     "lowered_class": [],
+     "failed": [
+      "F04",
+      "F05"
+     ],
+     "by_tag": {
+      "hindi": 1.0,
+      "mixed": 1.0,
+      "vague": 0.0
+     }
+    },
+    "intent": {
+     "n": 87,
+     "accuracy": 0.322,
+     "asked": 0,
+     "sure_but_wrong": [
+      "I07",
+      "I10",
+      "I22",
+      "I23",
+      "I25",
+      "I26",
+      "I27",
+      "T-mkdir",
+      "T-create_file",
+      "T-rename",
+      "T-move",
+      "T-copy",
+      "T-copy_into_new_folder",
+      "T-find_and_show",
+      "T-find_filtered",
+      "T-find_by_name",
+      "T-zip",
+      "T-unzip",
+      "T-sort_downloads",
+      "T-undo_last",
+      "T-delete_permanent",
+      "T-empty_bin",
+      "T-cleanup",
+      "T-trash",
+      "T-snap_left",
+      "T-snap_right",
+      "T-arrange_side_by_side",
+      "T-show_desktop",
+      "T-close_app",
+      "T-screenshot",
+      "T-copy_screen_text",
+      "T-paste",
+      "T-type_active",
+      "T-dark_mode",
+      "T-light_mode",
+      "T-brightness",
+      "T-dnd_on",
+      "T-dnd_off",
+      "T-night_light",
+      "T-wallpaper",
+      "T-lock_screen",
+      "T-reminder",
+      "T-wifi_off",
+      "T-wifi_on",
+      "T-bluetooth_off",
+      "T-bluetooth_on",
+      "T-airplane_mode_on",
+      "T-airplane_mode_off",
+      "T-vault_note",
+      "T-read_clipboard",
+      "T-time_now",
+      "T-battery",
+      "T-disk_space",
+      "T-network_status",
+      "T-today_folder",
+      "T-calculate",
+      "T-convert_units",
+      "T-read_window_aloud",
+      "T-summarize_window"
+     ],
+     "p50_ms": 1531,
+     "p95_ms": 2313,
+     "lowered_class": [],
+     "failed": [
+      "I07",
+      "I10",
+      "I22",
+      "I23",
+      "I25",
+      "I26",
+      "I27",
+      "T-mkdir",
+      "T-create_file",
+      "T-rename",
+      "T-move",
+      "T-copy",
+      "T-copy_into_new_folder",
+      "T-find_and_show",
+      "T-find_filtered",
+      "T-find_by_name",
+      "T-zip",
+      "T-unzip",
+      "T-sort_downloads",
+      "T-undo_last",
+      "T-delete_permanent",
+      "T-empty_bin",
+      "T-cleanup",
+      "T-trash",
+      "T-snap_left",
+      "T-snap_right",
+      "T-arrange_side_by_side",
+      "T-show_desktop",
+      "T-close_app",
+      "T-screenshot",
+      "T-copy_screen_text",
+      "T-paste",
+      "T-type_active",
+      "T-dark_mode",
+      "T-light_mode",
+      "T-brightness",
+      "T-dnd_on",
+      "T-dnd_off",
+      "T-night_light",
+      "T-wallpaper",
+      "T-lock_screen",
+      "T-reminder",
+      "T-wifi_off",
+      "T-wifi_on",
+      "T-bluetooth_off",
+      "T-bluetooth_on",
+      "T-airplane_mode_on",
+      "T-airplane_mode_off",
+      "T-vault_note",
+      "T-read_clipboard",
+      "T-time_now",
+      "T-battery",
+      "T-disk_space",
+      "T-network_status",
+      "T-today_folder",
+      "T-calculate",
+      "T-convert_units",
+      "T-read_window_aloud",
+      "T-summarize_window"
+     ],
+     "by_tag": {
+      "hindi": 0.714,
+      "telugu": 0.5,
+      "mixed": 0.636,
+      "injection": 1.0,
+      "vague": 0.0
+     }
+    },
+    "specialist": {
+     "n": 5,
+     "accuracy": 0.2,
+     "asked": 0,
+     "sure_but_wrong": [
+      "S01",
+      "S02",
+      "S04",
+      "S05"
+     ],
+     "p50_ms": 813,
+     "p95_ms": 6375,
+     "lowered_class": [],
+     "failed": [
+      "S01",
+      "S02",
+      "S04",
+      "S05"
+     ]
+    }
+   }
+  }
+ },
+ "suggested_thresholds": {
+  "app": 0.9,
+  "dialog_class": 0.0,
+  "file": 0.9,
+  "folder": 0.9,
+  "intent": 0.4,
+  "specialist": 0.4
+ },
+ "suggested_models": {
+  "folder": "decider-qwen3-1.7b",
+  "app": "decider-qwen3-1.7b"
+ }
+}
