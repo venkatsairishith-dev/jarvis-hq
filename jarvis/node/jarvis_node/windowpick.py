@@ -129,6 +129,16 @@ def pick_env(proc: str, mutating: bool) -> dict:
     return {"JARVIS_UI_HWND": str(w["hwnd"]), "JARVIS_UI_PID": str(w["pid"]), "JARVIS_UI_PICKNOTE": note}
 
 
+_LAUNCHED: list[dict] = []          # what the last launch opened ({proc, pid}), handed once to the job result: the journal's undo recipe (D61) closes exactly that window
+
+
+def take_launched() -> list[dict]:
+    """The windows the last launch recorded (process name and pid only; never a handle), once."""
+    out = list(_LAUNCHED)
+    _LAUNCHED.clear()
+    return out
+
+
 def launch_and_record(proc: str, start) -> None:
     """Start the app (`start()` does it) and remember the window that appeared because of it."""
     try:
@@ -144,6 +154,7 @@ def launch_and_record(proc: str, start) -> None:
             now = []
         if now:
             record(proc, [w["hwnd"] for w in now], now[0].get("pid", 0))
+            _LAUNCHED[:] = [{"proc": proc.lower(), "pid": int(now[0].get("pid", 0))}]
             return
 
 
@@ -167,5 +178,7 @@ def launch_and_record_any(start) -> list[str]:
                 if w.get("name"):
                     record(w["name"], [w["hwnd"]], w.get("pid", 0))
                     names.append(w["name"])
+                    if not any(x["pid"] == int(w.get("pid", 0)) for x in _LAUNCHED):
+                        _LAUNCHED.append({"proc": w["name"].lower(), "pid": int(w.get("pid", 0))})
             return names
     return []

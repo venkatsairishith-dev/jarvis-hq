@@ -19,3 +19,6 @@ auto_start = true
 # D51: an online model plans the goal (text only, through the privacy gateway), local models execute it. false: the local model plans alone.
 # JARVIS_PLAN_ONLINE_EXECUTE_LOCAL=0 turns it off for one run without editing this file.
 plan_online_execute_local = true
+# D61: the flight recorder (Timeline panel) takes a before/after picture of the ONE window a step acted on, kept on D: for 7 days, never sent anywhere.
+# false: no pictures at all. JARVIS_JOURNAL_SCREENSHOTS=0 turns it off for one run; D:\jarvis\data\journal\settings.json {"journal_screenshots": false} too.
+journal_screenshots = true

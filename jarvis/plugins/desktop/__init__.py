@@ -19,9 +19,9 @@ from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_pl
 
 from jarvis.plugins._shared import screen_text
 
-from . import coordinator as coord, core, decide, goal as goal_mod
+from . import coordinator as coord, core, decide, goal as goal_mod, journal_client as jc, undoer
 
-PROFILE_HELP = "Chrome profile alias: 'default' (the owner's default account) or a name such as 'VenkatAMV'; see list_browser_profiles."
+PROFILE_HELP = "Chrome profile alias: 'default' or a name such as 'VenkatAMV'; see list_browser_profiles."
 
 
 class StepUnavailable(RuntimeError):
@@ -231,7 +231,9 @@ class DesktopPlugin(PluginBase):
 
         def work():
             try:
-                return pc.run(body, timeout, what)
+                res = pc.run(body, timeout, what)
+                jc.note_job(res.get("job") if isinstance(res, dict) else None)      # D61: the journal finds the node's before/after pictures by job id
+                return res
             finally:
                 if op is not None:
                     op.worker_done()                      # the operation's lock may be released here ...
@@ -435,6 +437,7 @@ class DesktopPlugin(PluginBase):
                                         "profile_name_matches", "note", "error"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("open_website")
     async def open_website(self, url: str = "", profile: str = "default", **_):
         try:
             with _PcLock("open_website", 120):
@@ -455,6 +458,7 @@ class DesktopPlugin(PluginBase):
                                         "windows_media", "error", "needs"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("play_youtube")
     async def play_youtube(self, query: str = "", profile: str = "default", **_):
         try:
             with _PcLock("play_youtube", 180):
@@ -503,6 +507,7 @@ class DesktopPlugin(PluginBase):
                                         "page", "page_note"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("run_browser_action")
     async def run_browser_action(self, action: str = "read", profile: str = "default", target: str = "", text: str = "",
                                  approval_id: str = "", **_):
         body = {"op": "browser", "action": action, "profile": profile, "target": target, "text": text}
@@ -544,6 +549,7 @@ class DesktopPlugin(PluginBase):
         timeout=360, llm_result_fields=["state", "ok", "opened", "done", "verified", "window", "note", "error", "approval_id", "how"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("run_pc_action")
     async def run_pc_action(self, action: str = "", target: str = "", text: str = "", approval_id: str = "", **_):
         body = {"op": "open_app", "target": target} if action == "open_app" else {"op": "ui", "action": action, "target": target, "text": text}
         if approval_id:
@@ -566,6 +572,7 @@ class DesktopPlugin(PluginBase):
         timeout=120, llm_result_fields=["state", "ok", "rows", "sessions", "playing", "error"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("check_pc")
     async def check_pc(self, check: str = "disk", target: str = "", **_):
         body = {"op": "media"} if check == "media" else {"op": "diag", "check": check, "target": target}
         return await self._one(body, 90)
@@ -582,6 +589,7 @@ class DesktopPlugin(PluginBase):
         timeout=60, llm_result_fields=["ok", "in_front", "windows", "count", "hint"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("whats_on_screen")
     async def whats_on_screen(self, **_):
         res = await self._one({"op": "windows"}, 30, "list windows")
         if not isinstance(res, Ok):
@@ -615,6 +623,7 @@ class DesktopPlugin(PluginBase):
         timeout=120, llm_result_fields=["ok", "app", "lines", "text", "text_note", "source", "removed", "error"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("read_window_text")
     async def read_window_text(self, app: str = "", **_):
         """OCR of one window through the kernel job diag/window_ocr (policy, approvals and audit apply).
         UNVERIFIED on real hardware. The node keeps the text in a local file; it is read once here, deleted, scrubbed, and returned only when the
@@ -667,6 +676,7 @@ class DesktopPlugin(PluginBase):
         timeout=180, llm_result_fields=["ok", "found", "app", "x", "y", "found_by", "basis", "window", "source", "note", "error"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("find_on_screen")
     async def find_on_screen(self, app: str = "", text: str = "", **_):
         """Locate a label in one window through the kernel job diag/window_locate (policy, approvals and audit apply).
         UNVERIFIED on real hardware. A point is in the window's own pixels; basis says observed (OCR) or inferred (model)."""
@@ -718,6 +728,7 @@ class DesktopPlugin(PluginBase):
         timeout=900, llm_result_fields=["outcome", "cause", "verified", "evidence", "fix", "backup", "undo", "verification", "steps", "approval_id", "how"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    @jc.journaled("run_troubleshooter")
     async def run_troubleshooter(self, app: str = "", start_name: str = "", apply_fix: bool = True, **_):
         # It clicks, starts the app and edits a file: it takes the PC lock like a task. A task's own troubleshoot step
         # already holds that lock and calls the flow below directly (taking it again would wait on itself forever).
@@ -909,6 +920,7 @@ class DesktopPlugin(PluginBase):
             active.append(p)
             try:
                 res = run_pc(p, body, timeout, what)
+                jc.note_job(res.get("job"))                              # D61: pictures of this step, found by job id
             finally:
                 active.remove(p)
                 op.detach_pc(p)
@@ -1124,7 +1136,7 @@ class DesktopPlugin(PluginBase):
             "window": window, "type_text": type_text, "press_key": press_key, "open_file": open_file, "check_pc": check,
             "troubleshoot": troubleshoot, "research": research, "open_output": open_output, "stop": stop,
         }
-        return {k: _with_approval(fn) for k, fn in agents.items()}
+        return {k: jc.wrap_agent(k, _with_approval(fn)) for k, fn in agents.items()}       # D61: one journal line per step run
 
     def _stop_pc_tasks(self) -> None:
         """The owner's stop reaches every registered PC operation (each has its own flag: a second request that is
@@ -1161,6 +1173,7 @@ class DesktopPlugin(PluginBase):
         # another plugin (research), as in missions.
         op = coord.begin("task", "task-" + secrets.token_hex(3))
         tok = coord.bind(op)
+        jtok = jc.enter_task(request)                       # D61: the owner's request is the journal's task (inside a goal, the goal's task)
         c = coord.Coordinator(self._agents(loop, abort=op.stop_flag.is_set), core.profiles(), on_progress=core.set_activity,
                               cancelled=op.stop_flag.is_set, op=op)
         ctx = contextvars.copy_context()
@@ -1183,6 +1196,7 @@ class DesktopPlugin(PluginBase):
             await asyncio.to_thread(ended.wait, coord.STOP_WAIT_S)
             raise
         finally:
+            jc.exit_task(jtok)
             coord.unbind(tok)
             op.entry_exit()
             core.set_activity("idle")
@@ -1211,10 +1225,14 @@ class DesktopPlugin(PluginBase):
         """One local helper entry (another plugin's, or this one's) through the plugin router: (ok, value, error text)."""
         if self.plugins is None:
             return False, {}, "the plugin router is not available"
+        t0 = time.time()
         res = await self.plugins.call_entry_json(ref, args, timeout=900.0 if ref.startswith("doc_reader:") else 180.0)
         if isinstance(res, Ok):
             value = res.value if isinstance(res.value, dict) else {}
-            return True, (value["data"] if isinstance(value.get("data"), dict) else value), ""
+            data = value["data"] if isinstance(value.get("data"), dict) else value
+            jc.record_call(ref, args, True, data, "", int((time.time() - t0) * 1000))
+            return True, data, ""
+        jc.record_call(ref, args, False, {}, str(getattr(res, "error", res))[:200], int((time.time() - t0) * 1000))
         return False, {}, str(getattr(res, "error", res))[:300]
 
     @plugin_entry(
@@ -1232,8 +1250,53 @@ class DesktopPlugin(PluginBase):
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def do_goal(self, goal: str = "", **_):
         hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}))
-        res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on())
+        jtok = jc.enter_task(goal)                          # D61: the goal is one task in the journal; its steps group under the owner's words
+        try:
+            res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on())
+        finally:
+            jc.exit_task(jtok)
         return Ok(res)
+
+    @plugin_entry(
+        id="undo_steps",
+        name=tr("entry.undo_steps.name", default="Undo what JARVIS did"),
+        description=tr("entry.undo_steps.description", default=(
+            "Reverse steps from the journal (what JARVIS did on this PC), ONLY when the owner asked to undo: the last n steps that changed something, "
+            "the steps of one task, or named steps. A new file goes to the Recycle Bin, a binned file comes back, a move is reversed, a window JARVIS opened is "
+            "closed, a setting goes back. Each is checked first (it must be unchanged since) and afterwards; it says exactly what was and was not undone.")),
+        input_schema={"type": "object", "properties": {
+            "n": {"type": "integer", "description": "undo the newest n steps that changed something"},
+            "task": {"type": "string", "description": "undo every undoable step of this task id"},
+            "ids": {"type": "array", "items": {"type": "string"}, "description": "journal step ids"}}},
+        timeout=300, llm_result_fields=["ok", "undone", "not_undone", "results", "summary"],
+    )
+    @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
+    async def undo_steps(self, n: int = 0, task: str = "", ids: list | None = None, **_):
+        j = jc.get_journal()
+        if j is None:
+            return Err(SdkError("the journal is not available here"))
+        if ids:
+            steps = [s for s in (j.get(str(i)) for i in list(ids)[:50]) if s and s.get("undo")]
+        elif task:
+            steps = j.undoable(task_id=str(task)[:60])[:50]
+        else:
+            steps = j.undoable(max(1, min(int(n or 1), 20)))
+        steps.sort(key=lambda s: s.get("ts") or 0, reverse=True)           # newest first: a task is taken back in reverse order
+        if not steps:
+            return Ok({"ok": False, "undone": 0, "not_undone": 0, "results": [], "summary": "There was nothing to undo."})
+        loop = asyncio.get_running_loop()
+        pc = self._pc()
+        pc.approval_wait_s = 0.0                            # an undo that would need the PIN says so and stops; it never waits for it
+
+        class _Hand:
+            def run(_self, body, timeout, what):
+                return asyncio.run_coroutine_threadsafe(DesktopPlugin._run(self, pc, body, timeout, what), loop).result(timeout + 30)
+        try:
+            with _PcLock("undo_steps", 300):
+                report = await asyncio.to_thread(undoer.run, steps, _Hand(), j)
+        except coord.Busy as e:
+            return _err(e)
+        return Ok(report)
 
     @plugin_entry(
         id="stop_pc_task",

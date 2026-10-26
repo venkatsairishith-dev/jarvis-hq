@@ -77,6 +77,7 @@ class CleanerService:
         self.stop = False
         self.idle = threading.Event()
         self.idle.set()
+        self.journal = False                           # set by the tool server: the result is written to the activity journal
 
     # -- the form ------------------------------------------------------------------------------------------------------------------------
     def _ticked_bytes(self) -> tuple[int, int]:
@@ -92,9 +93,10 @@ class CleanerService:
         review = [r for r in self.rows if r["kind"] == "review"]
         fields: list[dict] = []
         if safe:
-            fields.append({"type": "section", "label": f"Safe to clean · {fmt_bytes(sum(r['bytes'] for r in safe))}", "children": [{
-                "id": "safe", "type": "checkbox_group", "label": "Safe to clean",
-                "options": [{"id": r["id"], "label": r["label"], "detail": r["what_it_is"], "size": r["bytes"], "checked": r["id"] in self.safe} for r in safe]}]})
+            fields.append({"type": "section", "label": f"Safe to clean · {fmt_bytes(sum(r['bytes'] for r in safe))}", "children": [
+                {"type": "callout", "level": "warn", "text": "These are caches and junk files. They are deleted for good and cannot be undone. Review items go to the Recycle Bin and can be put back."},
+                {"id": "safe", "type": "checkbox_group", "label": "Safe to clean",
+                 "options": [{"id": r["id"], "label": r["label"], "detail": r["what_it_is"], "size": r["bytes"], "checked": r["id"] in self.safe} for r in safe]}]})
         listed = [(r, i) for r in review for i in r.get("items", [])]
         if review and self.phase != "scanning":
             fields.append({"type": "section", "label": f"Review first · {fmt_bytes(sum(r['bytes'] for r in review))}", "collapsed": True, "children": [
@@ -191,6 +193,9 @@ class CleanerService:
                                                                                   "bytes_total": p["total_bytes"], "label": p["label"]})
             res = self.cleaner.clean(selection, on_progress=progress, should_stop=lambda: self.stop)
             self.result = res
+            if self.journal:
+                from jarvis.bridge.timeline import record_cleanup          # D61: what was cleaned, and what can be put back
+                record_cleanup(res)
             self.rows = (res.get("scan") or {}).get("categories", self.rows)
             self.safe, self.items = set(), set()
             self.phase = "done"

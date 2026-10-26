@@ -654,7 +654,7 @@ class Owner:
         with what it actually observed. Ordinary actions run at once (owner_direct); one that needs the owner's approval
         comes back as {"status": "needs_approval", "approval_id"}: approve it with the PIN, then send the same request again
         with that approval_id (it is bound to exactly this action and used once)."""
-        from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, action_for
+        from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, UNDO_OPS, action_for
         from .store import Killed
         holder, dup = self._pc_holder(body.get("holder"))
         if dup is not None:                                           # the same request delivered twice: the job it made, no second one
@@ -684,14 +684,16 @@ class Owner:
             kind, params = "repair", {"op": body["action"], "target": s("target", 260), "args": args}
         elif op == "media":
             kind, params = "media_state", {}
+        elif op == "undo" and body.get("action") in UNDO_OPS:      # D61: one journaled step reversed (the node re-checks it)
+            kind, params = "pc_undo", {"agent": "owner", "op": body["action"], "target": s("target", 260), "path": s("path", 260), "expect": s("expect", 64)}
         else:
             raise OwnerError("op must be open_app, open_folder, open_file, list_folder, windows, snapshot, screenshot, project_check, "
                              "ui (action: " + "|".join(sorted(UI_OPS)) + "), browser (action: " + "|".join(sorted(BROWSER_OPS)) +
                              "), diag (check: " + "|".join(sorted(DIAG_OPS)) + "), repair (action: " + "|".join(sorted(REPAIR_OPS)) +
-                             ") or media")
+                             "), undo (action: " + "|".join(sorted(UNDO_OPS)) + ") or media")
         aid = str(body.get("approval_id") or "")[:40] or None
         try:
-            if aid is None and kind in ("ui_action", "browser_ext", "diag", "repair", "media_state"):
+            if aid is None and kind in ("ui_action", "browser_ext", "diag", "repair", "media_state", "pc_undo"):
                 from .jobs import _check_params
                 _check_params(kind, params)
                 a = action_for(kind, params, "private", untrusted=False, owner_direct=True)

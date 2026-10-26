@@ -42,6 +42,7 @@ import AskHost from './components/ask/AskHost.vue'
 import JarvisHud from './components/hud/JarvisHud.vue'
 import PreviewHost from './components/PreviewHost.vue'
 import ResizeHandler from './components/ResizeHandler.vue'
+import TimelineHost from './components/timeline/TimelineHost.vue'
 
 import {
   electronGetServerChannelConfig,
@@ -490,6 +491,7 @@ onUnmounted(() => {
   <JarvisHud v-if="hudVisible" />
   <PreviewHost v-if="fullStageRuntime" />
   <AskHost v-if="fullStageRuntime" />
+  <TimelineHost v-if="fullStageRuntime" />
 </template>
 
 <style>
