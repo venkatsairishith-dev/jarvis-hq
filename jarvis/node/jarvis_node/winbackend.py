@@ -347,7 +347,8 @@ try {
   if ($have -ne $null) {
     $norm = { param($t) ([regex]::Replace([string]$t, '\s+', ' ')).Trim() }
     $tail = & $norm $text; if ($tail.Length -gt 60) { $tail = $tail.Substring($tail.Length - 60) }
-    if ((& $norm $have).Contains($tail)) { $seen = 'read back' } else { throw 'text not in field' }
+    if ((& $norm $have).Contains($tail)) { $seen = 'read back' }
+    elseif ($env:JARVIS_UI_PROC -notin @('Code', 'Code - Insiders', 'VSCodium', 'Cursor')) { throw 'text not in field' }      # Monaco's hidden textarea holds a fragment, not the document (seen live 2026-10-26: the paste landed, the file's text matched): not observed, the save's disk read-back is the proof
   }
 } catch { if ("$_" -like '*text not in field*') { throw 'text not in field' } }
 "JARVIS_TYPED:" + $seen

@@ -314,7 +314,10 @@ def open_code(root: str, rel: str, *, roots: dict | None = None, exe: str | None
     real = (launcher is None) if real is None else real
 
     def go():
-        (launcher or (lambda a: subprocess.Popen(a, close_fds=True)))(args)
+        # ELECTRON_RUN_AS_NODE (set by any Electron parent, e.g. the face or an IDE) makes Code.exe behave as plain node: "Code.exe: bad option: -n" and no window
+        # (seen live 2026-10-26). It is taken out of the environment this one program gets.
+        env = {k: v for k, v in os.environ.items() if k != "ELECTRON_RUN_AS_NODE"}
+        (launcher or (lambda a: subprocess.Popen(a, close_fds=True, env=env)))(args)
     if real and os.name == "nt":
         from . import windowpick
         windowpick.launch_and_record_any(go)             # remember the new window: it is the one JARVIS may type into

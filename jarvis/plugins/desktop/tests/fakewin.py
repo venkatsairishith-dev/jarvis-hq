@@ -247,6 +247,10 @@ class FakeWindows:
             k = p.get("text", "")
             if proc_of(t).lower() == "code" and k == "ctrl+n":
                 self.code_text, self.code_untitled = "", True
+            if proc_of(t).lower() == "code" and k == "ctrl+shift+p":          # the Command Palette (D54, 2026-10-26: ctrl+n went to VS Code's Chat box)
+                self.code_palette = ""
+            elif proc_of(t).lower() == "code" and k == "enter" and getattr(self, "code_palette", None) == "File: New Untitled Text File":
+                self.code_text, self.code_untitled, self.code_palette = "", True, None
             if app is not None:
                 if app.dialogs and k == "enter":
                     dlg = app.dialogs.pop()
@@ -289,6 +293,9 @@ class FakeWindows:
             if app is not None:
                 app.doc += p.get("text", "")
                 return {"observed": "text read back from the editor"}
+            if proc == "code" and getattr(self, "code_palette", None) is not None:        # typed into the palette's box, not into the document
+                self.code_palette = p.get("text", "")
+                return {}
             if proc == "code":
                 self.code_text += p.get("text", "") + self.paste_noise
                 return {}

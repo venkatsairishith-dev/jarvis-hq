@@ -1087,8 +1087,18 @@ class DesktopPlugin(PluginBase):
             if not text:
                 return {"ok": False, "error": "there was no text to type"}
             if step.get("new_file") or composite.is_code_app(step.get("app", "")):
-                # VS Code always gets a NEW untitled file first: the keyboard focus may be in its terminal, where a paste would run the lines
-                r = editor_job(step, {"op": "ui", "action": "key", "text": "ctrl+n"})        # a new, empty, focused editor
+                # VS Code always gets a NEW untitled file first: the keyboard focus may be in its terminal, where a paste would run the lines, or in the Chat
+                # panel (live 2026-10-26: a fresh window had the Chat box focused; ctrl+n and ctrl+1 both went to the chat and the code was pasted into it).
+                # The Command Palette works from wherever the focus is: ctrl+shift+p, "File: New Untitled Text File", enter.
+                if composite.is_code_app(step.get("app", "")):
+                    for act in ({"op": "ui", "action": "key", "text": "ctrl+shift+p"}, {"op": "ui", "action": "type_focused", "text": "File: New Untitled Text File"},
+                                {"op": "ui", "action": "key", "text": "enter"}):
+                        r = editor_job(step, act)
+                        if not r.get("ok"):
+                            return r
+                        time.sleep(0.8)
+                else:
+                    r = editor_job(step, {"op": "ui", "action": "key", "text": "ctrl+n"})        # a new, empty, focused editor
                 if not r.get("ok"):
                     return r
                 time.sleep(0.8)

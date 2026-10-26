@@ -214,8 +214,8 @@ def test_vs_code_open_folder_create_file_type_and_save_with_the_disk_as_proof(pc
     assert (pc.proj / "hello.py").read_text(encoding="utf-8") == "print('hi')"
     assert pc.launched == [[str(pc.home.parent / "lad" / "Programs" / "Microsoft VS Code" / "Code.exe"), "-n", os.path.realpath(pc.proj)]]
     ops = [(c.get("op"), c.get("action"), (c.get("text") or "")[:20]) for c in pc.calls if c.get("op") in ("open_code", "ui")]
-    assert [o[:2] for o in ops] == [("open_code", None), ("ui", "key"), ("ui", "type_focused"), ("ui", "save_as")]
-    assert ops[1][2] == "ctrl+n"                                               # a new untitled file first
+    assert [o[:2] for o in ops] == [("open_code", None), ("ui", "key"), ("ui", "type_focused"), ("ui", "key"), ("ui", "type_focused"), ("ui", "save_as")]
+    assert ops[1][2] == "ctrl+shift+p" and ops[2][2] == "File: New Untitled T" and ops[3][2] == "enter"      # a new untitled file first, from the Command Palette
     assert not getattr(pc, "pending", None) and not [c for c in pc.calls if c.get("action") == "click"]
     assert "hello.py" in [w for w in pc.windows if w["process"] == "Code"][0]["title"]
     # the editor cannot be read back: the paste step says so, and it is the saved file that proves the text
@@ -227,7 +227,7 @@ def test_vs_code_is_never_pasted_into_without_a_new_file_first(pc):
                    {"tool": "type_in_editor", "app": "vs code", "target": "", "text": "ls\nrm x", "new_file": False, "post": ""}], "ok")
     rec = pc.run(plan)
     keys = [c["text"] for c in pc.calls if c.get("action") == "key"]
-    assert rec["status"] == "completed" and keys == ["ctrl+n"], "VS Code's terminal may have the focus: a paste there would run the lines"
+    assert rec["status"] == "completed" and keys == ["ctrl+shift+p", "enter"], "VS Code's terminal may have the focus: a paste there would run the lines"
 
 
 def test_vs_code_is_started_only_on_a_known_folder(pc):
