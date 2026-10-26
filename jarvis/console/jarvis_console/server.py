@@ -44,7 +44,7 @@ import control_auth                     # noqa: E402  sessions, one-time codes a
 from . import bench as benchmod
 from . import files as filesmod
 from .config import Config
-from . import intent, provider_command, scoring
+from . import intent, lang_hook, provider_command, scoring
 from .kernel_client import Kernel, KernelError
 from .speech_text import speakable
 from .voice import Voice, VoiceError
@@ -326,7 +326,7 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
             if name.startswith("desktop/"):
                 return self._desktop(method, name[8:])
             if name == "classify" and method == "POST":
-                text = str(self._jbody().get("text", ""))
+                text = lang_hook.english(str(self._jbody().get("text", "")), "console-classify")      # D58: the rules and the local model read English
                 return self._json(200, intent.classify(text, cfg.intent_llm_url, cfg.intent_model))
             if name == "providers/command" and method == "POST":
                 return self._provider_command()
@@ -418,6 +418,10 @@ def make_server(cfg: Config = None, kernel=None, voice=None, bench=None):
 
         def _owner(self, method, name, q):
             body = self._jbody() if method == "POST" else None
+            if method == "POST" and name == "command" and isinstance(body, dict) and isinstance(body.get("text"), str):
+                # D58: the owner's Command box. The agent on the server reads English only and the translator is on THIS laptop: translate before the text leaves.
+                # The original stays in the owner's record on this PC (translations.jsonl); the kernel gets English.
+                body = {**body, "text": lang_hook.english(body["text"], "console")}
             qs = ("?" + urllib.parse.urlencode(q)) if q else ""
             code, reply = kernel.request(method, name + qs, body)
             return self._json(code, reply)

@@ -17,7 +17,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from jarvis.plugins._shared import loopback_http
+from jarvis.plugins._shared import loopback_http, translate
 
 LOCAL = "http://127.0.0.1:8080/v1/chat/completions"
 DEFAULT_MODEL = "decider"          # a llama-swap alias (see jarvis/local_models/llama-swap.yaml)
@@ -793,6 +793,12 @@ def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=
     """context: the owner's previous request, for follow-ups such as "actually use the Satish profile instead".
     last: what that request verifiably produced (coordinator.previous), for "open it"."""
     request = " ".join(str(request or "").split())[:1000]
+    # D58: a Telugu, Hindi or Tenglish request that reached the decider by a path that bypasses the gateway is made English here (English: no model call).
+    request = " ".join(translate.english(request, source="decide").split())[:1000]
+    said = translate.apply_reply_language_intent(request)            # "reply in Telugu" is a setting, not a PC task
+    if said:
+        shown = "the language you write in" if said == "match" else translate.LANG_NAMES.get(said, said)
+        return Plan([], "clarify", question=f"Okay. From now on my replies are shown in {shown}.", model="rule")
     if re.fullmatch(r"(?i)\W*(stop|cancel|abort|never ?mind|forget it)\W*", request):     # no model needed
         return Plan([{"tool": "stop"}], "ok", model="rule")
     if MAKE_FOLDER.search(request):                                  # no tool creates folders or files: say so, do not open a path that is not there

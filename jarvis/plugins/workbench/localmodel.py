@@ -19,7 +19,7 @@ import re
 import urllib.request
 from typing import Any
 
-from jarvis.plugins._shared import loopback_http
+from jarvis.plugins._shared import loopback_http, translate
 
 from . import safety
 
@@ -103,6 +103,7 @@ def _json_block(text: str) -> Any:
 
 def drafter(task: str, context: dict[str, Any]) -> dict[str, Any] | None:
     from .sandbox_runner import OPS
+    task = translate.english(task, source="workbench")           # D58: the owner's task is English for the model; third-party message text stays data, fenced
     ops = "; ".join(f"{k}({', '.join(v)})" for k, v in OPS.items())
     research = context.get("research", {}).get("summary", "")
     lessons = "; ".join(x.get("lesson", "") for x in context.get("lessons") or [])

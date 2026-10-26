@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import gateway, idempotency, sizing
+from . import gateway, idempotency, lang, sizing
 from .router import shadow as router_shadow
 from .scrub import scrub
 
@@ -1003,6 +1003,10 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router
             self.end_headers()
             self.wfile.write(b)
 
+        def _xlat_header(self):
+            if getattr(self, "_xlat", None) in ("yes", "skipped"):      # D58: a Telugu/Hindi owner message was translated here, or went on as written
+                self.send_header("X-Jarvis-Translated", self._xlat)
+
         def _agent(self):
             auth = self.headers.get("Authorization", "")
             return tokens.identify(auth[7:]) if auth.startswith("Bearer ") else (None, None)
@@ -1184,6 +1188,11 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router
             dropped = sorted(str(k)[:30] for k in body if k not in CHAT_FIELDS)[:12]   # names only, never values
             body = {k: v for k, v in body.items() if k in CHAT_FIELDS}
             body, findings, blocked = _scrub_messages(body)
+            self._xlat = None
+            body, xlat = lang.english_body(body)
+            if xlat != "no":
+                self._xlat = xlat
+                kernel.audit.append("agent_translate", {"agent": agent, "status": xlat})
             if blocked:
                 kernel.audit.append("agent_model_refused", {"agent": agent, "why": "private key in prompt"})
                 return self._json(400, {"error": {"message": "refused: the request contains a private key"}})
@@ -1340,6 +1349,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router
                     with resp:   # from here on we are committed to this provider
                         self.send_response(200)
                         self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
+                        self._xlat_header()
                         if stream:
                             self.send_header("Cache-Control", "no-cache")
                         self.end_headers()
@@ -1406,6 +1416,7 @@ def make_handler(kernel, providers, clock=time.time, owner_hermes="auto", router
                            "finish_reason": ch.get("finish_reason") or "stop"}], **({"usage": reply["usage"]} if reply.get("usage") else {}))]
             data = b"".join(b"data: " + json.dumps(c).encode() + b"\n\n" for c in chunks) + b"data: [DONE]\n\n"
             self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.send_header("Cache-Control", "no-cache")
+            self._xlat_header()
             self.end_headers(); self.wfile.write(data); self.wfile.flush()
 
         def _unavailable(self, agent, lane, wait):

@@ -23,6 +23,7 @@ import time
 import urllib.parse
 
 from .scrub import scrub
+from . import lang
 
 # What the owner asks JARVIS to do changes the computer; what it looked like a few minutes ago may not be true now.
 STATE_RULE = ("[JARVIS rule: the state of the computer changes. Never answer that something is already open, running or done from "
@@ -167,6 +168,9 @@ class Owner:
         clean, _, blocked = scrub(text, deep=True)
         if blocked:
             raise OwnerError("refused: the command contains a private key", 400)
+        # D58: the console, the face and the voice path translate on the laptop BEFORE the text reaches here, so this is normally English. Text that still is
+        # not (a client that skips the layer) is translated here only if a local translator is enabled on this server, else flagged in the audit log and kept.
+        clean, tr_status = lang.english_for_agent(clean, source=source)
         if self.k.killed():
             raise OwnerError("the kill switch is on", 503)
         wait = self.lane_wait("private") if self.lane_wait else 0
@@ -180,7 +184,7 @@ class Owner:
         try:
             self.k.db.execute("INSERT INTO owner_commands(id, ts, source, text, state) VALUES (?,?,?,?,?)",
                               (cid, now, source[:20], clean[:MAX_COMMAND], "running"))
-            self.k.audit.append("owner_command", {"id": cid, "source": source[:20], "chars": len(clean)})
+            self.k.audit.append("owner_command", {"id": cid, "source": source[:20], "chars": len(clean), **({"translated": tr_status} if tr_status != "no" else {})})
         except BaseException:
             self.busy.release()
             raise

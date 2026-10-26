@@ -17,7 +17,7 @@ import time
 
 from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_plugin, plugin_entry, timer_interval, tr
 
-from jarvis.plugins._shared import screen_text
+from jarvis.plugins._shared import screen_text, translate
 
 from . import coordinator as coord, core, decide, goal as goal_mod
 
@@ -1148,8 +1148,20 @@ class DesktopPlugin(PluginBase):
         # answered its clarification question passes it (pending-input contract, main_agent/input_request.py).
         if isinstance(answers, dict) and isinstance(answers.get("clarification"), str) and answers["clarification"].strip():
             request = f"{request}\n(The owner's clarification: {screen_text.clean_message(answers['clarification'], 300)})"
+        # D58: the decider and every model below it understand English only. The owner's words are translated on this PC first (English costs nothing);
+        # a doubtful translation is shown to him as a question instead of being acted on, unless he already answered one.
+        request, tr_info = await asyncio.to_thread(translate.entry_text, request, confirmed=bool(isinstance(answers, dict) and answers.get("clarification")),
+                                                    source="pc_task")
+        if tr_info and tr_info.get("clarify"):
+            return Ok(translate.clarification_result(tr_info["clarify"]))
         rec = await DesktopPlugin._run_task(self, request)         # (not self._run_task: tests and hosts lend a stand-in `self`)
-        return DesktopPlugin._task_result(rec)
+        res = DesktopPlugin._task_result(rec)
+        if tr_info and isinstance(getattr(res, "value", None), dict):
+            # (the "note" key is the plugin's own words and passes the screen-text cleaner; an "english" field would be withheld as screen text)
+            res.value["translation"] = {k: tr_info.get(k) for k in ("source_lang", "confidence", "translated")}
+            res.value["note"] = translate.understood_note(tr_info)
+            res.value["summary"] = translate.skipped_note(tr_info) + str(res.value.get("summary") or "")
+        return res
 
     async def _run_task(self, request: str, plan: "decide.Plan | None" = None) -> dict:
         """One PC task as a registered operation (planning included): the coordinator's record. `plan`: a plan already made (D51: the
@@ -1231,8 +1243,14 @@ class DesktopPlugin(PluginBase):
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def do_goal(self, goal: str = "", **_):
+        goal, tr_info = await asyncio.to_thread(translate.entry_text, goal, source="goal")       # D58: English only below this line
+        if tr_info and tr_info.get("clarify"):
+            return Ok(translate.clarification_result(tr_info["clarify"]))
         hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}))
         res = await goal_mod.GoalRunner(hands).run(goal, goal_mod.flag_on())
+        if tr_info and isinstance(res, dict):
+            res["translation"] = {k: tr_info.get(k) for k in ("source_lang", "confidence", "translated")}
+            res["note"] = translate.understood_note(tr_info)
         return Ok(res)
 
     @plugin_entry(
