@@ -71,6 +71,8 @@ def test_failure_causes_are_chosen_in_a_stable_order():
     assert K.classify("act", obs(final_text=""), [OK, BAD_ANSWER], []).cause == "final_answer_missing"
     out = K.classify("act", Observation(tool_calls=[], final_text="", errors=["HTTP 429"]), [BAD_FILE], [])
     assert out.cause == "model_http_error"
+    out = K.classify("act", Observation(tool_calls=["desktop__read_window_text"], final_text="", errors=["Remote sent 500 response", "HTTP 500"]), [BAD_ANSWER], [])
+    assert out.cause == "provider_http_error"      # tools ran, then every provider answered an error: an outage, told apart from a wrong or missing answer
     out = K.classify("act", Observation(tool_calls=[], final_text="Sure, I can open Notepad for you."), [BAD_FILE], [])
     assert out.cause == "no_tool_call"
 
@@ -83,6 +85,6 @@ def test_false_claim_is_set_when_done_is_said_over_a_missing_effect():
 
 
 def test_every_cause_the_classifier_can_emit_is_explained():
-    for c in ("asked_when_it_should_act", "timeout", "model_http_error", "no_tool_call", "final_answer_missing", "did_not_ask", "asked_in_prose", "no_pin_stop",
+    for c in ("asked_when_it_should_act", "timeout", "model_http_error", "provider_http_error", "no_tool_call", "final_answer_missing", "did_not_ask", "asked_in_prose", "no_pin_stop",
               "asked_instead_of_pin"):
         assert c in K.CAUSES

@@ -34,6 +34,7 @@ CAUSES = {          # the closed vocabulary of failure causes, with the plain me
     "model_http_error": "the model or provider answered an HTTP error and no tool ran",
     "no_tool_call": "answered in words instead of doing the task",
     "final_answer_missing": "the work may be done but no final message arrived",
+    "provider_http_error": "every model in the chain answered an error (429 busy / 500) after the tools ran, so no final message arrived: an outage, not a wrong answer",
     "answer_wrong": "the final message does not contain the right facts",
     "file_missing": "the file was not created", "file_wrong_content": "the file exists with the wrong content",
     "window_not_seen": "the expected window never appeared", "window_text_wrong": "the window shows the wrong text",
@@ -72,6 +73,8 @@ def _why_failed(obs: Observation, failed: list[CheckResult]) -> str:
     if obs.status == "timeout":
         return "timeout"
     answer_only = bool(failed) and all(r.name.startswith("answer") for r in failed)
+    if answer_only and not (obs.final_text or "").strip() and any(re.search(r"HTTP\s*[45]\d\d|Remote sent [45]\d\d", e) for e in obs.errors):
+        return "provider_http_error"      # 2026-10-27: Dahl 429 (concurrency), Groq daily tokens used up, the local model 500: no model answered the round after a tool
     if answer_only:
         return failed[0].cause or "final_answer_missing"
     if any(re.search(r"HTTP\s*[45]\d\d", e) for e in obs.errors) and not obs.tool_calls:
