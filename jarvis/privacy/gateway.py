@@ -920,6 +920,9 @@ def degraded_reasons(red, require_deep: bool) -> list[str]:
     return out
 
 
+FIRST_BYTE_S = 30.0          # a streamed answer from a provider that is not the last link must begin within this many seconds
+
+
 def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: float = 60.0, require_deep: bool = False):
     """require_deep: refuse (503) every model call while the PII model is not loaded. `serve()` and `main()` turn it on
     unless the owner sets JARVIS_PRIVACY_REQUIRE_DEEP=0; it is off here only so a test or a bench can drive the handler
@@ -1158,8 +1161,12 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 try:
                     req = urllib.request.Request(prov["base_url"] + self._path(), data=data, headers=hdrs,
                                                  method="POST" if data is not None else "GET")
+                    # A provider that has not sent a first byte in `first_byte_timeout_s` (default 30; the last link keeps the full timeout) is given up on, and the
+                    # next one is asked. Measured on the laptop 2026-10-27 (reliability quick run): first bytes after 45 s, 53 s and 315 s from Groq and Dahl, goals
+                    # that ended with no answer at all after 183 s although another provider was free (normal first byte: GLM 1.2 s, p90 9 s).
+                    first_byte = timeout if (last or not stream) else min(timeout, float(prov.get("first_byte_timeout_s") or FIRST_BYTE_S))
                     try:
-                        resp = urllib.request.urlopen(req, timeout=timeout)
+                        resp = urllib.request.urlopen(req, timeout=first_byte)
                     except urllib.error.HTTPError as e:
                         if e.code == 429:
                             _cooldown[prov["name"]] = time.time() + cooldown

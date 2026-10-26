@@ -18,6 +18,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import types
 import unittest
 import urllib.error
@@ -1087,3 +1088,54 @@ class LatencyIsMeasuredPerProvider(unittest.TestCase):
         self.assertTrue(lat, lat)
         row = next(iter(lat.values()))[-1]
         self.assertTrue(all(k in row for k in ("redact_ms", "first_ms", "total_ms")))
+
+
+class AStalledProviderIsGivenUpOn(unittest.TestCase):
+    """2026-10-27 (reliability quick run on the laptop): Groq and Dahl sometimes sent no first byte for 45 s to 315 s; the owner's goal ended with no answer.
+    A streamed request waits for the first byte of a provider that is not the last link only `first_byte_timeout_s`, then asks the next one."""
+
+    def test_a_provider_that_never_starts_is_skipped_for_the_next(self):
+        seen = {"slow": 0, "local": 0}
+        release = threading.Event()
+
+        def handler_for(name, slow):
+            class H(BaseHTTPRequestHandler):
+                def log_message(self, *a):
+                    pass
+
+                def do_POST(self):
+                    self.rfile.read(int(self.headers["Content-Length"]))
+                    seen[name] += 1
+                    if slow:
+                        release.wait(8)                       # no first byte
+                        return
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    self.wfile.write(b'data: {"choices":[{"index":0,"delta":{"content":"hello"}}]}\n\ndata: [DONE]\n\n')
+                    self.wfile.flush()
+            return H
+        servers = []
+        for name, slow in (("slow", True), ("local", False)):
+            sv = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(name, slow))
+            threading.Thread(target=sv.serve_forever, daemon=True).start()
+            servers.append(sv)
+        self.addCleanup(lambda: (release.set(), [(sv.shutdown(), sv.server_close()) for sv in servers]))
+        provs = [{"name": "slow", "enabled": True, "first_byte_timeout_s": 0.6, "base_url": f"http://127.0.0.1:{servers[0].server_address[1]}/v1"},
+                 {"name": "local", "enabled": True, "local": True, "model": "local-chat", "base_url": f"http://127.0.0.1:{servers[1].server_address[1]}/v1"}]
+        gateway._cooldown.clear()
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 20, 60.0)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        req = urllib.request.Request(f"http://127.0.0.1:{gw.server_address[1]}/v1/chat/completions", method="POST", headers={"Content-Type": "application/json"},
+                                     data=json.dumps({"model": "x", "stream": True, "messages": [{"role": "user", "content": "hi"}]}).encode())
+        t0 = time.time()
+        with urllib.request.urlopen(req, timeout=20) as r:
+            body = r.read().decode()
+        self.assertIn("hello", body)
+        self.assertLess(time.time() - t0, 5)
+        self.assertEqual((seen["slow"], seen["local"]), (1, 1))
