@@ -198,7 +198,7 @@ Every step the plugin runs (a task, a goal, a mission, a single action, a read) 
 | `pcagent.py` | the loop and the rungs; result shape = `drive.Driver.run` plus `problems`, `ask`, `lessons_used` |
 | `perceive.py` | `Port`, `Observation`, `observe`, `cascade_read`, `locate` |
 | `ladder.py` | recognising a problem; button, key and menu tables; UAC / resource / not-responding patterns |
-| `lessons.py` | `(app, problem) -> route that worked`, closed vocabularies, 300 entries / 64 KB |
+| `lessons.py` | `(app, problem) -> route that worked`, as delta items (reflect proposes add / helpful / harmful / retire, merge applies them, D67), closed vocabularies, 300 entries / 64 KB |
 | `taskstate.py`, `taskvoice.py` | the live state file, the controls, the owner's phrases and the answers |
 | `humanfeel.py` | waits by condition, `OwnerWatch`, the pause for the owner |
 | `pcport.py` | the real Port: one kernel job per call |

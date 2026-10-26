@@ -1,0 +1,11 @@
+# liteparse-venv (laptop: D:\jarvis\tools\liteparse-venv; D67, scout item 2). OPTIONAL: without it the Document Reader sends every PDF page to the
+# OCR model as before. Own venv on D:, nothing else is installed into it (the package has no runtime dependencies on its PyPI page).
+# Install (Windows, once, with the network on; pip checks the hash of the wheel it picks):
+#   py -3.13 -m venv D:\jarvis\tools\liteparse-venv
+#   D:\jarvis\tools\liteparse-venv\Scripts\python.exe -m pip install --only-binary=:all: --require-hashes -r jarvis\tools\requirements\liteparse-venv.txt
+# That puts the `lit` command at D:\jarvis\tools\liteparse-venv\Scripts\lit.exe, the path jarvis/plugins/doc_reader/fastpath.py looks for
+# (LITEPARSE_EXE can name another absolute path; DOC_READER_FASTPATH=0 switches the fast path off).
+# Source and hash read 2026-10-26 from https://pypi.org/pypi/liteparse/json (PyPI, upload 2026-10-22): liteparse-2.17.0-cp310-abi3-win_amd64.whl,
+# 12148209 bytes, sha256 c14b17cf2408a5dcdd201a9cbbf392173e91271395cc6c8e872f7bfb347e0cd2. Hashes of the other platforms' wheels are not listed
+# here (this laptop is win_amd64); a different platform needs its own hash from the same page. Apache-2.0 (github.com/run-llama/liteparse).
+liteparse==2.17.0 --hash=sha256:c14b17cf2408a5dcdd201a9cbbf392173e91271395cc6c8e872f7bfb347e0cd2   # from docs, verify on laptop

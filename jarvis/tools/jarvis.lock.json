@@ -2447,6 +2447,10 @@
    "unpinned_reason": "Installed into jarvis-venv with pip: sherpa-onnx==1.13.8 and sherpa-onnx-core==1.13.8 are pinned in jarvis/tools/requirements/jarvis-venv.txt; the wheel hashes are not recorded here."
   },
   {
+   "registry_name": "LiteParse (run-llama/liteparse)",
+   "unpinned_reason": "A pip package, not a download, so it is not in this file's download list: it is pinned with its wheel hash in jarvis/tools/requirements/liteparse-venv.txt (liteparse==2.17.0, win_amd64 wheel sha256 c14b17cf2408a5dcdd201a9cbbf392173e91271395cc6c8e872f7bfb347e0cd2, read from https://pypi.org/pypi/liteparse/json on 2026-10-26). Optional and not installed yet (D67); without it the Document Reader sends every PDF page to the OCR model."
+  },
+  {
    "registry_name": "NVIDIA Kumo Tabular (structured-data-models)",
    "unpinned_reason": "Optional and not installed yet (D66). When the laptop installs it, pin the pip version and the Hugging Face revision with sha256 here; until then jarvis/tools/tabular_predict.py answers with its baseline."
   }

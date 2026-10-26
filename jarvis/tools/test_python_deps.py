@@ -23,7 +23,7 @@ IMPORT_TO_DIST = {
     "pdfplumber": "pdfplumber",
     "pypdfium2": "pypdfium2",
 }
-REQUIREMENT_FILES = ("agent-venv.txt", "jarvis-venv.txt", "piper-venv.txt", "privacy-venv.txt")
+REQUIREMENT_FILES = ("agent-venv.txt", "jarvis-venv.txt", "piper-venv.txt", "privacy-venv.txt", "liteparse-venv.txt")
 
 
 def _agent_pins() -> dict[str, str]:

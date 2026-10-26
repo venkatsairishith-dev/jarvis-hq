@@ -4,9 +4,9 @@
 FROM docker.io/library/python:3.11-slim
 RUN apt-get update -q && apt-get install -y -q --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 RUN pip install -q uv
-# Google Chrome: the node browser launches channel="chrome" (test_browser). Playwright's own installer, version 1.63.0
+# Google Chrome: the node browser launches channel="chrome" (test_browser). Playwright's own installer, version 1.64.1
 # (installed here first so this layer survives dependency changes).
-RUN uv pip install -q --system "playwright==1.63.0" && python -m playwright install --with-deps chrome && rm -rf /var/lib/apt/lists/*
+RUN uv pip install -q --system "playwright==1.64.1" && python -m playwright install --with-deps chrome && rm -rf /var/lib/apt/lists/*
 # gitleaks (secret scanner): jarvis_kernel.scrub uses it as its second pass; without it 5 kernel tests skip. Checksum pinned.
 RUN python -c "import urllib.request as u; u.urlretrieve('https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz', '/tmp/gl.tgz')" \
  && echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gl.tgz" | sha256sum -c - && tar -xzf /tmp/gl.tgz -C /usr/local/bin gitleaks && rm /tmp/gl.tgz && gitleaks version

@@ -85,7 +85,7 @@ class DocReaderPlugin(PluginBase):
             "max_pages": {"type": "integer", "description": "Most pages to read (default 10, at most 30).", "default": core.DEFAULT_PAGES}},
             "required": ["path"]},
         timeout=900,
-        llm_result_fields=["pages", "pages_total", "chars", "text", "text_note", "took_s", "removed", "note"],
+        llm_result_fields=["pages", "pages_total", "chars", "text", "text_note", "took_s", "removed", "note", "engines"],
     )
     async def read_document(self, path: str = "", max_pages: int = core.DEFAULT_PAGES, **_):
         try:
@@ -93,6 +93,8 @@ class DocReaderPlugin(PluginBase):
         except DocReaderError as exc:
             return Err(SdkError(str(exc)))
         out = {"pages": res["pages"], "pages_total": res["pages_total"], "chars": res["chars"], "took_s": res["took_s"]}
+        if res.get("engines", {}).get("liteparse"):
+            out["engines"] = res["engines"]                              # {"liteparse": pages from the text layer, "ocr": pages from the model}
         if res["removed"]:
             out["removed"] = res["removed"]                              # rule names only, never the values
         if res["notes"]:
