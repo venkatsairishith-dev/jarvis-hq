@@ -2656,5 +2656,35 @@
    "jarvis/evals/quality95/results/lightonocr-20261025-174505.json",
    "jarvis/tools/jarvis.lock.json"
   ]
+ },
+ {
+  "name": "NVIDIA Kumo Tabular (structured-data-models)",
+  "category": "model",
+  "upstream_url": "https://github.com/NVIDIA/structured-data-models",
+  "licence": "code Apache-2.0; weights OpenMDW-1.1 (read 2026-10-26 on nvidia.github.io/structured-data-models/api/models.html)",
+  "pinned_version": "NOT PINNED: not installed anywhere yet. Pin the pip version and the Hugging Face revision + sha256 when the laptop installs it.",
+  "pin_location": [],
+  "integration": "optional pip package in its own venv on D: + downloaded weights (size small ~28M by default)",
+  "machine": "laptop (CPU; a GPU is not required by the code but the repo examples use CUDA, CPU speed unmeasured)",
+  "jarvis_files": [
+   "jarvis/tools/tabular_predict.py",
+   "jarvis/tools/test_tabular_predict.py"
+  ],
+  "features_used": [
+   "in-context prediction from labelled rows + query rows (classification and regression), size 'small'"
+  ],
+  "unused_features": [
+   {
+    "feature": "sizes medium and large (up to ~215M); fit/predict/clear caching; TabICLv2 (BSD-3-Clause) as an alternative",
+    "evidence": "nvidia.github.io/structured-data-models/api/models.html"
+   }
+  ],
+  "size_class": "small (28M parameters; download size not stated on the pages read)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Optional. Used only for a table whose held-out check (tabular_predict.py check) shows it beating the plain baseline; otherwise the baseline answers. NVIDIA's ranking is its own test; independent reproduction pending in the coverage read on 2026-10-26.",
+  "evidence": [
+   "jarvis/docs/REEL_INTAKE_2026-10-26.md",
+   "jarvis/docs/03_DECISIONS.md (D66)"
+  ]
  }
 ]
