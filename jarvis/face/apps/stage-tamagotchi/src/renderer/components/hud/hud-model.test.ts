@@ -243,6 +243,14 @@ describe('jARVIS D60: the instant acknowledgement and the progress line', () => 
     expect(goalLine(null)).toBe('')
   })
 
+  it('shows what the PC control loop is doing, in the plugin\'s own fixed words (D65)', () => {
+    const base = { goal_state: 'running', goal_n: 1, goal_total: 1, goal_exec: 'pc' }
+    expect(goalLine(goal({ ...base, pc_line: 'I am typing into notepad (step 2).' }))).toBe('I am typing into notepad (step 2).')
+    expect(goalLine(goal({ ...base, pc_line: 'I am waiting because you are using the PC.' }))).toBe('I am waiting because you are using the PC.')
+    expect(goalLine(goal({ ...base, pc_line: '<script>alert(1)</script>' }))).toBe('Working on the PC')
+    expect(goalLine(goal({ goal_state: 'waiting', pc_line: 'I am clicking in notepad' }))).toBe('Waiting for your approval')
+  })
+
   it('prefers the goal step over the acknowledgement and shows the acknowledgement until there is one', () => {
     const running = goal({ goal_state: 'running', goal_n: 1, goal_total: 2, goal_exec: 'pc' })
     expect(hudLine('On it', running)).toBe('Step 1 of 2: working on the PC')

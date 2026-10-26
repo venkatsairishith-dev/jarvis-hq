@@ -121,6 +121,18 @@ def _json(text):
 
 def run(p: dict, runner=None, lister=None) -> dict:
     op, name = str(p.get("op", "")), str(p.get("target", ""))
+    if op == "window_vision":                                # D65: the vision rung of the cascade, read-only, local ("app|*" reads, "app|label" locates)
+        proc, _, label = name.partition("|")
+        if not NAME.match(proc) or not proc or not label or len(label) > 120 or "\n" in label:
+            return {"ok": False, "error": "bad target"}
+        if sensitive.sensitive_window(proc, lister):
+            return {"ok": False, "error": "refused: a password manager, wallet or bank"}
+        from . import vision
+        try:
+            res = vision.see(proc, label)
+        except vision.VisionError as e:
+            return {"ok": False, "error": str(e)}
+        return dict(res, check=op, note="the window's text stayed on this laptop (local_result); only counts and points went to the kernel")
     if op in ("window_ocr", "window_locate"):                # perception of one window (vision.py): read-only, local
         proc, _, label = name.partition("|")
         if not NAME.match(proc) or not proc or len(label) > 120 or "\n" in label:

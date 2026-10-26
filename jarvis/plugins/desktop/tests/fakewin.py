@@ -234,6 +234,11 @@ class FakeWindows:
 
         def focus(t, p):
             need(proc_of(t))
+            for w in self.windows:                                          # D65: the window in front is really the focused one (the ladder looks at it)
+                if w["process"].lower() == proc_of(t).lower():
+                    w["foreground"], w["minimized"] = True, False
+                else:
+                    w["foreground"] = False
             return {"observed": "the target is the foreground window", "foreground": True}
 
         def key(t, p):
@@ -379,7 +384,7 @@ class FakeWindows:
     def _node(self, job: dict) -> dict:
         kind, p = job["kind"], job["params"]
         if kind == "ui_windows":
-            return node_jobs.ui_windows({}, lister=self.lister)
+            return node_jobs.ui_windows({}, lister=self.lister, input_state=lambda: self.input_state() if callable(getattr(self, "input_state", None)) else {})
         if kind == "ui_action":
             return node_jobs.ui_action(p, backend=self.backend(), lister=self.lister)
         if kind == "diag":

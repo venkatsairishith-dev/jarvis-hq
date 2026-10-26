@@ -76,10 +76,49 @@ def list_windows(include_minimized=True) -> list:
         if not mini and (w < 40 or h < 20):
             return True
         out.append({"hwnd": int(hwnd), "pid": int(pid.value), "process": _process_name(pid.value), "title": t,
-                    "class": c, "foreground": hwnd == fg, "minimized": mini, "x": rect.left, "y": rect.top, "w": w, "h": h})
+                    "class": c, "foreground": hwnd == fg, "minimized": mini, "x": rect.left, "y": rect.top, "w": w, "h": h,
+                    "hung": _is_hung(hwnd), "cloaked": _is_cloaked(hwnd)})
         return True
     user32.EnumWindows(cb, 0)
     return _scrub_titles(out)
+
+
+def _is_hung(hwnd) -> bool:
+    """Windows' own verdict that the window's thread has not pumped messages for about 5 seconds (the "(Not Responding)" state)."""
+    try:
+        return bool(user32.IsHungAppWindow(hwnd))
+    except Exception:  # noqa: BLE001 - an API that is missing is "not known to be hung"
+        return False
+
+
+def _is_cloaked(hwnd) -> bool:
+    """True for a window on another virtual desktop (DWMWA_CLOAKED = 14 with the shell flag): it is in the list but not on this desktop."""
+    try:
+        val = wintypes.DWORD(0)
+        if ctypes.windll.dwmapi.DwmGetWindowAttribute(wintypes.HWND(hwnd), 14, ctypes.byref(val), ctypes.sizeof(val)) == 0:
+            return bool(val.value)
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
+def input_state() -> dict:
+    """{idle_ms, cursor: [x, y]}: milliseconds since the last keyboard or mouse input of ANY kind (JARVIS's own synthetic input counts, so the
+    plugin compares it with the time of its own last action), and where the mouse pointer is. {} off Windows or when Windows will not say."""
+    if not ON_WINDOWS:
+        return {}
+    try:
+        class LII(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+        info = LII(ctypes.sizeof(LII), 0)
+        if not user32.GetLastInputInfo(ctypes.byref(info)):
+            return {}
+        idle = int((kernel32.GetTickCount() - info.dwTime) & 0xFFFFFFFF)       # the tick counter wraps every 49 days
+        pt = wintypes.POINT()
+        got = user32.GetCursorPos(ctypes.byref(pt))
+        return {"idle_ms": idle, **({"cursor": [int(pt.x), int(pt.y)]} if got else {})}
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def _scrub_titles(out: list) -> list:

@@ -259,11 +259,33 @@ def read_goal_progress(path=None, now=None) -> dict:
     return {"goal_state": state, "goal_n": count("n"), "goal_total": count("total"), "goal_exec": ex if ex in GOAL_EXECUTORS else ""}
 
 
+PC_LINE_STALE_S = 60.0
+PC_LINE_OK = re.compile(r"^[A-Za-z0-9 .,()'-]{1,140}$")
+
+
+def read_pc_line(path=None, now=None) -> dict:
+    """D65: what the PC control loop is doing right now, as ONE short sentence the desktop plugin made from fixed phrases and an app's process name
+    (plugins/pc_task_state.json, field `line`). Nothing else of that file leaves: not the problem, not what was tried. {} when no task is live or the line is not plain."""
+    if path is None:
+        from jarvis.pluginapi.paths import data_dir
+        path = data_dir() / "plugins" / "pc_task_state.json"
+    now = time.time() if now is None else now
+    try:
+        snap = json.loads(path.read_text(encoding="utf-8"))
+        line, state, at = snap["line"], snap["state"], float(snap["updated"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+    if state not in ("running", "paused_owner", "asking", "waiting_approval") or now - at > PC_LINE_STALE_S or not isinstance(line, str) or not PC_LINE_OK.match(line):
+        return {}
+    return {"pc_line": line}
+
+
 class FaceTools:
     """The tools as plain async functions; `build_server` only registers them. `client_factory` returns a JarvisClient."""
 
-    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None, goal_progress_path=None):
+    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None, goal_progress_path=None, pc_line_path=None):
         self.goal_progress_path = goal_progress_path
+        self.pc_line_path = pc_line_path
         self.console = console or _load_console_client()
         self.client_factory = client_factory or (lambda: self.console.JarvisClient())
         self.clean = clean or _cleaner()
@@ -315,6 +337,7 @@ class FaceTools:
             pass
         out.update(await asyncio.to_thread(read_pc_operations, self.pc_ops_path))
         out.update(await asyncio.to_thread(read_goal_progress, self.goal_progress_path))
+        out.update(await asyncio.to_thread(read_pc_line, self.pc_line_path))
         return self._out(out)
 
     def _language_gate(self, task: str):

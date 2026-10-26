@@ -254,3 +254,32 @@ def look(proc: str, label: str = "", use_model: bool = True) -> dict:
             os.remove(png)
         except OSError:
             pass
+
+
+def see(proc: str, label: str = "*") -> dict:
+    """D65, the vision rung of the screen cascade (plugins/_shared/screen_cascade.py). `label` "*": what the small vision model reads in the window,
+    kept in a local file (`local_result`: observed OCR lines + the model's text); only counts go back. A label: where the OCR line AND the vision
+    model each put it, as two separate points, so the cascade can ask whether they AGREE before anything is clicked from pixels."""
+    png, size = capture(proc)
+    try:
+        lines = ocr(png, size.get("scale", 1))
+        res: dict = {"ok": True, "size": {"width": size["width"], "height": size["height"]}, "lines": len(lines)}
+        if label in ("", "*"):
+            answer = ask_vision(png, "Transcribe the text that is visible in this window. Only what you can read; no commentary.")
+            local = os.path.join(local_result_dir(), f"vision-{secrets.token_hex(4)}.json")
+            with open(local, "w", encoding="utf-8") as f:
+                json.dump({"observed_lines": [ln["text"] for ln in lines], "inferred": answer[:6000]}, f)
+            res.update(local_result=local, chars=len(answer))
+            return res
+        hit = find_text(lines, label)
+        if hit:
+            res["ocr_point"] = {"x": hit["cx"], "y": hit["cy"]}
+        g = ground_vision(png, size, label)
+        if g:
+            res["vision_point"] = {"x": g["cx"], "y": g["cy"]}
+        return res
+    finally:
+        try:
+            os.remove(png)
+        except OSError:
+            pass

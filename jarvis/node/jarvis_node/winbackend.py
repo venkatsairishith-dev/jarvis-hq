@@ -63,8 +63,20 @@ public class FW { [DllImport("user32.dll")] public static extern IntPtr GetForeg
   Start-Sleep -Milliseconds 400
   $fpid = 0; [void][FW]::GetWindowThreadProcessId([FW]::GetForegroundWindow(), [ref]$fpid)
   if ($fpid -ne $p.Id) { throw 'target is not the foreground window' }
-  $t = [regex]::Replace($env:JARVIS_UI_TEXT, '[\+\^%~\(\)\{\}\[\]]', '{$0}')
-  [System.Windows.Forms.SendKeys]::SendWait($t)
+  # D65 (human feel, not evasion): a short text is typed in small pieces with a short beat between them (about 8 characters every 40 to 80 ms), so the owner
+  # sees it being written; beyond JARVIS_UI_PACE_CAP characters (default 240) it goes in one piece, as before. The text is cut BEFORE the SendKeys escaping,
+  # so an escaped group such as {+} is never split. JARVIS_UI_PACE_MS=0 turns the pace off.
+  $raw = $env:JARVIS_UI_TEXT; $cap = if ($env:JARVIS_UI_PACE_CAP) { [int]$env:JARVIS_UI_PACE_CAP } else { 240 }; $pace = if ($env:JARVIS_UI_PACE_MS) { [int]$env:JARVIS_UI_PACE_MS } else { 55 }
+  if ($pace -gt 0 -and $raw.Length -le $cap) {
+    for ($i = 0; $i -lt $raw.Length; $i += 8) {
+      $piece = $raw.Substring($i, [Math]::Min(8, $raw.Length - $i))
+      [System.Windows.Forms.SendKeys]::SendWait([regex]::Replace($piece, '[\+\^%~\(\)\{\}\[\]]', '{$0}'))
+      Start-Sleep -Milliseconds ($pace - 15 + (($i / 8) % 3) * 15)
+    }
+  } else {
+    $t = [regex]::Replace($raw, '[\+\^%~\(\)\{\}\[\]]', '{$0}')
+    [System.Windows.Forms.SendKeys]::SendWait($t)
+  }
 }
 """
 
@@ -216,11 +228,26 @@ if ($el.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern,
   [W32]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero)
 }
 """
-CLICK_AT = FOCUS + r"""
+# D65 (human feel, not evasion): the pointer travels to the target in a short eased curve (about a quarter of a second) instead of jumping, so the owner can
+# SEE where JARVIS is clicking; the pause after arriving is the beat a person takes before pressing. JARVIS_UI_SMOOTH=0 turns it off.
+SMOOTH_MOVE = r"""
+Add-Type -AssemblyName System.Windows.Forms
+function Move-Smooth([int]$tx, [int]$ty) {
+  if ($env:JARVIS_UI_SMOOTH -eq '0') { [void][W32]::SetCursorPos($tx, $ty); return }
+  $c = [System.Windows.Forms.Cursor]::Position; $sx = $c.X; $sy = $c.Y
+  $steps = [Math]::Max(6, [Math]::Min(18, [int]([Math]::Sqrt(($tx - $sx) * ($tx - $sx) + ($ty - $sy) * ($ty - $sy)) / 40)))
+  for ($i = 1; $i -le $steps; $i++) {
+    $t = $i / $steps; $e = $t * $t * (3 - 2 * $t)                      # ease in and out
+    [void][W32]::SetCursorPos([int]($sx + ($tx - $sx) * $e), [int]($sy + ($ty - $sy) * $e)); Start-Sleep -Milliseconds 12
+  }
+  [void][W32]::SetCursorPos($tx, $ty); Start-Sleep -Milliseconds 70
+}
+"""
+CLICK_AT = FOCUS + SMOOTH_MOVE + r"""
 $r = New-Object W32+RECT; [void][W32]::GetWindowRect($h, [ref]$r)
 $x = $r.L + [int]$env:JARVIS_UI_X; $y = $r.T + [int]$env:JARVIS_UI_Y
 if ($x -ge $r.R -or $y -ge $r.B) { throw 'point outside the window' }
-[void][W32]::SetCursorPos($x, $y)
+Move-Smooth $x $y
 [W32]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero); [W32]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
 """
 # close (D54): the polite close, WM_CLOSE to the picked window - the app asks about unsaved work itself, so nothing is ever force-killed. The script
@@ -233,12 +260,12 @@ Start-Sleep -Milliseconds 1500
 """
 # drag (D54, any task: drawing, selecting, moving a slider): press at one point of the window, move to another in a few steps, release. Points are in the
 # window's own pixels and must lie inside it, like click_at.
-DRAG = FOCUS + r"""
+DRAG = FOCUS + SMOOTH_MOVE + r"""
 $r = New-Object W32+RECT; [void][W32]::GetWindowRect($h, [ref]$r)
 $a = $env:JARVIS_UI_PTS -split ','
 $x1 = $r.L + [int]$a[0]; $y1 = $r.T + [int]$a[1]; $x2 = $r.L + [int]$a[2]; $y2 = $r.T + [int]$a[3]
 foreach ($pt in @(@($x1, $y1), @($x2, $y2))) { if ($pt[0] -ge $r.R -or $pt[1] -ge $r.B) { throw 'point outside the window' } }
-[void][W32]::SetCursorPos($x1, $y1); Start-Sleep -Milliseconds 60
+Move-Smooth $x1 $y1
 [W32]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
 for ($i = 1; $i -le 12; $i++) { [void][W32]::SetCursorPos([int]($x1 + ($x2 - $x1) * $i / 12), [int]($y1 + ($y2 - $y1) * $i / 12)); Start-Sleep -Milliseconds 15 }
 [W32]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
@@ -249,7 +276,10 @@ SENDKEYS = {"enter": "{ENTER}", "tab": "{TAB}", "esc": "{ESC}", "escape": "{ESC}
             "end": "{END}", "pageup": "{PGUP}", "pagedown": "{PGDN}", **{f"f{i}": "{F%d}" % i for i in range(1, 13)}}
 MODS = {"ctrl": "^", "alt": "%", "shift": "+"}
 # D54 (simple tasks): a few Windows shortcuts that go to the desktop, not to a window: target "desktop|". Only these, fixed; the flag 1 marks the arrows as extended keys.
-GLOBAL_KEYS = {"win+d": "91:0,68:0", "win+m": "91:0,77:0", "win+left": "91:0,37:1", "win+right": "91:0,39:1", "win+up": "91:0,38:1", "win+down": "91:0,40:1"}
+GLOBAL_KEYS = {"win+d": "91:0,68:0", "win+m": "91:0,77:0", "win+left": "91:0,37:1", "win+right": "91:0,39:1", "win+up": "91:0,38:1", "win+down": "91:0,40:1",
+               # D65 (problem solving): switch to the previous window, and to the next / previous virtual desktop. Nothing else may carry these keys.
+               "alt+tab": "18:0,9:0", "ctrl+win+left": "17:0,91:0,37:1", "ctrl+win+right": "17:0,91:0,39:1"}
+GLOBAL_ALIASES = {"win+ctrl+left": "ctrl+win+left", "win+ctrl+right": "ctrl+win+right"}
 MEDIA_KEYS = {"playpause": 0xB3, "nexttrack": 0xB0, "prevtrack": 0xB1, "stop": 0xB2, "volumeup": 0xAF, "volumedown": 0xAE, "mute": 0xAD}
 
 
@@ -282,6 +312,7 @@ def focus(target, params):
 
 def key(target, params):
     chord = str(params.get("text", "")).strip().lower()
+    chord = GLOBAL_ALIASES.get(chord, chord)
     if chord in GLOBAL_KEYS:                               # win+d, win+left ...: to the desktop (target "desktop|"), nothing else may carry the Windows key
         if _proc(target).lower() != "desktop":
             raise ValueError("bad key")
