@@ -115,7 +115,8 @@ def test_a_name_that_exists_gets_a_counter_never_the_same_name(world):
 def test_save_as_checks_the_disk_the_window_and_the_text(world):
     typed = "line one\r\nline two  \r\n"
     run = saver(content=typed)
-    out = do(world, f"Documents|hello.txt|{sf.text_digest('line one\nline two')}", run)
+    digest = sf.text_digest("line one\nline two")          # outside the f-string: Python 3.11 refuses a backslash inside one
+    out = do(world, f"Documents|hello.txt|{digest}", run)
     assert out["saved"] == "hello.txt" and out["folder"] == "Documents" and out["file_ok"] is True and out["title_ok"] is True and out["content_ok"] is True
     assert run.seen[0]["JARVIS_SAVE_PATH"] == str(world["docs"] / "hello.txt") or os.path.samefile(run.seen[0]["JARVIS_SAVE_PATH"], world["docs"] / "hello.txt")
     assert run.seen[0]["JARVIS_UI_PROC"] == "notepad"
