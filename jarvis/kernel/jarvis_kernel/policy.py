@@ -1093,6 +1093,21 @@ def _jarvis_project(a: Action) -> bool:
     return False
 
 
+def clean_words(s: str) -> str:
+    """NFKC, lower case, and no invisible format/control characters (soft hyphen, zero-width, bidi marks): 'Ｐａｙ now' and 'Se\u00advnd' read as pay and send."""
+    return "".join(c for c in unicodedata.normalize("NFKC", str(s)).lower() if unicodedata.category(c) not in ("Cf", "Cc") or c in "\n\t ")
+
+
+def mixed_script(s: str) -> bool:
+    """True when letters of Latin and Cyrillic/Greek are mixed in one name (a lookalike: Cyrillic 'а' in 'pаy'); such a name never counts as ordinary."""
+    scripts = set()
+    for c in s:
+        if c.isalpha():
+            n = unicodedata.name(c, "")
+            scripts.add("latin" if n.startswith("LATIN") else "cyrillic" if n.startswith("CYRILLIC") else "greek" if n.startswith("GREEK") else "other")
+    return "latin" in scripts and bool(scripts & {"cyrillic", "greek"})
+
+
 # On-screen permission buttons JARVIS clicks itself (owner, 2026-10-25, twice: "JARVIS can click for permission on screen"). The list is
 # config/auto_click.json: [{"process": regex, "element": regex}], both must match the WHOLE name. It only waives the SOFT words of CONSEQUENTIAL
 # (accept, agree, allow, grant, authorize, confirm); a click whose words also name money, deletion, sending, installing or signing in stays the owner's.
@@ -1124,7 +1139,8 @@ def _auto_click_rules() -> list:
 
 def auto_click_ok(target, words: str) -> bool:
     """True when a ui.click on 'process|element' is a button the owner listed for JARVIS to click by itself, and nothing hard is in its words."""
-    if HARD_CONSEQUENCE.search(words):
+    words = clean_words(words)
+    if HARD_CONSEQUENCE.search(words) or mixed_script(words) or "reset" in words:
         return False
     proc, sep, element = str(target).partition("|")
     if not sep:
@@ -1140,10 +1156,10 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
     if (a.owner_direct and op in ORDINARY_OPS.get(tool, ()) and _name(a.lane) == "private" and not a.untrusted_session
             and level == YELLOW_APPROVAL):
         level, reason = YELLOW_AUTO, "the owner asked for this directly (ordinary PC or browser action)"
-        words = " ".join(_leaves(a.target, [], False) + _leaves(a.params, [], False))
+        words = clean_words(" ".join(_leaves(a.target, [], False) + _leaves(a.params, [], False)))
         key = _name((a.params or {}).get("text", "")) if op in ("key", "press") else ""
-        if CONSEQUENTIAL.search(words):
-            if tool == "ui" and op == "click" and auto_click_ok(a.target, words):
+        if CONSEQUENTIAL.search(words) or mixed_script(words):
+            if tool == "ui" and op == "click" and not mixed_script(words) and auto_click_ok(a.target, words):
                 reason = "the owner listed this on-screen permission button in config/auto_click.json: JARVIS clicks it itself"
             else:
                 level, reason = YELLOW_APPROVAL, "this could pay, send, delete, install, sign in or out, or accept something: the owner approves it"

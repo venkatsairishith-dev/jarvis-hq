@@ -79,7 +79,7 @@ class JsonLog:
 
 # Windows the owner clicks and watches (owner, 2026-10-26: "the Windows widget is very non responsive"). BELOW_NORMAL + EcoQoS + the CPU-capped job
 # starved the face while a model ran, so these components are left alone: normal priority, no efficiency mode, outside the capped job.
-INTERACTIVE = frozenset({"face"})
+INTERACTIVE = F.PROTECTED | frozenset({"privacy-gateway", "face-tools", "local-speech"})   # the whole chat path: window, hands, kernel client, gateway, tool server, speech
 
 
 class Enforcer:

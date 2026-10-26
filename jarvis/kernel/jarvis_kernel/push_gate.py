@@ -40,7 +40,7 @@ PROTECTED = re.compile(
     r"|(^|/)conftest\.py$|threshold|baseline|(^|/)\.github(/|$)|(^|/)\.claude(/|$)|(^|/)claude\.md$|(^|/)agents\.md$"
     r"|(^|/)\.mcp\.json$|(^|/)hooks\.json$|(^|/)settings(\.local)?\.json$|(^|/)\.gitattributes$|(^|/)\.gitmodules$"
     r"|(^|/)(policy|audit|store|push_gate|gitleaks_gate|llm_proxy|projectfix|cdp_relay|adminctl)\.py$"
-    r"|(^|/)(sensitive_sites|admin_verbs|providers)\.json$|(^|/)\.env|secret|credential|\.pem$|\.key$|(^|/)id_(rsa|ed25519)",
+    r"|(^|/)(sensitive_sites|admin_verbs|providers|auto_click|specialists|simple_tasks)\.json$|(^|/)\.env|secret|credential|\.pem$|\.key$|(^|/)id_(rsa|ed25519)",
     re.I)
 Git = Callable[..., str]
 
