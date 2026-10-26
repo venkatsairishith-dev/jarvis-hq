@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
 import HudSettingsField from '../../../components/hud/HudSettingsField.vue'
+import SpeedSettingsFields from '../../../components/SpeedSettingsFields.vue'
 
 import { electron, electronAppIconGet, electronAppIconSet } from '../../../../shared/eventa'
 
@@ -42,6 +43,7 @@ async function updateHidden(hidden: boolean) {
   <SettingsGeneralFields>
     <template #additional-fields>
       <HudSettingsField />
+      <SpeedSettingsFields />
       <FieldCheckbox
         v-if="hideAppIcon !== undefined"
         :model-value="hideAppIcon"

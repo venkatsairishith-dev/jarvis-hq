@@ -162,10 +162,16 @@ def _opened(go, real: bool) -> None:
 
 
 def pc_open(p: dict, roots: dict = None, apps: list = None, opener=None, launcher=None) -> dict:
-    """Run one authorized pc_open job: open_app, open_folder, open_file or list_folder."""
+    """Run one authorized pc_open job: open_app, open_folder, open_file, list_folder or open_code (VS Code on a folder)."""
     op, target, rel = str(p.get("op", "")), str(p.get("target", "")), str(p.get("path", ""))
     if _sensitive(target, rel):
         return {"ok": False, "error": REFUSED}
+    if op == "open_code":                                 # D54: VS Code on a folder inside the known folders / projects (savefile.py)
+        from . import savefile
+        try:
+            return savefile.open_code(target, rel, roots=savefile.folder_roots(known=roots), launcher=launcher)
+        except savefile.SafeError as e:
+            return {"ok": False, "error": e.public}
     opener = opener or os.startfile
     if op == "open_app":
         found, near = find_app(target, apps if apps is not None else start_apps())

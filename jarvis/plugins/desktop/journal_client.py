@@ -7,10 +7,13 @@ Where it hooks in (all additive, a few lines each):
   - `_agents()` wraps every step runner (`wrap_agent`): tasks, goals and missions all run steps through them, so each step and each retry is one line;
   - `_run_task` and `do_goal` open a task scope (`enter_task`): a goal's steps share one task id and the owner's own words;
   - the single-action entries carry `@journaled(...)`;
-  - `Pc.run` callers note the node job ids (`note_job`) so the before/after pictures the node took (named after the job) are found.
+  - `Pc.run` callers note the node job ids (`note_job`) so the before/after pictures the node took (named after the job) are found, and the step
+    runners' `pc()` calls `before_job` / `after_job` around every kernel job: a file or setting job that worked is a line of its own with its
+    undo recipe (a catalogue task such as "move a file" or "dark mode" is journaled by what it DID, not as one opaque step).
 
-Class: A = looked (nothing on the PC changed), B = an ordinary action the kernel let through because the owner asked, C = needed the owner's PIN, a
-repair, a permanent delete, or something that is held. Verified: `verified` only when the step passed and nothing was left unobserved,
+Class (the kernel's effect classes, D54): A = ordinary and local, what the owner's words cover (look, open, focus, type, a NEW file or folder, a
+copy); B = changes something that was there, a setting, the network, or runs something (rename, move, sort, a setting, a click in a web page, typing
+in a terminal); C = deletes, repairs, or anything held for the owner's PIN. Verified: `verified` only when the step passed and nothing was left unobserved,
 `unconfirmed` when the node said ok but it was not seen, `failed` otherwise.
 
 Privacy: labels are fixed phrases plus an app or site name, cleaned like every other plugin text (`screen_text.clean_message`); typed text is
@@ -162,6 +165,7 @@ class StepTok:
     t0: float
     jobs: list = field(default_factory=list)
     ctx_token: Any = None
+    effects: int = 0                     # lines `after_job` wrote for this step's file and setting jobs
 
 
 def note_job(job_id: Any) -> None:
@@ -203,6 +207,8 @@ def end(tok: "StepTok | None", res: Any, raised: bool = False) -> None:
             return
         res = res if isinstance(res, dict) else {"ok": False, "error": f"the agent returned a {type(res).__name__}"}
         passed, checked, unc = _verdict(tok.step, tok.tool, res)
+        if tok.tool == "simple_task" and tok.effects and passed and not raised:
+            return                                                   # each of its file and setting jobs is a line of its own (with its own undo recipe)
         cls, label, target = classify(tok.tool, tok.step, res)
         verified = "failed" if not passed and res.get("ok") is not True else ("verified" if passed and not unc else "unconfirmed")
         if raised:
@@ -314,41 +320,75 @@ def pseudo_step(kind: str, kw: dict) -> dict:
     return {"tool": kind}
 
 
+TERMINALS = {"windowsterminal", "wt", "cmd", "conhost", "powershell", "pwsh", "bash", "wsl", "mintty", "alacritty", "putty", "terminal", "git-bash", "gitbash"}
+DELETING = {"trash", "delete_permanent", "empty_bin", "cleanup"}
+SIMPLE_SKIP_NAME = re.compile(r"\s*\([^)]*\)")
+
+
+def _terminal(app: Any) -> bool:
+    return str(app or "").partition("|")[0].strip().lower().removesuffix(".exe") in TERMINALS
+
+
+def _task_entry(step: dict) -> "dict | None":
+    try:
+        from . import simple_tasks
+        return simple_tasks.get(str(step.get("task", "")))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def classify(tool: str, step: dict, res: dict) -> tuple[str, str, str]:
-    """(class, step label, target label)."""
+    """(class, step label, target label). The class is the kernel's effect class (D54): A = ordinary and local, what the owner's words cover (look, open,
+    focus, type, a NEW file or folder, a copy); B = changes something that was there, a setting, the network, or runs something (rename, move, a
+    sort, a setting, a click in a page, typing in a terminal); C = deletes, repairs, or anything that was held for the owner's PIN."""
     app = step.get("app") or res.get("process") or ""
     waiting = res.get("state") in ("waiting_for_permission", "denied") or bool(res.get("approval_id"))
     if tool == "open_app":
-        return "B", f"Open {_name(step.get('app'))}", _name(step.get("app"))
+        return "A", f"Open {_name(step.get('app'))}", _name(step.get("app"))
     if tool == "open_website":
         h = _host(str(step.get("url", "")), str(step.get("site", "")))
-        return "B", f"Open {h}", h
+        return "A", f"Open {h}", h
     if tool == "play_media":
-        return "B", "Play something on YouTube", "YouTube"
+        return "A", "Play something on YouTube", "YouTube"
     if tool == "browser":
         act = str(step.get("action") or "read")
         words = {"read": "Read a page in Chrome", "find": "Find text in Chrome", "tabs": "List the Chrome tabs", "whoami": "Check the Chrome account",
                  "media": "Check what is playing", "click": "Click in Chrome", "type": "Type into a page in Chrome", "press": "Press a key in Chrome",
                  "open": "Open a page in Chrome", "play": "Play in Chrome"}
-        return ("C" if waiting else "A" if act in BROWSER_READS else "B"), words.get(act, "Do something in Chrome"), "Chrome"
+        return ("C" if waiting else "B" if act in ("click", "type", "press") else "A"), words.get(act, "Do something in Chrome"), "Chrome"
     if tool == "window":
         act = str(step.get("action") or "focus")
         if act == "inspect":
             return "A", f"Read the {_name(app)} window", _name(app)
         if act == "focus":
-            return "B", f"Bring the {_name(app)} window to the front", _name(app)
-        return "B", f"{act.capitalize() if act in ('minimize', 'maximize', 'restore') else 'Use'} the {_name(app)} window", _name(app)
+            return "A", f"Bring the {_name(app)} window to the front", _name(app)
+        return "A", f"{act.capitalize() if act in ('minimize', 'maximize', 'restore') else 'Use'} the {_name(app)} window", _name(app)
     if tool == "type_text":
-        return ("C" if waiting else "B"), f"Type {len(str(step.get('text') or ''))} characters into {_name(app)}", _name(app)
+        return ("C" if waiting else "B" if _terminal(app) else "A"), f"Type {len(str(step.get('text') or ''))} characters into {_name(app)}", _name(app)
     if tool == "press_key":
         if res.get("done") == "nothing to do":
             return "A", "Check the media state", ""
-        return ("C" if waiting else "B"), f"Press {_key(step.get('key'))}" + (f" in {_name(app)}" if app else ""), _name(app) if app else ""
+        return ("C" if waiting else "B" if _terminal(app) else "A"), f"Press {_key(step.get('key'))}" + (f" in {_name(app)}" if app else ""), _name(app) if app else ""
     if tool == "open_file":
         name = str(step.get("name") or "")
         known = {"downloads", "documents", "desktop", "pictures", "videos", "music"}
         n = re.sub(r"(?i)\b(my|the|folder)\b", "", name).strip().lower()
-        return "B", (f"Open the {n.title()} folder" if n in known else f"Open {screen_text.file_class(name)}"), ""
+        return "A", (f"Open the {n.title()} folder" if n in known else f"Open {screen_text.file_class(name)}"), ""
+    if tool == "open_in_vscode":
+        return "A", "Open a folder in VS Code", "VS Code"
+    if tool == "type_in_editor":
+        n = res.get("typed_chars")
+        return ("C" if waiting else "B" if _terminal(app) else "A"), f"Type {n if isinstance(n, int) else len(str(step.get('text') or ''))} characters into {_name(app)}", _name(app)
+    if tool == "save_as":
+        where = _c(res.get("folder") or "", 40)
+        return ("C" if waiting else "A"), f"Save {screen_text.file_class(res.get('saved') or step.get('name') or '')}" + (f" in {where}" if where else ""), where
+    if tool == "drive":
+        return ("C" if waiting else "B"), "Do a task by looking at the screen", _name(app) if app else ""
+    if tool == "simple_task":
+        e = _task_entry(step) or {}
+        steps = [s.get("op") for s in (e.get("how") or {}).get("steps") or [] if isinstance(s, dict)]
+        cls = "C" if waiting or DELETING & set(steps) else "A"
+        return cls, _c(SIMPLE_SKIP_NAME.sub("", str(e.get("name") or "A simple task")), 60), ""
     if tool == "check_pc":
         chk = str(step.get("check") or step.get("action") or "disk")
         chk = chk if chk in {"processes", "disk", "network", "services", "app_info", "crashes", "media"} else "the PC"
@@ -357,11 +397,11 @@ def classify(tool: str, step: dict, res: dict) -> tuple[str, str, str]:
         return "C", f"Troubleshoot {_name(app)}", _name(app)
     if tool == "research":
         made = step.get("deliverable", "none")
-        return "B", "Research a topic" + (f" and make a {made}" if made and made != "none" else ""), ""
+        return "A", "Research a topic" + (f" and make a {made}" if made and made != "none" else ""), ""
     if tool == "open_output":
-        return "B", "Open a file JARVIS made", ""
+        return "A", "Open a file JARVIS made", ""
     if tool == "stop":
-        return "B", "Stop the PC task", ""
+        return "A", "Stop the PC task", ""
     if tool == "whats_on_screen":
         return "A", "Look at which windows are open", ""
     if tool == "read_window_text":
@@ -369,7 +409,7 @@ def classify(tool: str, step: dict, res: dict) -> tuple[str, str, str]:
     if tool == "find_on_screen":
         return "A", "Find something in a window", ""
     if tool == "save":
-        return "B", "Save a file", ""
+        return "A", "Save a file", ""
     return ("C" if waiting else "B"), tool.replace("_", " ").strip().capitalize()[:60] or "A PC action", _name(app) if app else ""
 
 
@@ -379,12 +419,15 @@ def recipe_for(tool: str, step: dict, res: dict, passed: bool, started: float) -
         return None
     try:
         launched = res.get("launched")
-        if tool in ("open_app", "open_file") and res.get("verified") == "verified" and isinstance(launched, list) and launched:
+        if tool in ("open_app", "open_file", "open_in_vscode") and res.get("verified") == "verified" and isinstance(launched, list) and launched:
             first = launched[0]
             if isinstance(first, dict) and first.get("proc"):
                 return U.recipe_close_window(str(first["proc"]), int(first.get("pid") or 0), started)
-        if tool == "type_text":
+        if tool in ("type_text", "type_in_editor"):
             return U.recipe_cannot("typed text cannot be taken back (if it was saved as a new file, that file can be undone)")
+        if tool == "save_as" and res.get("saved"):
+            base = folder_path(str(res.get("folder") or ""))
+            return U.recipe_recycle_new(os.path.join(base, str(res["saved"]))) if base else None
         if tool == "browser" and step.get("action") in ("click", "type", "press"):
             return U.recipe_cannot("what was done in the web page cannot be taken back from here")
         if tool == "troubleshoot" and res.get("outcome") == "fixed and verified":
@@ -396,9 +439,163 @@ def recipe_for(tool: str, step: dict, res: dict, passed: bool, started: float) -
                     return U.recipe_recycle_new(path)
             except OSError:
                 return None
+        if tool == "simple_task":
+            e = _task_entry(step) or {}
+            if (e.get("how") or {}).get("handler") in ("type_active", "paste"):
+                return U.recipe_cannot("typed text cannot be taken back")
     except Exception:  # noqa: BLE001
         return None
     return None
+
+
+# ----------------------------------------------------------------------------------------------------- the effects of file and setting jobs (D54)
+_ROOTS: dict[str, Any] = {"roots": None}
+
+
+def use_roots(roots: "dict | None") -> None:
+    """Tests set the known folders ({"documents": path, ...}); None forgets them."""
+    _ROOTS["roots"] = roots
+
+
+def known_roots() -> dict:
+    if _ROOTS["roots"] is None:
+        try:
+            from jarvis.node.jarvis_node import savefile
+            _ROOTS["roots"] = savefile.folder_roots()
+        except Exception:  # noqa: BLE001
+            _ROOTS["roots"] = {}
+    return _ROOTS["roots"]
+
+
+def folder_path(label: str) -> str:
+    """The real path of a folder label the node gave ("Documents", "Documents/notes"); "" when it is not one of the known folders."""
+    parts = [p for p in re.split(r"[\\/]+", str(label or "")) if p]
+    root = known_roots().get(parts[0].lower()) if parts else None
+    return os.path.join(root, *parts[1:]) if root else ""
+
+
+def _parts(path: Any) -> list:
+    return [p for p in re.split(r"[\\/]+", str(path or "")) if p]
+
+
+SETTING_OF = {"dark_mode": "dark_mode", "light_mode": "dark_mode", "dnd": "dnd", "brightness": "brightness", "wallpaper": "wallpaper"}
+_READER: dict[str, Any] = {"fn": None}
+
+
+def use_setting_reader(fn: "Callable[[str], Any] | None") -> None:
+    """Tests give a fake reader of the current value of a setting."""
+    _READER["fn"] = fn
+
+
+def read_setting(name: str) -> Any:
+    try:
+        if _READER["fn"] is not None:
+            return _READER["fn"](name)
+        return U.WinSettings().get(name)                 # Windows only; anywhere else it raises and the value stays unknown
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def before_job(body: dict) -> "dict | None":
+    """Called just before a kernel job runs: a setting job reads the current value (it is what an undo puts back). Never raises."""
+    try:
+        if get_journal() is None or body.get("op") != "setting":
+            return None
+        name = SETTING_OF.get(str(body.get("action") or ""))
+        return {"name": name, "previous": read_setting(name)} if name else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _setting_new(body: dict, name: str) -> str:
+    act, val = str(body.get("action") or ""), str(body.get("text") or "").strip()
+    if name == "dark_mode":
+        return "dark" if act == "dark_mode" else "light"
+    if name == "dnd":
+        return "off" if val.lower() in ("off", "0", "false") else "on"
+    return val.rpartition("|")[2] if name == "wallpaper" else val
+
+
+def _file_effect(body: dict, r: dict) -> "tuple | None":
+    """(label, class, target, result, recipe) of one file job that worked, or None for a job that changed nothing (find, reveal)."""
+    act, where = str(body.get("action") or ""), _c(r.get("folder") or "", 40)
+    base = folder_path(str(r.get("folder") or ""))
+    given = _parts(body.get("path"))
+    fc = screen_text.file_class
+    if act == "mkdir" and r.get("created"):
+        return (f"Create a folder in {where}", "A", where, "the folder exists",
+                U.recipe_recycle_new(os.path.join(base, str(r["created"]))) if base else None)
+    if act == "create_file" and r.get("created"):
+        return (f"Create {fc(r['created'])} in {where}", "A", where, "the file is on disk" + (", its text was read back" if r.get("content_ok") else ""),
+                U.recipe_recycle_new(os.path.join(base, str(r["created"]))) if base else None)
+    if act == "rename" and r.get("renamed_to") and given and base:
+        src = os.path.join(base, *given)
+        return (f"Rename {fc(given[-1])} in {where}", "B", where, "it has its new name", U.recipe_move_back(src, os.path.join(os.path.dirname(src), str(r["renamed_to"]))))
+    if act in ("move", "copy"):
+        name = r.get("moved") or r.get("copied")
+        src_base, dst_base = folder_path(str(r.get("from") or "")), folder_path(str(r.get("to") or ""))
+        if not name or not dst_base:
+            return None
+        dst = os.path.join(dst_base, str(name))
+        if act == "copy":
+            return (f"Copy {fc(name)} to {_c(r.get('to') or '', 40)}", "A", _c(r.get("to") or "", 40), "the copy is there", U.recipe_recycle_new(dst))
+        return (f"Move {fc(name)} to {_c(r.get('to') or '', 40)}", "B", _c(r.get("to") or "", 40), "it is in the new folder",
+                U.recipe_move_back(os.path.join(src_base, *given), dst) if src_base and given else None)
+    if act == "zip" and r.get("archive") and base:
+        return (f"Zip {fc(given[-1] if given else '')} in {where}", "A", where, "the archive is on disk",
+                U.recipe_recycle_new(os.path.join(base, *given[:-1], str(r["archive"]))))
+    if act == "unzip" and r.get("unpacked_to") and base:
+        return (f"Unpack {fc(given[-1] if given else '')} in {where}", "A", where, f"{int(r.get('files') or 0)} files unpacked into a new folder",
+                U.recipe_recycle_new(os.path.join(base, *given[:-1], str(r["unpacked_to"]))))
+    if act == "sort_downloads":
+        moved = int(r.get("moved") or 0)
+        pairs = [(os.path.join(base, str(m[0])), os.path.join(base, str(m[1]), str(m[2]))) for m in r.get("moves") or [] if isinstance(m, (list, tuple)) and len(m) == 3] if base else []
+        return (f"Sort {moved} files in {where}", "B", where, f"{moved} files moved into type folders", U.recipe_moves(pairs) if moved else None)
+    if act == "trash" and r.get("trashed") and base:
+        name = str(r["trashed"])
+        return (f"Move {fc(name)} to the Recycle Bin", "C", where, "it is in the Recycle Bin",
+                U.recipe_restore_bin(os.path.join(base, *given[:-1], name), size=int(r["bytes"]) if os.path.splitext(name)[1] and r.get("bytes") is not None else None))
+    if act == "delete_permanent" and r.get("deleted"):
+        return (f"Delete {fc(r['deleted'])} for good", "C", where, "it is gone and not in the Recycle Bin", U.recipe_cannot("deleted for good: it is not in the Recycle Bin"))
+    if act == "empty_bin":
+        return ("Empty the Recycle Bin", "C", "", "the Recycle Bin is empty", U.recipe_cannot("the Recycle Bin was emptied for good"))
+    if act == "cleanup":
+        return ("Clean up the PC (the safe list)", "C", "", "the fixed safe list was removed",
+                U.recipe_cannot("caches were removed for good and the Recycle Bin was emptied; nothing can be put back from here"))
+    if act == "undo":
+        return ("Undo the last file move", "B", "", "put back by the file journal", None)
+    return None
+
+
+def after_job(body: dict, r: dict, pre: "dict | None", t0: float) -> None:
+    """Called after a kernel job came back (`r` is the plugin's flattened result): a file or setting job that WORKED is one journal line of its own,
+    with its undo recipe. The step that ran it (a catalogue task) then writes no second line. Never raises."""
+    try:
+        j = get_journal()
+        op = body.get("op")
+        if j is None or op not in ("file", "setting") or not r.get("ok") or r.get("state") not in (None, "done"):
+            return
+        tok = _STEP.get()
+        ms = int((time.time() - t0) * 1000)
+        if op == "file":
+            got = _file_effect(body, r)
+            if got is None:
+                return
+            label, cls, target, said, recipe = got
+            tool = "file"
+        else:
+            name = SETTING_OF.get(str(body.get("action") or ""))
+            nice = str(r.get("setting") or body.get("action") or "a setting")[:60]
+            prev = (pre or {}).get("previous")
+            recipe = U.recipe_setting(name, prev, _setting_new(body, name)) if name and prev not in (None, "") else (
+                U.recipe_cannot("the earlier value could not be read, so it cannot be put back from here") if name else None)
+            label, cls, target, said, tool = f"Change {_c(nice, 40)}", "B", _c(nice, 40), "changed" + (", read back" if r.get("read_back") else ""), "setting"
+        _write(j, _TASK.get(), label=label, tool=tool, cls=cls, target=target, result=said, verified="verified" if r.get("verified") is not False else "unconfirmed",
+               ms=ms, shots=shots_for(j, tok.jobs[-1:]) if tok is not None else None, undo=recipe)
+        if tok is not None:
+            tok.effects += 1
+    except Exception:  # noqa: BLE001 - the recorder never breaks an action
+        pass
 
 
 # --------------------------------------------------------------------------------------------------------------------------------- writing

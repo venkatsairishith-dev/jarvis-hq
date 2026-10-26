@@ -43,6 +43,17 @@ function parametersWithSummary(parameters: Record<string, unknown> | undefined):
   }
 }
 
+// JARVIS D60: the tools that go to the model as they are, without the label argument. The direct JARVIS tools (22 of them, in every request and every
+// round) would carry about 150 bytes of it each, 3.4 KB a request, for a row label in the chat that the tool's own name already gives.
+const noCallSummary = new Set<string>()
+
+/** Replaces the set of tool names that are offered without the `call_summary` argument. */
+export function setToolsWithoutCallSummary(names: Iterable<string>) {
+  noCallSummary.clear()
+  for (const name of names)
+    noCallSummary.add(name)
+}
+
 function withoutSummary(input: unknown) {
   return isPlainObject(input) ? omit(input, hiddenArguments) : input
 }
@@ -61,6 +72,8 @@ function withoutSummary(input: unknown) {
  * - The tool with the summary arguments. A tool that declares one of them itself stays as it is.
  */
 export function withCallSummary(tool: Tool): Tool {
+  if (tool.function?.name && noCallSummary.has(tool.function.name))
+    return tool
   const parameters = parametersWithSummary(tool.function?.parameters)
   if (!parameters)
     return tool

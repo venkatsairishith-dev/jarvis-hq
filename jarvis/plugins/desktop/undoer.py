@@ -42,6 +42,9 @@ def bodies(recipe: dict) -> list[dict]:
     if k == "cleanup":
         return [dict(base, action="restore_bin", target=str(i["path"]), path="", expect="" if i.get("size") in (None, "") else str(i["size"]))
                 for i in recipe.get("items") or [] if isinstance(i, dict) and i.get("path")]
+    if k == "moves":                       # a sort: one move back per file, each checked on its own (a file edited since stays where it is)
+        return [dict(base, action="move", target=str(i["dst"]), path=str(i["src"]), expect=str(i.get("stamp") or ""))
+                for i in reversed(recipe.get("items") or []) if isinstance(i, dict) and i.get("dst") and i.get("src")]
     return []
 
 
@@ -80,6 +83,15 @@ def undo_step(step: dict, pc: Any) -> dict:
         return dict(out, status="failed", reason="there is no recipe to undo this with")
     results = [_one(pc, b, "undo: " + out["label"]) for b in todo]
     ok = [r for r in results if r[0] in ("done", "already")]
+    if kind == "moves":
+        left, more = len(results) - len(ok), int(recipe.get("more") or 0)
+        extra = f" {more} more files were sorted than were recorded; they stay where they are." if more else ""
+        if not left:
+            return dict(out, status="undone" if not more else "partly", reason=f"{len(ok)} files are back where they were." + extra)
+        why = next((r[1] for r in results if r[0] not in ("done", "already")), "")
+        if ok:
+            return dict(out, status="partly", reason=f"{len(ok)} of {len(results)} files are back; the rest: {why}." + extra)
+        return dict(out, status=("approval" if results[0][0] == "approval" else "refused"), reason=why + extra)
     if kind == "cleanup":
         perm = recipe.get("permanent") or {}
         left = len(results) - len(ok)

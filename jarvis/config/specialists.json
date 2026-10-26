@@ -6,6 +6,27 @@
     "screen_read": {"where": "local", "alias": "vision", "fallback": "vision-ground", "max_tokens": 200, "note": "what is on the screen: the accessibility tree first, then OCR, then this vision alias only for what has no text (node/jarvis_node/vision.py)."},
     "screen_locate": {"where": "local", "alias": "vision-ground", "fallback": "vision", "max_tokens": 200, "note": "where a label is in a window (UI-Venus grounding); a point from it is checked before use."},
     "doc_read": {"where": "local", "alias": "lightonocr-docreader", "fallback": "ocr-docs", "max_tokens": 1800, "note": "scanned pages and pictures of pages to text (plugins/doc_reader)."},
-    "chat_simple": {"where": "local", "alias": "local-chat", "fallback": "general", "max_tokens": 400, "note": "short, simple local work: choosing the arguments of a read-only step. local-chat is the Ling MoE once installed; general is the Ling MoE today."}
+    "chat_simple": {"where": "local", "alias": "local-chat", "fallback": "general", "max_tokens": 400, "note": "short, simple local work: choosing the arguments of a read-only step. local-chat is the Ling MoE once installed; general is the Ling MoE today."},
+    "translate": {"where": "local", "alias": "decider", "fallback": "local-chat", "max_tokens": 400, "note": "D58: the LLM translator for romanized Telugu/Hindi (Tenglish, Hinglish) and the fallback for script text; Qwen3-4B-Instruct-2507 (the decider model, already installed). Telugu/Hindi script text goes first to the in-process IndicTrans2 200M (language.text_backends). Runs on this PC only: never an online provider."}
+  },
+  "language": {
+    "_note": "D58 language layer (jarvis/plugins/_shared/translate.py). Every model sees English only; the owner's own words are kept in D:\\jarvis\\data\\translate\\translations.jsonl. All backends are LOCAL (in-process, or a llama-swap alias on 127.0.0.1): nothing is translated online. reply_language: en (default) | match | te | hi; the owner changes it by saying 'reply in Telugu'. tts_verified stays false until a Telugu or Hindi voice has been installed and heard by the owner.",
+    "reply_language": "en",
+    "keep_original": true,
+    "budget_s": 3.0,
+    "backend_budget_s": {},
+    "breaker_s": 30,
+    "cache_size": 512,
+    "min_confidence": 0.55,
+    "back_translation_min": 0.5,
+    "idle_unload_s": 120,
+    "identify_with_model": false,
+    "text_backends": ["service", "llm"],
+    "indictrans2": {"root": "D:\\jarvis\\models\\translate", "threads": 3},
+    "service": {"base_url": "http://127.0.0.1:48960/v1"},
+    "llm": {"kind": "translate", "base_url": "http://127.0.0.1:8080/v1", "max_tokens": 400},
+    "asr": {"en": "parakeet-tdt-0.6b-v3-int8", "hi": "indicconformer-int8-hi", "te": "indicconformer-int8-te"},
+    "tts": {"en": "kokoro-v1.0-fp32", "hi": "piper-hi_IN-rohan-medium", "te": "piper-te_IN-venkatesh-medium"},
+    "tts_verified": {"te": false, "hi": false}
   }
 }

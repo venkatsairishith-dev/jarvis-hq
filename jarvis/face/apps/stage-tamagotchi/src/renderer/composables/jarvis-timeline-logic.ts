@@ -336,9 +336,9 @@ export const VERIFIED_TEXT: Record<Verified, string> = {
   failed: 'Failed or not done',
 }
 export const CLASS_TEXT: Record<StepClass, string> = {
-  A: 'Class A: looked only, nothing changed',
-  B: 'Class B: an ordinary action you asked for',
-  C: 'Class C: needed your PIN, a repair, or cannot be undone',
+  A: 'Class A: ordinary, what you asked for (look, open, type, a new file)',
+  B: 'Class B: changed something that was there, a setting, or ran something',
+  C: 'Class C: a delete, a repair, or it needed your PIN',
 }
 
 export function taskLine(t: TlTask): string {

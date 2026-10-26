@@ -26,6 +26,8 @@ const props = defineProps<{
   status: JarvisStatus | null
   statusAt: number
   modelLabel: string
+  /** D60: one short line for the task under way ("On it", "Step 2 of 3: reading the window"); empty when none. */
+  line?: string
   /** The character's mouth, 0 to 1. */
   level?: number
 }>()
@@ -68,6 +70,7 @@ watch(() => props.level, (v) => {
         :status="status"
         :status-at="statusAt"
         :model-label="modelLabel"
+        :line="line"
       />
     </div>
   </div>

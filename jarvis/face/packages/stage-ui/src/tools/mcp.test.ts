@@ -4,7 +4,7 @@ import type { McpToolRuntime } from './mcp'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { compactMcpToolDescriptor, createMcpTools, mcp } from './mcp'
+import { compactMcpToolDescriptor, createDirectMcpTools, createMcpTools, mcp, slimMcpResult } from './mcp'
 
 function createRuntime(): McpToolRuntime {
   return {
@@ -155,5 +155,56 @@ describe('compact tool descriptors (JARVIS)', () => {
     const compact = compactMcpToolDescriptor({ serverName: 's', name: 's::t', toolName: 't', inputSchema: {} } as never)
     expect(compact.description).toBe('')
     expect(compact.inputSchema).toEqual({ type: 'object', properties: {} })
+  })
+})
+
+describe('jARVIS D60: direct tools', () => {
+  const goal = { serverName: 'jarvis', name: 'jarvis::desktop__do_goal', toolName: 'desktop__do_goal', description: 'Do a goal. Risky steps wait for the PIN.', inputSchema: { type: 'object', properties: { goal: { type: 'string', description: 'What to do' }, max_steps: { type: 'integer' } }, required: ['goal'] } }
+
+  it('offers a server\'s tools under their own names with the schema and the description as the server wrote them', () => {
+    const tools = createDirectMcpTools([goal, { ...goal, serverName: 'other', name: 'other::x', toolName: 'x' }], createRuntime())
+    expect(tools.map(t => t.function.name)).toEqual(['desktop__do_goal'])
+    expect(tools[0].function.description).toBe('Do a goal. Risky steps wait for the PIN.')
+    expect(tools[0].function.parameters).toEqual({ type: 'object', properties: goal.inputSchema.properties, required: ['goal'] })
+  })
+
+  it('skips a tool whose name a provider would refuse', () => {
+    expect(createDirectMcpTools([{ ...goal, toolName: 'has space' }, { ...goal, toolName: 'x'.repeat(65) }], createRuntime())).toEqual([])
+  })
+
+  it('calls the tool through the server\'s qualified name and hands back the text without the structured copy', async () => {
+    const runtime: McpToolRuntime = {
+      listTools: vi.fn(async () => []),
+      callTool: vi.fn(async () => ({ content: [{ type: 'text', text: '{"status":"completed"}' }], structuredContent: { status: 'completed' }, isError: false })),
+    }
+    const [tool] = createDirectMcpTools([goal], runtime)
+    const out = await tool.execute({ goal: 'open notepad' }, { messages: [], toolCallId: 'c' })
+    expect(runtime.callTool).toHaveBeenCalledWith({ name: 'jarvis::desktop__do_goal', arguments: { goal: 'open notepad' } })
+    expect(out).toEqual({ content: [{ type: 'text', text: '{"status":"completed"}' }], isError: false })
+  })
+
+  it('answers a missing required argument with an error the model can read, without calling the server', async () => {
+    const runtime = createRuntime()
+    const [tool] = createDirectMcpTools([goal], runtime)
+    const out = await tool.execute({}, { messages: [], toolCallId: 'c' }) as { isError: boolean, content: Array<{ text: string }> }
+    expect(out.isError).toBe(true)
+    expect(out.content[0].text).toContain('goal')
+    expect(runtime.callTool).not.toHaveBeenCalled()
+  })
+
+  it('turns a failing call into an error result instead of throwing', async () => {
+    const runtime: McpToolRuntime = { listTools: vi.fn(async () => []), callTool: vi.fn(async () => {
+      throw new Error('mcp server is not running')
+    }) }
+    const [tool] = createDirectMcpTools([goal], runtime)
+    const out = await tool.execute({ goal: 'x' }, { messages: [], toolCallId: 'c' }) as { isError: boolean, content: Array<{ text: string }> }
+    expect(out.isError).toBe(true)
+    expect(out.content[0].text).toContain('not running')
+  })
+
+  it('keeps a result that has no text part as it is, and says so when there is none', () => {
+    const image = { content: [{ type: 'image', data: 'AA' }], structuredContent: { a: 1 } }
+    expect(slimMcpResult(image)).toBe(image)
+    expect(slimMcpResult(undefined)).toBe('The tool returned nothing.')
   })
 })

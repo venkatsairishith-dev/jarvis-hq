@@ -347,7 +347,7 @@ API (`jarvis/pluginapi`), and the whole repository is JARVIS. The backup of the 
 jarvis/face         the avatar, chat and voice window (Electron + Vue, Live2D/VRM/MMD); decides nothing
 jarvis/pluginapi    the plugin API and host: loads jarvis/plugins/*/plugin.toml, runs lifecycle and timers, routes calls between
                     plugins, offers every entry as an MCP tool with its real JSON schema
-jarvis/plugins      main_agent, jarvis_bridge, desktop, research, deliverables, local_team, doc_tools, doc_reader, learn_vault, workbench, web_search
+jarvis/plugins      main_agent, jarvis_bridge, desktop, research, deliverables, local_team, doc_tools, doc_reader, learn_vault, workbench, web_search, translate
 jarvis/bridge       face_tools.py: the tool server the face connects to (MCP over loopback HTTP, 127.0.0.1:48970)
 jarvis/privacy      privacy gateway 127.0.0.1:48950 (second opinion 48954)
 jarvis/console      owner console 127.0.0.1:8799: approvals, audit, connectors, and the Bench screen
@@ -375,6 +375,7 @@ jarvis/plugins/research       search -> read -> write -> claim check (local NLI 
 jarvis/plugins/deliverables   PPTX decks and PDF reports, checked before hand-over
 jarvis/plugins/local_team     local specialist models through llama-swap 127.0.0.1:8080
 jarvis/plugins/doc_tools      read allowed documents as data; write to one output folder
+jarvis/plugins/translate      D58: English-only layer (plugins/_shared/translate.py: detect, mask, local translators, reply language) and translation as a task; local models only
 jarvis/plugins/doc_reader     read one scanned document / PDF / page picture the owner names, locally (LightOnOCR via llama-swap `docreader`), cleaned
 jarvis/plugins/learn_vault    a study vault (Markdown notes), separate from JARVIS's memory vault
 jarvis/plugins/main_agent, jarvis_bridge   plan-then-run orchestration and the door to JARVIS's owner plane

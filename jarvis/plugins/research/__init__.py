@@ -14,7 +14,7 @@ import os
 import urllib.request
 
 from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_plugin, plugin_entry, tr
-from jarvis.plugins._shared import loopback_http  # noqa: E402
+from jarvis.plugins._shared import loopback_http, translate  # noqa: E402
 
 from . import core, fetch, verify
 from . import search as searchmod
@@ -169,6 +169,7 @@ class ResearchPlugin(PluginBase):
     )
     async def research_topic(self, question: str = "", depth: str = "standard", deliverable: str = "none",
                              open_after: bool = False, **_):
+        question = await asyncio.to_thread(translate.english, question, source="research")      # D58: the planner and the search query are English
         loop = asyncio.get_running_loop()
 
         def web_search(q: str, n: int) -> list[dict]:

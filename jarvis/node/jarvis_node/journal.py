@@ -5,8 +5,8 @@ debug a failure afterwards.
     D:\jarvis\data\journal\shots\<job>-b.jpg / -a.jpg    the window a step acted on, before and after (about 800 px wide)
     D:\jarvis\data\journal\settings.json                 optional: {"journal_screenshots": false}
 
-What a step line holds: id, ts, task_id, goal_hash + goal_label (the owner's own words, kept here), step_label, tool, class (A looked, B ordinary,
-C needed the PIN or cannot be taken back), target label (an app or site name, cleaned: never typed text), result, verified (verified |
+What a step line holds: id, ts, task_id, goal_hash + goal_label (the owner's own words, kept here), step_label, tool, class (the kernel's effect class: A
+ordinary and local, B changes something that was there or a setting, C a delete, a repair or held for the PIN), target label (an app or site name, cleaned: never typed text), result, verified (verified |
 unconfirmed | failed), duration_ms, shots {before, after} (picture names), undo (a recipe, `cannot_undo`, or null). What each picture cost (seconds and
 bytes) is appended to shots\timing.jsonl, so the owner can see what the pictures add to a step. Nothing in the journal is ever sent to a
 model or over the network by this module; the face's Timeline panel reads it through tools of the local tool server (jarvis/bridge/timeline.py),
@@ -130,14 +130,15 @@ def new_id(ts: float | None = None) -> str:
 
 def stamp(path: str) -> dict | None:
     """size and mtime of a file, and a short hash of both: what a later undo compares to prove the file is still the one that was recorded.
-    A folder: the sum of its files' sizes and the newest mtime inside (at most 5000 entries). None when it does not exist."""
+    A folder: the sum of its files' sizes, the newest mtime and the number of entries inside (at most 5000); the folder's own mtime does not count, so
+    a new folder that had something put in it and taken out again is still the empty folder that was recorded. None when it does not exist."""
     try:
         st = os.lstat(path)
     except OSError:
         return None
-    size, mtime = st.st_size, st.st_mtime_ns
+    size, mtime, seen = st.st_size, st.st_mtime_ns, None
     if os.path.isdir(path) and not os.path.islink(path):
-        size, mtime, seen = 0, st.st_mtime_ns, 0
+        size, mtime, seen = 0, 0, 0
         for base, dirs, files in os.walk(path):
             for name in dirs + files:
                 seen += 1
@@ -152,7 +153,7 @@ def stamp(path: str) -> dict | None:
                     size += s.st_size
             if seen > 5000:
                 break
-    return {"size": size, "mtime_ns": mtime, "hash": hashlib.sha1(f"{size}:{mtime}".encode()).hexdigest()[:16]}
+    return {"size": size, "mtime_ns": mtime, "hash": hashlib.sha1(f"{size}:{mtime}".encode() + (b"" if seen is None else f":{seen}".encode())).hexdigest()[:16]}
 
 
 def make_step(*, task_id: str, goal: str, step_label: str, tool: str, cls: str, target: str = "", result: str = "", verified: str = "failed",

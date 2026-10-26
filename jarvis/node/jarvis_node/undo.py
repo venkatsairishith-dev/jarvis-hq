@@ -11,6 +11,8 @@ the exact thing to reverse and how to know it is still that thing. Nothing here 
                                             shell; if that path is taken, restored under a numbered name ("name (1).txt"), never over anything
   move_back      {src, dst, stamp}          a move or rename -> back to where it was, only if dst is unchanged (size+mtime) and src is free
   setting        {name, previous, new}      dark mode, volume, brightness, wallpaper, do-not-disturb -> the value recorded before the change
+  moves          {items: [{src, dst, stamp}], more}   a sort of Downloads (D54): one move_back per file, each only while that file is unchanged; the
+                                            type folders the sort made stay (empty); `more` files beyond the first 100 are not recorded
   cannot_undo    {why}                      typed text, a permanent delete, safe-list caches: nothing to run; the panel and the answer say why
 
 The node job is `pc_undo` (kernel: jobs.py, policy rule tool `undo`, the owner's own request = owner_direct = ordinary, so no PIN, and a secrets
@@ -33,7 +35,7 @@ from typing import Any, Callable
 from . import journal
 from .journal import stamp
 
-KINDS = ("close_window", "recycle_new", "restore_bin", "move_back", "setting", "cannot_undo")
+KINDS = ("close_window", "recycle_new", "restore_bin", "move_back", "setting", "cleanup", "moves", "cannot_undo")
 NODE_OPS = ("recycle", "restore_bin", "move", "close_window", "setting")
 SETTINGS = ("dark_mode", "volume", "brightness", "wallpaper", "dnd")
 UNSAVED_TITLE = re.compile(r"^\s*[*\u25cf\u2022]|\s\*\s*$|\bunsaved\b|\(modified\)", re.I)
@@ -94,6 +96,20 @@ def recipe_setting(name: str, previous: str, new: str) -> dict:
     return {"kind": "setting", "name": name if name in SETTINGS else "unknown", "previous": None if previous is None else str(previous)[:260], "new": str(new)[:260]}
 
 
+MOVES_MAX = 100
+
+
+def recipe_moves(pairs: list) -> "dict | None":
+    """For a sort: [(original path, new path)]. Each file is stamped now; the first MOVES_MAX are kept and the rest only counted. None when none."""
+    items = []
+    for src, dst in pairs or []:
+        rec = recipe_move_back(src, dst) if len(items) < MOVES_MAX else None
+        if rec is not None:
+            items.append({"src": rec["src"], "dst": rec["dst"], "stamp": rec["stamp"]})
+    more = max(0, len(pairs or []) - len(items))
+    return {"kind": "moves", "items": items, "more": more} if items else None
+
+
 def recipe_cannot(why: str) -> dict:
     return {"kind": "cannot_undo", "why": journal.text(why, 160)}
 
@@ -119,6 +135,8 @@ def describe(recipe: dict | None) -> str:
         return f"Set {str(recipe.get('name', 'the setting')).replace('_', ' ')} back to how it was"
     if k == "cleanup":
         return f"Put {len(recipe.get('items') or [])} cleaned items back from the Recycle Bin"
+    if k == "moves":
+        return f"Move the {len(recipe.get('items') or [])} sorted files back"
     if k == "cannot_undo":
         return "Cannot be undone: " + str(recipe.get("why", ""))
     return ""
@@ -468,7 +486,7 @@ class WinWindows:
 class WinSettings:
     """Reads and writes five settings. Values are strings: dark_mode dark|light, volume 0-100, brightness 0-100, wallpaper a path, dnd on|off."""
     PERSONALIZE = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-    NOTIFY = r"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"
+    NOTIFY = r"Software\Microsoft\Windows\CurrentVersion\PushNotifications"          # D54's `setting dnd` writes ToastEnabled here: 0 = toasts off = do-not-disturb on
 
     def get(self, name: str) -> str | None:
         if name == "dark_mode":
@@ -479,7 +497,7 @@ class WinSettings:
             import winreg
             try:
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.NOTIFY) as k:
-                    return "off" if winreg.QueryValueEx(k, "NOC_GLOBAL_SETTING_TOASTS_ENABLED")[0] else "on"
+                    return "off" if winreg.QueryValueEx(k, "ToastEnabled")[0] else "on"
             except OSError:
                 return "off"
         if name == "wallpaper":
@@ -499,7 +517,7 @@ class WinSettings:
         if name == "dnd":
             import winreg
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, self.NOTIFY) as k:
-                winreg.SetValueEx(k, "NOC_GLOBAL_SETTING_TOASTS_ENABLED", 0, winreg.REG_DWORD, 0 if value == "on" else 1)
+                winreg.SetValueEx(k, "ToastEnabled", 0, winreg.REG_DWORD, 0 if value == "on" else 1)
             return
         if name == "wallpaper":
             import ctypes

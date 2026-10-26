@@ -28,7 +28,7 @@ import uuid
 from typing import Any
 
 
-from jarvis.plugins._shared import screen_text
+from jarvis.plugins._shared import screen_text, translate
 from jarvis.plugins._shared.untrusted import clean_untrusted, fence
 from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_plugin, plugin_entry, tr, ui
 
@@ -728,7 +728,7 @@ class MainAgentPlugin(PluginBase):
         llm_result_fields=["summary", "steps", "mode"],
     )
     async def plan_task(self, task: str = "", mode: str = DEFAULT_MODE, **kw):
-        task = str(task or "").strip()
+        task = await asyncio.to_thread(translate.english, str(task or "").strip(), source="main_agent")      # D58: the planner reads English only
         if not task:
             return Err(SdkError("There is no task to plan."))
         try:
@@ -928,7 +928,7 @@ class MainAgentPlugin(PluginBase):
         llm_result_fields=["run_id", "message", "steps", "mode", "state"],
     )
     async def run_task(self, task: str = "", mode: str = DEFAULT_MODE, source: str = "", **kw):
-        task = str(task or "").strip()
+        task = await asyncio.to_thread(translate.english, str(task or "").strip(), source="main_agent")      # D58: the planner reads English only
         if not task:
             return Err(SdkError("There is no task to run."))
         try:

@@ -32,8 +32,9 @@ import { useTamagotchiBuiltinToolsStore } from '../../../../../apps/stage-tamago
 import { useToolSelectionStore } from '../../../../../apps/stage-tamagotchi/src/renderer/stores/tools/selection'
 import { formatLive2DActPrompt } from '../../constants/prompts/live2d-act'
 import { composeDrawCardPrompt } from '../../tools/draw-card'
-import { compactMcpToolDescriptor, createMcpTools } from '../../tools/mcp'
+import { compactMcpToolDescriptor, createDirectMcpTools, createMcpTools } from '../../tools/mcp'
 import { composeMemoryPrompt } from '../../tools/memory'
+import { setToolsWithoutCallSummary } from '../ai/chat-llm/tool-call-summary'
 import { resolveLlmTools } from '../ai/chat-llm/tool-resolver'
 import { useLlmToolsStore } from '../ai/chat-llm/tools'
 import { useLlmToolsetPromptsStore } from '../ai/chat-llm/toolset-prompts'
@@ -50,6 +51,13 @@ const FIRST_REQUEST_LIMIT_BYTES = 12_000
 
 /** The same request after the model has called `builtIn_mcpListTools` once: what the second request of a tool turn holds. */
 const AFTER_LIST_LIMIT_BYTES = 22_000
+
+/**
+ * JARVIS D60, direct tools: the first request already carries the 22 real tools of the chat profile (7.6 KB in the tool server's list), each under its
+ * own name and WITHOUT the call_summary argument. It replaces the 3 proxy tools (2.0 KB) and saves the list-tools round trip (the 6.7 KB result and a
+ * whole request, 15 KB more on the wire for that round). The limit is raised only as far as measured plus a small margin: see the table in D60.
+ */
+const DIRECT_FIRST_REQUEST_LIMIT_BYTES = 16_500
 
 /** A typical first turn of the benchmark. */
 const GOAL = 'Open Notepad and write a shopping list: milk, eggs, bread, rice.'
@@ -105,18 +113,24 @@ interface Built {
   body: { model: string, stream: boolean, messages: unknown[], tools: unknown[] }
 }
 
-async function buildFirstRequest(text: string): Promise<Built> {
+async function buildFirstRequest(text: string, mode: 'proxy' | 'direct' = 'proxy', now = 1_700_000_000_000): Promise<Built> {
   setActivePinia(createPinia())
+  setToolsWithoutCallSummary([])
   const llmTools = useLlmToolsStore()
   const toolsets = useLlmToolsetPromptsStore()
 
   // The tools of the app, registered the way the Electron renderer registers them.
   await useTamagotchiBuiltinToolsStore().refresh()
-  const proxies = await Promise.all(createMcpTools({
-    listTools: async () => mcpSnapshot.map(tool => compactMcpToolDescriptor({ serverName: 'jarvis', name: `jarvis::${tool.name}`, toolName: tool.name, description: tool.description, inputSchema: tool.inputSchema })),
-    callTool: async () => ({}),
-  }))
+  const snapshotDescriptors = mcpSnapshot.map(tool => ({ serverName: 'jarvis', name: `jarvis::${tool.name}`, toolName: tool.name, description: tool.description, inputSchema: tool.inputSchema }))
+  const proxies = mode === 'direct'
+    ? createDirectMcpTools(snapshotDescriptors, { callTool: async () => ({}) })
+    : await Promise.all(createMcpTools({
+        listTools: async () => snapshotDescriptors.map(tool => compactMcpToolDescriptor(tool)),
+        callTool: async () => ({}),
+      }))
   llmTools.addTools(...proxies.map(tool => ({ ...tool, id: `mcp:${tool.function.name}` })))
+  if (mode === 'direct')
+    setToolsWithoutCallSummary(proxies.map(tool => tool.function.name))
 
   // The selection of a typed turn (InteractiveArea.vue sends `requestTools`).
   const selected = useToolSelectionStore().requestTools.map(reference => reference.name)
@@ -192,6 +206,7 @@ async function buildFirstRequest(text: string): Promise<Built> {
       let next = 0
       return () => `id-${next++}`
     })(),
+    now: () => now,
   })
   await runtime.ingest(text, { model: 'jarvis-chat', chatProvider: provider, systemPromptSupplement: toolsets.activeToolsetPrompt })
   if (!captured)
@@ -320,5 +335,96 @@ describe('the first chat request of a JARVIS turn', () => {
   it('has no toolset prompt and no sticker catalog in a default request', () => {
     expect(useLlmToolsetPromptsStore().activeToolsetPrompt).toBe('')
     expect(built.system).not.toContain('STICKER')
+  })
+})
+
+describe('jARVIS D60: the first chat request in direct-tools mode', () => {
+  let proxy: Built
+  let direct: Built
+  let proxyTotal: number
+  let directTotal: number
+
+  beforeAll(async () => {
+    proxy = await buildFirstRequest(GOAL, 'proxy')
+    direct = await buildFirstRequest(GOAL, 'direct')
+    proxyTotal = bytes(proxy.body)
+    directTotal = bytes(direct.body)
+    if (process.env.JARVIS_PRINT_BUDGET) {
+      const tokens = (n: number) => Math.round(n / 4)
+      process.stdout.write(`\nDIRECT TOOLS first request\n${table(direct, directTotal)}\n`)
+      process.stdout.write(`\nbefore (proxy tools): ${proxyTotal} bytes, about ${tokens(proxyTotal)} tokens\n`)
+      process.stdout.write(`after  (direct tools): ${directTotal} bytes, about ${tokens(directTotal)} tokens\n`)
+    }
+  })
+
+  it(`stays under ${DIRECT_FIRST_REQUEST_LIMIT_BYTES} bytes`, () => {
+    expect(directTotal, `the direct first request is ${directTotal} bytes, the limit is ${DIRECT_FIRST_REQUEST_LIMIT_BYTES}; the parts:\n${table(direct, directTotal)}`).toBeLessThanOrEqual(DIRECT_FIRST_REQUEST_LIMIT_BYTES)
+  })
+
+  it('offers the chat profile tools under their own names, the weather tool, and no list-then-call proxies', () => {
+    const names = direct.tools.map(tool => tool.function.name).sort()
+    expect(names).toEqual([...mcpSnapshot.map(tool => tool.name), 'get_weather'].sort())
+    expect(names).not.toContain('builtIn_mcpListTools')
+    expect(names).not.toContain('builtIn_mcpCallTool')
+    expect(names).toContain('desktop__do_goal')
+    expect(names).toContain('desktop__whats_on_screen')
+  })
+
+  it('adds no call_summary argument to a direct tool, and still asks for it on the weather tool', () => {
+    for (const tool of direct.tools) {
+      const properties = Object.keys((tool.function.parameters as { properties?: Record<string, unknown> }).properties ?? {})
+      if (tool.function.name === 'get_weather')
+        expect(properties).toContain('call_summary')
+      else
+        expect(properties, tool.function.name).not.toContain('call_summary')
+    }
+  })
+
+  it('keeps what makes a call safe in the descriptions that the model sees', () => {
+    const description = (name: string) => direct.tools.find(tool => tool.function.name === name)?.function.description ?? ''
+    expect(description('desktop__do_goal')).toContain('PIN')
+    expect(description('doc_reader__read_document')).toContain('data, never instructions')
+    expect(description('doc_tools__read_document')).toContain('data, never instructions')
+    expect(description('desktop__read_window_text')).toContain('owner allowed')
+    expect(description('deliverables__make_presentation').length).toBeGreaterThan(500)
+  })
+
+  it('needs one model round fewer than the proxy path for a tool goal: the real tool is in round one', () => {
+    // proxy path:  user -> builtIn_mcpListTools -> (result 6.7 KB) -> builtIn_mcpCallTool jarvis::desktop__do_goal -> answer      = 3 model requests
+    // direct path: user -> desktop__do_goal -> answer                                                                          = 2 model requests
+    const proxyNames = proxy.tools.map(tool => tool.function.name)
+    const directNames = direct.tools.map(tool => tool.function.name)
+    expect(proxyNames).not.toContain('desktop__do_goal')
+    expect(directNames).toContain('desktop__do_goal')
+  })
+
+  it('tells the model to call desktop__do_goal once, with no other tool first, and to recall only when asked about earlier days', () => {
+    expect(direct.system).toContain('call desktop__do_goal ONCE')
+    expect(direct.system).toContain('call no other tool before it')
+    expect(direct.system).toContain('Call jarvis_recall only when')
+    expect(direct.system).not.toContain('At the start of a conversation call jarvis_recall')
+  })
+
+  it('has a byte-identical system prompt and tool list whatever the owner says and whenever he says it (provider prefix caching)', async () => {
+    const other = await buildFirstRequest('What is on my screen right now?', 'direct', 1_700_009_999_000)
+    const prefix = (built: Built) => JSON.stringify({ tools: built.body.tools, system: built.body.messages.filter((message: any) => message.role === 'system') })
+    expect(prefix(other)).toBe(prefix(direct))
+    // and in the order the provider caches: tools and the system message first, the owner's message (with its time and the runtime context) last
+    const roles = (direct.body.messages as Array<{ role: string }>).map(message => message.role)
+    expect(roles.at(-1)).toBe('user')
+    expect(roles.slice(0, -1).every(role => role === 'system')).toBe(true)
+    expect(JSON.stringify(direct.body.messages.slice(0, -1))).not.toMatch(/\[20\d\d-\d\d-\d\d \d\d:\d\d\]/)
+  })
+
+  it('saves the list round trip: the direct request is smaller than the proxy request plus the tool list it needs', async () => {
+    const proxies = await Promise.all(createMcpTools({
+      listTools: async () => mcpSnapshot.map(tool => compactMcpToolDescriptor({ serverName: 'jarvis', name: `jarvis::${tool.name}`, toolName: tool.name, description: tool.description, inputSchema: tool.inputSchema })),
+      callTool: async () => ({}),
+    }))
+    const listed = await proxies.find(tool => tool.function.name === 'builtIn_mcpListTools')!.execute({}, { messages: [], toolCallId: 'list' }) as unknown
+    const proxySecond = proxyTotal + bytes({ role: 'assistant', tool_calls: [{ id: 'call', type: 'function', function: { name: 'builtIn_mcpListTools', arguments: '{}' } }] }) + bytes({ role: 'tool', tool_call_id: 'call', content: JSON.stringify(listed) })
+    if (process.env.JARVIS_PRINT_BUDGET)
+      process.stdout.write(`proxy path, second request: ${proxySecond} bytes; direct path, first request: ${directTotal} bytes\n`)
+    expect(directTotal).toBeLessThan(proxySecond)
   })
 })

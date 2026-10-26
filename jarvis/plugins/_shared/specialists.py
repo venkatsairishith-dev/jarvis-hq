@@ -22,7 +22,7 @@ from pathlib import Path
 JARVIS = Path(__file__).resolve().parents[2]
 TABLE_FILE = JARVIS / "config" / "specialists.json"
 SWAP_FILE = JARVIS / "local_models" / "llama-swap.yaml"
-KINDS = ("reason", "ui_decide", "screen_read", "screen_locate", "doc_read", "chat_simple")
+KINDS = ("reason", "ui_decide", "screen_read", "screen_locate", "doc_read", "chat_simple", "translate")
 _ALIAS = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]{0,63}$")
 _KIND = re.compile(r"^[a-z][a-z_]{1,30}$")
 
@@ -52,6 +52,7 @@ BUILT_IN = {
     "screen_locate": {"where": "local", "alias": "vision-ground", "fallback": "vision", "max_tokens": 200},
     "doc_read": {"where": "local", "alias": "lightonocr-docreader", "fallback": "ocr-docs", "max_tokens": 1800},
     "chat_simple": {"where": "local", "alias": "local-chat", "fallback": "general", "max_tokens": 400},
+    "translate": {"where": "local", "alias": "decider", "fallback": "local-chat", "max_tokens": 400},
 }
 
 
@@ -99,7 +100,10 @@ def load(path: Path | str | None = None) -> dict[str, Specialist]:
         data = json.loads(text)
     except ValueError:
         raise SpecialistError("specialists table: the file is not valid JSON") from None
-    return parse(data)
+    table = parse(data)
+    for kind, row in parse({"kinds": BUILT_IN}).items():       # a file that lists only some kinds keeps the built-in row of the others (resolve("ui_decide") must never be missing)
+        table.setdefault(kind, row)
+    return table
 
 
 def resolve(kind: str, table: dict[str, Specialist] | None = None) -> Specialist:

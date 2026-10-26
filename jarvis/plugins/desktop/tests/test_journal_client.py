@@ -35,13 +35,13 @@ def last(j):
     return j.steps(1)[0]
 
 
-def test_an_opened_app_is_a_verified_class_b_step_with_a_close_recipe(jr):
+def test_an_opened_app_is_a_verified_class_a_step_with_a_close_recipe(jr):
     res = {"ok": True, "opened": "Calculator", "verified": "verified", "window": {"title": "Calculator", "process": "CalculatorApp"},
            "launched": [{"proc": "calculatorapp", "pid": 4242}]}
     out = run("open_app", {"app": "calculator"}, res, "Open Calculator and tell me the weather")
     assert out is res, "the agent's result passes through untouched"
     e = last(jr)
-    assert (e["step_label"], e["tool"], e["class"], e["verified"], e["target"]) == ("Open Calculator", "open_app", "B", "verified", "Calculator")
+    assert (e["step_label"], e["tool"], e["class"], e["verified"], e["target"]) == ("Open Calculator", "open_app", "A", "verified", "Calculator")
     assert e["undo"]["kind"] == "close_window" and e["undo"]["proc"] == "calculatorapp" and e["undo"]["pid"] == 4242
     assert e["goal_label"].startswith("Open Calculator and tell me") and e["duration_ms"] >= 0 and e["task_id"]
     assert "a window for Calculator appeared" in e["result"]
@@ -299,6 +299,6 @@ def test_a_whole_task_through_the_coordinator_writes_one_task_with_recipes_and_p
     assert [s["step_label"] for s in steps] == ["Open Calculator", "Check network"]
     assert len({s["task_id"] for s in steps}) == 1 and steps[0]["goal_label"] == "Open Calculator and tell me the network"
     assert steps[0]["undo"] == {"kind": "close_window", "proc": "calculatorapp", "pid": 4242, "opened_at": steps[0]["undo"]["opened_at"]}
-    assert steps[0]["verified"] == "verified" and steps[0]["class"] == "B" and steps[1]["class"] == "A" and steps[1]["undo"] is None
+    assert steps[0]["verified"] == "verified" and steps[0]["class"] == "A" and steps[1]["class"] == "A" and steps[1]["undo"] is None
     assert steps[0]["shots"] == {"before": None, "after": "job3-a.jpg"}, "the job ids of the step led to the node's picture"
     assert jr.undoable(5)[0]["step_label"] == "Open Calculator"

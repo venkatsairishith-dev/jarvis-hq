@@ -30,6 +30,8 @@ import 'uno.css'
 // Fonts
 import '@proj-airi/font-cjkfonts-allseto/index.css'
 import '@proj-airi/font-xiaolai/index.css'
+// JARVIS (D58): Noto Sans Telugu and Devanagari, bundled (SIL OFL), so the owner's Telugu and Hindi render the same on every PC; relative path = no lockfile change
+import '../../../../packages/font-indic/index.css'
 import '@fontsource-variable/dm-sans/index.css'
 import '@fontsource-variable/jura/index.css'
 import '@fontsource-variable/quicksand/index.css'

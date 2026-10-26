@@ -340,3 +340,14 @@ def test_stamp_changes_with_size_or_mtime_and_a_folder_is_stamped_by_its_content
     h = J.stamp(str(d))["hash"]
     (d / "y").write_text("22")
     assert J.stamp(str(d))["hash"] != h
+
+
+def test_a_new_empty_folder_is_still_the_recorded_one_after_something_came_and_went(tmp_path):
+    d = tmp_path / "new"
+    d.mkdir()
+    h = J.stamp(str(d))["hash"]
+    (d / "t.txt").write_text("x")
+    assert J.stamp(str(d))["hash"] != h
+    (d / "t.txt").unlink()
+    os.utime(d, (1, 1))
+    assert J.stamp(str(d))["hash"] == h, "the folder's own mtime does not count: it is empty, as recorded"

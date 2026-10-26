@@ -19,7 +19,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Callable
-from jarvis.plugins._shared import loopback_http
+from jarvis.plugins._shared import loopback_http, translate
 from jarvis.plugins._shared.untrusted import fence
 
 LOCAL_BASE = os.environ.get("JARVIS_LOCAL_LLM", "http://127.0.0.1:8080/v1").rstrip("/")
@@ -231,7 +231,7 @@ def memory_ok(model: str, free_gb: float | None = None, loaded: set[str] | None 
 
 def ask_local(task: str, specialist: str = "auto", *, think: bool = False, post: Callable = post_json,
               max_tokens: int = 1200) -> dict:
-    task = str(task or "").strip()
+    task = translate.english(str(task or "").strip(), source="local_team")          # D58: the specialists understand English only
     if not task:
         raise TeamError("Give the task text.")
     if len(task) > MAX_TASK:
@@ -332,7 +332,7 @@ def needs_adviser(task: str, post: Callable = post_json) -> tuple[bool, str]:
 def solve(task: str, *, adviser: Callable[[str], dict] | None, post: Callable = post_json, use_adviser: str = "auto") -> dict:
     """Team work: the router picks a specialist; Jev decides whether the public adviser is needed; the adviser (redacted)
     reasons; the specialist writes the answer locally. use_adviser: auto | always | never."""
-    task = str(task or "").strip()
+    task = translate.english(str(task or "").strip(), source="local_team")          # D58: English only below this line
     if not task:
         raise TeamError("Give the task text.")
     if use_adviser not in ("auto", "always", "never"):
