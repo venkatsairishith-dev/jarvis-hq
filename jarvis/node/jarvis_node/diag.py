@@ -104,8 +104,20 @@ foreach ($w in $A::RootElement.FindAll([System.Windows.Automation.TreeScope]::Ch
 BATTERY = r"""
 @(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ percent = [int]$_.EstimatedChargeRemaining; charging = ($_.BatteryStatus -in 2, 6, 7, 8, 9); minutes_left = $(if ($_.EstimatedRunTime -lt 71582788) { [int]$_.EstimatedRunTime } else { $null }) } }) | ConvertTo-Json -Compress
 """
+# D68 (scout item 9): which OCR languages Windows can read right now. Read-only: it asks the OCR engine (the same WinRT bridge vision.py uses) for its
+# AvailableRecognizerLanguages and whether the engine for the owner's profile languages can be made. It installs nothing: a language pack is a class C step
+# the owner takes himself (docs/05_OPERATIONS.md).
+OCR_LANGUAGES = r"""
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+$langs = @([Windows.Media.Ocr.OcrEngine]::AvailableRecognizerLanguages | ForEach-Object { [pscustomobject]@{ tag = $_.LanguageTag; name = $_.DisplayName } })
+$prof = $null -ne [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+[pscustomobject]@{ languages = $langs; profile_engine = $prof } | ConvertTo-Json -Compress -Depth 4
+"""
+OCR_WANTED = {"en": "English", "hi": "Hindi", "te": "Telugu"}       # the languages the owner reads on his screen
 SCRIPTS = {"battery": BATTERY, "processes": PROCESSES, "app_errors": APP_ERRORS, "crashes": CRASHES, "services": SERVICES, "disk": DISK,
-           "network": NETWORK, "app_info": APP_INFO, "window_text": WINDOW_TEXT}
+           "network": NETWORK, "app_info": APP_INFO, "window_text": WINDOW_TEXT, "ocr_languages": OCR_LANGUAGES}
 NEEDS_NAME = {"services", "app_info", "window_text"}
 LOCAL_ONLY = {"app_errors", "window_text"}           # free text from the screen or from event messages
 SENSITIVE = sensitive.FLOOR          # the node's floor; the check itself is sensitive.why / sensitive_window (2026-10-18)
@@ -117,6 +129,20 @@ def _json(text):
         return []
     v = json.loads(text)
     return v if isinstance(v, list) else [v] if v is not None else []
+
+
+def ocr_languages_report(rows: list) -> dict:
+    """The OCR_LANGUAGES output as the node reports it: which languages Windows reads, and whether English, Hindi and Telugu are among them."""
+    obj = next((r for r in rows if isinstance(r, dict) and "languages" in r), {})
+    langs = obj.get("languages") or []
+    langs = [langs] if isinstance(langs, dict) else [x for x in langs if isinstance(x, dict)]
+    shown = [{"tag": str(x.get("tag", ""))[:20], "name": str(x.get("name", ""))[:60]} for x in langs][:40]
+    have = {str(x["tag"]).split("-")[0].lower() for x in shown}
+    wanted = {code: code in have for code in OCR_WANTED}
+    return {"ok": True, "check": "ocr_languages", "count": len(shown), "languages": shown, "wanted": wanted,
+            "missing": [f"{code} ({OCR_WANTED[code]})" for code, ok in wanted.items() if not ok],
+            "profile_engine": bool(obj.get("profile_engine")),
+            "note": "read-only; a missing language is added by the owner in Windows Settings (Time & language), which JARVIS never does"}
 
 
 def run(p: dict, runner=None, lister=None) -> dict:
@@ -151,14 +177,21 @@ def run(p: dict, runner=None, lister=None) -> dict:
         return {"ok": False, "error": "a short app or service name is needed" if op in NEEDS_NAME else "bad name"}
     if sensitive.why(name):
         return {"ok": False, "error": "refused: a password manager, wallet or bank"}
-    runner = runner or runtime.powershell
-    r = runner(SCRIPTS[op], {"JARVIS_DIAG_NAME": name, "JARVIS_DIAG_HOURS": "24"}, 60)
-    if r.returncode != 0:
-        return {"ok": False, "error": f"the {op} check failed (exit {r.returncode})"}
-    try:
-        rows = _json(r.stdout)
-    except ValueError:
-        return {"ok": False, "error": f"the {op} check returned something unreadable"}
+    rows = None
+    if op == "window_text" and runner is None:               # D68: the persistent UI Automation worker first (same rows); None = PowerShell as before
+        from . import uia
+        rows = uia.window_text(name) if uia.enabled() else None
+    if rows is None:
+        runner = runner or runtime.powershell
+        r = runner(SCRIPTS[op], {"JARVIS_DIAG_NAME": name, "JARVIS_DIAG_HOURS": "24"}, 60)
+        if r.returncode != 0:
+            return {"ok": False, "error": f"the {op} check failed (exit {r.returncode})"}
+        try:
+            rows = _json(r.stdout)
+        except ValueError:
+            return {"ok": False, "error": f"the {op} check returned something unreadable"}
+    if op == "ocr_languages":
+        return ocr_languages_report(rows)
     if op == "window_text":     # a bank open in Chrome: that window and its dialogs are left out, the others stay
         rows = [w for w in rows if isinstance(w, dict) and not sensitive.why(str(w.get("title", "")), str(w.get("owner", "")))]
     if op == "app_info":        # the main window's title goes to the kernel: never a bank's, wallet's or payment app's

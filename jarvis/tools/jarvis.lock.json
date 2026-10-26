@@ -2453,6 +2453,10 @@
   {
    "registry_name": "NVIDIA Kumo Tabular (structured-data-models)",
    "unpinned_reason": "Optional and not installed yet (D66). When the laptop installs it, pin the pip version and the Hugging Face revision with sha256 here; until then jarvis/tools/tabular_predict.py answers with its baseline."
+  },
+  {
+   "registry_name": "uiautomation (yinkaisheng) / comtypes COM UIA",
+   "unpinned_reason": "Pip packages, not downloads: uiautomation==2.0.29 and comtypes==1.4.11 are pinned WITH the sha256 of their wheels in jarvis/tools/requirements/uia-venv.txt (D68; install with --require-hashes into D:\\jarvis\\tools\\uia-venv). The version is pinned exactly because the project is stale-ish (last release 2.0.29 on 2025-08-05, no release since) and its API is not stable across versions: the worker's adapter (uia_lib_uiautomation.py) was written against 2.0.29, and a newer comtypes than 1.4.11 has not been tried with it. Not installed on the laptop yet, so the worker stays off and the PowerShell path serves until the owner runs the install line."
   }
  ]
 }

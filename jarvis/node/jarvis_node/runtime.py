@@ -109,6 +109,24 @@ def popen(args, **kw):
     return p
 
 
+def adopt(p):
+    """Register a process that OUTLIVES the job (the persistent UI Automation worker, D68) for as long as ONE request of this job waits on it, so a cancel
+    kills it like any other program of the job (the next request starts a fresh one). Not registered while idle: a later job's cancel never touches it."""
+    with _lock:
+        _current["procs"].append(p)
+        if _current["cancelled"].is_set():                       # a cancel that arrived just before: same rule as popen()
+            _kill_tree(p)
+            raise Cancelled()
+
+
+def release(p):
+    with _lock:
+        try:
+            _current["procs"].remove(p)
+        except ValueError:
+            pass
+
+
 def run(args, timeout=30, env=None, cwd=None, input_text=None):
     """subprocess.run for job work: text in and out, a time limit, and stoppable by cancel()."""
     p = popen(args, stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL, stdout=subprocess.PIPE,

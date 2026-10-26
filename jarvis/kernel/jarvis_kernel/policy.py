@@ -84,7 +84,7 @@ RULES = [
     # owner's side. Repairs change the PC: approval, except putting a backed-up file back (the safe direction).
     ("browser", "play", YELLOW_AUTO),
     ("media", "state", GREEN),
-    ("diag", "processes|app_errors|crashes|services|disk|network|app_info|window_text|window_ocr|window_locate|window_vision|battery", GREEN),
+    ("diag", "processes|app_errors|crashes|services|disk|network|app_info|window_text|window_ocr|window_locate|window_vision|battery|ocr_languages", GREEN),
     ("repair", "restore", YELLOW_AUTO),
     # Undo (D61): reversing one journaled step. Ordinary for the owner's own request (owner_direct, below); an agent's needs the owner's approval.
     ("undo", "recycle|restore_bin|move|close_window|setting", YELLOW_APPROVAL),

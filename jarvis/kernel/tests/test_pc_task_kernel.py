@@ -54,6 +54,8 @@ class OwnerDirectPolicy(unittest.TestCase):
         self.assertEqual(decide(Action("diag", "window_locate", "notepad|OK")).level, GREEN)
         self.assertEqual(decide(Action("diag", "window_vision", "notepad|*")).level, GREEN)          # D65: read-only, the text stays on the laptop, as window_ocr
         self.assertEqual(decide(Action("diag", "window_ocr", "notepad", lane="public")).level, YELLOW_APPROVAL)
+        self.assertEqual(decide(Action("diag", "ocr_languages", "")).level, GREEN)                   # D68: which OCR languages Windows reads; read-only, nothing leaves the PC
+        self.assertEqual(decide(Action("diag", "ocr_languages", "", lane="public")).level, YELLOW_APPROVAL)
         self.assertEqual(decide(Action("media", "state", "system")).level, GREEN)
         self.assertEqual(decide(Action("repair", "restart_app", "notepad")).level, YELLOW_APPROVAL)
         self.assertEqual(decide(Action("repair", "install", "Notepad++.Notepad++")).level, YELLOW_APPROVAL)
@@ -115,6 +117,9 @@ class NewJobKinds(unittest.TestCase):
         self.bad("diag", {"op": "window_vision", "target": "Calculator"})
         self.bad("diag", {"op": "window_vision", "target": "a;b|x"})
         self.bad("diag", {"op": "window_vision", "target": "Calculator|a\nb"})
+        # D68: the OCR language check takes no target (an empty one), like the other whole-PC checks
+        self.ok("diag", {"op": "ocr_languages", "target": ""})
+        self.bad("diag", {"op": "ocr_languages", "target": "a;b"})
         self.ok("repair", {"op": "edit_file", "target": r"D:\apps\x\settings.json", "args": {"find": "a", "replace": "b"}})
         self.bad("repair", {"op": "edit_file", "target": r"D:\x", "args": {"find": "", "replace": "b"}})
         self.ok("repair", {"op": "restore", "target": "20261016-101500-abcdef", "args": {}})

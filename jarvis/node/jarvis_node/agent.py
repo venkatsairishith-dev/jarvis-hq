@@ -101,6 +101,11 @@ def run(url, name, once=False, collect_every=60, beat=15, poll=1, clock=time.tim
                     reap()                                       # stop connector servers nobody has used for ten minutes
                 except Exception:
                     pass
+                try:
+                    from .uia import reap as uia_reap
+                    uia_reap()                                   # D68: and the UI Automation worker, after ten idle minutes (it holds memory; the next job starts it again)
+                except Exception:
+                    pass
             if not once and not killed and (worker is None or not worker.is_alive()):
                 job = _post(url, "/jobs/next", {}, token).get("job")
                 if job:

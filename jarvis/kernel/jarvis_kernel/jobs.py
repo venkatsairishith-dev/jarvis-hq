@@ -46,7 +46,7 @@ BROWSER_NEEDS_TARGET = {"click", "type", "play", "find", "select", "hover", "dra
 BROWSER_HOST_RX = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$")
 BROWSER_WAIT_RX = re.compile(r"^(?:text:[^\r\n\0]{1,200}|gone:[^\r\n\0]{1,200}|seconds:(?:[1-9]|[12][0-9]|30)|idle)$")
 DIAG_OPS = {"processes", "app_errors", "crashes", "services", "disk", "network", "app_info", "window_text",
-            "window_ocr", "window_locate", "window_vision", "battery"}   # D65: window_vision = the vision rung of the screen cascade (same read-only, local-text class as window_ocr). 2026-10-16: OCR of one window / where a label is in it (read-only, text stays local)
+            "window_ocr", "window_locate", "window_vision", "battery", "ocr_languages"}   # D68: ocr_languages = which OCR languages Windows reads (read-only, nothing leaves the PC). D65: window_vision = the vision rung of the screen cascade (same read-only, local-text class as window_ocr). 2026-10-16: OCR of one window / where a label is in it (read-only, text stays local)
 REPAIR_OPS = {"restart_app", "edit_file", "restore", "install"}
 # Undo (D61): the owner's explicit "undo that" (or a click on Undo in the Timeline panel) reverses one step JARVIS did: move a new file to the Recycle Bin,
 # put a binned file back, move a moved file back, close a window JARVIS opened, set a setting back to its recorded value. The node checks the

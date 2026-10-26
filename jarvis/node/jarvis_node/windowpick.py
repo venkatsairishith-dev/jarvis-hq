@@ -111,6 +111,10 @@ def list_windows(proc: str) -> tuple[list[dict], int]:
     from . import runtime
     if proc and not _SAFE.match(proc):
         raise ValueError("bad target")                                 # "" lists every app's windows (used to see what a launch opened)
+    from . import uia                                                   # D68: the persistent worker lists the windows in milliseconds; None = PowerShell as before
+    got = uia.windows_of(proc) if uia.enabled() else None
+    if got is not None:
+        return got
     r = runtime.powershell(LIST, {"JARVIS_UI_PROC": proc}, 25)
     if r.returncode or not (r.stdout or "").strip():
         return [], 0
