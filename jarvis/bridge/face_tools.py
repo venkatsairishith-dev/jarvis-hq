@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 import sys
 import time
@@ -277,7 +278,29 @@ class FaceTools:
         out.update(await asyncio.to_thread(read_pc_operations, self.pc_ops_path))
         return self._out(out)
 
+    def _language_gate(self, task: str):
+        """D59 lever c, OFF unless JARVIS_LANGUAGE_GATE=1: Telugu / Hindi / Tenglish words are read by the deterministic rules (plugins/_shared/tenglish.py)
+        before anything acts. Returns None (English, or the switch is off, or the gate failed) or a language_gate.Decision. For this to matter the chat
+        model must pass the owner's words on UNCHANGED instead of translating them itself (face persona rule, laptop work)."""
+        if os.environ.get("JARVIS_LANGUAGE_GATE", "").strip().lower() not in ("1", "true", "on", "yes"):
+            return None
+        try:
+            from jarvis.plugins._shared import language_gate
+            d = language_gate.decide(task)
+            return None if d.action == language_gate.PASS else d
+        except Exception:  # noqa: BLE001 - the gate must never stop an English task or break a result
+            return None
+
     async def do(self, task: str) -> dict:
+        gate = self._language_gate(task)
+        if gate is not None and gate.action == "ask":
+            form = gate.form or {}
+            labels = " / ".join(str(o.get("label", "")) for o in form.get("options") or [])
+            return self._out({"ok": True, "asked": True, "message": "Nothing was started: I am not sure I understood the owner. Ask the owner: "
+                              + str(form.get("question") or "Could you say that another way?") + (f" Options: {labels}." if labels else "")
+                              + " Then call jarvis_do again with the confirmed request."})
+        if gate is not None and gate.action == "act":
+            task = gate.english
         try:
             sent = await self.client_factory().delegate(task, source=SOURCE)
         except self.console.BridgeError as exc:
@@ -309,7 +332,18 @@ class FaceTools:
             out["message"] = "JARVIS could not complete it: " + str(row.get("error") or "no reason given")[:200]
         else:
             out["message"] = f"The task is {state}."
+        out["summary"] = self._answer(state, row)                        # D59: the sentence to tell the owner, whatever the chat model manages to say
         return self._out(out)
+
+    def _answer(self, state: str, row: dict) -> str:
+        """The deterministic final sentence (jarvis/plugins/_shared/final_answer.py): built from the console's row, never from a model. The
+        reply text is used only where the reply is allowed to be spoken (the same switch as `reply`); otherwise a generic sentence."""
+        try:
+            from jarvis.plugins._shared import final_answer
+            return final_answer.answer_for_task(state, str(row.get("reply") or ""), str(row.get("error") or ""),
+                                                detailed=bool(self.console.speak_full_reply()))
+        except Exception:  # noqa: BLE001 - the hook must never break a result
+            return ""
 
     async def cancel(self, command_id: str) -> dict:
         try:
