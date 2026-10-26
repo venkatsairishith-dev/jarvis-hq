@@ -135,6 +135,9 @@ def launch(target, params):
 
 def click(target, params):
     proc, elem = _split(target)
+    from . import uia                                      # D68: the persistent UI Automation worker first; None = it is off, down or cannot, so PowerShell as before
+    if uia.act("click", proc, True, elem=elem) is not None:
+        return
     _run(CLICK, {"JARVIS_UI_PROC": proc, "JARVIS_UI_ELEM": elem})
 
 
@@ -143,6 +146,9 @@ def type_text(target, params):
     text = str(params.get("text", ""))
     if len(text) > 2000:
         raise ValueError("text too long")
+    from . import uia
+    if uia.act("type", proc, True, elem=elem, text=text) is not None:       # D68: focus, set the value or type the keys, read it back: ONE worker request
+        return {"observed": "text read back from the field"}
     # bring the window forward the way FOCUS does (Windows' foreground lock): a field without a value pattern (classic
     # Edit controls show up as Pane) is typed into with keys, which only go to the foreground window
     _run(FOCUS, {"JARVIS_UI_PROC": proc})
@@ -306,6 +312,9 @@ def _proc(target):
 
 
 def focus(target, params):
+    from . import uia
+    if uia.act("focus", _proc(target), True) is not None:
+        return {"observed": "the target is the foreground window", "foreground": True}
     _run(FOCUS, {"JARVIS_UI_PROC": _proc(target)})
     return {"observed": "the target is the foreground window", "foreground": True}      # FOCUS throws when it is not
 
@@ -488,6 +497,9 @@ SHOW = {"minimize": ("6", "minimized"), "maximize": ("3", "maximized"), "restore
 def _window_state(op):
     def run(target, params):
         n, want = SHOW[op]
+        from . import uia
+        if uia.act("window_state", _proc(target), True, show=int(n), want=want) is not None:
+            return {"observed": "window state read back", "window_state": want}
         _run(WINDOW_STATE, {"JARVIS_UI_PROC": _proc(target), "JARVIS_UI_SHOW": n, "JARVIS_UI_WANT": want})   # checked after
         # WINDOW_STATE throws unless the window now is in the wanted state, so reaching here IS the node's observation of it
         return {"observed": "window state read back", "window_state": want}
@@ -524,6 +536,10 @@ def type_focused(target, params):
     text = str(params.get("text", ""))
     if not text or len(text) > MAX_FOCUSED:
         raise ValueError("bad text")
+    from . import uia
+    got = uia.act("paste", proc, True, text=text)
+    if got is not None:                                    # D68: the worker pasted it and read the focused control back (or said it could not)
+        return {"observed": "text read back from the editor"} if got.get("typed") == "read back" else {}
     out = _run(TYPE_FOCUSED, {"JARVIS_UI_PROC": proc, "JARVIS_UI_TEXT": text})
     return {"observed": "text read back from the editor"} if "JARVIS_TYPED:read back" in (out or "") else {}
 

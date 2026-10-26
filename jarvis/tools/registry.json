@@ -2481,28 +2481,41 @@
  {
   "name": "uiautomation (yinkaisheng) / comtypes COM UIA",
   "category": "computer",
-  "upstream_url": "unknown",
-  "licence": "uiautomation Apache-2.0; comtypes MIT-style",
-  "pinned_version": "none (comtypes 1.4.11 transitive in agent-venv.txt)",
+  "upstream_url": "https://github.com/yinkaisheng/Python-UIAutomation-for-Windows",
+  "licence": "Apache-2.0 AND MIT",
+  "pinned_version": "uiautomation 2.0.29 (PyPI 2025-08-05) + comtypes 1.4.11, both with sha256 hashes; not installed yet (D68, 2026-10-26)",
   "pin_location": [
-   "jarvis/tools/requirements/agent-venv.txt"
+   "jarvis/tools/requirements/uia-venv.txt"
   ],
-  "integration": "planned-only",
+  "integration": "pip, in its own venv on D: (D:\\jarvis\\tools\\uia-venv), run as the node's persistent UI Automation worker",
   "machine": "laptop",
-  "jarvis_files": [],
-  "features_used": [],
+  "jarvis_files": [
+   "jarvis/node/jarvis_node/uia_worker.py",
+   "jarvis/node/jarvis_node/uia_lib_uiautomation.py",
+   "jarvis/node/jarvis_node/uia.py",
+   "jarvis/node/jarvis_node/winbackend.py",
+   "jarvis/node/jarvis_node/windowpick.py",
+   "jarvis/node/jarvis_node/ui.py",
+   "jarvis/node/jarvis_node/diag.py"
+  ],
+  "features_used": [
+   "COM bootstrap, Invoke / Value / Text pattern wrappers and the clipboard, behind one adapter (uia_lib_uiautomation.py); window list, window text and tree, find control, click, type, paste, focus and window state served by ONE long-lived process instead of a PowerShell start per call (D68). pywinauto was weighed and not chosen (docs/03_DECISIONS.md D68); the adapter is the only file that names a library"
+  ],
   "unused_features": [
    {
-    "feature": "Persistent UIA worker to save 235-343 ms PowerShell start per call",
-    "evidence": "jarvis/docs/research/03-computer-control.md:418"
+    "feature": "its bitmap / screen-capture functions (a native UIAutomationClient_VC140 DLL ships in the wheel and is never loaded by the worker), SendKeys, the mouse functions, its Logger",
+    "evidence": "jarvis/docs/03_DECISIONS.md D68"
    }
   ],
   "size_class": "small",
-  "packaging_recommendation": "lockfile-pinned (pip) when adopted",
-  "packaging_reason": "Not adopted.",
+  "packaging_recommendation": "pinned (jarvis/tools/requirements/uia-venv.txt)",
+  "packaging_reason": "uiautomation is Apache-2.0, comtypes is MIT. Pinned with hashes in its own venv; not a download, so only explained in jarvis.lock.json not_locked.",
   "evidence": [
-   "jarvis/docs/research/03-computer-control.md:173"
-  ]
+   "jarvis/docs/research/03-computer-control.md:173",
+   "jarvis/scout/findings/2026-10-26.md:17",
+   "https://pypi.org/project/uiautomation/ (read 2026-10-26)"
+  ],
+  "licence_spdx": "Apache-2.0 AND MIT"
  },
  {
   "name": "WSL lab Agent PC tools (TigerVNC/Xvnc, xdotool, cua-driver, Firefox, Dashy)",
