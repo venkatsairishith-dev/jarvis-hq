@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { JARVIS_OPEN_OUTPUT_TOOL, JARVIS_OUTPUT_GET_TOOL, JARVIS_OUTPUTS_TOOL, JARVIS_WANTED_TOOL } from './jarvis-preview-logic'
+import { POLL_WAIT_MS } from './poll-guard'
 import { previewEnabled, usePreviewController } from './use-jarvis-preview'
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
@@ -52,6 +53,39 @@ function fakeServer(wanted: string[][] = []) {
   })
   return { call, calls }
 }
+
+describe('usePreviewController polling (D57)', () => {
+  it('skips the poll while the window cannot be seen', async () => {
+    const s = fakeServer([['rep1']])
+    let hidden = true
+    const c = usePreviewController({ call: s.call, paused: () => hidden })
+    expect(await c.pollWanted()).toBe(0)
+    expect(s.call).not.toHaveBeenCalled()
+    hidden = false
+    expect(await c.pollWanted()).toBe(1)
+  })
+
+  it('stops waiting for an answer that never comes and polls again next time', async () => {
+    vi.useFakeTimers()
+    try {
+      let n = 0
+      const onError = vi.fn()
+      const c = usePreviewController({
+        call: () => (++n === 1 ? new Promise(() => {}) : Promise.resolve({ structuredContent: { ids: [] } })),
+        onError,
+      })
+      const first = c.pollWanted()
+      await vi.advanceTimersByTimeAsync(POLL_WAIT_MS + 10)
+      expect(await first).toBe(0)
+      expect(onError).toHaveBeenCalledOnce()
+      expect(await c.pollWanted()).toBe(0)
+      expect(n).toBe(2)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+})
 
 describe('usePreviewController', () => {
   it('opens on the newest item and lists the rest', async () => {
