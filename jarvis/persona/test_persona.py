@@ -29,7 +29,8 @@ def test_card_prompt_is_safe_and_complete():
     for rule in ("only when a tool result says so", "call desktop__do_goal", "Use jarvis_do only for work on the server", "jarvis_recall", "jarvis_show",
                  "doc_reader__read_document", "doc_tools__read_document"):
         assert rule in p, rule
-    assert len(p) <= 4_800, "D60: 4,800 (was 3,800: the deck, report, invoice and one-call do_goal rules had been added); the persona is part of every face request (budget test: jarvis/face/packages/stage-ui/src/stores/chat/request-budget.test.ts)"
+    assert len(p) <= 4_050, "D64: 4,050 (was 4,800, D60). The built-in deck and report tools left the chat list and the persona (the owner's deck goes to a free web generator through desktop__do_goal); the persona is part of every face request (budget test: jarvis/face/packages/stage-ui/src/stores/chat/request-budget.test.ts)"
+    assert "deliverables__make_presentation" not in p and "deliverables__make_report" not in p, "D64: the built-in generators are not owner-facing"
     assert not re.search(r"\b(he|him|his|she|her|hers)\b", p, re.IGNORECASE)   # no gendered pronouns for JARVIS or the owner
 
 

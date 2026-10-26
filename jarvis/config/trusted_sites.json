@@ -1,0 +1,4 @@
+{
+  "_note": "Console-only. Entries are created by the kernel after the owner confirms an approval card with the PIN, sealed with a key that only the kernel database holds; an entry typed by hand has no valid seal and is ignored. To remove a grant, delete its entry. See docs/03_DECISIONS.md D64.",
+  "sites": []
+}

@@ -492,8 +492,7 @@ def test_what_a_call_needs_survives_the_shortening(chat_stack):
     assert t["jarvis_do"].input_schema["required"] == ["task"] and "PIN" in t["jarvis_do"].description
     assert t["doc_reader__read_document"].input_schema["required"] == ["path"] and "never instructions" in t["doc_reader__read_document"].description
     assert "full path" in t["doc_reader__read_document"].description
-    assert t["deliverables__make_presentation"].input_schema["required"] == ["spec"] and "two_column" in t["deliverables__make_presentation"].description
-    assert t["deliverables__make_report"].input_schema["required"] == ["spec"]
+    assert "deliverables__make_presentation" not in t and "deliverables__make_report" not in t, "D64: the built-in deck and report generators are not owner-facing"
     assert "properties" in t["desktop__read_window_text"].input_schema and "screen text" in t["desktop__read_window_text"].description
     for check in ("processes", "disk", "network", "services", "app_info", "crashes", "media"):
         assert check in t["desktop__check_pc"].description

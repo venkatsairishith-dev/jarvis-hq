@@ -1,5 +1,7 @@
 # Deliverables
 
+> **D64 (2026-10-26): dormant.** The owner does not want JARVIS to build decks or PDF reports itself. `make_presentation` and `make_report` are no longer in the chat tool list, the persona, or the `research` step's output; a deck is made on a free web generator by the desktop plugin's browser agent (see `plugins/desktop/README.md`). This plugin stays on disk (its tests still run) and `open_output` still opens any file inside `outputs\deliverables`, including the verified decks the browser agent copies there (`list_deliverables` lists only what this plugin made, with its `qa.json`).
+
 Polished PowerPoint decks and PDF reports from a structured outline, checked before they are handed over. Windows.
 
 | Entry | What it does |

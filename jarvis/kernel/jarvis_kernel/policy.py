@@ -36,7 +36,12 @@ RULES = [
     ("project", "apply_patch", YELLOW_APPROVAL),
     ("browser", "open|snapshot|extract", GREEN),
     ("browser", "click|type|select|press", YELLOW_APPROVAL),
+    # D64 (2026-10-26): the browser agent's other hands. Ordinary for the owner's own request (ORDINARY_OPS below); an agent still needs approval.
+    ("browser", "hover|scroll|back|wait|tab|dialog|drag|check|cred_new", YELLOW_APPROVAL),
+    # download is RED until the owner has granted download_to_quarantine for that exact host (sitegrants, decide below); upload is RED always.
     ("browser", "download|upload", RED),
+    # A one-time per-site grant (sitegrants.py): only the owner plane asks, only the owner's PIN approves (never lowered by owner_direct).
+    ("sitegrant", "grant", YELLOW_APPROVAL),
     # Agent actions (owner defaults 2026-10-09): outputs go only to the laptop's outputs folder; real PC control
     # (ui.launch/click/type below) always needs the owner's approval; model switching stays inside the token's lane.
     ("output", "save|show", YELLOW_AUTO),
@@ -376,6 +381,8 @@ def sensitive_target(texts, sites: dict = None) -> str:
 # Files that hold the rules, hooks and settings the agents run under: changing them is console-only (at least RED).
 SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".claude", "hooks.json", "providers.json", "policy.py", "audit.py", "store.py",
                      "sensitive_sites.json", "auto_click.json",
+                     # D64 (2026-10-26): the per-site grants of the browser agent and the owner's alias e-mail: console-only, sealed by the kernel.
+                     "trusted_sites.json", "identity.json", "sitegrants.py",
                      # Audit M10 (2026-10-18): the files that decide what leaves, what is checked and who may close a task. Names that
                      # only JARVIS has are RED wherever they are; the generic names are in JARVIS_SAFETY_FILES below.
                      "gitleaks_gate.py", "llm_proxy.py", "projectfix.py", "lab_runner.py", "control_auth.py",
@@ -415,7 +422,7 @@ SECRET_COMPONENTS = {".jarvis", ".jarvis-kernel", "secrets.env", "keys.json", "p
 # What the owner may ask for directly without an approval each time (owner_direct): looking, opening, clicking, typing,
 # keys, scrolling. A click or key whose words could pay, send, delete, install, sign out or accept is raised back to approval.
 ORDINARY_OPS = {"ui": {"launch", "focus", "click", "type", "key", "scroll", "click_at", "minimize", "maximize", "restore", "save_as", "type_focused", "drag", "close"},
-                "browser": {"click", "type", "select", "press"},
+                "browser": {"click", "type", "select", "press", "hover", "scroll", "back", "wait", "tab", "dialog", "drag", "check", "cred_new"},
                 # D54, simple tasks of any kind: files, a few reversible settings, the clipboard (the node does exactly these and nothing else)
                 "file": {"mkdir", "create_file", "rename", "move", "copy", "zip", "unzip", "sort_downloads", "find", "reveal", "undo",
                          "trash", "delete_permanent", "cleanup", "empty_bin"},
@@ -1365,6 +1372,121 @@ def _setting_level(a: Action, op: str):
     return YELLOW_AUTO, "a small reversible setting the owner asked for (class A)"
 
 
+# ---- D64 (2026-10-26): the browser agent and the one-time per-site grants (sitegrants.py) -------------------------------------------------
+# A browser job from the owner's own request may carry `host` (the exact host of the page it acts on; the NODE checks that the live page really
+# is that host before it acts, and that the element really has the name the job declares), `via` (for a step at a sign-in provider: the granted
+# site it signs in to), `ref` and `profile` (identity, never words), and the visible text of the page part it is aimed at as Action.ctx (evidence:
+# it can only ADD risk). With a valid, unexpired, sealed grant for that exact host the owner's own sign-in, sign-up, terms and download clicks run
+# without a card; everything else keeps the old rule. Words for money, upgrades, sending, deleting, installing and passwords are never waived.
+BROWSER_META = frozenset({"host", "via", "ref", "profile", "ext", "sel"})
+SITE_ONLY_OPS = frozenset({"cred_new"})
+SSO_IDP_HOSTS = frozenset({"accounts.google.com", "login.microsoftonline.com", "login.live.com"})
+SECRET_REF = re.compile(r"^@(?:cred|identity):[a-z0-9][a-z0-9._-]{0,40}$")       # a reference the NODE resolves; the model never sees the value
+BROWSER_HARD = re.compile(
+    r"\b(pay|payments?|buy|purchase|order|checkout|check out|place order|subscribe|subscription|upgrade|go pro|get pro|start (?:a |your )?(?:free )?trial|"
+    r"donate|billing|credit card|card number|send|post|publish|share|tweet|reply|comment|delete|remove|erase|trash|wipe|format|uninstall|install|"
+    r"unsubscribe|transfer|withdraw|deposit|upload|save card|add card|change password|close account|deactivate|admin|administrator|submit|confirm|"
+    r"reset|grant|authori[sz]e|two-?factor|2fa|otp|one-?time|verification code|security code|passcode|passkey|credentials?)\b", re.I)
+# What a FIELD label may not say when something is typed into it (the label "Confirm password" is a field, not the action "confirm").
+BROWSER_FIELD_HARD = re.compile(r"\b(pay|payments?|card number|credit card|debit card|cvv|cvc|billing|iban|account number|routing number|ssn|two-?factor|2fa|otp|"
+                                r"one-?time|verification code|security code|passcode|passkey|credentials?|api key|secret)\b", re.I)
+DISMISS_ONLY = re.compile(r"cancel|close|dismiss|no|no,? thanks?|not now|skip|skip for now|later|maybe later|reject(?: all)?|decline|deny|back|stay|keep|×|✕|x")
+SOFT_ABILITY = (
+    ("signin_existing_session", re.compile(r"\b(sign ?in|signin|log ?in|login)\b", re.I)),
+    ("signup", re.compile(r"\b(sign ?up|signup|create (?:an |your |a )?account|register|registration)\b", re.I)),
+    ("accept_terms", re.compile(r"\b(accept|agree|terms|licen[sc]e|allow)\b", re.I)),
+    ("download_to_quarantine", re.compile(r"\b(download)\b", re.I)),
+)
+SCOPE_WORDS = re.compile(r"\b(gmail|inbox|mailbox|messages|drive|calendar|contacts?|photos?|youtube|manage|delete|send|compose|full access|all your|"
+                         r"read and write|view and manage|offline access|files?|documents?|sheets|docs|admin|payment|billing|edit, create)\b", re.I)
+# "Allow access to your Drive": a permission for the site, not a terms or cookie click. accept_terms never covers it.
+PERMISSION_WORDS = re.compile(r"\b(access|permissions?|drive|gmail|e-?mails?|inbox|calendar|contacts?|photos?|files?|microphone|camera|location|notifications?|"
+                              r"clipboard|account data|personal data|profile data)\b", re.I)
+PASSWORD_FIELD = re.compile(r"\b(pass(?:word|code|phrase)|pwd)\b", re.I)
+
+
+def site_host(raw) -> str:
+    """A plain lower-case host from a job's `host` field ('' when it is not one). No scheme, port or path: grants are for exact hosts."""
+    s = str(raw or "").strip().lower()
+    return s if re.fullmatch(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}", s) else ""
+
+
+def _grant(host: str, ability: str):
+    from . import sitegrants
+    return sitegrants.find(host, ability) if host else None
+
+
+def _browser_words(a: Action) -> str:
+    """The words a browser step is judged by: what it names (the element or address) and its parameters except identity fields and the
+    content typed into a field. Typed text is the owner's or a reference; a reference is never words."""
+    p = {k: v for k, v in (a.params or {}).items() if k not in BROWSER_META and not (k == "text" and a.op in ("type",))}
+    return clean_words(" ".join(_leaves(a.target, [], False) + _leaves(p, [], False)))
+
+
+def _browser_site_level(a: Action, op: str, key: str):
+    """(level, reason) of an owner-direct browser step that names its host (or an op that only makes sense on a granted site)."""
+    p = a.params or {}
+    host = site_host(p.get("host"))
+    if not host:
+        return YELLOW_APPROVAL, "the browser step does not name the site it acts on: the owner approves it"
+    words = _browser_words(a)
+    ctx = clean_words(a.ctx) if isinstance(a.ctx, str) else ""
+    typed = str(p.get("text") or "")
+    if mixed_script(words):
+        return YELLOW_APPROVAL, "a name that mixes alphabets can hide a word like pay or send: the owner approves it"
+    if op in ("press",) and (key in RISKY_KEYS or key == "enter"):
+        return YELLOW_APPROVAL, "this key can close, delete or send: the owner approves it"
+    if host in SSO_IDP_HOSTS:           # a step at Google / Microsoft sign-in, part of signing in to a granted site
+        via = site_host(p.get("via"))
+        if not (via and _grant(via, "signin_existing_session")):
+            return YELLOW_APPROVAL, "a step at a sign-in provider that no grant covers: the owner approves it"
+        if op != "click":
+            return YELLOW_APPROVAL, "typing at a sign-in provider (password, code) is never automatic: the owner does that step"
+        shown = re.sub(r"\S+@\S+", " ", ctx)                  # the owner's own address on the account chooser ("...@gmail.com") is not a scope
+        if not dialog_readable(ctx) or SCOPE_WORDS.search(shown) or BROWSER_HARD.search(shown) or BROWSER_HARD.search(re.sub(r"\S+@\S+", " ", words)):
+            return YELLOW_APPROVAL, "this permission screen is unreadable or asks for more than signing in (mail, Drive, contacts, payment): the owner decides"
+        return YELLOW_AUTO, f"signing in to {via} with the owner's existing session (grant), basic sign-in screen only"
+    dismiss = op == "click" and bool(DISMISS_ONLY.fullmatch(words.strip()))          # "Cancel" / "Close" / "No thanks" never does what the dialog warns about
+    if (BROWSER_FIELD_HARD if op == "type" else BROWSER_HARD).search(words) or (BROWSER_HARD.search(ctx) and not dismiss):
+        return YELLOW_APPROVAL, "class C, always the owner's: it could pay, upgrade, send, delete, install, give a site more access, or use a code or password"
+    used = []
+    remaining = words
+    if op == "type" and SECRET_REF.match(typed):
+        need = "signup"
+        if not _grant(host, need):
+            return YELLOW_APPROVAL, f"typing a generated password or the alias e-mail needs the owner's one-time 'signup' grant for {host}"
+        used.append(need)
+    elif op == "type" and PASSWORD_FIELD.search(words):
+        return YELLOW_APPROVAL, "a password is never typed from words: only a generated one, by the node, on a granted site"
+    if op == "cred_new":
+        if not _grant(host, "signup"):
+            return YELLOW_APPROVAL, f"making an account password needs the owner's one-time 'signup' grant for {host}"
+        used.append("signup")
+    for ability, rx in SOFT_ABILITY:
+        if rx.search(remaining):
+            if ability == "accept_terms" and PERMISSION_WORDS.search(remaining):
+                return YELLOW_APPROVAL, "a permission for the site (access to mail, Drive, contacts, camera, location ...) is never a terms or cookie click: the owner decides"
+            if not _grant(host, ability):
+                return YELLOW_APPROVAL, (f"'{rx.search(remaining).group(0)}' on {host} needs the owner's one-time grant ({ability}), "
+                                         "confirmed with the PIN in the console")
+            used.append(ability)
+            remaining = rx.sub(" ", remaining)
+    if op != "type" and CONSEQUENTIAL.search(remaining):         # a field label ("Confirm password") is not an action
+        return YELLOW_APPROVAL, "this could pay, send, delete, install, sign in or out, or accept something: the owner approves it"
+    if used:
+        return YELLOW_AUTO, f"the owner granted {', '.join(dict.fromkeys(used))} on {host} (one-time, PIN-confirmed, expires)"
+    return YELLOW_AUTO, "the owner asked for this directly (ordinary browser step)"
+
+
+def _browser_download_level(a: Action):
+    """download on a granted host, owner-direct: AUTO; anything else stays RED (the console)."""
+    host = site_host((a.params or {}).get("host"))
+    ext = str((a.params or {}).get("ext") or "").lower()
+    if host and _grant(host, "download_to_quarantine") and (not ext or set(re.split(r"[,|]", ext)) <= {"pptx", "pdf", "png", "jpg", "jpeg"}):
+        return YELLOW_AUTO, f"the owner granted download_to_quarantine on {host}: the file goes to the quarantine folder and is checked, never run"
+    return None
+
+
 def decide(a: Action, suggested=None, protected=None) -> Decision:
     """Return the final decision. `suggested` is a model's opinion: it can only raise the level."""
     tool, op = _name(a.tool), _name(a.op)
@@ -1388,6 +1510,8 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
                 level, reason = YELLOW_APPROVAL, "a name that mixes alphabets can hide a word like pay or send: the owner approves it"
             if level == YELLOW_AUTO and (key in RISKY_KEYS or (key == "enter" and MESSAGING_APPS.search(words))):
                 level, reason = YELLOW_APPROVAL, "this key can close, delete or send: the owner approves it"
+        elif tool == "browser" and (op in SITE_ONLY_OPS or "host" in (a.params or {})):      # D64: the browser agent; one-time per-site grants
+            level, reason = _browser_site_level(a, op, key)
         elif CONSEQUENTIAL.search(words) or mixed_script(words):
             if tool == "ui" and op == "click" and not mixed_script(words) and auto_click_ok(a.target, words):
                 reason = "the owner listed this on-screen permission button in config/auto_click.json: JARVIS clicks it itself"
@@ -1395,6 +1519,12 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
                 level, reason = YELLOW_APPROVAL, "this could pay, send, delete, install, sign in or out, or accept something: the owner approves it"
         elif key in RISKY_KEYS or (key == "enter" and (MESSAGING_APPS.search(words) or (tool == "browser" and "search" not in words.lower()))):
             level, reason = YELLOW_APPROVAL, "this key can close, delete or send: the owner approves it"
+    if tool == "browser" and op == "download" and level == RED and a.owner_direct and _name(a.lane) == "private" and not a.untrusted_session:
+        got = _browser_download_level(a)                # D64: a download from a host the owner granted (download_to_quarantine); everything else stays RED
+        if got:
+            level, reason = got
+    if tool == "sitegrant" and (not a.owner_direct or a.requester or _name(a.lane) != "private" or a.untrusted_session):
+        level, reason = DENY, "only the owner's own console request can ask for a site grant (never an agent, a plan, a model or a web page)"
     if tool == "file" and protected_target(a):          # system folders, the profile root, drive roots, secrets, JARVIS's own folders, wildcards: nobody, ever
         level, reason = DENY, f"always blocked: {protected_target(a)}"
     if tool == "lab" and op == "task" and _name(a.lane) != "public" and level < YELLOW_APPROVAL:

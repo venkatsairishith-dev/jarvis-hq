@@ -35,7 +35,16 @@ SAVE_AS_TEXT = re.compile(r"^[^|\r\n\0]{1,120}\|[A-Za-z0-9][A-Za-z0-9 _.()\-]{0,
 PROC_BAR = re.compile(r"^[A-Za-z0-9_.\- ]{1,80}\|$")
 # JARVIS's PC control (2026-10-16). Browser: the owner's EXISTING Chrome profiles, by alias; the node keeps the registry.
 BROWSER_OPS = {"open": "open", "read": "snapshot", "tabs": "snapshot", "whoami": "snapshot", "find": "snapshot",
-               "media": "snapshot", "play": "play", "click": "click", "type": "type", "press": "press"}
+               "media": "snapshot", "play": "play", "click": "click", "type": "type", "press": "press",
+               # D64 (2026-10-26), the browser agent (plugins/desktop/browser_agent.py): the left value is the job op, the right one the policy op.
+               "observe": "snapshot", "shot": "snapshot", "locate": "snapshot", "session_end": "snapshot",       # read-only: the page into a local file, a picture, close the pooled session
+               "goto": "open", "reload": "back", "back": "back", "select": "select", "hover": "hover", "scroll": "scroll", "wait": "wait",
+               "tab_select": "tab", "tab_close": "tab", "dialog": "dialog", "drag": "drag", "check": "check", "xy_click": "click",
+               "upload": "upload", "download": "download", "cred_new": "cred_new"}
+BROWSER_EXTRA = {"host", "via", "ref", "ctx", "task", "ext", "sel"}        # optional fields of a browser job (all text, checked in _browser_ok)
+BROWSER_NEEDS_TARGET = {"click", "type", "play", "find", "select", "hover", "drag", "check", "xy_click", "upload", "locate"}
+BROWSER_HOST_RX = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$")
+BROWSER_WAIT_RX = re.compile(r"^(?:text:[^\r\n\0]{1,200}|gone:[^\r\n\0]{1,200}|seconds:(?:[1-9]|[12][0-9]|30)|idle)$")
 DIAG_OPS = {"processes", "app_errors", "crashes", "services", "disk", "network", "app_info", "window_text",
             "window_ocr", "window_locate", "battery"}   # 2026-10-16: OCR of one window / where a label is in it (read-only, text stays local)
 REPAIR_OPS = {"restart_app", "edit_file", "restore", "install"}
@@ -85,6 +94,45 @@ LAB_RUN_TTL = 2 * 3600                     # a lab run that never reports is fai
 
 class JobError(Exception):
     pass
+
+
+def _browser_ok(op: str, params: dict) -> bool:
+    """The optional fields and the op-specific shapes of a browser job (D64). Everything is plain text; the node and the policy check the rest."""
+    for k in BROWSER_EXTRA & set(params):
+        v = params[k]
+        if not isinstance(v, str) or SAFE_TEXT.match(v) is None or len(v) > (600 if k == "ctx" else 300 if k == "sel" else 80):
+            return False
+    if params.get("sel", "") != "" and re.match(r"^(?:xpath|css)=[^\r\n\0]{1,250}$", params["sel"]) is None:
+        return False                                    # a hint the node resolves and checks by the element's name; nothing else is a selector
+    for k in ("host", "via"):
+        if params.get(k, "") != "" and BROWSER_HOST_RX.match(params[k]) is None:
+            return False
+    if params.get("ref", "") != "" and re.match(r"^(?:f\d+)?e\d+$", params["ref"]) is None:
+        return False
+    if params.get("task", "") != "" and re.match(r"^[a-z0-9]{6,32}$", params["task"]) is None:
+        return False
+    if params.get("ext", "") != "" and re.match(r"^(?:pptx|pdf|png|jpg|jpeg)(?:,(?:pptx|pdf|png|jpg|jpeg)){0,4}$", params["ext"]) is None:
+        return False
+    t, x = params["target"], params["text"]
+    if op in ("download", "cred_new") and params.get("host", "") == "":
+        return False                                    # these two only make sense for a named site
+    if op == "xy_click" and re.match(r"^\d{1,5},\d{1,5}$", t) is None:
+        return False
+    if op == "scroll" and x not in ("up", "down", "top", "bottom", "into_view"):
+        return False
+    if op == "scroll" and x == "into_view" and t == "":
+        return False
+    if op == "wait" and BROWSER_WAIT_RX.match(x) is None:
+        return False
+    if op in ("tab_select", "tab_close") and x != "" and re.match(r"^\d{1,2}$", x) is None:
+        return False
+    if op == "dialog" and x not in ("accept", "dismiss"):
+        return False
+    if op in ("drag", "select", "upload") and x == "":
+        return False
+    if op == "upload" and re.match(r"^[A-Za-z0-9][A-Za-z0-9 _.()\-]{0,79}$", x) is None:
+        return False                                    # a file NAME inside the node's allowed folders, never a path
+    return True
 
 
 def _check_params(kind: str, params: dict):
@@ -138,13 +186,15 @@ def _check_params(kind: str, params: dict):
               and NAME.match(str(params["agent"])) is not None and isinstance(params["text"], str) and len(params["text"]) <= FOCUSED_MAX)
     elif kind == "browser_ext":
         op = params.get("op")
-        ok = (keys == {"profile", "op", "url", "target", "text"} and op in BROWSER_OPS
+        base = {"profile", "op", "url", "target", "text"}
+        ok = (keys >= base and keys - base <= BROWSER_EXTRA and op in BROWSER_OPS
               and re.match(r"^[a-z0-9][a-z0-9_-]{0,31}$", str(params["profile"])) is not None
               and isinstance(params["url"], str) and (params["url"] == "" or URL.match(params["url"]) is not None)
               and isinstance(params["target"], str) and len(params["target"]) <= 300 and SAFE_TEXT.match(params["target"]) is not None
               and isinstance(params["text"], str) and len(params["text"]) <= 500 and SAFE_TEXT.match(params["text"]) is not None
-              and (op != "open" or params["url"] != "")
-              and (op not in ("click", "type", "press", "play", "find") or params["target"] != "" or op == "press"))
+              and (op not in ("open", "goto") or params["url"] != "")
+              and (op not in BROWSER_NEEDS_TARGET or params["target"] != "")
+              and _browser_ok(op, params))
     elif kind == "diag":
         target_ok = (r"^[A-Za-z0-9_. :()-]{1,80}\|[^\r\n\0|]{1,120}$" if params.get("op") == "window_locate"   # "app|label"
                      else r"^[A-Za-z0-9_. :()-]{0,80}$")
@@ -223,8 +273,14 @@ def _action_for(kind: str, params: dict, lane: str, untrusted: bool):
         p = {"profile": params["profile"]}
         if params["text"]:
             p["text"] = params["text"]
-        return Action("browser", BROWSER_OPS[params["op"]], params["url"] or params["target"] or params["op"],
-                      dict(p, element=params["target"]) if params["url"] and params["target"] else p, lane, untrusted)
+        for k in ("host", "via", "ref", "ext", "sel"):           # D64: the site the step acts on (the node checks the live page), the sign-in it belongs to, the element ref
+            if params.get(k):
+                p[k] = params[k]
+        act = Action("browser", BROWSER_OPS[params["op"]], params["url"] or params["target"] or params["op"],
+                     dict(p, element=params["target"]) if params["url"] and params["target"] else p, lane, untrusted)
+        if params.get("ctx"):                  # D64: the visible text of the page part this step is aimed at: evidence, it can only add risk
+            act.ctx = params["ctx"]
+        return act
     if kind == "diag":
         return Action("diag", params["op"], params["target"] or params["op"], {}, lane, untrusted)
     if kind == "repair":                      # the edit itself is part of it: an approval binds to exactly this change

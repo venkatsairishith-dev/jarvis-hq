@@ -398,6 +398,8 @@ def classify(tool: str, step: dict, res: dict) -> tuple[str, str, str]:
     if tool == "research":
         made = step.get("deliverable", "none")
         return "A", "Research a topic" + (f" and make a {made}" if made and made != "none" else ""), ""
+    if tool == "web_task":
+        return ("C" if waiting else "B"), "Make a deck on a free web generator", str(res.get("site") or "")[:60]
     if tool == "open_output":
         return "A", "Open a file JARVIS made", ""
     if tool == "stop":
@@ -632,6 +634,40 @@ def record_call(ref: str, args: dict, ok: bool, value: Any, err: str, ms: int) -
         _write(j, _TASK.get(), label=words[1], tool=ref.split(":")[0], cls=words[0], target=words[2],
                result="done" if good else _c(err or v.get("error") or "did not succeed", 160), verified="unconfirmed" if good else "failed", ms=ms, shots=None, undo=None)
     except Exception:  # noqa: BLE001
+        pass
+
+
+WEB_WORDS = {"click": "Click", "type": "Type into a field", "select": "Choose an option", "press": "Press a key", "scroll": "Scroll", "hover": "Hover", "check": "Tick a box",
+             "goto": "Open a page", "back": "Go back", "reload": "Reload the page", "wait": "Wait for the page", "download": "Collect a download", "upload": "Upload a file",
+             "drag": "Drag", "tab_select": "Switch tab", "tab_close": "Close a tab", "dialog": "Answer a page dialog", "xy_click": "Click a spot on the page",
+             "cred_new": "Make a password for a site", "observe": "", "locate": "", "shot": ""}
+
+
+def record_web_step(ev: dict) -> None:
+    """D64: one content-free line per ACTION of the browser agent (browser_agent.py's `_log`). It carries the kind of action, the site's host, the class, whether it
+    went through, how long it took: never a typed value, a page text, a label of what was clicked, an address path or a credential. A wall handed to the owner and a
+    skipped phase are lines of their own (class A)."""
+    try:
+        j = get_journal()
+        if j is None or not isinstance(ev, dict):
+            return
+        host = _c(ev.get("host") or "", 60)
+        kind = ev.get("kind")
+        if kind == "action":
+            words = WEB_WORDS.get(str(ev.get("act")), "Act on a page")
+            if not words:
+                return                                                 # reading the page is not an action
+            ok, res = bool(ev.get("ok")), str(ev.get("res") or "")
+            cls = str(ev.get("cls") or "B") if str(ev.get("cls") or "B") in ("A", "B", "C") else "B"
+            _write(j, _TASK.get(), label=f"{words} on {host}" if host else words, tool="browser_agent", cls=cls, target=host,
+                   result="done" if ok else ("held for the owner's PIN" if res == "approval" else "did not succeed" + (f" ({_c(res, 30)})" if res else "")),
+                   verified="unconfirmed" if ok else "failed", ms=int(ev.get("ms") or 0), shots=None, undo=None)
+        elif kind in ("wall", "ask", "banner", "offlist", "fallback"):
+            said = {"wall": "A step only the owner can do", "ask": "Asked the owner", "banner": "Closed a banner or pop-up", "offlist": "Left a page the task may not visit",
+                    "fallback": "Tried the next way in"}[kind]
+            _write(j, _TASK.get(), label=f"{said} on {host}" if host else said, tool="browser_agent", cls="A", target=host, result=_c(ev.get("wall") or "", 40) or "noted",
+                   verified="unconfirmed", ms=0, shots=None, undo=None)
+    except Exception:  # noqa: BLE001 - the recorder never breaks an action
         pass
 
 

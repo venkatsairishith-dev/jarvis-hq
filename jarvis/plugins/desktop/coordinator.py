@@ -38,7 +38,8 @@ MAX_RETRIES = 1
 AGENT = {"open_website": "browser", "play_media": "browser", "browser": "browser", "open_app": "desktop", "window": "desktop",
          "type_text": "desktop", "press_key": "desktop", "open_file": "desktop", "check_pc": "desktop",
          "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator",
-         "open_in_vscode": "desktop", "type_in_editor": "desktop", "save_as": "desktop", "drive": "desktop", "simple_task": "desktop"}      # D54
+         "open_in_vscode": "desktop", "type_in_editor": "desktop", "save_as": "desktop", "drive": "desktop", "simple_task": "desktop",      # D54
+         "web_task": "desktop"}                                                                                           # D64: a deck on a free web generator
 TRANSIENT = re.compile(r"(?i)timeout|timed out|connection failed|not answering|temporarily|busy")
 # Steps that change nothing when run twice (open, focus, read, check). Typing, keys, clicks, playing, repairs and
 # research are not: a failure reported as a timeout may come after they already acted, so they are never re-run blindly.
@@ -1475,6 +1476,16 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
         if not facts:
             return True, "the steps were sent", unobserved(loose or "nothing about their effect could be checked on the PC")
         return True, facts, unobserved(loose) if loose else ""
+    if t == "web_task":                                    # D64: passes only on a deck file that arrived in quarantine AND was read (type, size, slide or page count)
+        facts = "; ".join(str(x) for x in r.get("facts") or [])
+        if r.get("stopped"):
+            return False, "stopped by the owner", str(r.get("error") or "")[:200]
+        if int(r.get("verified_files") or 0) < 1 or not facts:
+            who = r.get("needs_owner") or {}
+            return False, "no deck file was made and checked", str(who.get("detail") or r.get("error") or r.get("summary") or "")[:240]
+        if step.get("open_after") and not r.get("opened_verified"):
+            return True, facts, "the deck was made, but no window showing it was seen" + (f" ({r.get('open_note')})" if r.get("open_note") else "")
+        return True, facts, ""
     if t == "drive":                                       # D54: an observe - decide - act loop; it passes on what was VERIFIED, never on the model's "done"
         facts = "; ".join(str(x) for x in r.get("facts") or [])
         loose = "; ".join(str(x) for x in r.get("unverified") or [])

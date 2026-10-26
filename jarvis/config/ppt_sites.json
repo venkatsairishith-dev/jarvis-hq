@@ -1,0 +1,244 @@
+{
+ "_note": "D64 (2026-10-26). Free AI presentation generators the browser agent may use, ranked, with what each vendor's OWN pages said on 2026-10-26 (quoted, with the page and the date it was read). Memory, search snippets and AI summaries were leads only. status: shortlist (tried first, in rank order), fallback (tried after the shortlist), excluded (never tried: the reason is given), unverified (a vendor page could not be read, so nothing is claimed). terms_class: clean (the terms read today have no clause on automated access), scraping_clause (the terms bar bots / scrapers / crawlers or 'automated software' from pages; one deck for the owner, in his own session, at human pace, is not scraping, but the clause is broad; the grant card shows it to the owner and he decides with his PIN), ordinary_use_clause (tools that act 'contrary to the ordinary use' are barred), forbids (excluded). Ranking rule: terms first, then a free export of a usable file, then free credits. Rank, free limits and UI change: re-read the pages before relying on this file after a month. Protected from agent pushes (push_gate).",
+ "checked": "2026-10-26",
+ "sites": [
+  {
+   "id": "pitch",
+   "name": "Pitch",
+   "host": "pitch.com",
+   "hosts": [
+    "pitch.com",
+    "app.pitch.com"
+   ],
+   "status": "shortlist",
+   "rank": 1,
+   "free": "Free plan: 'Unlimited presentations' and '100 AI credits ... This amount does not renew once used.' (pitch.com/pricing, read 2026-10-26)",
+   "exports": "Free: PDF export, branded ('PDF exports | Branded'); PowerPoint export is not on Free ('PowerPoint exports | -', from Plus: 'Export presentations as PPTX files, with no added Pitch branding'). (pitch.com/pricing, 2026-10-26)",
+   "terms_class": "clean",
+   "terms_quote": "Terms of Use, 'Last Updated: October 19, 2026 (Version 1.1.4)': searched for robot, spider, scraper, crawl, bot, automated, circumvent: no clause on automated access. The only use limit: 'the Customer has to refrain from copying, decompiling, reverse engineering or editing the Service beyond the Contract Purpose.' (pitch.com/terms-of-use, 2026-10-26) (The scout sweep got HTTP 404 on pitch.com/legal/terms; pitch.com/terms-of-use answers HTTP 200.)",
+   "signin": "'the Customer must first select a supported login method to start the signup process' (terms); which methods (Google / Microsoft / e-mail) must be seen live.",
+   "captcha": "not seen; the laptop must check",
+   "notes": "The vendor lists 'Pitch MCP & API' and 'Agentic workflows' in its own navigation (pitch.com, 2026-10-26): agents are expected. Free PDF is branded and has no PPTX; the PDF is what the Preview panel shows best.",
+   "source_urls": [
+    "https://pitch.com/pricing",
+    "https://pitch.com/terms-of-use"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": "pitch.com.make_deck.json"
+  },
+  {
+   "id": "gamma",
+   "name": "Gamma",
+   "host": "gamma.app",
+   "hosts": [
+    "gamma.app"
+   ],
+   "status": "shortlist",
+   "rank": 2,
+   "free": "'Each new Free user receives 400 credits when initially signing up.' 'On the Free plan, all AI actions use credits, and credits do not refresh.' 'Generating presentations with Create with AI uses credits, metered per slide and per image.' (help.gamma.app article 7834324, 2026-10-26) Second vendor page, same day: 'Every new account starts on the Free Plan with no time limit and no credit card required, and comes with 400 credits' and 'Generate up to 10 slides in a single prompt' (help.gamma.app article 8077107, 'Updated over 3 weeks ago'). The scout sweep of the same day did not find the 400 figure on that page; both vendor pages say it, so it is settled for now: re-read before relying on it.",
+   "exports": "PDF, PNG, PowerPoint (PPTX), Google Slides via PPTX upload; Share > Export (help.gamma.app article 8022861). On the Free plan: 'The Made by Gamma badge appears on PDF and PPTX exports when your workspace is on the Free plan at the time of export'.",
+   "terms_class": "scraping_clause",
+   "terms_quote": "Terms of Use, 'Effective Date: September 9, 2025': 'you shall not use any manual or automated software, devices or other processes (including but not limited to spiders, robots, scrapers, crawlers, avatars, data mining tools or the like) to \"scrape\" or download data from any web pages contained in the Site' and, among the grounds for termination, 'using manual or automated software or other means to access, \"scrape,\" \"crawl\" or \"spider\" any pages contained in Services'. (gamma.app terms, read through production-vercel-app.gamma.app/terms because gamma.app itself answered a Cloudflare challenge, 2026-10-26)",
+   "signin": "not read on the sign-in page (gamma.app is behind a Cloudflare 'Just a moment...' challenge for a non-browser client); the owner's real Chrome normally passes it silently. If a CAPTCHA shows, the agent stops and asks.",
+   "captcha": "gamma.app returned HTTP 403 'Just a moment... Enable JavaScript and cookies to continue' to this server's fetch on 2026-10-26: a bot check exists. In the owner's signed-in Chrome it may not show; if it does the agent stops (never solves it).",
+   "notes": "SANCTIONED AUTOMATION EXISTS: 'API keys are available on all plans, including Free; usage is limited by your credits' and 'The MCP server and the ChatGPT, Claude, and Slack connectors work on all plans.' (developers.gamma.app/get-started/access-and-pricing, 2026-10-26). If the owner prefers the terms-clean route for Gamma, a later grant can add an API-key flow (a design hook; not built here). Best generator of the three; the badge stays on Free exports.",
+   "source_urls": [
+    "https://help.gamma.app/en/articles/7834324-how-do-credits-work-in-gamma",
+    "https://help.gamma.app/en/articles/8022861-what-s-the-easiest-way-to-export-my-gamma",
+    "https://production-vercel-app.gamma.app/terms",
+    "https://developers.gamma.app/get-started/access-and-pricing",
+    "https://help.gamma.app/en/articles/8077107"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": "gamma.app.make_deck.json",
+   "max_slides": 10,
+   "api_route": {
+    "status": "design_hook_not_built",
+    "note": "Gamma's own developer page (developers.gamma.app/get-started/access-and-pricing, 2026-10-26): 'API keys are available on all plans, including Free'; MCP and the ChatGPT, Claude and Slack connectors work on all plans; Free = at most 10 cards per gamma, 2 agent jobs in flight; generations cost credits. A generation by API needs no sign-in UI and no automation clause (the scout sweep, jarvis/scout/findings/2026-10-26.md item 3, ranks it first). It is NOT built here: the owner must create the key himself (kept in D:\\jarvis-secrets, never read by an agent) and read Gamma's API terms first (the terms page answered HTTP 403 to the scout's fetch and Cloudflare to ours). The UI route in this file stays the fallback, and when the API route exists it goes in front of it.",
+    "source": "https://developers.gamma.app/get-started/access-and-pricing"
+   }
+  },
+  {
+   "id": "slidesgo",
+   "name": "Slidesgo AI Presentation Maker",
+   "host": "slidesgo.com",
+   "hosts": [
+    "slidesgo.com"
+   ],
+   "status": "shortlist",
+   "rank": 3,
+   "free": "'You can create up to 3 free presentations every month to test out the service'; 'you'll need to create an account and be logged in to generate and download presentations.' (slidesgo.com/ai/presentation-maker, 2026-10-26)",
+   "exports": "'click Download now to get it in PPTX format. It's fully editable and compatible with tools like PowerPoint, Google Slides, and Figma.' (same page)",
+   "terms_class": "ordinary_use_clause",
+   "terms_quote": "'It is prohibited to use robots, spiders or any other mechanism, mobile application, program or tool to access, copy or control any part of the Slidesgo Website or the Services in any way which is contrary to the ordinary use of the Slidesgo Websites or which infringes the Company's interests, without its express prior authorization.' and users undertake 'that any access or downloads of any content ... will always be the result of a genuine legitimate interest of the User'. (slidesgo.com/terms-conditions, HTTP 200, 2026-10-26. The scout sweep got HTTP 404 on slidesgo.com/terms-and-conditions, a different address; the group's magnific.com terms it found are a separate document.)",
+   "signin": "an account is required; the method (Google / e-mail) must be seen live.",
+   "captcha": "not seen; the laptop must check",
+   "notes": "A person at human pace asking for one deck in his own account is ordinary use; a tool that clicks for him is the grey area the clause names. The owner decides with the grant card.",
+   "source_urls": [
+    "https://slidesgo.com/ai/presentation-maker",
+    "https://slidesgo.com/terms-conditions"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": "slidesgo.com.make_deck.json"
+  },
+  {
+   "id": "presentations_ai",
+   "name": "Presentations.AI",
+   "host": "presentations.ai",
+   "hosts": [
+    "presentations.ai",
+    "www.presentations.ai"
+   ],
+   "status": "fallback",
+   "rank": 4,
+   "free": "Starter plan $0: '200 credits', 'Up to 20 Slides' ('Free to start. No card needed.'). (presentations.ai/pricing, 2026-10-26)",
+   "exports": "The comparison table has a 'PowerPoint / PDF Export' row but the per-plan cell could not be read here; Pro lists 'High-quality PowerPoint Export'. Unknown for Starter: check live.",
+   "terms_class": "scraping_clause",
+   "terms_quote": "Terms of Use 'Last updated August 21, 2026': the same clause as Gamma's ('you shall not use any manual or automated software ... to \"scrape\" or download data from any web pages contained in the Site'). (presentations.ai/terms, 2026-10-26)",
+   "signin": "'Continue with Google / Email / Apple / Microsoft / LinkedIn' (sign-up page text, 2026-10-26)",
+   "captcha": "not seen",
+   "notes": "No playbook yet: the engine skips a site without one ('no_playbook') until 'learn this site' has made one.",
+   "source_urls": [
+    "https://www.presentations.ai/pricing",
+    "https://www.presentations.ai/terms"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": ""
+  },
+  {
+   "id": "canva",
+   "name": "Canva (Magic Design / AI presentations)",
+   "host": "canva.com",
+   "hosts": [
+    "www.canva.com"
+   ],
+   "status": "unverified",
+   "rank": 99,
+   "free": "UNVERIFIED: every canva.com page (terms, pricing, help) answered HTTP 403 ('We'll have you designing again soon', a Cloudflare block) to this server on 2026-10-26. Search leads disagree (3 Magic Design presentations a month vs a 200-credit pool; PPTX export free vs Pro-only).",
+   "exports": "UNVERIFIED",
+   "terms_class": "unread",
+   "terms_quote": "UNREAD. A third-party summary says Canva's terms bar scraping and bots that exceed normal human usage; that is a lead, not proof.",
+   "signin": "UNVERIFIED",
+   "captcha": "canva.com blocks non-browser clients",
+   "notes": "Not tried until the laptop reads Canva's own terms and pricing pages.",
+   "source_urls": [
+    "https://www.canva.com/policies/terms-of-use/",
+    "https://www.canva.com/pricing/"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": ""
+  },
+  {
+   "id": "beautiful_ai",
+   "name": "Beautiful.ai",
+   "host": "beautiful.ai",
+   "hosts": [
+    "www.beautiful.ai"
+   ],
+   "status": "excluded",
+   "rank": 99,
+   "free": "No free plan: 'You can start a 14-day free trial ... A free trial requires a credit card to get started, which will be charged in full if you don't cancel your trial.' (beautiful.ai/pricing, 2026-10-26)",
+   "exports": "PowerPoint import/export with the paid plans",
+   "terms_class": "forbids",
+   "terms_quote": "'use any meta tags, \"hidden text\", robots, spiders, crawlers, or other tools, whether manual or automated, to collect, scrape, index, mine, republish, redistribute, transmit, sell, license or download the Beautiful.ai Services or any part thereof'. (beautiful.ai/terms-of-service, 2026-10-26)",
+   "signin": "-",
+   "captcha": "-",
+   "notes": "EXCLUDED: no free tier (a card is needed) and the terms bar automated tools.",
+   "source_urls": [
+    "https://www.beautiful.ai/pricing",
+    "https://www.beautiful.ai/terms-of-service"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": ""
+  },
+  {
+   "id": "plus_ai",
+   "name": "Plus AI",
+   "host": "plusai.com",
+   "hosts": [
+    "plusai.com"
+   ],
+   "status": "excluded",
+   "rank": 99,
+   "free": "Not a free tier: 'All plans start with a 7-day free trial with 1,000 AI credits.' (plusai.com/pricing, 2026-10-26); a search lead says the trial needs a card.",
+   "exports": "Google Slides and PowerPoint add-in",
+   "terms_class": "unread",
+   "terms_quote": "not read",
+   "signin": "'Sign up with Google', 'Sign up with Microsoft' (pricing page)",
+   "captcha": "-",
+   "notes": "EXCLUDED: a trial, not a free plan.",
+   "source_urls": [
+    "https://plusai.com/pricing"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": ""
+  },
+  {
+   "id": "gemini_slides",
+   "name": "Google Slides with Gemini",
+   "host": "docs.google.com",
+   "hosts": [
+    "docs.google.com"
+   ],
+   "status": "excluded",
+   "rank": 99,
+   "free": "'This feature requires an eligible Google Workspace or Google AI plan.' (support.google.com/docs/answer/14207419, 2026-10-26): not free.",
+   "exports": "Slides itself is free and exports PPTX/PDF",
+   "terms_class": "clean",
+   "terms_quote": "Google Terms of Service, 'Effective July 30, 2026': bars 'using automated means to access content from any of our services in violation of the machine-readable instructions on our web pages (for example, robots.txt files ...)'; nothing against a user's own session. (policies.google.com/terms, 2026-10-26)",
+   "signin": "the owner's existing Google session",
+   "captcha": "-",
+   "notes": "EXCLUDED as a generator (Gemini in Slides is paid). Slides remains a free editor; not used here.",
+   "source_urls": [
+    "https://support.google.com/docs/answer/14207419",
+    "https://policies.google.com/terms"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": ""
+  },
+  {
+   "id": "microsoft",
+   "name": "Microsoft 365 Copilot / Designer",
+   "host": "m365.cloud.microsoft",
+   "hosts": [
+    "m365.cloud.microsoft"
+   ],
+   "status": "unverified",
+   "rank": 99,
+   "free": "UNVERIFIED: the consumer AI-deck plan and limits were not found on a Microsoft page.",
+   "exports": "UNVERIFIED",
+   "terms_class": "ordinary_use_clause",
+   "terms_quote": "Microsoft Services Agreement ('Published: July 30, 2026, Effective: September 30, 2026'): 'Don't circumvent any restrictions on access to, usage, or availability of the Services (e.g., attempting to \"jailbreak\" an AI system or impermissible scraping)' and 'Unless explicitly permitted, you may not use web scraping, web harvesting, or web data extraction methods to extract data from the AI services.' (microsoft.com/servicesagreement, 2026-10-26)",
+   "signin": "Microsoft account",
+   "captcha": "-",
+   "notes": "Not tried until a free AI deck feature is confirmed on a Microsoft page.",
+   "source_urls": [
+    "https://www.microsoft.com/en-us/servicesagreement"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": ""
+  },
+  {
+   "id": "tome",
+   "name": "Tome",
+   "host": "tome.app",
+   "hosts": [
+    "tome.app"
+   ],
+   "status": "excluded",
+   "rank": 99,
+   "free": "Gone: tome.app answered 'The deployment could not be found on Vercel. DEPLOYMENT_NOT_FOUND' on 2026-10-26; third-party sources say the slides product was shut down on 2025-04-30 (a lead).",
+   "exports": "-",
+   "terms_class": "unread",
+   "terms_quote": "-",
+   "signin": "-",
+   "captcha": "-",
+   "notes": "EXCLUDED: the product no longer exists.",
+   "source_urls": [
+    "https://tome.app"
+   ],
+   "read_on": "2026-10-26",
+   "playbook": ""
+  }
+ ]
+}
