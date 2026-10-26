@@ -1,0 +1,27 @@
+phase / field                          before p50 -> after p50      before p90 -> after p90
+  model_first                             1.5 s -> 5.5 s    (+4007 ms)     22.8 s -> 22.8 s  
+  first_token                             1.5 s -> 5.5 s    (+4007 ms)     22.8 s -> 22.8 s  
+  tool_start                             12.1 s -> 9.3 s    (-2773 ms)     30.1 s -> 34.2 s  
+  tool_end                               12.7 s -> 9.4 s    (-3299 ms)     30.1 s -> 34.8 s  
+  final_token                            18.5 s -> 13.6 s   (-4886 ms)     59.3 s -> 28.6 s  
+  done                                   22.9 s -> 13.2 s   (-9654 ms)     61.7 s -> 28.6 s  
+  done_chat_only                         11.6 s -> 6.8 s    (-4792 ms)     17.7 s -> 22.8 s  
+  done_with_tools                        24.0 s -> 22.7 s   (-1308 ms)     61.7 s -> 33.2 s  
+  first_token_after_tools                 1.5 s -> 1.7 s    (+195 ms)     10.9 s -> 22.9 s  
+  first_token_no_tool                     1.2 s -> 6.1 s    (+4830 ms)      1.6 s -> 13.2 s  
+  model rounds per turn (p50)          2 -> 1
+  dahl: redact_ms                        351 ms -> 275 ms   (-76 ms)      1.5 s -> 1.5 s   
+  dahl: queue_ms                           0 ms -> 0 ms     (+0 ms)       0 ms -> 0 ms    
+  dahl: first_ms                          1.1 s -> 1.2 s    (+110 ms)      8.9 s -> 1.9 s   
+  dahl: total_ms                          9.0 s -> 8.0 s    (-1027 ms)     21.7 s -> 22.8 s  
+  dahl: req_bytes                         8.5 s -> 16.0 s   (+7558 ms)     16.7 s -> 17.7 s  
+  dahl / after tool: redact_ms           450 ms -> 410 ms   (-40 ms)      1.5 s -> 1.5 s   
+  dahl / after tool: queue_ms              0 ms -> 0 ms     (+0 ms)       0 ms -> 0 ms    
+  dahl / after tool: first_ms             1.1 s -> 1.3 s    (+194 ms)      5.3 s -> 1.6 s   
+  dahl / after tool: total_ms             8.0 s -> 8.0 s    (+24 ms)     20.5 s -> 10.9 s  
+  dahl / after tool: req_bytes           15.2 s -> 17.6 s   (+2438 ms)     16.8 s -> 18.0 s  
+  dahl / after user: redact_ms           241 ms -> 242 ms   (+1 ms)     619 ms -> 805 ms  
+  dahl / after user: queue_ms              0 ms -> 0 ms     (+0 ms)       0 ms -> 0 ms    
+  dahl / after user: first_ms            955 ms -> 1.1 s    (+148 ms)      1.7 s -> 3.5 s   
+  dahl / after user: total_ms            11.3 s -> 7.1 s    (-4225 ms)     25.0 s -> 38.5 s  
+  dahl / after user: req_bytes            8.4 s -> 16.0 s   (+7591 ms)      8.5 s -> 16.0 s  
