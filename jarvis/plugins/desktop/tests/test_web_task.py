@@ -207,3 +207,24 @@ def test_the_web_step_choice_is_a_known_kind_with_its_own_threshold_and_never_a_
     assert d.choice != "Delete everything", "an answer that is not on the list is never taken"
     d = D.decide("web_step", "go", ["Cancel", "Let's go"], post=lambda b: json.dumps({"choice": "Let's go", "confidence": 0.4, "why": "x"}))
     assert d.ask or d.choice is None, "below the threshold it asks"
+
+# ------------------------------------------------------------------------------------------------------------------------------ through the coordinator (D65 step runner)
+def _coord(tmp_path, agents):
+    return coord.Coordinator(agents, PROFILES, tasks_dir=tmp_path / "tasks", lock_path=tmp_path / "lock")
+
+
+def test_a_deck_task_runs_through_the_coordinator_once_and_is_never_repeated_blindly(tmp_path):
+    plan = decide.decide("make a 3 slide deck about solar power for schools", PROFILES)
+    calls = []
+    good = {"ok": True, "verified_files": 1, "facts": ["pptx file of 31000 bytes with 3 slides", "made on pitch.com in the owner's Chrome"], "site": "pitch.com", "file": "x.pptx"}
+    rec = _coord(tmp_path, {"web_task": lambda s: calls.append(s) or dict(good)}).run("make a 3 slide deck about solar power for schools", plan)
+    assert rec["status"] == "completed" and len(calls) == 1 and calls[0]["topic"] == "solar power for schools" and calls[0]["slides"] == 3
+    assert rec["agents"] == ["desktop"] and rec["steps"][0]["passed"] and "3 slides" in rec["steps"][0]["checked"]
+    calls.clear()
+    bad = {"ok": False, "verified_files": 0, "facts": [], "error": "every site on the list failed or hit its free limit", "tried": [{"site": "pitch.com", "outcome": "limit", "why": "x"}]}
+    rec = _coord(tmp_path, {"web_task": lambda s: calls.append(s) or dict(bad)}).run("make a 3 slide deck about solar power for schools", plan)
+    assert rec["status"] == "failed" and len(calls) == 1 and rec["steps"][0]["attempts"] == 1, "a deck that failed is not made a second time by the coordinator"
+    calls.clear()
+    held = {"ok": False, "state": "waiting_for_permission", "approval_id": "a1", "verified_files": 0}
+    rec = _coord(tmp_path, {"web_task": lambda s: calls.append(s) or dict(held)}).run("make a deck about tides", decide.decide("make a deck about tides", PROFILES))
+    assert rec["status"] == "waiting_for_permission" and len(calls) == 1

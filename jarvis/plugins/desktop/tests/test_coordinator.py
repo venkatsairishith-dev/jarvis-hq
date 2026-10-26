@@ -226,7 +226,7 @@ def test_round3_resolver_rules():
     # a report or slides asked for in the request is kept even if the model left it out
     # D64: slides asked for in the request are made on a free web generator (web_task), whatever the model planned
     p = D.validate(json.dumps({"steps": [{"tool": "research", "query": "solar"}]}), six, "make a presentation about solar energy")
-    assert p.steps[0]["tool"] == "web_task" and p.steps[0]["topic"] == "solar"
+    assert p.steps[0]["tool"] == "web_task" and p.steps[0]["topic"] == "solar energy"
 
 
 def test_media_toggle_keeps_the_owners_intent():
