@@ -7,6 +7,8 @@
  * daily cap); this only collects, and only while the owner is not in the middle of something.
  */
 
+import { POLL_WAIT_MS, withDeadline } from './poll-guard'
+
 export const JARVIS_SPOKEN_TOOL = 'jarvis::jarvis_spoken'
 export const JARVIS_SPOKEN_OFF_KEY = 'jarvis:proactive'
 const POLL_MS = 8_000
@@ -65,6 +67,8 @@ export interface SpokenPollerDeps {
   lastOwnerActivity: () => number
   now?: () => number
   enabled?: () => boolean
+  /** True while nobody sees the window (minimized, hidden): the poll skips its turn. */
+  paused?: () => boolean
   onError?: (error: unknown) => void
 }
 
@@ -74,14 +78,14 @@ export function createSpokenPoller(deps: SpokenPollerDeps) {
   let running = false
 
   async function pollOnce(): Promise<number> {
-    if (running || (deps.enabled && !deps.enabled()))
+    if (running || (deps.enabled && !deps.enabled()) || deps.paused?.())
       return 0
     running = true
     try {
       // Ask the server only when speaking would not talk over the owner. An urgent notice waits on the server at most two hours.
       if (deps.busy() || now() - deps.lastOwnerActivity() < IDLE_AFTER_TYPING_MS)
         return 0
-      const notices = parseSpoken(await deps.call(JARVIS_SPOKEN_TOOL))
+      const notices = parseSpoken(await withDeadline(deps.call(JARVIS_SPOKEN_TOOL), POLL_WAIT_MS, 'the notice poll'))
       for (const notice of notices)
         await deps.say(buildSpokenTurn(notice))
       return notices.length

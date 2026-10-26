@@ -33,6 +33,7 @@ import { protectPrivilegedWindowNavigation } from '../shared'
 import { setupFloatingChatWindow } from './floating'
 import { createChatModeSwitch } from './mode-switch'
 import { setupChatWindowElectronInvokes } from './rpc/index.electron'
+import { singleFlight } from './single-flight'
 
 type EventaContext = ReturnType<typeof createContext>['context']
 
@@ -97,6 +98,11 @@ export interface ChatWindowManager {
    * the fullscreen chat opens in the main window.
    */
   toggle: () => Promise<void>
+  /**
+   * Creates the floating chat before the first press of the chat button (D57), folded and hidden. Does nothing in the other chat
+   * modes or when the window exists. Never throws: a chat that cannot be created early is created by the first press as before.
+   */
+  prewarm: () => Promise<void>
   getButtonState: () => ChatButtonState
   /** Calls `listener` whenever the button state changes. Returns the function that stops it. */
   onButtonStateChange: (listener: (state: ChatButtonState) => void) => () => void
@@ -371,17 +377,30 @@ export function setupChatWindowManager(params: {
     }
   }
 
+  // One press at a time (D57): a second press while the first still creates the window is the same press, not a fold after the open.
+  const toggle = singleFlight(() => modeSwitch.run(async () => {
+    const mode = getConfig().mode
+    if (mode === 'floating')
+      await floating.toggle()
+    else if (mode === 'fullscreen')
+      await params.openFullscreenChat()
+    else
+      await openLegacy()
+  }))
+
   return {
     open: modeSwitch.show,
-    toggle: () => modeSwitch.run(async () => {
-      const mode = getConfig().mode
-      if (mode === 'floating')
-        await floating.toggle()
-      else if (mode === 'fullscreen')
-        await params.openFullscreenChat()
-      else
-        await openLegacy()
-    }),
+    toggle,
+    async prewarm() {
+      if (getConfig().mode !== 'floating')
+        return
+      try {
+        await floating.prewarm()
+      }
+      catch (error) {
+        console.warn('[chat] could not create the chat window early; the first press creates it:', error)
+      }
+    },
     getButtonState,
     onButtonStateChange(listener) {
       buttonStateListeners.add(listener)

@@ -69,6 +69,7 @@ import { setupNoticeWindowManager } from './windows/notice'
 import { setupOnboardingWindowManager } from './windows/onboarding'
 import { setupSettingsWindowReusableFunc } from './windows/settings'
 import { moveFullscreen } from './windows/shared/fullscreen'
+import { chatPrewarmEnabled, deferStartup, STARTUP_STAGGER } from './windows/shared/startup-stagger'
 import { setupSpotlightWindowManager } from './windows/spotlight'
 import { setupWidgetsWindowManager } from './windows/widgets'
 import { setupWorkspaceWindowManager } from './windows/workspace'
@@ -530,8 +531,17 @@ app.whenReady().then(async () => {
   }
 
   injeca.invoke({
-    dependsOn: { mainWindow, tray, serverChannel, airiHttpServer, godotStageManager, pluginHost, mcpManager, onboardingWindow: onboardingWindowManager, widgetsWindow: widgetsManager, spotlightWindow, artistryConfig },
+    dependsOn: { mainWindow, chatWindow, tray, serverChannel, airiHttpServer, godotStageManager, pluginHost, mcpManager, onboardingWindow: onboardingWindowManager, widgetsWindow: widgetsManager, spotlightWindow, artistryConfig },
     callback: async (deps) => {
+      // D57: the floating chat is created folded and hidden a while after the avatar window, so the first press of the chat button
+      // shows it at once. Before, the press created the window and loaded the whole page (seconds with no sign of life), and a
+      // second press made the chat open and fold again. `JARVIS_FACE_PREWARM_CHAT=0` turns this off.
+      if (chatPrewarmEnabled(env)) {
+        deferStartup(() => deps.chatWindow.prewarm(), STARTUP_STAGGER.chatPrewarmMs, {
+          isAlive: () => !deps.mainWindow.isDestroyed(),
+          onError: error => log.withError(error).warn('Could not create the chat window early'),
+        })
+      }
       const { context } = createContext(ipcMain)
       // JARVIS: AIRI's computer use and Home Assistant control act outside the kernel, so they are not started.
       // Actions reach the PC only through the JARVIS tool server, where the kernel decides.

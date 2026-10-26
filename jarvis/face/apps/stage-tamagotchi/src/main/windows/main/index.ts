@@ -39,6 +39,7 @@ import { createConfig } from '../../libs/electron/persistence'
 import { createWindowContext } from '../../libs/electron/window-context'
 import { setupSettingsPageInvokes } from '../settings/rpc/index.electron'
 import { protectPrivilegedWindowNavigation, setWindowAlwaysOnTop, transparentWindowConfig } from '../shared'
+import { deferStartup, STARTUP_STAGGER } from '../shared/startup-stagger'
 import { centerWindowOnDisplay, computeCenteredWindowBounds } from '../shared/display'
 import { hideOnClose } from './hide-on-close'
 import { setupMainWindowElectronInvokes } from './rpc/index.electron'
@@ -255,10 +256,16 @@ export async function setupMainWindow(params: {
 
   // The inlay loads once and stays shown, so the first speech does not wait for a window and a page load.
   // It is transparent and click-through until speech starts. Showing it inactive keeps focus in the main window.
-  void params.inlayWindow().then((inlay) => {
+  // D57: it starts a few seconds after the avatar window, not inside the avatar's model load (it is a second copy of the whole
+  // page). Speech that starts earlier opens it on demand (`electronOpenInlay`).
+  deferStartup(async () => {
+    const inlay = await params.inlayWindow()
     if (!inlay.isDestroyed())
       inlay.showInactive()
-  }).catch(error => console.error('Failed to prepare the inlay window', error))
+  }, STARTUP_STAGGER.inlayMs, {
+    isAlive: () => !window.isDestroyed(),
+    onError: error => console.error('Failed to prepare the inlay window', error),
+  })
 
   /**
    * This is a know issue (or expected behavior maybe) to Electron.

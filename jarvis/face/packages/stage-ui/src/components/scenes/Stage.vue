@@ -53,9 +53,16 @@ const props = withDefaults(defineProps<{
   cursorPosition?: { x: number, y: number }
   enableOrbitControls?: boolean
   paused?: boolean
+  /**
+   * Frame rate the host asks for while the owner has set no limit of their own. 0 draws every frame the display offers.
+   * The desktop app passes 30 while the character is idle and 60 while it is in use, so a stage nobody is looking at
+   * does not repaint a transparent window 60 to 144 times a second.
+   */
+  frameRate?: number
 }>(), {
   enableOrbitControls: true,
   paused: false,
+  frameRate: 0,
 })
 
 const emit = defineEmits<{
@@ -93,6 +100,8 @@ const {
   live2dMaxFps,
   live2dRenderScale,
 } = storeToRefs(useSettingsLive2d())
+/** The owner's limit (Settings > Live2D) wins; otherwise the host's; 0 means every frame. */
+const effectiveLive2dMaxFps = computed(() => live2dMaxFps.value > 0 ? live2dMaxFps.value : props.frameRate)
 const live2dMotionControl = useLive2DMotionControl()
 const { exclusiveOwnerId: live2dMotionControlOwnerId } = storeToRefs(live2dMotionControl)
 const {
@@ -728,7 +737,7 @@ defineExpose({
         :theme-colors-hue="themeColorsHue"
         :theme-colors-hue-dynamic="themeColorsHueDynamic"
         :live2d-shadow-enabled="live2dShadowEnabled"
-        :live2d-max-fps="live2dMaxFps"
+        :live2d-max-fps="effectiveLive2dMaxFps"
         :live2d-render-scale="live2dRenderScale"
         @error="handleStageRenderError"
       />
@@ -744,6 +753,7 @@ defineExpose({
         :cursor-position="cursorPosition"
         :idle-animation="animations.idleLoop.toString()"
         :paused="paused"
+        :fps-cap="frameRate"
         :show-axes="stageViewControlsEnabled"
         :enable-orbit-controls="props.enableOrbitControls"
         :audio-context="audioContext"

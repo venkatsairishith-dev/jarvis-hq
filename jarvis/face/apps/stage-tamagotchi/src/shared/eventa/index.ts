@@ -562,6 +562,12 @@ export interface ElectronMcpToolDescriptor {
 export interface ElectronMcpCallToolPayload {
   name: string
   arguments?: Record<string, unknown>
+  /**
+   * How long this call may take, in milliseconds (D57). A background poll (HUD status, spoken notices, preview) passes a few
+   * seconds, so a tool server that hangs never holds the poll for the 180 s that a real tool call (a deck, a scanned page) may need.
+   * Omitted: the long tool-call limit. The main process keeps the value between 1 s and that limit.
+   */
+  timeoutMs?: number
 }
 
 export interface ElectronMcpCallToolResult {
