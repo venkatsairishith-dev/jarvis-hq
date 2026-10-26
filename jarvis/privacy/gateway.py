@@ -66,6 +66,119 @@ def _count(mapping: Mapping):
             STATS["redacted"][kind] = STATS["redacted"].get(kind, 0) + n
 
 
+# ---------- outbound: English only (D58) ----------
+# The models downstream (online providers and the local ones) only understand English. A chat request whose LAST message is a user message in Telugu, Hindi or
+# romanized Telugu/Hindi is translated on THIS PC (a local model, never an online one) before it is redacted and forwarded; system prompts and
+# tool results are never touched (they are data: a Telugu sentence inside a tool result stays Telugu data). Earlier user turns and earlier replies that the face
+# resends in Telugu or Hindi are made English too (from the cache first, so only new text costs model time). The original goes nowhere: the body is rebuilt
+# from the whitelist below, so no field can carry it; the owner's record of it stays in a file on this PC (translate.keep_record). When the translator is
+# missing, slow or wrong the request goes on unchanged and the reply says so: X-Jarvis-Translated: skipped. JARVIS_TRANSLATE=0 turns the layer off.
+
+def _translate_module():
+    """The shared language layer, or None. Imported by name when `jarvis` is importable, else loaded by path; never raises."""
+    if os.environ.get("JARVIS_TRANSLATE", "1") == "0":
+        return None
+    try:
+        from jarvis.plugins._shared import translate as mod
+        return mod
+    except ImportError:
+        pass
+    try:
+        import importlib.util
+        if "jarvis_translate" in sys.modules:
+            return sys.modules["jarvis_translate"]
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "plugins", "_shared", "translate.py")
+        spec = importlib.util.spec_from_file_location("jarvis_translate", path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["jarvis_translate"] = mod
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:                                    # noqa: BLE001 - no language layer: the gateway works as before
+        sys.modules.pop("jarvis_translate", None)
+        return None
+
+
+def _text_of(content) -> str:
+    if isinstance(content, str):
+        return content
+    return " ".join(p.get("text", "") for p in (content or []) if isinstance(p, dict) and isinstance(p.get("text"), str))
+
+
+def translate_input(body, face: bool = False):
+    """(body, info) with the last user message in English. info is None when there is nothing to report (English, reply in English), else
+    {"status": "no"|"yes"|"skipped", "lang": language of the owner's last message, "reply": language the reply is shown in}.
+    Never raises, never blocks past the translator's own budget."""
+    mod = _translate_module()
+    if mod is None or not isinstance(body, dict) or not isinstance(body.get("messages"), list):
+        return body, None
+    try:
+        msgs = body["messages"]
+        new, res, hist = mod.english_messages_ex(msgs, source="gateway")
+        last_lang = res.source_lang if res is not None else "en"
+        if res is None:                                   # "match" follows the owner's last message, whichever turn it was
+            for m in reversed(msgs):
+                if isinstance(m, dict) and m.get("role") == "user":
+                    last_lang = mod.detect_language(_text_of(m.get("content")))
+                    break
+        out = dict(body)
+        did = hist["translated"] + (1 if res is not None and res.translated else 0)
+        left = hist["skipped"] + (1 if res is not None and not res.translated else 0)
+        if did:
+            out["messages"] = new
+        status = "skipped" if left else ("yes" if did else "no")
+        if new and isinstance(new[-1], dict) and new[-1].get("role") == "user":
+            if res is not None:
+                mod.apply_reply_language_intent(res.original)
+            mod.apply_reply_language_intent(_text_of(new[-1].get("content")))
+        reply = mod.target_for_reply(last_lang) if face else "en"
+        if status == "no" and reply == "en":
+            return out, None
+        return out, {"status": status, "lang": last_lang, "reply": reply, "mod": mod}
+    except Exception:                                    # noqa: BLE001 - the layer never breaks the gateway
+        with _lock:
+            STATS["translate_errors"] = STATS.get("translate_errors", 0) + 1
+        return body, {"status": "skipped", "lang": "?", "reply": "en", "mod": None}
+
+
+def _reply_event(data: str, st):
+    """One streamed chunk with its text converted to the owner's language, a finished sentence at a time (st: translate.SentenceTranslator).
+    None when the chunk became empty (its sentence is not finished yet)."""
+    try:
+        ev = json.loads(data)
+    except ValueError:
+        return data
+    if not isinstance(ev, dict):
+        return data
+    held = False
+    for ch in ev.get("choices") or []:
+        d = ch.get("delta") or {}
+        c = d.get("content")
+        if isinstance(c, str) and c:
+            d["content"] = st.feed(c)
+            held = held or not d["content"]
+        if ch.get("finish_reason"):
+            tail = st.flush()
+            if tail:
+                d["content"] = (d.get("content") or "") + tail
+        ch["delta"] = d
+    if held and "usage" not in ev and all(not (c.get("delta") or {}).get("content") and not (c.get("delta") or {}).get("tool_calls")
+                                         and not c.get("finish_reason") and not (c.get("delta") or {}).get("role") for c in ev.get("choices") or []):
+        return None
+    return json.dumps(ev, ensure_ascii=False)
+
+
+def _reply_json(obj, tinfo):
+    """A non-streamed reply whose message text is in the owner's language (only `content` text; never tool-call arguments)."""
+    mod = tinfo["mod"]
+    for ch in (obj.get("choices") or []) if isinstance(obj, dict) else []:
+        msg = ch.get("message") if isinstance(ch, dict) else None
+        if isinstance(msg, dict) and isinstance(msg.get("content"), str) and msg["content"].strip():
+            st = mod.SentenceTranslator(tinfo["reply"])
+            msg["content"] = st.feed(msg["content"]) + st.flush()
+            tinfo["reply_skipped"] = tinfo.get("reply_skipped") or st.skipped
+    return obj
+
+
 # ---------- outbound: redact ----------
 
 # Every role gets the full pass (patterns + PII model + Jev check), not only user/tool/function (audit MEM-M3, 2026-10-18):
@@ -645,6 +758,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(raw)))
+            self._lang_headers()
             self.end_headers()
             self.wfile.write(raw)
 
@@ -709,7 +823,17 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     STATS["inflight"] -= 1
                     STATS["last_call_end"] = time.time()
 
+        def _lang_headers(self):
+            ti = getattr(self, "_tinfo", None)
+            if not ti:
+                return
+            if ti["status"] in ("yes", "skipped"):
+                self.send_header("X-Jarvis-Translated", ti["status"])
+            if ti.get("reply", "en") != "en":
+                self.send_header("X-Jarvis-Reply-Language", ti["reply"] + (";skipped" if ti.get("reply_skipped") else ""))
+
         def _forward_inner(self, raw):
+            self._tinfo = None
             m = Mapping()
             body, stream = None, False
             if raw:
@@ -725,6 +849,11 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                         return self._json(503, {"error": {"message": "the privacy gateway is degraded (" + ", ".join(why) + "), so "
                                                                      "nothing was sent to the public model. Restore the PII model or "
                                                                      "use a local model."}})
+                    body, self._tinfo = translate_input(body, is_face(self.headers))
+                    if self._tinfo and self._tinfo["status"] in ("yes", "skipped"):
+                        with _lock:
+                            key = "translated" if self._tinfo["status"] == "yes" else "translate_skipped"
+                            STATS[key] = STATS.get(key, 0) + 1
                     try:
                         body = redact_body(body, red, m)
                     except GatewayRefusal as e:
@@ -874,18 +1003,23 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     self._relay_stream(resp, m, face)
                 else:
                     data = resp.read()
-                    if (m.to_value or face) and "json" in ctype:
+                    if (m.to_value or face or (getattr(self, "_tinfo", None) or {}).get("reply", "en") != "en") and "json" in ctype:
                         try:
                             obj = json.loads(data)
                             if face:
                                 obj = hide_reasoning_json(obj)
-                            data = json.dumps(restore_json(obj, m) if m.to_value else obj, ensure_ascii=False).encode("utf-8")
+                            obj = restore_json(obj, m) if m.to_value else obj
+                            ti = getattr(self, "_tinfo", None)
+                            if ti and ti.get("reply", "en") != "en" and ti.get("mod") is not None:
+                                obj = _reply_json(obj, ti)
+                            data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
                         except ValueError:
                             pass
                     self.send_response(resp.status)
                     self.send_header("Content-Type", ctype or "application/json")
                     self.send_header("Content-Length", str(len(data)))
                     self.send_header("X-Jarvis-Provider", provider)
+                    self._lang_headers()
                     self.end_headers()
                     self.wfile.write(data)
 
@@ -895,15 +1029,20 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Connection", "close")
+            self._lang_headers()
             self.end_headers()
             self.close_connection = True
             sse = SseRestorer(m, hide_reasoning=face)
+            ti = getattr(self, "_tinfo", None)
+            conv = ti["mod"].SentenceTranslator(ti["reply"]) if ti and ti.get("reply", "en") != "en" and ti.get("mod") is not None else None
             quiet_since = time.time()
             try:
                 for line in resp:
                     text = line.decode("utf-8", "replace")
                     if text.startswith("data:"):
                         out = sse.event(text[5:].strip())
+                        if conv is not None and out is not None and out.strip() != "[DONE]":
+                            out = _reply_event(out, conv)           # the owner's language, a finished sentence at a time (D58)
                         if out is None:                              # only the model's reasoning: nothing to show the owner
                             if time.time() - quiet_since >= STREAM_KEEPALIVE_S:
                                 self.wfile.write(b": still working\n")      # an SSE comment: readers skip it, nothing times the stream out

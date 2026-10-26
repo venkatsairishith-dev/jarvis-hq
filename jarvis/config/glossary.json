@@ -1,0 +1,8 @@
+{
+  "_note": "D58: names and terms the language layer NEVER translates (masked before translation, restored after). The owner extends this file or says 'never translate <word>'. Matching is whole-word and case-insensitive. Add your own name and your family's names under owner_names and family_names exactly as you write them (Latin and Telugu/Hindi script spellings both).",
+  "terms": ["JARVIS", "Hermes", "Hermes Agent", "llama-swap", "Parakeet", "IndicTrans2", "Kokoro", "Piper", "Playwright", "OmniRoute", "Dahl", "Groq", "Cerebras"],
+  "apps": ["Notepad", "Calculator", "Chrome", "Spotify", "WhatsApp", "Telegram", "Excel", "Word", "PowerPoint", "Paint", "File Explorer", "VS Code"],
+  "owner_names": [],
+  "family_names": [],
+  "places": []
+}

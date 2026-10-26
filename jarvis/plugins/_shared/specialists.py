@@ -22,7 +22,7 @@ from pathlib import Path
 JARVIS = Path(__file__).resolve().parents[2]
 TABLE_FILE = JARVIS / "config" / "specialists.json"
 SWAP_FILE = JARVIS / "local_models" / "llama-swap.yaml"
-KINDS = ("reason", "ui_decide", "screen_read", "screen_locate", "doc_read", "chat_simple")
+KINDS = ("reason", "ui_decide", "screen_read", "screen_locate", "doc_read", "chat_simple", "translate")
 _ALIAS = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]{0,63}$")
 _KIND = re.compile(r"^[a-z][a-z_]{1,30}$")
 
@@ -52,6 +52,7 @@ BUILT_IN = {
     "screen_locate": {"where": "local", "alias": "vision-ground", "fallback": "vision", "max_tokens": 200},
     "doc_read": {"where": "local", "alias": "lightonocr-docreader", "fallback": "ocr-docs", "max_tokens": 1800},
     "chat_simple": {"where": "local", "alias": "local-chat", "fallback": "general", "max_tokens": 400},
+    "translate": {"where": "local", "alias": "decider", "fallback": "local-chat", "max_tokens": 400},
 }
 
 

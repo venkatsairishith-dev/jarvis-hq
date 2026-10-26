@@ -1,0 +1,57 @@
+{"_meta": "D58 eval set. 56 PC-task sentences in Telugu script (te), Hindi script (hi), romanized Telugu (te-Latn, 'Tenglish'), romanized Hindi (hi-Latn, 'Hinglish') and English mixed with Telugu script (mixed), each with a reference English. WRITTEN BY CLAUDE, 2026-10-26, NOT CHECKED BY A NATIVE SPEAKER: the owner (or a Telugu/Hindi speaker) must review the sentences and the references before any score from this file is trusted. The romanized spellings are one common way of writing; real typing varies more. Tasks: open_app, type_text, save_file, delete_file, clean_up, show_screen, weather, play_song, set_reminder, volume, window, stop, open_folder, open_file."}
+{"id": "te-01", "lang": "te", "task": "open_app", "text": "నోట్‌ప్యాడ్ ఓపెన్ చేయి", "english": "Open Notepad"}
+{"id": "te-02", "lang": "te", "task": "open_app", "text": "క్రోమ్ తెరిచి యూట్యూబ్ ఓపెన్ చేయి", "english": "Open Chrome and open YouTube"}
+{"id": "te-03", "lang": "te", "task": "type_text", "text": "నోట్‌ప్యాడ్‌లో షాపింగ్ లిస్ట్ రాయి", "english": "Type a shopping list in Notepad"}
+{"id": "te-04", "lang": "te", "task": "save_file", "text": "ఈ ఫైల్‌ను డెస్క్‌టాప్‌లో సేవ్ చేయి", "english": "Save this file on the Desktop"}
+{"id": "te-05", "lang": "te", "task": "delete_file", "text": "డౌన్‌లోడ్స్ ఫోల్డర్‌లో పాత ఫైళ్లను తొలగించు", "english": "Delete the old files in the Downloads folder"}
+{"id": "te-06", "lang": "te", "task": "clean_up", "text": "నా కంప్యూటర్‌ను క్లీన్ చేయి, టెంపరరీ ఫైళ్లు తీసేయి", "english": "Clean up my computer and remove the temporary files"}
+{"id": "te-07", "lang": "te", "task": "show_screen", "text": "నా స్క్రీన్ మీద ఏముందో చూపించు", "english": "Show me what is on my screen"}
+{"id": "te-08", "lang": "te", "task": "weather", "text": "ఈ రోజు హైదరాబాద్‌లో వాతావరణం ఎలా ఉంది?", "english": "What is the weather in Hyderabad today?"}
+{"id": "te-09", "lang": "te", "task": "play_song", "text": "ఒక తెలుగు పాట ప్లే చేయి", "english": "Play a Telugu song"}
+{"id": "te-10", "lang": "te", "task": "set_reminder", "text": "రేపు ఉదయం ఏడు గంటలకు నాకు గుర్తు చేయి", "english": "Remind me tomorrow morning at seven o'clock"}
+{"id": "te-11", "lang": "te", "task": "open_app", "text": "కాలిక్యులేటర్ తెరిచి 25 ను 4 తో గుణించు", "english": "Open Calculator and multiply 25 by 4"}
+{"id": "te-12", "lang": "te", "task": "volume", "text": "సౌండ్ తగ్గించు", "english": "Turn the volume down"}
+{"id": "te-13", "lang": "te", "task": "window", "text": "ఈ విండోను మినిమైజ్ చేయి", "english": "Minimize this window"}
+{"id": "te-14", "lang": "te", "task": "open_folder", "text": "నా డౌన్‌లోడ్స్ ఫోల్డర్ తెరువు", "english": "Open my Downloads folder"}
+{"id": "te-15", "lang": "te", "task": "stop", "text": "ఈ పని ఆపు", "english": "Stop this task"}
+{"id": "hi-01", "lang": "hi", "task": "open_app", "text": "नोटपैड खोलो", "english": "Open Notepad"}
+{"id": "hi-02", "lang": "hi", "task": "open_app", "text": "क्रोम खोलकर यूट्यूब खोलो", "english": "Open Chrome and open YouTube"}
+{"id": "hi-03", "lang": "hi", "task": "type_text", "text": "नोटपैड में शॉपिंग लिस्ट लिखो", "english": "Type a shopping list in Notepad"}
+{"id": "hi-04", "lang": "hi", "task": "save_file", "text": "इस फ़ाइल को डेस्कटॉप पर सेव करो", "english": "Save this file on the Desktop"}
+{"id": "hi-05", "lang": "hi", "task": "delete_file", "text": "डाउनलोड फ़ोल्डर की पुरानी फ़ाइलें डिलीट करो", "english": "Delete the old files in the Downloads folder"}
+{"id": "hi-06", "lang": "hi", "task": "clean_up", "text": "मेरे कंप्यूटर को साफ़ करो और अस्थायी फ़ाइलें हटाओ", "english": "Clean up my computer and remove the temporary files"}
+{"id": "hi-07", "lang": "hi", "task": "show_screen", "text": "मेरी स्क्रीन पर क्या है दिखाओ", "english": "Show me what is on my screen"}
+{"id": "hi-08", "lang": "hi", "task": "weather", "text": "आज दिल्ली में मौसम कैसा है?", "english": "What is the weather in Delhi today?"}
+{"id": "hi-09", "lang": "hi", "task": "play_song", "text": "एक हिंदी गाना चलाओ", "english": "Play a Hindi song"}
+{"id": "hi-10", "lang": "hi", "task": "set_reminder", "text": "कल सुबह सात बजे मुझे याद दिलाओ", "english": "Remind me tomorrow morning at seven o'clock"}
+{"id": "hi-11", "lang": "hi", "task": "open_app", "text": "कैलकुलेटर खोलो और 25 को 4 से गुणा करो", "english": "Open Calculator and multiply 25 by 4"}
+{"id": "hi-12", "lang": "hi", "task": "volume", "text": "आवाज़ कम करो", "english": "Turn the volume down"}
+{"id": "hi-13", "lang": "hi", "task": "window", "text": "यह विंडो छोटी करो", "english": "Minimize this window"}
+{"id": "hi-14", "lang": "hi", "task": "open_folder", "text": "मेरा डाउनलोड फ़ोल्डर खोलो", "english": "Open my Downloads folder"}
+{"id": "tl-01", "lang": "te-Latn", "task": "type_text", "text": "notepad open chesi shopping list rayi", "english": "Open Notepad and write a shopping list"}
+{"id": "tl-02", "lang": "te-Latn", "task": "play_song", "text": "chrome open chesi youtube lo oka song play cheyyi", "english": "Open Chrome and play a song on YouTube"}
+{"id": "tl-03", "lang": "te-Latn", "task": "save_file", "text": "ee file ni desktop lo save cheyyi", "english": "Save this file on the Desktop"}
+{"id": "tl-04", "lang": "te-Latn", "task": "delete_file", "text": "downloads folder lo pata files anni delete cheyyi", "english": "Delete all the old files in the Downloads folder"}
+{"id": "tl-05", "lang": "te-Latn", "task": "clean_up", "text": "na computer ni clean cheyyi, temporary files teeseyyi", "english": "Clean up my computer and remove the temporary files"}
+{"id": "tl-06", "lang": "te-Latn", "task": "show_screen", "text": "na screen meeda emundo chupinchu", "english": "Show me what is on my screen"}
+{"id": "tl-07", "lang": "te-Latn", "task": "weather", "text": "ivala Hyderabad lo weather ela undi?", "english": "What is the weather in Hyderabad today?"}
+{"id": "tl-08", "lang": "te-Latn", "task": "play_song", "text": "oka Telugu song play cheyyi", "english": "Play a Telugu song"}
+{"id": "tl-09", "lang": "te-Latn", "task": "set_reminder", "text": "repu udayam 7 gantalaku naaku reminder pettu", "english": "Set a reminder for me tomorrow morning at 7 o'clock"}
+{"id": "tl-10", "lang": "te-Latn", "task": "open_app", "text": "calculator open chesi 25 ni 4 tho guninchu", "english": "Open Calculator and multiply 25 by 4"}
+{"id": "tl-11", "lang": "te-Latn", "task": "volume", "text": "volume taggichu", "english": "Turn the volume down"}
+{"id": "tl-12", "lang": "te-Latn", "task": "window", "text": "ee window ni minimize cheyyi", "english": "Minimize this window"}
+{"id": "tl-13", "lang": "te-Latn", "task": "open_file", "text": "nenu 'budget.xlsx' file open cheyali", "english": "I need to open the file 'budget.xlsx'"}
+{"id": "hl-01", "lang": "hi-Latn", "task": "type_text", "text": "notepad kholo aur shopping list likho", "english": "Open Notepad and write a shopping list"}
+{"id": "hl-02", "lang": "hi-Latn", "task": "save_file", "text": "yeh file desktop par save karo", "english": "Save this file on the Desktop"}
+{"id": "hl-03", "lang": "hi-Latn", "task": "delete_file", "text": "downloads folder ki purani files delete karo", "english": "Delete the old files in the Downloads folder"}
+{"id": "hl-04", "lang": "hi-Latn", "task": "clean_up", "text": "mere computer ko saaf karo aur temporary files hatao", "english": "Clean up my computer and remove the temporary files"}
+{"id": "hl-05", "lang": "hi-Latn", "task": "show_screen", "text": "meri screen par kya hai dikhao", "english": "Show me what is on my screen"}
+{"id": "hl-06", "lang": "hi-Latn", "task": "weather", "text": "aaj Delhi mein mausam kaisa hai?", "english": "What is the weather in Delhi today?"}
+{"id": "hl-07", "lang": "hi-Latn", "task": "play_song", "text": "ek Hindi gaana chalao", "english": "Play a Hindi song"}
+{"id": "hl-08", "lang": "hi-Latn", "task": "set_reminder", "text": "kal subah 7 baje mujhe yaad dilao", "english": "Remind me tomorrow morning at 7 o'clock"}
+{"id": "hl-09", "lang": "hi-Latn", "task": "open_app", "text": "calculator kholo aur 25 ko 4 se guna karo", "english": "Open Calculator and multiply 25 by 4"}
+{"id": "hl-10", "lang": "hi-Latn", "task": "volume", "text": "awaaz kam karo", "english": "Turn the volume down"}
+{"id": "mx-01", "lang": "mixed", "task": "type_text", "text": "open Notepad మరియు shopping list రాయి", "english": "Open Notepad and type the shopping list"}
+{"id": "mx-02", "lang": "mixed", "task": "play_song", "text": "Chrome లో YouTube ఓపెన్ చేసి ఒక song play చేయి", "english": "Open YouTube in Chrome and play a song"}
+{"id": "mx-03", "lang": "mixed", "task": "save_file", "text": "save this file as 'notes.txt' డెస్క్‌టాప్‌లో", "english": "Save this file as 'notes.txt' on the Desktop"}
+{"id": "mx-04", "lang": "mixed", "task": "delete_file", "text": "Delete the file C:\\Temp\\old.txt దయచేసి", "english": "Please delete the file C:\\Temp\\old.txt"}

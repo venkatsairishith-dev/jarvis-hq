@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import gateway
+from . import gateway, lang
 from .scrub import scrub
 
 MAX_IN = 2000
@@ -222,10 +222,18 @@ class Bridge:
         if cmd == "/resume":
             return self.say("Lifting the kill switch needs the kernel console, not Telegram.")
         if cmd == "/ask":
-            return self.ask(arg)
+            return self.ask(self.english(arg))
         if cmd.startswith("/"):
             return self.say("Unknown command. Try /help.")
-        return self.agent_turn(text.strip()) if self.agent else self.ask(text.strip())
+        return self.agent_turn(self.english(text.strip())) if self.agent else self.ask(self.english(text.strip()))
+
+    def english(self, text: str) -> str:
+        """D58: Hermes and its models read English only. English passes untouched; Telugu, Hindi or Tenglish is translated here only when a LOCAL translator is
+        enabled on this server (JARVIS_TRANSLATE_KERNEL=local, default off), else it goes on as written and the audit log says "skipped" (never an online translator)."""
+        out, status = lang.english_for_agent(text, source="telegram")
+        if status != "no":
+            self.k.audit.append("tg_translate", {"status": status})
+        return out
 
     # ---------- commands ----------
     def status(self):
