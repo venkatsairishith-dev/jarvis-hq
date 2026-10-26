@@ -976,3 +976,68 @@ class ProviderConcurrencyLimit(unittest.TestCase):
         [t.join() for t in ts]
         self.assertEqual(codes, [200, 200])
         self.assertEqual(state["peak"], 1)
+
+
+class StreamedAnswersAreJudgedBeforeTheCallerSeesThem(unittest.TestCase):
+    """2026-10-26 (on-screen bench): Dahl delivered 'Unterminated string' as an error event inside a 200 stream, MiniMax a final answer of nothing.
+    The gateway reads the start of the stream and moves on to the next provider instead of handing the caller a dead end."""
+
+    GOOD = [b'data: {"choices":[{"index":0,"delta":{"content":"hello"}}]}\n', b"\n", b"data: [DONE]\n", b"\n"]
+    ERROR = [b'data: {"error":{"message":"Unterminated string starting at: line 1 column 104"}}\n', b"\n"]
+    EMPTY = [b'data: {"choices":[{"index":0,"delta":{"role":"assistant","content":""}}]}\n', b"\n", b"data: [DONE]\n", b"\n"]
+
+    def run_case(self, first_lines, messages):
+        seen = {"first": 0, "local": 0}
+
+        def handler_for(name, lines):
+            class H(BaseHTTPRequestHandler):
+                def log_message(self, *a):
+                    pass
+
+                def do_POST(self):
+                    self.rfile.read(int(self.headers["Content-Length"]))
+                    seen[name] += 1
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    for ln in lines:
+                        self.wfile.write(ln)
+                    self.wfile.flush()
+            return H
+        servers = []
+        for name, lines in (("first", first_lines), ("local", self.GOOD)):
+            sv = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(name, lines))
+            threading.Thread(target=sv.serve_forever, daemon=True).start()
+            servers.append(sv)
+        self.addCleanup(lambda: [(sv.shutdown(), sv.server_close()) for sv in servers])
+        provs = [{"name": "first", "enabled": True, "base_url": f"http://127.0.0.1:{servers[0].server_address[1]}/v1"},
+                 {"name": "local", "enabled": True, "local": True, "model": "local-chat", "base_url": f"http://127.0.0.1:{servers[1].server_address[1]}/v1"}]
+        gateway._cooldown.clear()
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 10, 60.0)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        req = urllib.request.Request(f"http://127.0.0.1:{gw.server_address[1]}/v1/chat/completions", method="POST", headers={"Content-Type": "application/json"},
+                                     data=json.dumps({"model": "x", "stream": True, "messages": messages}).encode())
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.read().decode(), seen
+
+    def test_an_error_event_inside_a_200_stream_moves_on_to_the_next_provider(self):
+        body, seen = self.run_case(self.ERROR, [{"role": "user", "content": "hi"}])
+        self.assertIn("hello", body)
+        self.assertEqual((seen["first"], seen["local"]), (1, 1))
+
+    def test_an_empty_final_answer_after_a_tool_result_moves_on(self):
+        msgs = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": None, "tool_calls": [{"id": "1", "type": "function", "function": {"name": "f", "arguments": "{}"}}]},
+                {"role": "tool", "tool_call_id": "1", "content": "ok"}]
+        body, seen = self.run_case(self.EMPTY, msgs)
+        self.assertIn("hello", body)
+        self.assertEqual((seen["first"], seen["local"]), (1, 1))
+
+    def test_a_good_stream_is_relayed_untouched_and_the_next_provider_is_not_asked(self):
+        body, seen = self.run_case(self.GOOD, [{"role": "user", "content": "hi"}])
+        self.assertIn("hello", body)
+        self.assertEqual((seen["first"], seen["local"]), (1, 0))

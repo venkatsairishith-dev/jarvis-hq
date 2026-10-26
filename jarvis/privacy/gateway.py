@@ -375,6 +375,57 @@ def hide_reasoning_json(obj):
     return obj
 
 
+class ReplayResponse:
+    """A streamed provider answer whose first lines were already read: they come out again, then the rest."""
+
+    def __init__(self, resp, head):
+        self._r, self._head = resp, head
+        self.status, self.headers = resp.status, resp.headers
+
+    def __iter__(self):
+        yield from self._head
+        yield from self._r
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self._r.close()
+        return False
+
+
+def peek_stream(resp, whole: bool = False) -> tuple[list, str]:
+    """Read a provider's SSE answer far enough to judge it: ("ok") once content or a tool call arrives (or, with `whole`, the stream ended with some),
+    ("error") when an event is an error object, ("empty") when the stream ends with neither content nor a tool call. Returns the lines read."""
+    head, ok = [], False
+    try:
+        for line in resp:
+            head.append(line)
+            text = line.decode("utf-8", "replace")
+            if not text.startswith("data:"):
+                continue
+            payload = text[5:].strip()
+            if payload == "[DONE]":
+                break
+            try:
+                ev = json.loads(payload)
+            except ValueError:
+                continue
+            if not isinstance(ev, dict):
+                continue
+            if ev.get("error") and not ev.get("choices"):
+                return head, "error"
+            for ch in ev.get("choices") or []:
+                d = ch.get("delta") or {}
+                if d.get("content") or d.get("tool_calls"):
+                    ok = True
+            if ok and not whole:
+                break
+    except (OSError, ValueError):
+        return head, "error" if not ok else "ok"
+    return head, "ok" if ok else "empty"
+
+
 class SseRestorer:
     """Restores placeholders inside streamed chat deltas. One StreamRestorer per (choice, field).
 
@@ -794,6 +845,16 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                         with _lock:
                             STATS["errors"] += 1
                         return self._json(502, {"error": {"message": "no model provider answered: " + "; ".join(tried)}})
+                    if stream and not last and "text/event-stream" in (resp.headers.get("Content-Type") or ""):
+                        # Dahl delivered its tool-parser error INSIDE a 200 stream ("Unterminated string"), MiniMax a final answer of nothing (face, 2026-10-26):
+                        # look at the stream before the caller sees any of it, and move on to the next provider when it is an error or empty.
+                        after_tool = isinstance(body, dict) and bool(body.get("messages")) and isinstance(body["messages"][-1], dict) and body["messages"][-1].get("role") == "tool"
+                        head, verdict = peek_stream(resp, whole=after_tool)
+                        if verdict != "ok":
+                            tried.append(f"{prov['name']}: stream {verdict}")
+                            resp.close()
+                            continue
+                        resp = ReplayResponse(resp, head)
                     with _lock:
                         STATS.setdefault("by_provider", {})[prov["name"]] = STATS.setdefault("by_provider", {}).get(prov["name"], 0) + 1
                     self._answer(resp, stream, m, prov["name"], face)
