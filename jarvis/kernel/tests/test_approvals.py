@@ -170,7 +170,7 @@ class Approvals(unittest.TestCase):
 
     def test_the_owners_own_requests_carry_no_requester_and_still_work(self):
         """The owner-direct paths (owner.pc) are unchanged: an approval the owner asked for himself is bound to no agent."""
-        body = {"op": "ui", "action": "type", "target": "notepad|Edit", "text": "delete the draft"}     # a consequential word: the owner approves it
+        body = {"op": "ui", "action": "click", "target": "notepad|Delete draft", "text": ""}     # a consequential word on the control (typed text is content since D54): the owner approves it
         code, r = self.call("POST", "/v1/jarvis/owner/pc", body, self.owner)
         self.assertEqual(r["status"], "needs_approval")
         aid = r["approval_id"]

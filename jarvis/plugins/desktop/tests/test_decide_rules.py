@@ -53,7 +53,8 @@ def test_typing_rules_keep_the_app_name_clean_and_the_order_right():
     p = v("open wordpad and write dear sir", {"tool": "open_app", "app": "wordpad"})
     assert [s["tool"] for s in p.steps] == ["open_app", "type_text"] and p.steps[1]["text"] == "dear sir"
     p = v("write dear sir into wordpad and save it", {"tool": "open_app", "app": "wordpad"}, {"tool": "press_key", "app": "wordpad", "key": "ctrl+s"})
-    assert [s["tool"] for s in p.steps] == ["open_app", "type_text", "press_key"]
+    # D54 (2026-10-26): "save it" after typing is save_as (Save As + file name + Save, verified on disk), not a bare ctrl+s that only opens a dialog
+    assert [s["tool"] for s in p.steps] == ["open_app", "type_text", "save_as"] and p.steps[2]["folder"] == "Documents"
     assert [s["tool"] for s in v("put on some Ilaiyaraaja music on youtube", {"tool": "play_media", "query": "Ilaiyaraaja music"}).steps] == ["play_media"]
 
 

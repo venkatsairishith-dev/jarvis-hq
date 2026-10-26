@@ -109,6 +109,7 @@ def _run(script, env):
             print("UI-DEBUG:", text.strip()[:400], file=sys.stderr)
         code =next((c for c in REASONS if c in text), "other")
         raise RuntimeError("ui-action-failed:" + code)
+    return r.stdout or ""                                      # a script may report what it observed on its last line (type_focused)
 
 
 def launch(target, params):
@@ -187,6 +188,12 @@ MEDIA_KEY = WIN32 + r"""
 $vk = [byte]([int]$env:JARVIS_UI_VK)
 [W32]::keybd_event($vk, 0, 0, [UIntPtr]::Zero); [W32]::keybd_event($vk, 0, 2, [UIntPtr]::Zero)
 """
+GLOBAL_KEY = WIN32 + r"""
+$pairs = $env:JARVIS_UI_VKS.Split(',') | ForEach-Object { $p = $_.Split(':'); ,@([byte][int]$p[0], [int]$p[1]) }
+foreach ($p in $pairs) { [W32]::keybd_event($p[0], 0, $p[1], [UIntPtr]::Zero) }
+[array]::Reverse($pairs)
+foreach ($p in $pairs) { [W32]::keybd_event($p[0], 0, ($p[1] -bor 2), [UIntPtr]::Zero) }
+"""
 SCROLL = FOCUS + r"""
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $root = [System.Windows.Automation.AutomationElement]::FromHandle($h)
@@ -216,11 +223,33 @@ if ($x -ge $r.R -or $y -ge $r.B) { throw 'point outside the window' }
 [void][W32]::SetCursorPos($x, $y)
 [W32]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero); [W32]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
 """
+# close (D54): the polite close, WM_CLOSE to the picked window - the app asks about unsaved work itself, so nothing is ever force-killed. The script
+# says whether the window is gone a moment later; a window that is still there is an app asking something (an unsaved document): left for the owner.
+CLOSE = FOCUS + r"""
+Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class CW { [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l); [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h); }'
+[void][CW]::PostMessage($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+Start-Sleep -Milliseconds 1500
+"JARVIS_CLOSED:" + (-not [CW]::IsWindow($h))
+"""
+# drag (D54, any task: drawing, selecting, moving a slider): press at one point of the window, move to another in a few steps, release. Points are in the
+# window's own pixels and must lie inside it, like click_at.
+DRAG = FOCUS + r"""
+$r = New-Object W32+RECT; [void][W32]::GetWindowRect($h, [ref]$r)
+$a = $env:JARVIS_UI_PTS -split ','
+$x1 = $r.L + [int]$a[0]; $y1 = $r.T + [int]$a[1]; $x2 = $r.L + [int]$a[2]; $y2 = $r.T + [int]$a[3]
+foreach ($pt in @(@($x1, $y1), @($x2, $y2))) { if ($pt[0] -ge $r.R -or $pt[1] -ge $r.B) { throw 'point outside the window' } }
+[void][W32]::SetCursorPos($x1, $y1); Start-Sleep -Milliseconds 60
+[W32]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+for ($i = 1; $i -le 12; $i++) { [void][W32]::SetCursorPos([int]($x1 + ($x2 - $x1) * $i / 12), [int]($y1 + ($y2 - $y1) * $i / 12)); Start-Sleep -Milliseconds 15 }
+[W32]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+"""
 REASONS = REASONS + ("point outside the window",)
 SENDKEYS = {"enter": "{ENTER}", "tab": "{TAB}", "esc": "{ESC}", "escape": "{ESC}", "space": " ", "backspace": "{BS}",
             "delete": "{DEL}", "up": "{UP}", "down": "{DOWN}", "left": "{LEFT}", "right": "{RIGHT}", "home": "{HOME}",
             "end": "{END}", "pageup": "{PGUP}", "pagedown": "{PGDN}", **{f"f{i}": "{F%d}" % i for i in range(1, 13)}}
 MODS = {"ctrl": "^", "alt": "%", "shift": "+"}
+# D54 (simple tasks): a few Windows shortcuts that go to the desktop, not to a window: target "desktop|". Only these, fixed; the flag 1 marks the arrows as extended keys.
+GLOBAL_KEYS = {"win+d": "91:0,68:0", "win+m": "91:0,77:0", "win+left": "91:0,37:1", "win+right": "91:0,39:1", "win+up": "91:0,38:1", "win+down": "91:0,40:1"}
 MEDIA_KEYS = {"playpause": 0xB3, "nexttrack": 0xB0, "prevtrack": 0xB1, "stop": 0xB2, "volumeup": 0xAF, "volumedown": 0xAE, "mute": 0xAD}
 
 
@@ -253,6 +282,10 @@ def focus(target, params):
 
 def key(target, params):
     chord = str(params.get("text", "")).strip().lower()
+    if chord in GLOBAL_KEYS:                               # win+d, win+left ...: to the desktop (target "desktop|"), nothing else may carry the Windows key
+        if _proc(target).lower() != "desktop":
+            raise ValueError("bad key")
+        return _run(GLOBAL_KEY, {"JARVIS_UI_VKS": GLOBAL_KEYS[chord]})
     if chord in MEDIA_KEYS:                                # media keys go to whatever is playing: no window needed
         return _run(MEDIA_KEY, {"JARVIS_UI_VK": str(MEDIA_KEYS[chord])})
     _run(KEY, {"JARVIS_UI_PROC": _proc(target), "JARVIS_UI_KEYS": sendkeys(chord)})
@@ -266,12 +299,121 @@ def scroll(target, params):
     _run(SCROLL, {"JARVIS_UI_PROC": _proc(proc), "JARVIS_UI_ELEM": elem[:120], "JARVIS_UI_DIR": direction})
 
 
+def close(target, params):
+    out = _run(CLOSE, {"JARVIS_UI_PROC": _proc(target)})
+    return {"closed": "JARVIS_CLOSED:True" in (out or ""), **({"observed": "the window closed"} if "JARVIS_CLOSED:True" in (out or "") else {})}
+
+
+def drag(target, params):
+    proc, _, pts = target.partition("|")
+    m = re.fullmatch(r"(\d{1,5}),(\d{1,5}),(\d{1,5}),(\d{1,5})", pts)
+    if not m:
+        raise ValueError("bad points")
+    _run(DRAG, {"JARVIS_UI_PROC": _proc(proc), "JARVIS_UI_PTS": ",".join(m.groups())})
+
+
 def click_at(target, params):
     proc, _, point = target.partition("|")
     m = re.fullmatch(r"(\d{1,5}),(\d{1,5})", point)
     if not m:
         raise ValueError("bad point")
     _run(CLICK_AT, {"JARVIS_UI_PROC": _proc(proc), "JARVIS_UI_X": m.group(1), "JARVIS_UI_Y": m.group(2)})
+
+
+# ---- D54 (2026-10-26): "a save is part of the request". Two composite actions, each ONE kernel job and ONE verified step -------------------------
+# type_focused: put text into whatever has the keyboard focus in the target window, by pasting it (the clipboard's text is put back afterwards).
+# Used for editors UI Automation cannot fill by value (VS Code's Monaco) and for text longer than a value-set. Keystrokes would trigger Monaco's
+# auto-closing brackets and auto-indent and so change the code; a paste inserts it as it is. After the paste the focused control is read back
+# when UI Automation can (Notepad); Monaco cannot be read, so the step then says "not observed" and the save's disk read-back is the proof.
+TYPE_FOCUSED = FOCUS + r"""
+Add-Type -AssemblyName System.Windows.Forms, UIAutomationClient, UIAutomationTypes
+$text = $env:JARVIS_UI_TEXT
+$had = $false; $old = $null
+try { $old = Get-Clipboard -Raw -ErrorAction Stop; $had = ($old -is [string]) } catch { }
+try {
+  Set-Clipboard -Value $text -ErrorAction Stop
+  Start-Sleep -Milliseconds 150
+  $fpid = 0; [void][W32]::GetWindowThreadProcessId([W32]::GetForegroundWindow(), [ref]$fpid)
+  if ($fpid -ne $p.Id) { throw 'target is not the foreground window' }      # re-checked right before the keys go out
+  [System.Windows.Forms.SendKeys]::SendWait('^v')
+  Start-Sleep -Milliseconds 400
+} catch { if ("$_" -like '*foreground*') { throw 'target is not the foreground window' }; throw 'clipboard paste failed' }
+finally { if ($had) { try { Set-Clipboard -Value $old } catch { } } }
+$seen = 'none'
+try {
+  $fe = [System.Windows.Automation.AutomationElement]::FocusedElement; $pat = $null; $have = $null
+  if ($fe -and $fe.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$pat)) { $have = $pat.DocumentRange.GetText(-1) }
+  elseif ($fe -and $fe.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pat)) { $have = $pat.Current.Value }
+  if ($have -ne $null) {
+    $norm = { param($t) ([regex]::Replace([string]$t, '\s+', ' ')).Trim() }
+    $tail = & $norm $text; if ($tail.Length -gt 60) { $tail = $tail.Substring($tail.Length - 60) }
+    if ((& $norm $have).Contains($tail)) { $seen = 'read back' } else { throw 'text not in field' }
+  }
+} catch { if ("$_" -like '*text not in field*') { throw 'text not in field' } }
+"JARVIS_TYPED:" + $seen
+"""
+# save_as: Save As (ctrl+shift+s, never plain ctrl+s: ctrl+s on a document that already has a name would silently overwrite it), fill the file
+# name box of the Save As dialog with the full path, press its Save button, and look at what happens. A "Confirm Save As" / replace prompt gets
+# the NO button and the dialog is cancelled: this script never presses Yes. The path was chosen by savefile.py to be a name that does not exist.
+SAVE_AS = FOCUS + r"""
+Add-Type -AssemblyName System.Windows.Forms, UIAutomationClient, UIAutomationTypes
+$AE = [System.Windows.Automation.AutomationElement]; $TS = [System.Windows.Automation.TreeScope]
+$PC = [System.Windows.Automation.PropertyCondition]; $CT = [System.Windows.Automation.ControlType]
+$path = $env:JARVIS_SAVE_PATH; $mainH = [int64]$h; $mypid = $p.Id
+if (Test-Path -LiteralPath $path) { throw 'path exists' }                    # nothing is ever saved over an existing file
+function Get-Dialogs {
+  $r = @()
+  foreach ($w in $AE::RootElement.FindAll($TS::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+    if ($w.Current.ProcessId -eq $mypid -and [int64]$w.Current.NativeWindowHandle -ne $mainH) { $r += $w } }
+  $main = $AE::FromHandle([IntPtr]$mainH)
+  foreach ($d in $main.FindAll($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::ClassNameProperty, '#32770')))) { $r += $d }
+  $r
+}
+function Find-Button($dlg, $ids, $names) {
+  foreach ($b in $dlg.FindAll($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, $CT::Button)))) {
+    if ($ids -contains $b.Current.AutomationId -or $names -contains ($b.Current.Name -replace '&', '')) { return $b } }
+  return $null
+}
+function Press($b) { $ip = $null; if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$ip)) { $ip.Invoke() } else { throw 'no save button' } }
+$before = @(Get-Dialogs | ForEach-Object { [int64]$_.Current.NativeWindowHandle })
+[System.Windows.Forms.SendKeys]::SendWait('^+s')                              # Save As...
+$dlg = $null
+for ($i = 0; $i -lt 40 -and -not $dlg; $i++) {
+  Start-Sleep -Milliseconds 250
+  $dlg = @(Get-Dialogs | Where-Object { $before -notcontains [int64]$_.Current.NativeWindowHandle -and $_.Current.Name -match '(?i)^save' })[0]
+}
+if (-not $dlg) { throw 'no save dialog' }
+$dlgH = [int64]$dlg.Current.NativeWindowHandle
+$edit = $dlg.FindFirst($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::AutomationIdProperty, '1001')))      # the file name box of the common dialog
+if (-not $edit) { $edit = @($dlg.FindAll($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, $CT::Edit))) | Where-Object { $_.Current.Name -match '(?i)file name' })[0] }
+if (-not $edit) { throw 'no file name box' }
+$vp = $null
+if (-not $edit.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$vp)) { throw 'no file name box' }
+$vp.SetValue($path)
+if ($vp.Current.Value -ne $path) { throw 'no file name box' }
+$save = Find-Button $dlg @('1') @('Save')
+if (-not $save) { throw 'no save button' }
+function Cancel-Save { $c = Find-Button $dlg @('2') @('Cancel'); if ($c) { try { Press $c } catch { } } }
+Press $save
+$ended = $false
+for ($i = 0; $i -lt 28 -and -not $ended; $i++) {
+  Start-Sleep -Milliseconds 250
+  $now = @(Get-Dialogs)
+  $other = @($now | Where-Object { $before -notcontains [int64]$_.Current.NativeWindowHandle -and [int64]$_.Current.NativeWindowHandle -ne $dlgH })
+  if ($other.Count -gt 0) {                                                      # a prompt on top of the dialog: replace? an error?
+    $q = $other[0]; $said = ($q.Current.Name + ' ' + (($q.FindAll($TS::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name }) -join ' '))
+    $no = Find-Button $q @() @('No', 'Cancel'); $ok = Find-Button $q @() @('OK')
+    if ($no) { try { Press $no } catch { } } elseif ($ok) { try { Press $ok } catch { } }
+    Start-Sleep -Milliseconds 300; Cancel-Save
+    if ($said -match '(?i)already exists|replace|overwrite|confirm save as') { throw 'replace prompt' }
+    throw 'save dialog error'
+  }
+  if (-not ($now | Where-Object { [int64]$_.Current.NativeWindowHandle -eq $dlgH })) { $ended = $true }
+}
+if (-not $ended) { Cancel-Save; throw 'save dialog error' }
+"""
+REASONS = REASONS + ("path exists", "no save dialog", "no file name box", "no save button", "replace prompt", "save dialog error",
+                     "clipboard paste failed")
 
 
 WINDOW_STATE = WIN32 + r"""
@@ -316,9 +458,29 @@ if (-not $p) {
 }
 if (-not $p) { throw 'no window' }
 """
-FIND, CLICK, TYPE, READBACK, FOCUS, KEY, SCROLL, CLICK_AT, WINDOW_STATE = (
-    s.replace("__PICK__", PICK) for s in (FIND, CLICK, TYPE, READBACK, FOCUS, KEY, SCROLL, CLICK_AT, WINDOW_STATE))
+FIND, CLICK, TYPE, READBACK, FOCUS, KEY, SCROLL, CLICK_AT, WINDOW_STATE, TYPE_FOCUSED, SAVE_AS, DRAG, CLOSE = (
+    s.replace("__PICK__", PICK) for s in (FIND, CLICK, TYPE, READBACK, FOCUS, KEY, SCROLL, CLICK_AT, WINDOW_STATE, TYPE_FOCUSED, SAVE_AS, DRAG, CLOSE))
 READ_ONLY = {FIND, READBACK}                  # every other script changes something (focus included: a focus on a guessed window would aim the next keystroke)
 
+MAX_FOCUSED = 4000          # characters pasted by one type_focused job (the kernel's validator has the same limit)
+
+
+def type_focused(target, params):
+    """Paste the text into the focused control of the target window (see TYPE_FOCUSED). Says "observed" only when it read the text back."""
+    proc = _proc(target)
+    text = str(params.get("text", ""))
+    if not text or len(text) > MAX_FOCUSED:
+        raise ValueError("bad text")
+    out = _run(TYPE_FOCUSED, {"JARVIS_UI_PROC": proc, "JARVIS_UI_TEXT": text})
+    return {"observed": "text read back from the editor"} if "JARVIS_TYPED:read back" in (out or "") else {}
+
+
+def save_as(target, params):
+    """Save the target window's document under a new name in a known folder, then verify it on disk (savefile.py)."""
+    from . import savefile
+    return savefile.save_as(target, params)
+
+
 BACKEND = {"launch": launch, "click": click, "type": type_text, "focus": focus, "key": key, "scroll": scroll, "click_at": click_at,
-           "minimize": _window_state("minimize"), "maximize": _window_state("maximize"), "restore": _window_state("restore")}
+           "minimize": _window_state("minimize"), "maximize": _window_state("maximize"), "restore": _window_state("restore"),
+           "type_focused": type_focused, "save_as": save_as, "drag": drag, "close": close}

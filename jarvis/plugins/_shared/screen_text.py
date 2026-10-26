@@ -272,6 +272,48 @@ def release(text: Any, *, model_url: str | None = None) -> Released:
         return _withheld()
 
 
+def release_for_request(text: Any) -> Released:
+    """D54 (2026-10-26): the text of ONE window, for ONE explicit request of the owner ("solve what is on the screen"). It does NOT look at
+    JARVIS_SCREEN_TEXT_TO_MODEL (that switch stays as it is for every other path: this function is called by nothing else than the goal runner's
+    solve step, because the owner's request is itself the permission for this window's text), but it keeps every other rule: the secret pass
+    (a private key withholds the text whole), and the text is cleared ONLY through the privacy gateway's /redact with its own answer confirming
+    names and the PII model were active. A gateway that is down, degraded, old or unreadable, and any error at all, means withheld: the raw
+    text is never the fallback and the caller stops and says so."""
+    try:
+        raw = str(text if text is not None else "")
+        if not raw.strip():
+            return Released("", True, "none")
+        clean, hits = scrub_text(raw[:MAX_TEXT])
+        if "private_key" in hits:
+            return _withheld("the window held a private key, so none of it was sent")
+        ready, why = gateway_state()
+        if not ready:
+            return _withheld(f"the privacy gateway is not ready ({why}), so the window's text was not sent")
+        return Released(gateway_redact(_before_gateway(clean)), True, "gateway",
+                        "names, places and private details were hidden by the privacy gateway; file names are shown as their class")
+    except Exception:  # noqa: BLE001 - any failure at all withholds
+        return _withheld("redaction could not be confirmed, so the window's text was not sent")
+
+
+def release_local_for_task(text: Any, model_url: str) -> Released:
+    """D54 (general rule): what a window shows, for the LOCAL model that chooses the next step of the owner's own task (drive.py). The owner's goal is
+    the permission, so JARVIS_SCREEN_TEXT_TO_MODEL is not consulted (it stays as it is for every other path), but the destination is: ONLY a verified
+    local model endpoint (the check that guards the owner's memory; never the privacy gateway, never an online provider), after the secret pass. Anything
+    else, and any error, means withheld; the raw text never goes anywhere else."""
+    try:
+        raw = str(text if text is not None else "")
+        if not raw.strip():
+            return Released("", True, "none")
+        clean, hits = scrub_text(raw[:MAX_TEXT])
+        if "private_key" in hits:
+            return _withheld("the window held a private key, so none of it is shown")
+        if not local_model_ok(model_url):
+            return _withheld("the model is not a verified local one, so the window's text was not shown to it")
+        return Released(clean, True, "local", "read by a verified local model")
+    except Exception:  # noqa: BLE001
+        return _withheld()
+
+
 def release_safely(text: Any, **kw) -> Released:
     """release(), looked up at call time, with a second net: if release itself raises (or returns something unexpected) the
     answer is 'withheld', never the text. Every sink calls this one."""

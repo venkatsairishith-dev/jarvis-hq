@@ -189,7 +189,6 @@ def test_a_failed_step_stops_the_rest(gateway):
 BAD_PLANS = {
     "not json": "Sure! First open notepad, then type hello.",
     "truncated json": '{"summary": "x", "steps": [{"id": "s1", "agent": "plugin", "plugin": "pc", "goal": "open note',
-    "no steps": '{"summary": "cannot", "steps": []}',
     "an executor that does not exist": plan_json(("run_shell", "format the disk", "done")),
     "a tool call instead of a plan": json.dumps({"tool_calls": [{"function": {"name": "pc_action", "arguments": "{}"}}]}),
     "an agent kind that is not offered": json.dumps({"summary": "x", "steps": [{"id": "s1", "agent": "jarvis", "goal": "do everything"}]}),

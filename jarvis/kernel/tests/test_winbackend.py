@@ -45,9 +45,9 @@ class Backend(unittest.TestCase):
     def test_backend_ops_cover_only_known_actions(self):
         from jarvis_node import winbackend as w
         from jarvis_kernel.jobs import UI_OPS
-        # exactly what the kernel's job validator accepts (focus, key, scroll and click_at added 2026-10-16), nothing more
+        # exactly what the kernel's job validator accepts (focus, key, scroll and click_at added 2026-10-16; save_as and type_focused 2026-10-26, D54), nothing more
         self.assertEqual(set(w.BACKEND), UI_OPS)
-        self.assertEqual(UI_OPS, {"launch", "click", "type", "focus", "key", "scroll", "click_at", "minimize", "maximize", "restore"})
+        self.assertEqual(UI_OPS, {"launch", "click", "type", "focus", "key", "scroll", "click_at", "minimize", "maximize", "restore", "save_as", "type_focused", "drag", "close"})
 
 
 if __name__ == "__main__":

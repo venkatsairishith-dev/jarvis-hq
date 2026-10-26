@@ -100,7 +100,10 @@ def load(path: Path | str | None = None) -> dict[str, Specialist]:
         data = json.loads(text)
     except ValueError:
         raise SpecialistError("specialists table: the file is not valid JSON") from None
-    return parse(data)
+    table = parse(data)
+    for kind, row in parse({"kinds": BUILT_IN}).items():       # a file that lists only some kinds keeps the built-in row of the others (resolve("ui_decide") must never be missing)
+        table.setdefault(kind, row)
+    return table
 
 
 def resolve(kind: str, table: dict[str, Specialist] | None = None) -> Specialist:

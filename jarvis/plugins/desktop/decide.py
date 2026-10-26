@@ -17,8 +17,20 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from jarvis.plugins._shared import loopback_http, translate
+from jarvis.plugins._shared import decider, loopback_http, translate
+from . import composite, simple_tasks
 
+decider.MATCHERS["simple_task"] = simple_tasks.match          # D54b: the shared engine's intent rule asks the catalogue
+
+
+def _resolve_folder(phrase: str) -> "str | None":
+    """"the work folder", "my docs": which KNOWN folder is meant (rules first, then the small model, 3 s); None below the threshold, and the owner is asked."""
+    names = sorted(set(composite.known_roots().values()))
+    d = decider.resolve("folder", phrase, names)
+    return d.choice if d.choice in names else None
+
+
+simple_tasks.FOLDER_RESOLVER = _resolve_folder
 LOCAL = "http://127.0.0.1:8080/v1/chat/completions"
 DEFAULT_MODEL = "decider"          # a llama-swap alias (see jarvis/local_models/llama-swap.yaml)
 
@@ -37,6 +49,11 @@ TOOLS = {
     "answer": "answer from general knowledge, no PC action",
     "clarify": "the request is missing something essential: ask one short question (args: question)",
     "stop": "stop or cancel the current task",
+    # D54 (2026-10-26): "a save is part of the request"
+    "open_in_vscode": "open VS Code on a folder inside Documents, Desktop, Downloads or a project (args: folder)",
+    "type_in_editor": "paste text or code into the editor of an app such as VS Code; target new file starts an empty file first (args: app, target, text)",
+    "save_as": "save the open document under a new name in Documents, Desktop, Downloads, outputs or a project (args: app, name, folder)",
+    "drive": "do ANY other task on screen, step by step, watching the screen: draw, fill a form, copy a file into a folder, read a value in Settings, use a calculator (args: app, query = what to do)",
 }
 ACTIONS = {"browser": ["read", "find", "click", "type", "press", "tabs", "whoami"],
            "window": ["focus", "minimize", "maximize", "restore", "inspect"],
@@ -51,7 +68,7 @@ SITES = {"youtube": "https://www.youtube.com/", "gmail": "https://mail.google.co
          "google account": "https://myaccount.google.com/", "my google account": "https://myaccount.google.com/",
          "account": "https://myaccount.google.com/"}
 MAX_STEPS = 4
-PROMPT_VERSION = 3          # 1: plain rules (baseline); 2: + examples, action enum, key/site normalisation; 3: + account read from the request, name/folder fields, vague words, follow-up context, step merging
+PROMPT_VERSION = 4          # 1: plain rules (baseline); 2: + examples, action enum, key/site normalisation; 3: + account read from the request, name/folder fields, vague words, follow-up context, step merging; 4: + open_in_vscode, type_in_editor, save_as (D54)
 ALL_ACTIONS = sorted({a for v in ACTIONS.values() for a in v})
 KEY_WORDS = {"playpause": ["pause", "play", "play pause", "play/pause", "resume", "pause music", "stop music"],
              "nexttrack": ["next", "next song", "next track", "skip", "skip song"],
@@ -115,6 +132,10 @@ SYSTEM = (
     "open my tax notes on the desktop -> [{\"tool\":\"open_file\",\"name\":\"tax notes\",\"folder\":\"Desktop\"}]\n"
     "what is 2+2 -> [{\"tool\":\"answer\"}]\n"
     "open that -> [{\"tool\":\"clarify\",\"question\":\"What should I open?\"}]\n"
+    "open notepad, type buy milk and save it as list.txt in Documents -> [{\"tool\":\"open_app\",\"app\":\"notepad\"},{\"tool\":\"type_text\",\"app\":\"notepad\",\"text\":\"buy milk\"},{\"tool\":\"save_as\",\"app\":\"notepad\",\"name\":\"list.txt\",\"folder\":\"Documents\"}]\n"
+    "draw a house in paint and save it in Documents -> [{\"tool\":\"drive\",\"app\":\"paint\",\"query\":\"draw a house and save it in Documents\"}]\n"
+    "open calculator and work out 12 times 7 -> [{\"tool\":\"drive\",\"app\":\"calculator\",\"query\":\"work out 12 times 7 and read the result\"}]\n"
+    "open vs code in Documents/app, create hi.py and type print(1) -> [{\"tool\":\"open_in_vscode\",\"folder\":\"Documents/app\"},{\"tool\":\"type_in_editor\",\"app\":\"vs code\",\"text\":\"print(1)\"},{\"tool\":\"save_as\",\"app\":\"vs code\",\"name\":\"hi.py\",\"folder\":\"Documents/app\"}]\n"
 )
 
 
@@ -139,7 +160,8 @@ _ARGS = {"open_website": {"site": _S, "account": _S}, "play_media": {"query": _S
          "open_app": {"app": _S}, "window": {"action": {"type": "string", "enum": ACTIONS["window"]}, "app": _S},
          "type_text": {"app": _S, "target": _S, "text": _S}, "press_key": {"app": _S, "key": _S},
          "open_file": {"name": _S, "folder": _S}, "check_pc": {"action": {"type": "string", "enum": ACTIONS["check_pc"]}, "app": _S},
-         "troubleshoot": {"app": _S}, "research": {"query": _S, "deliverable": {"type": "string", "enum": ["none", "report", "presentation"]}},
+         "troubleshoot": {"app": _S}, "open_in_vscode": {"folder": _S}, "type_in_editor": {"app": _S, "target": _S, "text": _S},
+         "save_as": {"app": _S, "name": _S, "folder": _S}, "drive": {"app": _S, "query": _S}, "research": {"query": _S, "deliverable": {"type": "string", "enum": ["none", "report", "presentation"]}},
          "answer": {}, "clarify": {"question": _S}, "stop": {}}
 # One schema per tool with only that tool's arguments: the grammar cannot emit fields a tool does not use, so plans are
 # shorter (generation is ~10 tokens/s on this GPU) and carry fewer stray values. Behind a switch until measured.
@@ -486,8 +508,21 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
             if act not in ACTIONS["browser"]:
                 act = "read" if not target else "find"
             out.update(action=act, target=target[:300], text=(s.get("text") or s.get("key") or "")[:500])
-        elif tool in ("open_app", "window", "type_text", "press_key", "troubleshoot"):
-            app = (s.get("app") or s.get("target") or "").strip()
+        elif tool == "drive":                             # D54, the general rule: the observe - decide - act loop (drive.py); the owner's words are the task
+            q = (s.get("query") or s.get("text") or request or "").strip()
+            if not q:
+                return Plan(steps, "clarify", question="What should I do on the screen?", problems=["no task"], raw=raw)
+            out.update(app=(s.get("app") or "").strip()[:40], query=" ".join(q.split())[:600])
+        elif tool == "open_in_vscode":                    # D54: VS Code on a folder inside the known folders / projects
+            raw_folder = next((v for v in (s.get("folder"), s.get("name"), s.get("target"), s.get("query"), s.get("site")) if v and not _vague(v)), "")
+            spec, why = composite.folder_spec(raw_folder)
+            if why == "empty":
+                return Plan(steps, "clarify", question="Which folder should VS Code open?", problems=["no folder"], raw=raw)
+            if why:
+                return Plan(steps, "clarify", question=composite.folder_question(raw_folder), problems=["folder outside the allowed places"], raw=raw)
+            out.update(app="vs code", folder=spec)
+        elif tool in ("open_app", "window", "type_text", "press_key", "troubleshoot", "type_in_editor", "save_as"):
+            app = (s.get("app") or s.get("target") or "").strip() if tool != "type_in_editor" else (s.get("app") or "").strip()
             key = normalize_key((s.get("key") or s.get("text") or "").strip().lower())
             said_key = media_key_from_text(request) if tool == "press_key" else None
             if said_key and (key in KEY_WORDS or len(key) <= 1):     # a media request: what the owner said wins
@@ -505,6 +540,11 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
                 out["action"] = act if act in ACTIONS["window"] else "focus"
             if tool == "type_text":
                 out.update(target=(s.get("target") or "")[:120] if s.get("target") != app else "", text=(s.get("text") or "")[:500])
+            if tool == "type_in_editor":
+                out.update(target="", text=(s.get("text") or "")[:composite.MAX_TEXT],
+                           new_file=bool(re.search(r"(?i)\b(new|create|make)\b", f"{s.get('target') or ''} {request}")))
+            if tool == "save_as":                         # raw words here; _composite() below checks them against the allowlist and fills in defaults
+                out.update(name=(s.get("name") or s.get("query") or "")[:120], folder=(s.get("folder") or "")[:120])
             if tool == "press_key":
                 out["key"] = key[:30]
                 if key == "playpause":                         # the media key toggles: keep what the owner wanted; the
@@ -576,6 +616,11 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
         return Plan([], "clarify", question=UNCHECKED_STATUS, problems=problems + ["a status question has no check behind it"], raw=raw)
     before = list(steps)
     steps = complete_plan(steps, request, profiles)
+    steps = _composite(steps, request)                 # D54: the VS Code launch, the typing into its editor and the save, from the owner's words
+    if isinstance(steps, Plan):
+        steps.problems = problems + steps.problems
+        steps.raw = raw
+        return steps
     over = over_cap(before, steps)
     if over:                                          # audit PC-D8: never more than the cap, never cut silently
         return Plan(steps, "clarify", question=over, problems=problems + ["the completed plan has more steps than the cap"], raw=raw)
@@ -588,7 +633,7 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
     if not steps:
         return Plan([], "fallback", problems=problems or ["no usable step"], raw=raw)
     for st in steps:
-        st["post"] = POST.get(st["tool"], "the action reported success").format(**{k: st.get(k, "") for k in ("app", "profile", "action", "check")})
+        st["post"] = POST.get(st["tool"], "the action reported success").format(**{k: st.get(k, "") for k in ("app", "profile", "action", "check", "folder", "name")})
     return Plan(steps, "ok", problems=problems, raw=raw)
 
 
@@ -605,7 +650,12 @@ POST = {"open_website": "a Chrome window of profile {profile} shows the page",
         "troubleshoot": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis",
         "research": "a report with checked citations exists (and the requested file passed its checks; if asked, a window showing it opened)",
         "open_output": "a window showing the file JARVIS made appeared",
-        "stop": "the running work stopped"}
+        "stop": "the running work stopped",
+        "open_in_vscode": "a VS Code window showing the folder {folder} appeared",
+        "type_in_editor": "the text was pasted into the {app} editor (read back where the app allows it)",
+        "drive": "the task's expected effects were found on the PC (a window, the text read back, the file on disk, the file in the folder, the value on screen)",
+        "simple_task": "the task's own check passed: the item is on the PC (listed or read back), the setting was read back, or the answer was worked out here",
+        "save_as": "the file {name} is on disk in {folder}, the window names it, and its text is what was typed; nothing was overwritten"}
 TYPE_SAID = re.compile(r"(?i)\b(?:(?:type|write|enter)\s+[\"']?(.+?)[\"']?\s+(?:in|into|on)|put\s+[\"']?(.+?)[\"']?\s+into)\s+"
                        r"(?:the\s+|my\s+)?([A-Za-z][\w.+-]*(?:\s[A-Za-z][\w.+-]*)?)\s*(?:app|window)?"
                        r"(?:\s*,?\s+(?:and|then)\s+.*)?\s*[.!]?$")         # "... into wordpad and save it": the rest is other steps
@@ -628,7 +678,7 @@ def complete_plan(steps: list[dict], request: str, profiles: list[dict]) -> list
     """Deterministic completion of what the owner said outright but the model left out (measured omissions, 2026-10-16):
     'write X into WordPad' needs a typing step; 'go to youtube' on an account is opening the site, not reading a page;
     naming an account means checking that account before acting (opening a profile is not proof of who is signed in)."""
-    said_req = POLITE.sub("", request or "")
+    said_req = composite.SAVE_TAIL.sub("", POLITE.sub("", request or ""))      # "... and save it as x" is the save step, not part of the typed text
     m = TYPE_SAID.search(said_req)
     said, app = ((m.group(1) or m.group(2) or "").strip(), _clean_app(m.group(3))) if m else ("", "")
     if m and (app.lower() in SITES or resolve_site(app)):   # "put on some music on youtube" is not typing into an app
@@ -668,6 +718,90 @@ def complete_plan(steps: list[dict], request: str, profiles: list[dict]) -> list
     if named and acted and not any(st["tool"] == "browser" and st.get("action") == "whoami" for st in steps):
         steps.insert(steps.index(acted[0]), {"tool": "browser", "action": "whoami", "profile": acted[0]["profile"], "target": "", "text": ""})
     return steps
+
+
+def _composite(steps: list[dict], request: str):
+    """D54: the owner's write-and-save goals, finished from his own words (the model leaves these parts out, or names a file or folder loosely).
+      * VS Code: "open VS Code in <folder>, create <file> and type <code>" -> open_in_vscode, type_in_editor (new file), save_as <file>;
+      * a save after typing: "... and save it [as NAME] [in FOLDER]" -> save_as (Documents and a dated .txt name when he named none).
+    A folder is checked against the allowlist here (Documents, Desktop, Downloads, outputs, the projects of config/projects.json, and folders
+    inside them) and a file name against the plain-name rules, so a wrong one is a question to the owner and never a job; the node checks again.
+    Returns the steps, or a clarify Plan."""
+    steps = [dict(st) for st in steps]
+    code = composite.parse_vscode(request)
+    save = composite.parse_save(request)
+    ask = lambda q, why: Plan(steps, "clarify", question=q, problems=[why])        # noqa: E731
+    if save is not None:                                           # a model that put "... and save it as x" into the text it types: that is the save step
+        for st in steps:
+            if st["tool"] in ("type_text", "type_in_editor") and composite.SAVE_TAIL.search(st.get("text") or ""):
+                st["text"] = composite.SAVE_TAIL.sub("", st["text"]).strip()
+    if code:
+        idx = next((i for i, st in enumerate(steps) if st["tool"] == "open_in_vscode"), None)
+        if idx is None and code["folder"]:
+            old = next((i for i, st in enumerate(steps) if st["tool"] == "open_app" and composite.is_code_app(st.get("app", ""))), None)
+            blank = {"tool": "open_in_vscode", "app": "vs code", "folder": ""}
+            if old is not None:
+                steps[old] = blank
+                idx = old
+            else:
+                steps.insert(0, blank)
+                idx = 0
+        if idx is not None and code["folder"]:                        # his words win over the model's
+            spec, why = composite.folder_spec(code["folder"])
+            if why:
+                return ask(composite.folder_question(code["folder"]), "folder outside the allowed places")
+            steps[idx]["folder"] = spec
+        for st in steps:                                              # UI Automation cannot fill VS Code's editor by value: it is pasted into
+            if st["tool"] == "type_text" and composite.is_code_app(st.get("app", "")):
+                st.update(tool="type_in_editor", target="", new_file=code["wants_file"], app="vs code")
+        typing = [st for st in steps if st["tool"] == "type_in_editor"]
+        if not typing and code["text"] and (idx is not None or code["wants_file"]):
+            steps.append({"tool": "type_in_editor", "app": "vs code", "target": "", "text": code["text"][:composite.MAX_TEXT], "new_file": code["wants_file"]})
+        elif typing and code["text"]:
+            typing[0]["text"] = code["text"][:composite.MAX_TEXT]
+        if code["file"]:                                              # "create hello.py" is not a file to open: the save makes it
+            want = _norm(code["file"])
+            steps = [st for st in steps if not (st["tool"] == "open_file" and _norm(st.get("name")) == want)]
+    typing = [st for st in steps if st["tool"] in ("type_text", "type_in_editor")]
+    saves = [st for st in steps if st["tool"] == "save_as"]
+    if not saves and typing and (save is not None or (code and code["wants_file"])):
+        new = {"tool": "save_as", "app": typing[-1].get("app", ""), "name": "", "folder": ""}
+        steps.insert(max(i for i, st in enumerate(steps) if st["tool"] in ("type_text", "type_in_editor")) + 1, new)
+        saves = [new]
+    if saves:
+        steps = [st for st in steps if not (st["tool"] == "press_key" and st.get("key") == "ctrl+s")]      # the save is save_as now
+        default_folder = next((st["folder"] for st in steps if st["tool"] == "open_in_vscode" and st.get("folder")), "")
+        for st in saves:
+            name_raw = (save or {}).get("name") or (code or {}).get("file") or st.get("name") or ""
+            folder_raw = (save or {}).get("folder") or st.get("folder") or default_folder or "Documents"
+            name, why = composite.file_name(name_raw or composite.default_name(st.get("app", "")))
+            if why == "program":
+                return ask("I never save programs or scripts (.exe, .bat, .ps1 ...). What plain name and type should the file have?", "a program file name")
+            if why:
+                return ask("That is not a plain file name I can save. Use letters, digits, spaces, dots and dashes, with a text or code extension.", "bad file name")
+            spec, why = composite.folder_spec(folder_raw)
+            if why:
+                return ask(composite.folder_question(folder_raw), "folder outside the allowed places")
+            at = steps.index(st)
+            before_typing = [x for x in steps[:at] if x["tool"] in ("type_text", "type_in_editor")]
+            st.update(name=name, folder=spec, app=st.get("app") or (before_typing[-1].get("app") if before_typing else ""))
+            if before_typing and before_typing[-1].get("text"):
+                st["digest"] = composite.text_digest(before_typing[-1]["text"])
+    return steps
+
+
+def composite_rule(request: str, profiles: list[dict]) -> "Plan | None":
+    """"open VS Code in <folder>, create <file> and type <code>" is planned by rules, not by the small model (it has never seen this shape and
+    code does not fit its 400-token answer): open_in_vscode, then _composite() adds the typing and the save."""
+    code = composite.parse_vscode(request)
+    if not code or not code["wants_file"]:
+        return None
+    plan = validate(json.dumps({"steps": [{"tool": "open_in_vscode", "folder": code["folder"]}]}), profiles, request)
+    if plan.status in ("ok", "clarify"):
+        plan.model, plan.seconds = "rule", 0.0
+        return plan
+    return None
+
 
 
 def _says(st: dict) -> str:
@@ -785,7 +919,29 @@ def fast_path(request: str, profiles: list[dict]) -> Plan | None:
 # "make a folder test-live on D:", "create a new directory": the desktop agent opens, types and reads; it has no operation that creates a folder or a
 # file (a write needs its own approval rule in the kernel). Without this the model maps it to open_file and the owner hears "no single file matches".
 MAKE_FOLDER = re.compile(r"(?i)\b(?:create|make|new|add)\b(?:\W+\w+){0,3}?\W+(?:folder|directory)\b|\bmkdir\b")
-NO_CREATE = "I cannot create folders or files yet (the PC agent can open, type and read, not create), so nothing was changed"
+NO_CREATE = "I cannot create a folder or file there: I make them only inside Documents, Desktop, Downloads, Pictures, Videos, Music, outputs or one of your projects. Say which of them and the name, so nothing was changed"
+
+
+def simple_task_plan(request: str, profiles: list[dict]) -> "Plan | None":
+    """The catalogue's answer (simple_tasks.plan_for) as a Plan: steps, a question, or a plain "not built". A step the plugin already had (window, media key,
+    open file/site) goes through validate() like the model's. A broken catalogue file never stops the decider."""
+    try:
+        p = simple_tasks.plan_for(request)
+    except Exception:  # noqa: BLE001 - the catalogue is owner-editable data
+        return None
+    if p is None:
+        return None
+    if p["status"] == "clarify":
+        return Plan([], "clarify", question=p["question"], model="rule")
+    if p["status"] == "fallback":
+        return Plan([], "fallback", problems=p["problems"], model="rule")
+    if p.get("legacy"):
+        plan = validate(json.dumps({"steps": p["steps"]}), profiles, request)
+        if plan.status != "ok":
+            return None
+        plan.model, plan.seconds = "rule", 0.0
+        return plan
+    return Plan(p["steps"], "ok", model="rule")
 
 
 def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=None, timeout: float = 60.0,
@@ -801,15 +957,21 @@ def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=
         return Plan([], "clarify", question=f"Okay. From now on my replies are shown in {shown}.", model="rule")
     if re.fullmatch(r"(?i)\W*(stop|cancel|abort|never ?mind|forget it)\W*", request):     # no model needed
         return Plan([{"tool": "stop"}], "ok", model="rule")
-    if MAKE_FOLDER.search(request):                                  # no tool creates folders or files: say so, do not open a path that is not there
-        return Plan([], "fallback", problems=[NO_CREATE], model="rule")
     fu = follow_up(request, last)
     if fu is not None:
         return fu
+    cr = composite_rule(request, profiles)
+    if cr is not None:
+        return cr
     if not context and FAST_PATH:
         fp = fast_path(request, profiles)
         if fp is not None:
             return fp
+    st = simple_task_plan(request, profiles)                 # D54: the catalogue of everyday simple tasks (config/simple_tasks.json), still rules, no model
+    if st is not None:
+        return st
+    if MAKE_FOLDER.search(request) and not composite.parse_vscode(request):   # a folder the catalogue could not place (a drive letter, a path): say so, do not open a path that is not there
+        return Plan([], "fallback", problems=[NO_CREATE], model="rule")
     asked = f"Previous request: {context}\nNow: {request}" if context else request
     try:
         raw, secs = ask_model(asked, model, post=post, timeout=timeout)

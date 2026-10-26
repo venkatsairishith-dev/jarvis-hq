@@ -37,7 +37,8 @@ TOTAL_BUDGET_S = 600
 MAX_RETRIES = 1
 AGENT = {"open_website": "browser", "play_media": "browser", "browser": "browser", "open_app": "desktop", "window": "desktop",
          "type_text": "desktop", "press_key": "desktop", "open_file": "desktop", "check_pc": "desktop",
-         "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator"}
+         "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator",
+         "open_in_vscode": "desktop", "type_in_editor": "desktop", "save_as": "desktop", "drive": "desktop", "simple_task": "desktop"}      # D54
 TRANSIENT = re.compile(r"(?i)timeout|timed out|connection failed|not answering|temporarily|busy")
 # Steps that change nothing when run twice (open, focus, read, check). Typing, keys, clicks, playing, repairs and
 # research are not: a failure reported as a timeout may come after they already acted, so they are never re-run blindly.
@@ -230,6 +231,7 @@ class Operation:
         self.pcs: list = []
         self.on_stop: list = []                               # callables run once when the first stop arrives (a mission's cancel)
         self.hold: "Hold | None" = None
+        self.goal = ""                                        # the owner's goal for this operation (core.OWNER_GOAL): sent with every PC job it makes
         self.auto = False                                     # created by acquire() itself: finishes when its lock is released
         self.stuck = False
         self.abandoned = False
@@ -298,6 +300,7 @@ class Operation:
                 pc.on_progress = self.touch
                 pc.on_approval = lambda kind, aid, _op=self, _pc=pc: _approval_event(_op, _pc, kind, aid)
                 pc.fence, pc.on_job, pc.holder = self._fence, self._job_started, self._holder_info
+                pc.goal = self.goal
             except Exception:  # noqa: BLE001 - a stand-in that refuses attributes
                 pass
             if self.stop_flag.is_set():
@@ -1464,6 +1467,48 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
         if any(k in r for k in ("rows", "count", "summary", "sessions", "playing")):
             return True, f"{step.get('check')} read", ""
         return True, f"{step.get('check')} check ran", unobserved("no data came back with it")
+    if t == "simple_task":                                 # D54: a catalogue task; passes only on what its handler verified (listed, read back, measured, worked out)
+        facts = "; ".join(str(x) for x in r.get("facts") or [])
+        loose = "; ".join(str(x) for x in r.get("unverified") or [] if x)
+        if r.get("expected_missing"):
+            return False, "the expected effect was not found: " + ", ".join(r["expected_missing"]), str(r.get("error") or "")[:240]
+        if not facts:
+            return True, "the steps were sent", unobserved(loose or "nothing about their effect could be checked on the PC")
+        return True, facts, unobserved(loose) if loose else ""
+    if t == "drive":                                       # D54: an observe - decide - act loop; it passes on what was VERIFIED, never on the model's "done"
+        facts = "; ".join(str(x) for x in r.get("facts") or [])
+        loose = "; ".join(str(x) for x in r.get("unverified") or [])
+        if r.get("expected_missing"):
+            return False, "the expected effect was not found: " + ", ".join(r["expected_missing"]), str(r.get("error") or "")[:200]
+        if not facts:
+            return True, "the steps were sent", unobserved(loose or "nothing about their effect could be checked on the PC")
+        return True, facts, unobserved(loose) if loose else ""
+    if t == "open_in_vscode":                              # D54: the node looks for a window titled like the folder
+        seen = r.get("verified") == "verified"
+        return seen, f"VS Code opened the folder {step.get('folder')}" if seen else "VS Code was started, but no window showing the folder was seen", \
+            "" if seen else str(r.get("note") or "")
+    if t == "type_in_editor":                              # pasted into the focused editor; read back only where UI Automation can read the editor
+        n = r.get("typed_chars")
+        want = len(step.get("text") or "")
+        if n is not None and n != want:
+            return False, f"{n} of {want} characters were pasted", f"typed_chars {n} does not match the request ({want})"
+        if r.get("read_back") is True:
+            return True, f"{want} characters were pasted into the {r.get('process') or step.get('app')} editor and read back", ""
+        return True, f"{want} characters were pasted into the {r.get('process') or step.get('app')} editor", unobserved(
+            "the editor's text cannot be read back (VS Code); the saved file is the check")
+    if t == "save_as":                                     # D54: on disk, named in the window, and the text is what was typed; never over an existing file
+        if r.get("file_ok") is not True:
+            return False, "the file was not found on disk after Save", str(r.get("error") or "")[:200]
+        if r.get("content_ok") is False:
+            return False, "the saved file's text is not what was typed", "content_ok is false"
+        gaps = []
+        if r.get("content_ok") != True:                    # noqa: E712 - "unreadable" and "not compared" are not True
+            gaps.append("the saved text was not compared with what was typed" + (" (the file could not be read as text)" if r.get("content_ok") == "unreadable" else ""))
+        if r.get("title_ok") is False:
+            gaps.append("the window title did not show the file name")
+        what = "saved in " + str(r.get("folder") or step.get("folder")) + (" under a new name, because that name was taken" if r.get("renamed") else "")
+        what += ", found on disk" + (" and its text is what was typed" if r.get("content_ok") is True else "")
+        return True, what, unobserved("; ".join(gaps)) if gaps else ""
     if t == "type_text":                                   # the node reads the field back and fails if the text is absent
         return True, f"the text was typed into {r.get('process') or step.get('app')} and read back from the field", ""
     if t == "open_output":
