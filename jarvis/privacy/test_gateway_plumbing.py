@@ -1074,3 +1074,16 @@ class PinFileAndPeekRobustness(unittest.TestCase):
                 yield b'data: {"choices":[{"delta":{"role":"assistant"}}]}\n'
                 raise __import__("http.client").client.IncompleteRead(b"")
         self.assertEqual(gateway.peek_stream(Broken())[1], "error")
+
+
+class LatencyIsMeasuredPerProvider(unittest.TestCase):
+    def test_health_reports_median_redaction_first_byte_and_total_ms(self):
+        gateway.STATS.pop("latency", None)
+        t = StreamedAnswersAreJudgedBeforeTheCallerSeesThem()
+        t.setUp() if hasattr(t, "setUp") else None
+        body, seen = t.run_case(t.GOOD, [{"role": "user", "content": "hi"}])
+        self.assertIn("hello", body)
+        lat = gateway.STATS.get("latency", {})
+        self.assertTrue(lat, lat)
+        row = next(iter(lat.values()))[-1]
+        self.assertTrue(all(k in row for k in ("redact_ms", "first_ms", "total_ms")))

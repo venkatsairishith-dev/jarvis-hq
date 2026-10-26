@@ -678,6 +678,8 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                                             "last_call_age_s": round(time.time() - last, 1) if last else None,
                                             "providers": [p["name"] for p in providers],
                                             "answered_by": dict(STATS.get("by_provider", {})),
+                                            "latency_ms": {n: {k: sorted(r[k] for r in rows)[len(rows) // 2] for k in ("redact_ms", "first_ms", "total_ms")}
+                                                           for n, rows in STATS.get("latency", {}).items() if rows},     # median of the last 50 calls per provider
                                             "cooling_down": [n for n, t in _cooldown.items() if t > time.time()]})
             self._forward(None)
 
@@ -712,12 +714,20 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
         def _forward(self, raw):
             with _lock:
                 STATS["inflight"] += 1
+            self._t0, self._t_fwd, self._t_first = time.time(), None, None
             try:
                 return self._forward_inner(raw)
             finally:
+                now = time.time()
                 with _lock:
                     STATS["inflight"] -= 1
-                    STATS["last_call_end"] = time.time()
+                    STATS["last_call_end"] = now
+                    prov = getattr(self, "_provider", None)
+                    if prov and self._t_fwd:
+                        rows = STATS.setdefault("latency", {}).setdefault(prov, [])
+                        rows.append({"redact_ms": round((self._t_fwd - self._t0) * 1000), "first_ms": round(((self._t_first or now) - self._t_fwd) * 1000),
+                                     "total_ms": round((now - self._t0) * 1000)})
+                        del rows[:-50]
 
         def _forward_inner(self, raw):
             m = Mapping()
@@ -789,6 +799,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 if pinned is not None:                       # a benchmark run: this one provider only, no failover, so the result is honest
                     chain = [pinned]
             tried = []
+            self._t_fwd = time.time()
             for i, prov in enumerate(chain):
                 last = i == len(chain) - 1
                 hdrs, data = dict(headers), raw
@@ -858,13 +869,13 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     if stream and not last and "text/event-stream" in (resp.headers.get("Content-Type") or ""):
                         # Dahl delivered its tool-parser error INSIDE a 200 stream ("Unterminated string"), MiniMax a final answer of nothing (face, 2026-10-26):
                         # look at the stream before the caller sees any of it, and move on to the next provider when it is an error or empty.
-                        after_tool = isinstance(body, dict) and bool(body.get("messages")) and isinstance(body["messages"][-1], dict) and body["messages"][-1].get("role") == "tool"
-                        head, verdict = peek_stream(resp, whole=after_tool)
+                        head, verdict = peek_stream(resp)           # relays from the first real content on: streaming is kept (speed), an empty answer is still caught
                         if verdict != "ok":
                             tried.append(f"{prov['name']}: stream {verdict}")
                             resp.close()
                             continue
                         resp = ReplayResponse(resp, head)
+                    self._t_first = time.time()
                     with _lock:
                         STATS.setdefault("by_provider", {})[prov["name"]] = STATS.setdefault("by_provider", {}).get(prov["name"], 0) + 1
                     self._answer(resp, stream, m, prov["name"], face)
