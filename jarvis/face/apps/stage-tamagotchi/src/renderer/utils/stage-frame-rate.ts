@@ -7,8 +7,12 @@
  * 60 while the character is in use. A limit the owner sets in Settings still wins (the stage reads it first).
  */
 
-/** Frames per second while the character is idle. Enough for breathing and blinking. */
-export const IDLE_FPS = 30
+/**
+ * Frames per second while the character is idle. Enough for breathing and blinking.
+ * Measured on the laptop 2026-10-26: the Live2D model costs about 244 draw calls and 12 clears a frame; at 30 frames the avatar renderer used about 21% of a core
+ * and the GPU process about 21% more while the owner did nothing. 15 halves that; the rate goes to 60 the moment the character speaks or the cursor moves.
+ */
+export const IDLE_FPS = 15
 /** Frames per second while the character speaks, thinks, listens, or the owner is moving the cursor or typing. */
 export const ACTIVE_FPS = 60
 /** The stage stays at the active rate this long after the last sign of use, so the end of a sentence or a cursor stop is not choppy. */
