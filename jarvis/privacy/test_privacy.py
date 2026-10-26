@@ -183,7 +183,7 @@ class DeepOnly:
     def __init__(self):
         self.calls = []
 
-    def redact(self, text, m, deep=True):
+    def redact(self, text, m, deep=True, names=None):
         self.calls.append((text, deep))
         return text.replace(SECRET, m.tag("PASSWORD", SECRET)) if deep else text
 
