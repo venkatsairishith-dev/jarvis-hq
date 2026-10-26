@@ -9,6 +9,7 @@ import {
   computeResizedBoundsAnchoredToDominantDisplay,
   heightFrom,
   mapForBreakpoints,
+  usableSavedBounds,
   widthFrom,
 } from './display'
 
@@ -253,5 +254,30 @@ describe('centerWindowOnDisplay', () => {
       show: vi.fn(),
     })).toThrowError('Main JARVIS window is not available.')
     expect(getBounds).not.toHaveBeenCalled()
+  })
+})
+
+describe('usableSavedBounds', () => {
+  const work = [{ x: 0, y: 0, width: 1536, height: 920 }]
+
+  it('keeps a window that sits on a display', () => {
+    expect(usableSavedBounds({ x: 1056, y: 292, width: 481, height: 562 }, work)).toEqual({ x: 1056, y: 292, width: 481, height: 562 })
+  })
+
+  it('drops the bounds that were saved off every display on the laptop (2026-10-26)', () => {
+    expect(usableSavedBounds({ x: -2379, y: -3140, width: 1536, height: 920 }, work)).toBeUndefined()
+    expect(usableSavedBounds({ x: 5000, y: 100, width: 300, height: 400 }, work)).toBeUndefined()
+  })
+
+  it('drops a window as large as its display, a tiny one and anything incomplete', () => {
+    expect(usableSavedBounds({ x: 0, y: 0, width: 1536, height: 920 }, work)).toBeUndefined()
+    expect(usableSavedBounds({ x: 300, y: 100, width: 40, height: 40 }, work)).toBeUndefined()
+    expect(usableSavedBounds({ x: 300, y: 100 }, work)).toBeUndefined()
+    expect(usableSavedBounds(undefined, work)).toBeUndefined()
+  })
+
+  it('finds the display of a second monitor to the left', () => {
+    const two = [{ x: -1920, y: 0, width: 1920, height: 1040 }, ...work]
+    expect(usableSavedBounds({ x: -1500, y: 200, width: 400, height: 500 }, two)).toEqual({ x: -1500, y: 200, width: 400, height: 500 })
   })
 })

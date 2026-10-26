@@ -375,3 +375,32 @@ export function heightFrom(bounds: Rectangle, sizeOptions: Size & { min?: Size, 
 
   return val
 }
+
+/**
+ * The saved bounds of the main window, or `undefined` when they must not be used (JARVIS 2026-10-26).
+ *
+ * Live on the laptop (200% display, 1536 x 920 work area): the saved bounds were x -2379, y -3140, 1536 x 920, the avatar window opened outside every
+ * display and the owner saw no avatar at all; the app then saved the same bounds again at every start. A saved rectangle is used only when its centre lies
+ * inside the work area of a display, its size is plausible (at least 100 x 100) and it does not cover its whole display (the avatar is never full-screen).
+ */
+export function usableSavedBounds(
+  saved: Partial<Rectangle> | undefined,
+  workAreas: readonly Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>[],
+): Rectangle | undefined {
+  if (!saved)
+    return undefined
+  const { x, y, width, height } = saved
+  if (![x, y, width, height].every(v => typeof v === 'number' && Number.isFinite(v)))
+    return undefined
+  const rect = { x: x as number, y: y as number, width: width as number, height: height as number }
+  if (rect.width < 100 || rect.height < 100)
+    return undefined
+  const cx = rect.x + rect.width / 2
+  const cy = rect.y + rect.height / 2
+  const home = workAreas.find(a => cx >= a.x && cx < a.x + a.width && cy >= a.y && cy < a.y + a.height)
+  if (!home)
+    return undefined
+  if (rect.width >= home.width && rect.height >= home.height)
+    return undefined
+  return rect
+}
