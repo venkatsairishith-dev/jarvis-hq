@@ -40,7 +40,7 @@ import { createWindowContext } from '../../libs/electron/window-context'
 import { setupSettingsPageInvokes } from '../settings/rpc/index.electron'
 import { protectPrivilegedWindowNavigation, setWindowAlwaysOnTop, transparentWindowConfig } from '../shared'
 import { deferStartup, STARTUP_STAGGER } from '../shared/startup-stagger'
-import { centerWindowOnDisplay, computeCenteredWindowBounds } from '../shared/display'
+import { centerWindowOnDisplay, computeCenteredWindowBounds, usableSavedBounds } from '../shared/display'
 import { hideOnClose } from './hide-on-close'
 import { setupMainWindowElectronInvokes } from './rpc/index.electron'
 
@@ -108,13 +108,15 @@ export async function setupMainWindow(params: {
   setupConfig()
 
   const mainWindowConfig = getConfig().windows?.find(w => w.title === 'JARVIS' && w.tag === 'main')
+  // JARVIS: a saved rectangle that is outside every display (or as large as one) is dropped: the owner would see no avatar (see usableSavedBounds).
+  const savedBounds = usableSavedBounds(mainWindowConfig, screen.getAllDisplays().map(d => d.workArea))
 
   const window = new BrowserWindow({
     title: 'JARVIS',
-    width: mainWindowConfig?.width ?? 450.0,
-    height: mainWindowConfig?.height ?? 600.0,
-    x: mainWindowConfig?.x,
-    y: mainWindowConfig?.y,
+    width: savedBounds?.width ?? 450.0,
+    height: savedBounds?.height ?? 600.0,
+    x: savedBounds?.x,
+    y: savedBounds?.y,
     show: false,
     icon,
     webPreferences: {
@@ -163,6 +165,9 @@ export async function setupMainWindow(params: {
 
   function handleNewBounds(newBounds: Rectangle) {
     if (boundsBeforeFullscreen)
+      return
+    // never write a position that no display shows (it would come back at the next start)
+    if (!usableSavedBounds(newBounds, screen.getAllDisplays().map(d => d.workArea)))
       return
 
     const config = getConfig()
