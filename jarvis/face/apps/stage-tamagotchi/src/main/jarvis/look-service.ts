@@ -16,7 +16,7 @@ import type { HiddenState, LookSettings, OrbLayoutSnapshot, Rect, ShortcutStatus
 import type { DisplayInfo } from '../../shared/orb-layout'
 import type { StoredLook } from './look-config'
 
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { useLogg } from '@guiiai/logg'
@@ -62,6 +62,23 @@ const hiddenStateSchema = object({
   version: string(),
 })
 
+/**
+ * Whether the page's local storage holds anything: Chromium creates the (empty) folder on every start, so the folder alone says nothing; a profile
+ * that was used has database files with data in them.
+ */
+function localStorageHasData(folder: string): boolean {
+  try {
+    return readdirSync(folder).some((name) => {
+      if (/^\d+\.ldb$/.test(name))
+        return true
+      return /^\d+\.log$/.test(name) && statSync(join(folder, name)).size > 0
+    })
+  }
+  catch {
+    return false
+  }
+}
+
 export interface TrayPort {
   setVisible: (visible: boolean) => void
 }
@@ -94,10 +111,11 @@ export function setupLookService(): LookService {
   const signs = {
     appConfig: existsSync(join(userData, 'app-config.json')),
     appOptions: existsSync(join(userData, 'app-options.json')),
-    localStorage: existsSync(join(userData, 'Local Storage')),
+    localStorage: localStorageHasData(join(userData, 'Local Storage', 'leveldb')),
     lookConfig: existsSync(join(userData, 'jarvis-look-config.json')),
   }
   const existingProfile = profileExisted(signs)
+  log.log(`look: a profile ${existingProfile ? 'existed' : 'is new'} (${Object.entries(signs).filter(([, there]) => there).map(([name]) => name).join(', ') || 'no earlier file'})`)
   const lookConfig = createConfig('jarvis-look', 'config.json', lookConfigSchema, { default: {} })
   lookConfig.setup()
   const hiddenConfig = createConfig('jarvis-hidden', 'state.json', hiddenStateSchema)
@@ -162,6 +180,13 @@ export function setupLookService(): LookService {
     emit: (state) => {
       unhideSeqState = state
       broadcast?.()
+    },
+    onHidden: () => {
+      // DevTools of a development run are separate windows that the gate cannot hide: they are closed while JARVIS is hidden (never in an installed app)
+      for (const window of ElectronBrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed() && window.webContents.isDevToolsOpened())
+          window.webContents.closeDevTools()
+      }
     },
     ensureOrbShown: () => {
       if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible())
@@ -236,7 +261,14 @@ export function setupLookService(): LookService {
   function attachWindow(window: BrowserWindow) {
     if (window.isDestroyed())
       return
-    const { context } = createWindowContext(window)
+    let context: ReturnType<typeof createWindowContext>['context']
+    try {
+      context = createWindowContext(window).context
+    }
+    catch {
+      // a window that is closing has nothing to serve
+      return
+    }
     contexts.add(context)
     window.once('closed', () => contexts.delete(context))
     defineInvokeHandler(context, electronJarvisLookGet, () => snapshot())

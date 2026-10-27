@@ -92,6 +92,7 @@ describe('look controller: moving', () => {
     const t = setup()
     const { controller, win } = t
     t.moveCursor(1400, 700)
+    controller.drag('press')
     controller.drag('start')
     t.moveCursor(1000, 400)
     controller.drag('move')
@@ -105,6 +106,21 @@ describe('look controller: moving', () => {
     expect(t.saved()?.placements?.byDisplay['1']).toBeDefined()
   })
 
+  it('a drag sends the windows no message until it ends (the layout inside the window does not change)', () => {
+    const t = setup()
+    t.moveCursor(1000, 400)
+    t.controller.drag('start')
+    const before = t.emitted.length
+    for (let i = 1; i <= 20; i++) {
+      t.moveCursor(1000 - i * 10, 400 - i * 5)
+      t.controller.drag('move')
+    }
+    expect(t.emitted.length).toBe(before)
+    expect(t.win.setBoundsCalls).toBeGreaterThan(10)
+    t.controller.drag('end')
+    expect(t.emitted.length).toBe(before + 1)
+  })
+
   it('never leaves the work area, even when the cursor does', () => {
     const t = setup()
     t.moveCursor(1000, 400)
@@ -114,6 +130,19 @@ describe('look controller: moving', () => {
     expect(inside(t.win.bounds, laptop.workArea)).toBe(true)
     t.controller.drag('end')
     expect(inside(t.win.bounds, laptop.workArea)).toBe(true)
+  })
+
+  it('the drag starts from where the button went down, not from where it became a drag', () => {
+    const t = setup()
+    const zone = t.controller.layout().window!
+    t.moveCursor(1400, 700)
+    t.controller.drag('press')
+    // the pointer travels 40 px before the page calls it a drag
+    t.moveCursor(1360, 700)
+    t.controller.drag('start')
+    t.moveCursor(1300, 700)
+    t.controller.drag('move')
+    expect(t.controller.layout().window!.x).toBe(zone.x - 100)
   })
 
   it('a move without a start is ignored', () => {

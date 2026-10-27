@@ -119,6 +119,16 @@ describe('hidden mode', () => {
     expect(emitted.at(-1)).toEqual({ hidden: false, queued: 2, forgotten: false, unhideSeq: 1 })
   })
 
+  it('tells the shell to close what the gate cannot hide (DevTools of a development run), at hide and at a hidden start', () => {
+    const onHidden = vi.fn()
+    const a = setup({ onHidden })
+    a.mode.hide()
+    expect(onHidden).toHaveBeenCalledTimes(1)
+    const b = setup({ onHidden })
+    b.mode.startHidden(1)
+    expect(onHidden).toHaveBeenCalledTimes(2)
+  })
+
   it('shows nothing when it is not hidden', () => {
     const { mode, ensureOrbShown } = setup()
     expect(mode.show()).toBeUndefined()

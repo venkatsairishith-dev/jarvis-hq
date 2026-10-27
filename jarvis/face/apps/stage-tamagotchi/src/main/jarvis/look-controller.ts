@@ -62,7 +62,8 @@ export interface LookController {
   update: (patch: Partial<Record<keyof LookSettings, unknown>>) => LookChange
   /** The renderer says what is open next to the orb. */
   request: (request: OrbLayoutRequest) => OrbLayoutSnapshot
-  drag: (phase: 'start' | 'move' | 'end') => void
+  /** `press`: the button went down on the orb (the cursor and the place at that moment are the start of a possible drag); `start`: the press became a drag. */
+  drag: (phase: 'press' | 'start' | 'move' | 'end') => void
   nudge: (direction: Direction) => void
   resetPosition: () => void
   /** Displays were added, removed or changed (size, DPI, taskbar). */
@@ -109,13 +110,22 @@ export function createLookController(ports: LookPorts): LookController {
     ports.save({ ...settings, placements })
   }
 
-  function apply() {
+  /** What the windows read from a snapshot: the place of everything INSIDE the window. A plain move of the window does not change it. */
+  const relativeKey = (value: OrbLayoutSnapshot) => JSON.stringify([value.look, value.size, value.zone, value.pill, value.card, value.cardSide, value.menu])
+  let lastRelative = ''
+
+  /** Puts the window where the layout says; tells the windows only when something inside it moved (a drag sends no message at all). */
+  function apply(options: { quiet?: boolean } = {}) {
     snapshot = buildSnapshot()
     const window = ports.window()
     if (window && !window.isDestroyed() && snapshot.window) {
       // always the whole rectangle: setting the position alone lets Windows grow a window at a scale above 100 %
       window.setBounds(snapshot.window)
     }
+    const key = relativeKey(snapshot)
+    if (options.quiet && key === lastRelative)
+      return
+    lastRelative = key
     ports.emit(snapshot)
   }
 
@@ -185,11 +195,13 @@ export function createLookController(ports: LookPorts): LookController {
     drag(phase) {
       if (windowKind(settings.look) !== 'zone')
         return
-      if (phase === 'start') {
+      if (phase === 'press' || (phase === 'start' && !dragging)) {
         dragging = { cursor: ports.cursor(), zone: { ...zone } }
+        // what the windows have now: a move that changes nothing inside the window sends no message
+        lastRelative = relativeKey(snapshot)
         return
       }
-      if (!dragging)
+      if (!dragging || phase === 'start')
         return
       const now = ports.cursor()
       const moved: Rect = { ...dragging.zone, x: dragging.zone.x + (now.x - dragging.cursor.x), y: dragging.zone.y + (now.y - dragging.cursor.y) }
@@ -197,7 +209,7 @@ export function createLookController(ports: LookPorts): LookController {
       const area = workAreaFor({ ...moved })
       if (phase === 'move') {
         zone = clampRect(moved, area)
-        apply()
+        apply({ quiet: true })
         return
       }
       // end: snap to the nearest edge or corner and remember it for this display
@@ -231,6 +243,7 @@ export function createLookController(ports: LookPorts): LookController {
         return
       }
       const current = ports.displays()
+      ports.log?.(`the screens changed: ${current.length} display(s), work areas ${JSON.stringify(current.map(d => d.workArea))}`)
       zone = reflowAfterDisplayChange(zone, sizeOfZone(), previous, current, ports.primaryId())
       placements = pruneStore(placements, current)
       remember()

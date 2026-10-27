@@ -79,6 +79,32 @@ describe('window gate: hidden refuses every show path', () => {
     expect(created.skipTaskbar).toBe(true)
   })
 
+  it('a window that was still mapping when it was first hidden is hidden again a moment later', () => {
+    const later: Array<[() => void, number]> = []
+    const gate = createWindowGate({ schedule: (fn, ms) => later.push([fn, ms]) })
+    gate.hide([])
+    const created = new FakeWindow(false)
+    gate.adopt(created)
+    // the toolkit finishes showing it after our first hide
+    created.visible = true
+    for (const [fn] of later)
+      fn()
+    expect(created.visible).toBe(false)
+  })
+
+  it('does not hide a window again once the gate has opened', () => {
+    const later: Array<[() => void, number]> = []
+    const gate = createWindowGate({ schedule: (fn, ms) => later.push([fn, ms]) })
+    gate.hide([])
+    const created = new FakeWindow(false)
+    gate.adopt(created)
+    gate.unhide()
+    created.visible = true
+    for (const [fn] of later)
+      fn()
+    expect(created.visible).toBe(true)
+  })
+
   it('adopting a window while shown changes nothing', () => {
     const gate = createWindowGate()
     const created = new FakeWindow(true)

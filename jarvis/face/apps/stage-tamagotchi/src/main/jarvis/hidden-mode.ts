@@ -62,6 +62,8 @@ export interface HiddenModeDeps {
   persist: (state: PersistedHiddenState | null) => void
   /** Tells the windows (counts only). */
   emit: (state: HiddenState) => void
+  /** Called when the hiding has begun: closes what the gate cannot hide (the DevTools windows of a development run are not BrowserWindows). */
+  onHidden?: () => void
   /** After an unhide: makes sure the orb (the main window) is on the screen even if it was folded before the hide. */
   ensureOrbShown: () => void
   version: string
@@ -118,6 +120,7 @@ export function createHiddenMode(deps: HiddenModeDeps): HiddenMode {
     deps.setTrayVisible(trayShouldShow())
     persistNow(now())
     lastUnhide = { queued: 0, forgotten: false }
+    deps.onHidden?.()
     emit()
     return true
   }
@@ -157,6 +160,7 @@ export function createHiddenMode(deps: HiddenModeDeps): HiddenMode {
       // keep the old time, so the forgotten-hidden guard counts from the real hide; the windows the start-up shows are not "waiting"
       deps.gate.hide(deps.getWindows(), { since, quietUntil: now() + START_QUIET_MS })
       deps.setTrayVisible(trayShouldShow())
+      deps.onHidden?.()
       emit()
     },
   }

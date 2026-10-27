@@ -56,6 +56,8 @@ export interface WindowGateOptions {
   log?: (message: string) => void
   /** The most requests kept; the oldest are dropped beyond it, so a stream of requests cannot grow the memory without limit. */
   maxQueued?: number
+  /** Runs `fn` after `ms` milliseconds. Default: `setTimeout`, which never keeps the process alive. */
+  schedule?: (fn: () => void, ms: number) => void
 }
 
 interface Pending {
@@ -150,8 +152,8 @@ export function createWindowGate(options: WindowGateOptions = {}): WindowGate {
   function keepOff(window: GateWindow) {
     try {
       if (!window.isDestroyed()) {
-        if (window.isVisible())
-          window.hide()
+        // always, not only when it reports visible: a window that was just created with `show: true` can still be mapping and not say so yet
+        window.hide()
         asGate(() => window.setSkipTaskbar?.(true))
       }
     }
@@ -187,9 +189,28 @@ export function createWindowGate(options: WindowGateOptions = {}): WindowGate {
     return true
   }
 
+  /**
+   * A window that was just created with `show: true` is shown by the toolkit itself, before any JavaScript can stop it, and on some systems it is
+   * still mapping when the first `hide()` runs (Linux). So a new window is kept off now and checked again a moment later.
+   */
+  const RECHECK_MS = [0, 80, 300, 1000]
+  const schedule = options.schedule ?? ((fn: () => void, ms: number) => {
+    setTimeout(fn, ms).unref?.()
+  })
+
   function adopt(window: GateWindow) {
-    if (hidden)
-      keepOff(window)
+    if (!hidden)
+      return
+    keepOff(window)
+    for (const ms of RECHECK_MS) {
+      schedule(() => {
+        try {
+          if (hidden && !window.isDestroyed() && window.isVisible())
+            keepOff(window)
+        }
+        catch {}
+      }, ms)
+    }
   }
 
   function noteSkipTaskbar(window: GateWindow, skip: boolean): boolean {

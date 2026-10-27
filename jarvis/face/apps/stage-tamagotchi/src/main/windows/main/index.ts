@@ -120,7 +120,8 @@ export async function setupMainWindow(params: {
   const lookNow = look.controller.settings().look
   const zoneWindow = lookNow !== 'avatar'
   const zoneBounds = zoneWindow ? look.controller.initialBounds() : undefined
-  const avatarBounds = () => savedBounds ?? computeCenteredWindowBounds({
+  // the avatar's own place now, read from the config each time (the owner may have moved it since the start)
+  const avatarBounds = () => usableSavedBounds(getConfig().windows?.find(w => w.title === 'JARVIS' && w.tag === 'main'), screen.getAllDisplays().map(d => d.workArea)) ?? computeCenteredWindowBounds({
     displayWorkArea: screen.getPrimaryDisplay().workArea,
     windowBounds: { x: 0, y: 0, width: 450, height: 600 },
   })
@@ -277,6 +278,7 @@ export async function setupMainWindow(params: {
     globalShortcut: params.globalShortcut,
     setPinned,
     center: centerWindow,
+    keepMainWindowInPlace: () => look.controller.settings().look !== 'avatar',
   })
 
   await load(window, withHashRoute(baseUrl(getRendererRoot()), '/', {

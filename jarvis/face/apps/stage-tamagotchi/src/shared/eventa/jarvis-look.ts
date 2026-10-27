@@ -22,7 +22,7 @@ export const electronJarvisLookChanged = defineEventa<JarvisLookSnapshot>('event
 /** What is open next to the orb (pill, card, menu): the main process makes the window big enough and answers where everything is. */
 export const electronJarvisOrbRequest = defineInvokeEventa<OrbLayoutSnapshot, OrbLayoutRequest>('eventa:invoke:electron:jarvis-look:orb-request')
 /** A drag of the orb or the bar. The main process reads the cursor itself, so the page needs no screen coordinates. */
-export const electronJarvisOrbDrag = defineInvokeEventa<void, { phase: 'start' | 'move' | 'end' }>('eventa:invoke:electron:jarvis-look:orb-drag')
+export const electronJarvisOrbDrag = defineInvokeEventa<void, { phase: 'press' | 'start' | 'move' | 'end' }>('eventa:invoke:electron:jarvis-look:orb-drag')
 export const electronJarvisOrbNudge = defineInvokeEventa<void, { direction: 'left' | 'right' | 'up' | 'down' }>('eventa:invoke:electron:jarvis-look:orb-nudge')
 export const electronJarvisOrbReset = defineInvokeEventa<void>('eventa:invoke:electron:jarvis-look:orb-reset')
 
