@@ -362,6 +362,8 @@ class DesktopPlugin(PluginBase):
             missions.E.agents = self._agents(loop, abort=missions.cancel_requested)
             # the whole decision (ok, clarify, fallback): a question for the owner reaches the owner (audit PC-D5)
             missions.E.plan_fn = lambda goal, ctx: decide.decide(goal, core.profiles(), context=ctx)
+            from . import takeover_wiring
+            missions.E.on_takeover_resume = takeover_wiring.on_mission_resume                 # D79: a mission paused for the owner at a screen: the screen goes back first
             missions.E.on_cancel = lambda: [setattr(p, "stopped", True) or (p.current_job and p.cancel(p.current_job))
                                             for p in list(getattr(self, "_active_pcs", []))]
             DBOS.launch()
@@ -1334,9 +1336,13 @@ class DesktopPlugin(PluginBase):
                 h = drive_mod.Hands(observe=drive_observe, act=act, propose=lambda task, obs, hist: drive_mod.propose_local(task, obs, hist), classify=classify)
                 out = drive_mod.Driver(h).run(goal, task=step.get("query") or goal, app=step.get("app", ""))
             else:                                                       # D65: the human-like loop with the problem ladder (pcagent.py)
+                from jarvis.plugins._shared import owner_ask
+                from . import takeover_wiring
                 agent = pcagent.PcAgent(pcport.PcPort(pc),
                                         lambda task, obs, hist: drive_mod.propose_local(task, obs, hist), classify=classify, lessons=lessons_mod.default(),
-                                        state=taskstate.TaskState(), goal=goal, stop=(op.stop_flag.is_set if op is not None else None), task_id=getattr(op, "id", "") or "")
+                                        state=taskstate.TaskState(), goal=goal, stop=(op.stop_flag.is_set if op is not None else None), task_id=getattr(op, "id", "") or "",
+                                        takeover=takeover_wiring.pc_hook(takeover_wiring.broker(ask=owner_ask.ask, state=taskstate.TaskState(), journal=jc.record_takeover,
+                                                                                                stop=(op.stop_flag.is_set if op is not None else None))))      # D79: UAC, an unreadable dialog
                 out = agent.run(goal, task=step.get("query") or goal, app=step.get("app", ""))
             if out.get("status") == "waiting_for_permission":
                 out["state"] = "waiting_for_permission"
@@ -1462,12 +1468,29 @@ class DesktopPlugin(PluginBase):
             from . import web_runner
             op = coord.current_op()
             stopped = lambda: bool(abort and abort()) or (op is not None and op.stop_flag.is_set())      # noqa: E731
+            from . import takeover_wiring
+            tk = takeover_wiring.broker(ask=owner_ask.ask, state=taskstate.TaskState(), journal=jc.record_takeover, stop=stopped,
+                                        front=lambda: pc({"op": "ui", "action": "focus", "target": "chrome"}, 20),
+                                        typing=lambda: (pc({"op": "windows"}, 20).get("idle_ms") or 10 ** 9) < takeover_wiring.TYPING_MS)       # D79: a wall is handed to him with one card
             res = web_runner.run_deck(step, pc_run=pc_raw, stop=stopped, ask=owner_ask.ask, profile=alias(step.get("profile", "Default")), journal=jc.record_web_step,
-                                     touch=(op.touch if op is not None else None))
+                                     touch=(op.touch if op is not None else None), takeover=tk, resume=step.get("_takeover"))
             if res.get("ok") and step.get("open_after") and res.get("file"):          # "... and open it": the verified copy, through the deliverables plugin's own open
                 o = open_output({"path": res["file"]})
                 res.update(opened=o.get("opened"), opened_verified=bool(o.get("opened_verified")), open_note=o.get("open_note") or o.get("error"))
             return res
+
+        def vm2_task(step):
+            """D79: a download or research that belongs on VM2 (the sandbox desktop): the lab agent does it there, a wall is handed to the owner on VM2's own screen, and a
+            downloaded file comes back to the PC quarantine only if he approves that file. Never done on the PC instead (plugins/_shared/vm2_task.py)."""
+            from jarvis.plugins._shared import owner_ask, vm2 as vm2_mod, vm2_task as vt
+            from . import takeover_wiring
+            op = coord.current_op()
+            stopped = lambda: bool(abort and abort()) or (op is not None and op.stop_flag.is_set())      # noqa: E731
+            cfg = vm2_mod.load_config()
+            port = vm2_mod.Vm2Port(cfg)
+            tk = takeover_wiring.broker(ask=owner_ask.ask, state=taskstate.TaskState(), journal=jc.record_takeover, stop=stopped, config=cfg, port=port)
+            return vt.run(step.get("query", ""), cfg=cfg, port=port, kernel=core.owner, ask=owner_ask.ask, takeover=tk, stop=stopped,
+                          trusted_hosts=takeover_wiring.pc_granted_hosts(core.owner), resume=step.get("_takeover"), touch=(op.touch if op is not None else None))
 
         def stop(step):
             for p in list(active):
@@ -1486,7 +1509,7 @@ class DesktopPlugin(PluginBase):
             "window": window, "type_text": type_text, "press_key": press_key, "open_file": open_file, "check_pc": check,
             "troubleshoot": troubleshoot, "research": research, "open_output": open_output, "stop": stop,
             "open_in_vscode": open_in_vscode, "type_in_editor": type_in_editor, "save_as": save_as, "drive": drive, "simple_task": simple_task,
-            "web_task": web_task,
+            "web_task": web_task, "vm2_task": vm2_task,
         }
         wrapped = AgentSet({k: jc.wrap_agent(k, _with_approval(fn)) for k, fn in agents.items()})       # D61: one journal line per step run
 

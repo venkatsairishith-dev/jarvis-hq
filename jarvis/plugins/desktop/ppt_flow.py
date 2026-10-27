@@ -266,6 +266,9 @@ class DeckFlow:
             return None
         except BA.NeedOwner as e:
             result.tried.append(SiteAttempt(host, "needs_owner", f"{e.kind}: {e.detail}"[:160]))
+            if e.kind == "takeover":                                       # D79: the owner is needed at the screen and the task is paused for him: the next site is NOT tried,
+                result.needs_owner = {"kind": "takeover", "site": host, "detail": e.detail[:160], "takeover": e.state.get("takeover")}      # and the browser session stays (his page)
+                raise
             try:
                 agent.backend.end()
             except Exception:  # noqa: BLE001

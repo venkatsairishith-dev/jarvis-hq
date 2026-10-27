@@ -50,7 +50,8 @@ class PcAgent:
                  lessons: lessons_mod.Lessons | None = None, state: taskstate.TaskState | None = None, goal: str = "", budget: int = MAX_ACTIONS,
                  clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], Any] = time.sleep, stop: Callable[[], bool] | None = None,
                  deadline_s: float = DEADLINE_S, settle_s: float = 1.8, hung_wait_s: float = HUNG_WAIT_S, slow_start_s: float = SLOW_START_S,
-                 owner_wait_s: float = humanfeel.OWNER_WAIT_MAX_S, human: bool = True, task_id: str = ""):
+                 owner_wait_s: float = humanfeel.OWNER_WAIT_MAX_S, human: bool = True, task_id: str = "",
+                 takeover: Callable[[str, "perceive.Observation", Callable[[], bool]], Any] | None = None):
         self.port, self.propose, self.classify = port, propose, classify
         self.lessons = lessons
         self.state = state or taskstate.TaskState(state_file=None)
@@ -59,6 +60,8 @@ class PcAgent:
         self.stop = stop or (lambda: False)
         self.deadline_s, self.settle_s, self.hung_wait_s, self.slow_start_s, self.owner_wait_s = deadline_s, settle_s, hung_wait_s, slow_start_s, owner_wait_s
         self.human, self.task_id = human, task_id
+        self.pending_takeover: dict | None = None
+        self.takeover = takeover          # D79: takeover(kind, obs, look) -> plugins/_shared/takeover.Outcome; None = the old "ask and stop" behaviour
         self.watch = humanfeel.OwnerWatch(clock)
         self.t0 = clock()
         self.jobs = 0
@@ -140,6 +143,8 @@ class PcAgent:
         missing = sorted(need - self.done_effects)
         out = {"ok": ok, "status": status, "actions": self.history, "facts": self.facts, "unverified": self.unverified, "expected_missing": missing,
                "verified": bool(self.facts) and not missing and ok, "problems": list(self.problems), "lessons_used": list(self.lessons_used), **kw}
+        if self.pending_takeover:
+            out["takeover"] = self.pending_takeover
         why = {"completed": "done", "stopped_to_ask": "asked", "waiting_for_permission": "approval", "cancelled": "owner_stop", "failed": "error", "budget": "budget"}.get(status, "")
         try:
             self.state.end({"completed": "done", "cancelled": "stopped", "waiting_for_permission": "waiting_approval", "stopped_to_ask": "asking"}.get(status, "failed"),
@@ -165,6 +170,25 @@ class PcAgent:
             except Exception:  # noqa: BLE001
                 pass
         return _End(self._result("stopped_to_ask", False, question=question[:200], ask=form, why=why))
+
+    def _hand_over(self, kind: str, obs: perceive.Observation, still: Callable[[perceive.Observation], bool]) -> str:
+        """D79: the owner's screen is needed (UAC, a dialog JARVIS cannot read). Returns "resolved" (look again and carry on), or "" (no takeover wired, or it ended without a
+        resolution: the caller asks as before). A stop by the owner ends the loop; a durable pause ends it with the takeover record in the result."""
+        if self.takeover is None:
+            return ""
+        try:
+            out = self.takeover(kind, obs, lambda: still(self.observe(obs.app or "", "none")) or None)
+        except Exception:  # noqa: BLE001 - a broken takeover falls back to the plain question
+            return ""
+        status = getattr(out, "status", "")
+        if status == "resolved":
+            return "resolved"
+        if status == "stop":
+            raise _End(self._cancel_result())
+        req = getattr(out, "request", None)
+        rec = {"id": getattr(req, "id", ""), "target": "pc", "kind": kind, "host": "", "status": status, "reasks": getattr(out, "reasks", 0), "site": "", "milestones": []}
+        self.pending_takeover = rec                      # the durable pause (missions.resume) needs the record; the caller asks its usual question, and the result carries the record
+        return ""
 
     # ---------------------------------------------------------------------------------------------------------------------------- look
     def observe(self, app: str, depth: str = "cheap") -> perceive.Observation:
@@ -289,6 +313,8 @@ class PcAgent:
         """What must be true before the next action is chosen. UAC, resource problems, a hung app, a dialog nobody asked for."""
         if ladder.is_uac(obs.windows, obs.dialogs):
             self.problems.append("uac") if "uac" not in self.problems else None
+            if self._hand_over("uac", obs, lambda o: ladder.is_uac(o.windows, o.dialogs)) == "resolved":
+                return self.observe(obs.app or "")
             raise self._ask("Windows is asking for administrator permission. That is only yours to give; I will not touch it. Tell me when it is done.", ["I dealt with it, carry on", "Stop here"],
                             why="uac", reason="I never answer a User Account Control prompt.", problem="uac")
         if obs.hung:
@@ -360,6 +386,8 @@ class PcAgent:
             else:
                 cls = self._classify(clean, obs.app)
             title = str(d.get("title") or "")
+            if not (d.get("texts") or d.get("title")) and self._hand_over("dialog", obs, lambda o: any(not (x.get("texts") or x.get("title")) for x in o.dialogs)) == "resolved":
+                return self.observe(obs.app or "", "cheap")           # D79: the owner answered a dialog JARVIS could not read; the screen is read again
             if FILE_DIALOG.search(title):
                 continue                                              # the task's own dialog: the model handles it (the kernel still classifies each click)
             if cls == "A":

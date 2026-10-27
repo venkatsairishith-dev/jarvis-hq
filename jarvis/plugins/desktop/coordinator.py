@@ -41,7 +41,7 @@ AGENT = {"open_website": "browser", "play_media": "browser", "browser": "browser
          "type_text": "desktop", "press_key": "desktop", "open_file": "desktop", "check_pc": "desktop",
          "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator",
          "open_in_vscode": "desktop", "type_in_editor": "desktop", "save_as": "desktop", "drive": "desktop", "simple_task": "desktop",      # D54
-         "web_task": "desktop"}                                                                                           # D64: a deck on a free web generator
+         "web_task": "desktop", "vm2_task": "desktop"}                                                                                           # D64: a deck on a free web generator
 TRANSIENT = re.compile(r"(?i)timeout|timed out|connection failed|not answering|temporarily|busy")
 # Steps that change nothing when run twice (open, focus, read, check). Typing, keys, clicks, playing, repairs and
 # research are not: a failure reported as a timeout may come after they already acted, so they are never re-run blindly.
@@ -1488,6 +1488,13 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
         if step.get("open_after") and not r.get("opened_verified"):
             return True, facts, "the deck was made, but no window showing it was seen" + (f" ({r.get('open_note')})" if r.get("open_note") else "")
         return True, facts, ""
+    if t == "vm2_task":                                    # D79: passes only when the lab agent finished and the quarantine was looked at; a wall left for the owner is a pause, not a pass
+        if r.get("stopped"):
+            return False, "stopped by the owner", str(r.get("error") or "")[:200]
+        if not r.get("ok") or not r.get("facts"):
+            who = r.get("needs_owner") or {}
+            return False, "the VM2 task did not finish", str(who.get("detail") or r.get("error") or r.get("summary") or "")[:240]
+        return True, "; ".join(str(x) for x in r.get("facts") or []), ""
     if t == "drive":                                       # D54: an observe - decide - act loop; it passes on what was VERIFIED, never on the model's "done"
         facts = "; ".join(str(x) for x in r.get("facts") or [])
         loose = "; ".join(str(x) for x in r.get("unverified") or [])
