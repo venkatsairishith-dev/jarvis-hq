@@ -158,3 +158,67 @@ def test_node_sampler_reads_the_probe_json_and_reports_a_harness_error():
 def test_goals_json_has_a_startup_command_for_the_face_copied_from_the_bench():
     cfg = CAT.probes["startup"]
     assert "--remote-debugging-port=9333" in " ".join(cfg["launch_cmd"]) and cfg["window_title"]
+
+
+class HangingProbe:
+    """D81 root cause: a node probe process that never exits on its own - exactly the shape of bug results/STATUS.md's Phase 3 already recorded live
+    ("connectOverCDP itself returned after 20 s and was wrong" against an assumed bound). Before the fix, `NodeSampler.startup()`'s own
+    `while probe.poll() is None` loop had no deadline at all and would spin on this forever."""
+
+    def __init__(self):
+        self.killed = False
+
+    def poll(self):
+        return None
+
+    def kill(self):
+        self.killed = True
+
+    def communicate(self, timeout=None):
+        return "", ""
+
+
+class Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def now(self):
+        return self.t
+
+    def sleep(self, s):
+        self.t += s
+
+
+def test_the_startup_probes_own_process_is_killed_instead_of_waited_on_forever():
+    clk = Clock()
+    hang = HangingProbe()
+    s = probes.NodeSampler(cfg={"startup": {"timeout_s": 5}}, clock=clk.now, sleep=clk.sleep, popen=lambda *a, **k: hang)
+    with __import__("pytest").raises(RuntimeError, match="did not exit"):
+        s.startup()
+    assert hang.killed
+    assert clk.t >= 5 + probes.STARTUP_GRACE_S          # the loop advanced by a BOUNDED amount, never forever
+
+
+def test_a_hung_startup_probe_makes_run_probe_invalid_not_a_hang():
+    clk = Clock()
+    hang = HangingProbe()
+    s = probes.NodeSampler(cfg={"startup": {"timeout_s": 5}}, clock=clk.now, sleep=clk.sleep, popen=lambda *a, **k: hang)
+    r = probes.run_probe(WR["wr-startup-interactive"], s, sleep=lambda s: None)
+    assert r.invalid.startswith("the probe could not run") and "did not exit" in r.invalid and not r.ok
+
+
+def test_a_startup_probe_that_exits_in_time_is_unaffected_by_the_new_deadline():
+    class QuickProbe:
+        def __init__(self):
+            self.polled = 0
+
+        def poll(self):
+            self.polled += 1
+            return 0 if self.polled > 2 else None
+
+        def communicate(self, timeout=None):
+            return '{"t_first_handled_ms": 900, "t_page_ms": 500}\n', ""
+    clk = Clock()
+    s = probes.NodeSampler(cfg={"startup": {"timeout_s": 5}}, clock=clk.now, sleep=clk.sleep, popen=lambda *a, **k: QuickProbe())
+    got = s.startup()
+    assert got["interactive_s"] == 0.9 and clk.t < 1.0          # finished fast; the deadline never had to fire

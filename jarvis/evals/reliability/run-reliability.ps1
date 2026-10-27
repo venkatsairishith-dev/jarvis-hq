@@ -11,6 +11,10 @@
 # Needs: the JARVIS tool server up (127.0.0.1:48970), the face started with --remote-debugging-port=9333 (face_reset.sh does that), Node on PATH.
 # For the capability local_moe_only: start the gateway with JARVIS_GATEWAY_PIN_FILE=D:\jarvis\cache\gateway-pin.txt and pass -PinFile with the same path.
 # Results: jarvis\evals\reliability\results\reliability-<date>.json (+ .md). Nothing here approves a PIN card, ever.
+# D81: a goal that hangs (a stuck window, a dialog nothing dismisses, the model side gone silent) no longer stalls the whole run. An external watchdog
+# (watchdog.py) gives each goal g.timeout_s + a grace margin (default 60 s, env JARVIS_RELIABILITY_WATCHDOG_GRACE_S or -Repeats-style CLI --watchdog-grace
+# on the python side); past that it reads the PC, writes a content-free stuck-report under results\stuck\, closes ONLY a new offending window (or cancels
+# and, if possible, ends a stuck child process), marks that one goal invalid, and moves on to the next goal. A human no longer has to notice and kill it.
 param(
     [ValidateSet('selftest', 'list', 'validate', 'quick', 'gate', 'report', 'latency')][string]$Mode = 'list',
     [string]$Capability = '',

@@ -29,14 +29,19 @@ if (!main || !chat) { out({ harness_error: 'face pages not found', pages: pages.
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const t0 = Date.now()
 const secs = () => Math.round((Date.now() - t0) / 100) / 10
+// D81: page.evaluate() (Playwright) has NO timeout of its own - if the face's renderer is frozen, an `await ...evaluate(...)` below can hang forever,
+// and since the goal loop's own deadline check only runs BETWEEN awaits, a hung evaluate would hold the whole script past `maxSeconds` even though the
+// loop looks bounded. This wraps a promise with its own timeout so the loop's deadline is always reachable; a timed-out read behaves like any other
+// failed read already does here (resolves to `fallback`, same as the existing `.catch(() => null)` style).
+const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))])
 
 // 1. a clean conversation (in place; the on-screen bench found that this does not reset everything: use the runner's --reset face for the final gate run)
 if (!keepChat) {
-  await main.evaluate(async () => {
+  await withTimeout(main.evaluate(async () => {
     const pinia = document.querySelector('#app').__vue_app__.config.globalProperties.$pinia
     const store = pinia._s.get('chat-session')
     store.cleanupMessages(store.activeSessionId)
-  }).catch(() => {})
+  }).catch(() => {}), 10000, null)
   await sleep(1200)
 }
 await chat.evaluate(() => { const b = document.querySelector('button[aria-label="Show the message box"]'); if (b) b.click() }).catch(() => {})
@@ -77,7 +82,7 @@ for (const p of pages) {
 }
 
 // helpers that read the stores in the main window
-const readState = () => main.evaluate(() => {
+const readState = () => withTimeout(main.evaluate(() => {
   const pinia = document.querySelector('#app').__vue_app__.config.globalProperties.$pinia
   const chatStore = pinia._s.get('chat')
   const sess = pinia._s.get('chat-session')
@@ -102,7 +107,7 @@ const readState = () => main.evaluate(() => {
     has_ask_form: flat.includes('"kind":"jarvis_ask"') || flat.includes('\\"kind\\":\\"jarvis_ask\\"'),
     ask_form_json: (() => { const i = flat.indexOf('"kind":"jarvis_ask"'); if (i < 0) return ''; const a = flat.lastIndexOf('{', i); let depth = 0; for (let k = a; k < flat.length; k++) { if (flat[k] === '{') depth++; else if (flat[k] === '}') { depth--; if (depth === 0) return flat.slice(a, k + 1) } } return '' })(),
   }
-}).catch(() => null)
+}).catch(() => null), 10000, null)
 
 // 3. the goal, typed into the chat box
 await chat.fill('textarea', goal)
@@ -125,7 +130,7 @@ const final = await readState()
 await sleep(300)
 let askForm = null
 try { if (final?.ask_form_json) askForm = JSON.parse(final.ask_form_json) } catch {}
-const body = await chat.evaluate(() => document.body.innerText.replace(/\n{2,}/g, '\n')).catch(() => '')
+const body = await withTimeout(chat.evaluate(() => document.body.innerText.replace(/\n{2,}/g, '\n')).catch(() => ''), 10000, '')
 const errs = [...body.matchAll(/(Remote sent \d+ response|Error from server[^|\n]{0,120}|didn't finish)/g)].map(m => m[1])
 out({
   goal, seconds: secs(), timed_out: timedOut, requests: reqs.length, statuses, calls: [...calls, ...((final && final.tool_slices) || [])],
