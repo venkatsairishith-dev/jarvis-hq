@@ -1,0 +1,16 @@
+{
+ "_note": "D76 (2026-10-27). Data for the open-ended task path (jarvis/plugins/desktop/taskplan.py, taskrun.py, webgoal.py). limits: the hard budget of ONE task, kept across a restart; when one is used up the task reports what it has instead of looping. research: the rules a multi-source brief must meet. sites: sites the owner can name in plain words, with the address of their search page (the query is URL-encoded and typed by JARVIS, never taken from a page) and the shape of the link that is a result. soft_words / hard_words: control names the pilot never presses by itself (the kernel judges every click as well: this list only decides when JARVIS stops and asks first). Nothing here widens a grant: trusted_sites.json and the kernel's lists are not read or changed.",
+ "limits": {"seconds": 1200, "milestones": 8, "actions": 120, "pages": 24, "tokens": 6000, "hops": 3, "rows": 200, "ask_rounds": 3, "page_seconds": 120},
+ "research": {"min_domains": 3, "max_quote_words": 12, "max_copy_words": 9, "brief_words": 450, "excerpt_chars": 1200, "excerpts_online_chars": 900},
+ "outputs": {"max_cell_chars": 500, "max_rows": 500, "folder": "tasks"},
+ "sites": {
+  "youtube": {"host": "www.youtube.com", "search": "https://www.youtube.com/results?search_query={q}", "result_hint": "/watch", "title_strip": " - YouTube"},
+  "wikipedia": {"host": "en.wikipedia.org", "search": "https://en.wikipedia.org/w/index.php?search={q}", "result_hint": "/wiki/", "title_strip": " - Wikipedia"},
+  "amazon": {"host": "www.amazon.in", "search": "https://www.amazon.in/s?k={q}", "result_hint": "/dp/"},
+  "github": {"host": "github.com", "search": "https://github.com/search?q={q}", "result_hint": ""},
+  "arxiv": {"host": "arxiv.org", "search": "https://arxiv.org/search/?query={q}&searchtype=all", "result_hint": "/abs/"},
+  "example": {"host": "example.com", "search": "", "result_hint": ""}
+ },
+ "hard_words": ["pay", "payment", "buy", "purchase", "order", "place order", "checkout", "check out", "subscribe", "upgrade", "donate", "billing", "send", "post", "publish", "share", "delete", "remove", "erase", "trash", "install", "unsubscribe", "transfer", "withdraw", "sign in", "sign up", "log in", "login", "register", "create account", "submit", "confirm", "book", "reserve", "accept", "agree", "apply", "authorize", "authorise", "grant", "password", "close account", "deactivate", "buy now", "add to cart", "add to basket"],
+ "result_skip": ["sponsored", "advertisement", "ad", "shorts", "people also ask", "sign in", "log in", "skip navigation", "privacy", "terms", "about", "help", "contact"]
+}

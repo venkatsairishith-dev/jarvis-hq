@@ -9,7 +9,8 @@
   "file": 0.9,
   "app": 0.9,
   "form_control": 0.8,
-  "web_step": 0.75
+  "web_step": 0.75,
+  "task_route": 0.7
  },
  "models": {
   "folder": "decider-qwen3-1.7b",

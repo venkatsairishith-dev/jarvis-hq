@@ -32,6 +32,9 @@ SAY = {    # fixed phrases for what the loop is doing (an app's process name is 
     "open_app": "opening", "click": "clicking in", "click_at": "clicking in", "type": "typing into", "paste": "typing into", "key": "pressing a key in",
     "scroll": "scrolling", "save_as": "saving the file from", "check_file": "checking the folder for the file", "focus": "bringing to the front",
     "restore": "bringing back", "drag": "dragging in", "wait": "waiting for", "read": "reading", "look": "looking at", "done": "finishing",
+    # D76 (open-ended tasks): the words of the web, document and output milestones; the "app" is a site's host name (letters, digits, dots)
+    "plan": "planning the task for", "browse": "browsing", "search": "searching", "download": "downloading from", "read_doc": "reading the files in",
+    "write_output": "writing the result for", "ask_owner": "asking you about", "fill": "filling in a form on",
 }
 APP = re.compile(r"^[A-Za-z0-9_.\- ]{1,40}$")
 _LOCK = threading.Lock()
