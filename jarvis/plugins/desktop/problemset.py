@@ -303,7 +303,7 @@ def ask_spec(cands: list[dict], need_folder: bool, defaults: dict, why: str = ""
             fields.append({"id": "folder", "type": "radio", "variant": "list", "label": "Which folder holds the problem statements?",
                            "options": [{"id": f"f{i + 1}", "label": c["label"][:80], "detail": f"{c.get('files', 0)} file(s), {c.get('kb', 0)} KB"} for i, c in enumerate(cands[:8])]})
         fields.append({"id": "folder_text", "type": "text", "label": "Or type the full folder path" if cands else "Full path of the folder with the problem statements", "max_len": 260})
-    fields.append({"id": "language", "type": "radio", "variant": "segmented" if False else "list", "label": "Language",
+    fields.append({"id": "language", "type": "radio", "variant": "list", "label": "Language",
                    "options": [{"id": k, "label": v, "checked": k == (defaults.get("language") or "statement")} for k, v in LANG_CHOICES]})
     fields.append({"id": "out", "type": "text", "label": "Save the solutions in (blank = a 'solutions' folder inside the problem folder)", "max_len": 260,
                    "value": defaults.get("out_phrase") or ""})
@@ -432,10 +432,8 @@ def prepare(text: str, utterance: str = "", *, ask: Callable[[dict, float], dict
 
 
 def _folder_from_answer(value: str, cands: list[dict]) -> tuple[Path | None, str]:
-    if any(c["path"] == value for c in cands):
-        p, why = check_folder(value)
-    else:                                                 # typed on the form: the owner's own word
-        p, why = check_folder(value)
+    """A folder from the form: one of the offered candidates or a path he typed (his own word). The same rules apply to both."""
+    p, why = check_folder(value)
     if p is not None and p.name.lower() in BROAD:
         return None, "that folder is too broad to read whole; name the folder with the problems"
     return p, why
