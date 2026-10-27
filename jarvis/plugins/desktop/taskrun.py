@@ -52,7 +52,9 @@ class Hands:
     pc: "Callable | None" = None                      # (goal, app) -> result of the PC loop
     llm: "Callable | None" = None                     # (question, text, names) -> {name: value}: the local model's optional extraction
     planner: object = None                            # browser_planner.LocalPlanner
-    release_text: "Callable | None" = None            # (text) -> Released: one short excerpt cleared for the online model by the gateway
+    release_local: "Callable | None" = None           # (text) -> Released: an excerpt for the VERIFIED LOCAL model (secret pass only; the text stays on this PC)
+    write_local: "Callable | None" = None             # (messages) -> (text, provider): the local model writes the brief
+    release_text: "Callable | None" = None            # (text) -> Released: one short excerpt cleared for the online model by the gateway (screen_text.release: it also needs the owner's switch)
     ask_reason: "Callable | None" = None              # (messages) -> (text, provider): the online model, through the gateway, no tools
     show: "Callable | None" = None                    # (path) -> None: queue the file for the Preview panel
     stop: Callable = lambda: False
@@ -210,10 +212,16 @@ class TaskRunner:
         # mode files: the files of a folder
         if self.h.doc_list is None:
             return Outcome(False, "failed", "listing the owner's folders is not available here")
-        files = self.h.doc_list(ms.folder or "Downloads", ms.ext or "pdf", int(ms.days or 0))
+        try:
+            files = self.h.doc_list(ms.folder or "Downloads", ms.ext or "pdf", int(ms.days or 0))
+        except (ValueError, OSError) as e:
+            return Outcome(False, "no_file", str(e)[:160] if isinstance(e, ValueError) else "the folder could not be read")
+        if ms.seek:                                                      # one document the owner named
+            files = [f for f in files if ms.seek.lower() in f["name"].lower()]
         if not files:
             return Outcome(False, "no_file", f"no {ms.ext or 'pdf'} files were found in {ms.folder or 'Downloads'}" + (f" from the last {ms.days} days" if ms.days else ""))
-        rows, bad = 0, []
+        rows, bad, told = 0, [], []
+        private = bool(set(names) & {"vendor", "seller", "supplier", "total", "amount", "invoice_number", "number"})        # money and parties stay in the file; dates and the like he asked to be told
         for fd in files[:15]:
             if self.h.stop():
                 return Outcome(False, "stopped", "the owner stopped the task")
@@ -229,12 +237,19 @@ class TaskRunner:
             rec = {"kind": "doc", "file": fd["name"]}
             for n, f in found.items():
                 rec[n] = f.value
+                if f.many:
+                    rec[n + "_all"] = list(f.many)
+                    told.append(f"{fd['name']}: {n}: " + "; ".join(f.many[:12]))
+                elif not private:
+                    told.append(f"{fd['name']}: {n}: {f.value}")
             b.add_record(rec)
             rows += 1
             if missing:
                 bad.append(f"{fd['name']}: {', '.join(missing)} not found")
-        out = Outcome(rows > 0, "none" if rows else "no_values", data={"private": True, "rows": rows}, unverified=bad[:4])
-        out.facts = [f"read {rows} of {len(files)} file(s) in {ms.folder or 'Downloads'}; each value was found in the file's own text"] if rows else []
+        out = Outcome(rows > 0, "none" if rows else "no_values", data={"private": True, "rows": rows} if private else {"rows": rows}, unverified=bad[:4])
+        out.facts = [f"read {rows} of {len(files)} file(s) in {'the folder' if ms.folder.startswith(('/', '\\')) or ':' in ms.folder else ms.folder}; each value was found in the file's own text"] if rows else []
+        if rows and told:
+            out.facts += told[:6]
         if not rows:
             out.detail = "none of the files could be read"
         return out
@@ -297,13 +312,18 @@ class TaskRunner:
         topic = ms.name or ms.query or "the topic"
         dis = TO.disagreements(sources)
         text, provider, problems = "", "", []
-        for attempt in (1, 2):
-            text = self._online_brief(topic, sources, rules, dis, problems if attempt == 2 else [], b)
-            if text:
-                provider = "the online model (excerpts cleared by the privacy gateway)"
-                problems = TO.brief_problems(text, sources, rules, dis)
-                if not problems:
-                    break
+        routes = [("the local model on this PC", self.h.release_local, self.h.write_local),
+                  ("the online model (excerpts cleared by the privacy gateway)", self.h.release_text, self.h.ask_reason)]
+        for label, release, write in routes:                              # the local model first: the pages' text then never leaves this PC
+            for attempt in (1, 2):
+                text = self._model_brief(release, write, topic, sources, rules, dis, problems if attempt == 2 else [], b)
+                if text:
+                    provider = label
+                    problems = TO.brief_problems(text, sources, rules, dis)
+                    if not problems:
+                        break
+            if text and not problems:
+                break
         if not text or problems:
             text = TO.extractive_brief(topic, sources, rules)
             provider = "short phrases assembled by JARVIS (no model)"
@@ -325,10 +345,10 @@ class TaskRunner:
             out.unverified = [f"the brief does not meet the research rules: {p}" for p in problems][:3]
         return out
 
-    def _online_brief(self, topic: str, sources: list, rules: dict, dis: list, problems: list, b: Board) -> str:
-        """The brief from the online model: the topic and SHORT excerpts, each cleared by the privacy gateway first (an excerpt that cannot be cleared is left out); nothing else
-        leaves the PC. '' when there is no model, the gateway is down, or the token budget is used up."""
-        if self.h.ask_reason is None or self.h.release_text is None:
+    def _model_brief(self, release, write, topic: str, sources: list, rules: dict, dis: list, problems: list, b: Board) -> str:
+        """The brief from a model: the topic and SHORT excerpts, each passed through `release` first (the local route: the secret pass; the online route: the privacy gateway
+        and the owner's switch; an excerpt that is not cleared stops that route). '' when there is no such model, nothing is cleared, or the token budget is used up."""
+        if write is None or release is None:
             return ""
         try:
             b.check("tokens")
@@ -337,7 +357,7 @@ class TaskRunner:
         cleared = []
         for s in sources:
             try:
-                rel = self.h.release_text(s["text"][: int(rules["excerpts_online_chars"])])
+                rel = release(s["text"][: int(rules["excerpts_online_chars"])])
             except Exception:  # noqa: BLE001
                 return ""
             if not getattr(rel, "allowed", False) or not str(getattr(rel, "text", "")).strip():
@@ -347,7 +367,7 @@ class TaskRunner:
         if problems:
             msgs[-1]["content"] += "\n\nThe last draft broke these rules, fix them: " + "; ".join(problems)[:300]
         try:
-            text, _prov = self.h.ask_reason(msgs)
+            text, _prov = write(msgs)
         except Exception:  # noqa: BLE001
             return ""
         b.spend("tokens", (sum(len(m["content"]) for m in msgs) + len(text or "")) / 4)

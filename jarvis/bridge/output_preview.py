@@ -538,6 +538,18 @@ class OutputPreview:
             self._wanted.append(item["id"])
         return {"ok": True, "message": f"Showing {item['title']} in the preview panel."}
 
+    def show_path(self, path: str) -> bool:
+        """D76: queue ONE file a task just made, named by its path (a plugin cannot word a query). Only a plain file inside the deliverables folder; the same id checks as
+        every other request (`resolve`: no link, no trick, an allowed type). False when it is not such a file."""
+        try:
+            rel = Path(path).resolve().relative_to(self.root.resolve()).as_posix()
+            self.resolve(rel)
+        except (ValueError, OSError, PreviewError):
+            return False
+        with self._lock:
+            self._wanted.append(encode_id(rel))
+        return True
+
     def _newest_mtime(self) -> float:
         newest = 0.0
         try:

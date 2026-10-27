@@ -643,6 +643,8 @@ async def _serve(args, views) -> None:
             asker = AskBroker()
             from jarvis.plugins._shared import owner_ask                   # D64: the browser agent asks the owner through this panel when a page needs him
             owner_ask.install(asker, asyncio.get_running_loop())
+            if outputs is not None:
+                owner_ask.install_preview(outputs.show_path)                 # D76: a task that made a file (a table, a brief) puts it in the Preview panel by itself
             try:
                 from jarvis.bridge.cleaner import Cleaner
                 from jarvis.bridge.cleaner_ui import CleanerService

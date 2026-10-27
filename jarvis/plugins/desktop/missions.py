@@ -265,6 +265,9 @@ def run_mission(mid: str, goal: str, resume: bool = False) -> dict:
         _save(mid, **rec)
         return rec
     rec = {"id": mid, "goal": goal, "status": "running", "started": started, "plans": [plan["steps"]], "steps": [], "replans": 0}
+    kind = (load(mid) or {}).get("kind")
+    if kind:
+        rec["kind"] = kind                                      # D76: the kind the mission was started with stays on its record
     _save(mid, **rec)
     stop = _plan_stop(rec, plan, steps_so_far=[], seen={}, history=[])
     if stop:

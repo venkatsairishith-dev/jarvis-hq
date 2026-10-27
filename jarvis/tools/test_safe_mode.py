@@ -24,6 +24,7 @@ CONSULTED_BY = {
     "plugins/desktop/browser_playbooks.py": "reads only the shipped playbooks, saves no repair",
     "plugins/desktop/browser_backend.py": "knows no site grant, makes no grant card",
     "plugins/desktop/quick.py": "the rules-before-model shortcut is off",
+    "plugins/desktop/taskroute.py": "the open-ended task path is off: a goal stays on the older, simpler paths (D76)",
     "bridge/face_tools.py": "adds the words Safe mode to the HUD status",
     "node/jarvis_node/uia.py": "the UI Automation worker is off",
     "node/jarvis_node/browserext.py": "does not click the extension's connect page",

@@ -459,7 +459,22 @@ def _strip_end(s: str) -> str:
 FOLDERS = {"downloads": "Downloads", "download": "Downloads", "documents": "Documents", "document": "Documents", "desktop": "Desktop", "outputs": "outputs"}
 
 
+PATH_RX = re.compile(r"(?:\"([^\"]{3,200})\")|(?<![\w.:/\\-])((?:[A-Za-z]:[\\/]|/)[^\s,;\"']{2,200})")
+
+
+def path_in(goal: str) -> str:
+    """A file or folder PATH the owner wrote ("C:\\Users\\x\\Documents\\inv", "/home/x/Documents/inv", or one in quotes). The executor lets it through only inside his known folders."""
+    for m in PATH_RX.finditer(str(goal or "")):
+        p = (m.group(1) or m.group(2) or "").rstrip(".,;:!?")
+        if re.match(r"(?i)^(?:[a-z]:[\\/]|/)", p):
+            return p[:200]
+    return ""
+
+
 def _folder_of(goal: str) -> str:
+    p = path_in(goal)
+    if p and "." not in p.replace("\\", "/").rsplit("/", 1)[-1]:
+        return p                                          # a folder he wrote by its path
     low = goal.lower()
     for w, canon in FOLDERS.items():
         if re.search(r"\b" + w + r"\b", low):
@@ -544,6 +559,13 @@ def rule_plan(goal: str, cfg: dict | None = None) -> tuple[list, str, str]:
         if out_type in ("csv", "xlsx"):
             ms.append(M("m2", "output", out_type, f"write the {out_type.upper()} of the rows", columns=cols, name="invoices", check={"kind": "output", "type": out_type}))
         return ms, "Read the invoices and list them.", ""
+
+    # --- one document the owner named by its path: read it and tell him what he asked
+    fp = path_in(g)
+    if fp and re.search(r"(?i)\.(pdf|png|jpe?g)$", fp) and re.search(r"(?i)\b(read|open|go through|look at|tell me|what)\b", low):
+        folder, _, name = fp.replace("\\", "/").rpartition("/")
+        tell = _what_to_tell(g) or ["dates"]
+        return [M("m1", "doc", "files", "read the document", folder=folder, seek=name, ext=name.rsplit(".", 1)[-1].lower(), extract=tell[:4], check={"kind": "values", "names": tell[:4]})], "Read the document.", ""
 
     # --- several sources on a topic and a brief
     if re.search(r"\b(brief|one-?page|write[- ]?up|summary)\b", low) and re.search(r"\b(sources?|articles?|pages?|websites?)\b|\blook(?:ing)? up\b|\bresearch\b", low):

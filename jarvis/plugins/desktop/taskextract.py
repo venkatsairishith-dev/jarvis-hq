@@ -195,7 +195,8 @@ def best_line(text: str, question: str) -> "tuple[str, str] | None":
     for ln in _lines(text):
         if len(ln) < 12 or len(ln) > 300 or INJECTION.search(ln) or re.search(r"(?i)\b(?:delete|click|go to|you are (?:now )?allowed)\b.*\bhttps?://", ln):
             continue                                     # a page line that gives orders is never the answer
-        score = len(want & _tok(ln))
+        have = _tok(ln)
+        score = sum(1 for t in want if t in have or any(len(t) >= 4 and len(h) >= 4 and (h.startswith(t) or t.startswith(h)) for h in have))
         if score >= min(2, len(want)) and (best is None or score > best[0] or (score == best[0] and len(ln) < len(best[1]))):
             best = (score, ln)
     return (best[1][:220], best[1]) if best else None
@@ -262,6 +263,7 @@ class Extractor:
     def read(self, names: list, text: str, *, title: str = "", subject: str = "", question: str = "") -> "tuple[dict, list]":
         """({name: Found}, [names not found]). Every Found's value is in `text` (rule results are read from it; model results were checked)."""
         found, missing = {}, []
+        text = f"{title}\n{text}" if title and title not in text else text          # the page's title is part of what the page says
         for name in names:
             f = self.one(name, text, title=title, subject=subject, question=question)
             from .browser_snapshot import INJECTION

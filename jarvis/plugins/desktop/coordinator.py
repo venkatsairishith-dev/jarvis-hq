@@ -1432,6 +1432,9 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
     t = step["tool"]
     if r.get("state") in ("waiting_for_permission", "denied"):
         return False, f"held for the owner ({r.get('state')})", ""
+    if t == "task_step":                                   # D76: a milestone of an open-ended task; it passes only on what its executor VERIFIED by effect
+        from . import taskrun
+        return taskrun.verify_step(step, r)
     if r.get("ok") is not True:                         # only boolean True: {"ok": "false"} is not success
         return False, "the action did not succeed", str(r.get("error") or r.get("state") or "")[:200]
     if t == "open_website":
@@ -1488,9 +1491,6 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
         if step.get("open_after") and not r.get("opened_verified"):
             return True, facts, "the deck was made, but no window showing it was seen" + (f" ({r.get('open_note')})" if r.get("open_note") else "")
         return True, facts, ""
-    if t == "task_step":                                   # D76: a milestone of an open-ended task; it passes only on what its executor VERIFIED by effect
-        from . import taskrun
-        return taskrun.verify_step(step, r)
     if t == "drive":                                       # D54: an observe - decide - act loop; it passes on what was VERIFIED, never on the model's "done"
         facts = "; ".join(str(x) for x in r.get("facts") or [])
         loose = "; ".join(str(x) for x in r.get("unverified") or [])
