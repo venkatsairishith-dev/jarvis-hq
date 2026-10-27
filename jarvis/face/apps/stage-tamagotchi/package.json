@@ -36,6 +36,7 @@
     "check:timeline": "node scripts/timeline-check.mjs",
     "check:launch": "node scripts/launch-check.mjs",
     "check:render": "node scripts/render-smoke.mjs",
+    "check:orb": "xvfb-run -a -s \"-screen 0 1280x800x24\" node scripts/orb-check.mjs",
     "check:downloads": "node scripts/verify-downloads.mjs"
   },
   "dependencies": {

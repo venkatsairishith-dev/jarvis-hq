@@ -63,6 +63,31 @@ const TASK_TALK = /^(?:what(?:'s| is| are)? you(?:'re| are)? doing(?: right now|
 const ASK_VERB = /^(?:delete|remove|erase|trash|send|e-?mail|forward|share|move|copy|rename|make|create|generate|search|find|look\s+up|print|upload|close|quit|exit|remind|schedule|whatsapp)\b/i
 const INDIC_VERB = /\b(?:kholo|khol\s+do|band\s+karo|hatao|hata\s+do|bhejo|bhej\s+do|banao|bajao|chalao|dikhao|dhundo|dhoondo|teruvu|teruvandi|muyyi|teesey|teeseyyi|pampu|pampandi|cheyyi|cheyandi|chupinchu|vetuku|mail\s+karo|(?:delete|save|open|close|rename|move|copy|send|play|share|search|create|make)\s+(?:karo|kar\s+do|cheyyi|cheyandi|chey))\b/i
 
+// ---- D78: hide / show (the look's hidden mode)
+const HIDE_YOURSELF = /^(?:please\s+)?(?:hide|go\s+hidden)\s+yourself(?:\s+please)?$/i
+const SHOW_YOURSELF = /^(?:please\s+)?(?:show|unhide)\s+yourself(?:\s+please)?$/i
+/** Short forms count only after the name ("Jarvis, hide"), so an ordinary sentence that starts with "show" or "hide" is never taken. */
+const HIDE_SHORT = /^(?:please\s+)?(?:hide|go\s+hidden)(?:\s+now)?(?:\s+please)?$/i
+const SHOW_SHORT = /^(?:please\s+)?(?:show|unhide|come\s+back|appear)(?:\s+now)?(?:\s+please)?$/i
+
+/**
+ * "hide yourself" / "show yourself" (and, after the name, "hide" / "show") as the owner says or types them; `null` for anything else.
+ * WHOLE phrases only. Used by the face before any model is asked, like the other quick commands (D60). It only changes what is DRAWN:
+ * a hide is never a permission and never approves anything (voice cannot approve: unchanged).
+ */
+export function parseVisibilityCommand(text: string | undefined | null): 'hide' | 'show' | null {
+  const clean = String(text ?? '').replace(/[.!?,]+$/g, '').replace(/\s+/g, ' ').trim()
+  const body = clean.replace(FILLER, '').replace(/[.!?,]+$/g, '').trim()
+  const named = body.length !== clean.length
+  if (!body || body.length > 40)
+    return null
+  if (HIDE_YOURSELF.test(body) || (named && HIDE_SHORT.test(body)))
+    return 'hide'
+  if (SHOW_YOURSELF.test(body) || (named && SHOW_SHORT.test(body)))
+    return 'show'
+  return null
+}
+
 /**
  * D75 (the owner: "it should do complex tasks ... can't we just do that by talking to JARVIS?"): a plain question the Python hook answers by itself, at once, with no app and no
  * model (jarvis/plugins/_shared/direct_answer.py): arithmetic ("23 times 47"), percentages, units, the date and the clock, tip / GST / EMI. The face only has to ASK the hook, so
@@ -81,11 +106,14 @@ export function mightBeQuickCommand(text: string, guess: TaskGuess | null = gues
   if (guess?.kind === 'pc')
     return true
   const body = String(text ?? '').replace(/\s+/g, ' ').trim().replace(FILLER, '')
-  return CLOCK.test(body) || TASK_TALK.test(body) || ASK_VERB.test(body) || INDIC_VERB.test(body) || (body.length <= 200 && ((NUMBERISH.test(body) && MATH_WORD.test(body)) || DATE_Q.test(body)))
+  return CLOCK.test(body) || TASK_TALK.test(body) || ASK_VERB.test(body) || INDIC_VERB.test(body) || parseVisibilityCommand(text) !== null ||
+    (body.length <= 200 && ((NUMBERISH.test(body) && MATH_WORD.test(body)) || DATE_Q.test(body)))
 }
 
 export interface QuickResult {
   handled: boolean
+  /** D78: handled with nothing to say (hide yourself / show yourself): no reply is made, shown or spoken. */
+  silent?: boolean
   /** The reply to show and speak. */
   reply?: string
   status?: string
@@ -125,6 +153,8 @@ export function parseQuickResult(result: unknown): QuickResult {
   const outer = data as Record<string, unknown>
   const d = (outer.result && typeof outer.result === 'object' && !Array.isArray(outer.result) ? outer.result : outer) as Record<string, unknown>
   const reply = typeof d.reply === 'string' ? d.reply.replace(/\s+/g, ' ').trim().slice(0, 600) : ''
+  if (d.handled === true && d.silent === true && !reply)
+    return { handled: true, silent: true }
   if (d.handled !== true || !reply)
     return { handled: false }
   return {
