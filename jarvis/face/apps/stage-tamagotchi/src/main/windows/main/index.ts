@@ -1,9 +1,8 @@
 import type { Rectangle } from 'electron'
 import type { InferOutput } from 'valibot'
 
-import type { LookService } from '../../jarvis/look-service'
-
 import type { FullscreenMode, FullscreenOpenRequest, FullscreenSurfaceId } from '../../../shared/eventa'
+import type { LookService } from '../../jarvis/look-service'
 import type { I18n } from '../../libs/i18n'
 import type { ServerChannel } from '../../services/airi/channel-server'
 import type { GodotStageManager } from '../../services/airi/godot-stage'
@@ -41,8 +40,8 @@ import { createConfig } from '../../libs/electron/persistence'
 import { createWindowContext } from '../../libs/electron/window-context'
 import { setupSettingsPageInvokes } from '../settings/rpc/index.electron'
 import { protectPrivilegedWindowNavigation, setWindowAlwaysOnTop, transparentWindowConfig } from '../shared'
-import { deferStartup, STARTUP_STAGGER } from '../shared/startup-stagger'
 import { centerWindowOnDisplay, computeCenteredWindowBounds, usableSavedBounds } from '../shared/display'
+import { deferStartup, STARTUP_STAGGER } from '../shared/startup-stagger'
 import { hideOnClose } from './hide-on-close'
 import { setupMainWindowElectronInvokes } from './rpc/index.electron'
 

@@ -168,7 +168,7 @@ watch([nowSpeaking, speechVoicing], ([speaking, voicing]) => {
 const { audioContext } = useAudioContext()
 const currentAudioSource = ref<AudioBufferSourceNode>()
 const speechOutputControlStore = useSpeechOutputControlStore()
-const { speechMuted, speechVolume } = storeToRefs(speechOutputControlStore)
+const { speechSilent, speechVolume } = storeToRefs(speechOutputControlStore)
 const lastVrmInteractionAt = new Map<VrmInteractionTarget, number>()
 const VRM_INTERACTION_COOLDOWN_MS = 450
 
@@ -468,7 +468,7 @@ const disconnectVoiceOutput = voice.connectOutput((turn) => {
         resetSpeakingState()
     },
   }
-  if (speechMuted.value)
+  if (speechSilent.value)
     return { ...output, synthesize: async () => null }
   try {
     const characterId = chatSession.sessionMetas[turn.sessionId]?.characterId
@@ -564,7 +564,7 @@ function setupAnalyser() {
   }
 }
 
-watch(speechMuted, (muted) => {
+watch(speechSilent, (muted) => {
   if (muted) {
     for (const turn of voice.activeTurns)
       voice.getSpeech(turn)?.cancel('Speech muted')
@@ -592,14 +592,14 @@ chatHookCleanups.push(onBeforeSend(async (_message, context) => {
 }))
 
 chatHookCleanups.push(onTokenLiteral(async (literal, context) => {
-  if (holdsVoice(context) && !speechMuted.value)
+  if (holdsVoice(context) && !speechSilent.value)
     await voice.getSpeech(context)?.write(literal)
 }))
 
 chatHookCleanups.push(onTokenSpecial(async (special, context) => {
   if (!holdsVoice(context))
     return
-  if (speechMuted.value)
+  if (speechSilent.value)
     await playSpecialToken(special, { turnId: context.turnId })
   else
     voice.getSpeech(context)?.special(special)

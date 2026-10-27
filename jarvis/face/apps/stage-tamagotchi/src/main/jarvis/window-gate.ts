@@ -249,7 +249,7 @@ export function createWindowGate(options: WindowGateOptions = {}): WindowGate {
 
     // A window that was on the screen before the hide has just been shown again: its own held "show" is the same thing, not one more request.
     const shownAgain = new Set(before.map(window => window.id).filter((id): id is number => typeof id === 'number'))
-    const waiting = pending.filter(entry => !(entry.kind === 'window' && entry.key?.startsWith('win:') && shownAgain.has(Number(entry.key.slice(4)))))
+    const waiting = pending.filter(entry => entry.kind !== 'window' || !entry.key?.startsWith('win:') || !shownAgain.has(Number(entry.key.slice(4))))
 
     // in order, once; a request that fails does not stop the ones behind it
     let delivered = 0

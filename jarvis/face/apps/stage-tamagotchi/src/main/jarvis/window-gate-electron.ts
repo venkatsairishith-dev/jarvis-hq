@@ -70,7 +70,9 @@ export function installWindowGate(gate: WindowGate, electron: GateElectron): () 
           (proto[name] as AnyFn).apply(self, callArgs)
       }, `win:${self.id}`)
     }
-    restore.push(() => { proto[method] = original })
+    restore.push(() => {
+      proto[method] = original
+    })
   }
 
   const originalSkip = proto.setSkipTaskbar as AnyFn | undefined
@@ -81,7 +83,9 @@ export function installWindowGate(gate: WindowGate, electron: GateElectron): () 
         return originalSkip.call(this, true)
       return originalSkip.call(this, skip)
     }
-    restore.push(() => { proto.setSkipTaskbar = originalSkip })
+    restore.push(() => {
+      proto.setSkipTaskbar = originalSkip
+    })
   }
 
   if (electron.Notification) {
@@ -92,7 +96,9 @@ export function installWindowGate(gate: WindowGate, electron: GateElectron): () 
         const self = this
         gate.request('notification', () => originalNotify.apply(self, args))
       }
-      restore.push(() => { notificationProto.show = originalNotify })
+      restore.push(() => {
+        notificationProto.show = originalNotify
+      })
     }
   }
 
@@ -113,7 +119,9 @@ export function installWindowGate(gate: WindowGate, electron: GateElectron): () 
           return name === 'showErrorBox' ? refuse() : Promise.resolve().then(refuse)
         return original.apply(this, args)
       }
-      restore.push(() => { dialog[name] = original })
+      restore.push(() => {
+        dialog[name] = original
+      })
     }
   }
 

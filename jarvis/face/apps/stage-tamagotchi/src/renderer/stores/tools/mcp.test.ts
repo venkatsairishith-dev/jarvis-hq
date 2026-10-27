@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const invokeMocks = vi.hoisted(() => ({
   timingMarks: vi.fn(async () => undefined),
+  hiddenSet: vi.fn(async () => ({ hidden: true, queued: 0, forgotten: false, unhideSeq: 0 })),
   speedEnv: vi.fn(async () => ({ directTools: true, quickAck: true, quickCommand: true, timing: true })),
   callMcpTool: vi.fn(async () => ({
     content: [{ type: 'text', text: 'ok' }],
@@ -34,6 +35,8 @@ vi.mock('@proj-airi/electron-vueuse', () => ({
       return invokeMocks.speedEnv
     if (event?.receiveEvent?.id === 'eventa:invoke:electron:jarvis:timing-marks-receive')
       return invokeMocks.timingMarks
+    if (event?.receiveEvent?.id === 'eventa:invoke:electron:jarvis-look:hidden-set-receive')
+      return invokeMocks.hiddenSet
 
     throw new Error(`Unexpected eventa invoke: ${JSON.stringify(event)}`)
   },
@@ -178,6 +181,44 @@ describe('useTamagotchiMcpToolsStore', async () => {
       const resolved = await resolveLlmTools({ activeTools: llmToolsStore.activeTools, builtInTools: [], webSearchTools: [] })
       const goal = resolved.find(tool => tool.function.name === 'desktop__do_goal')!
       expect(Object.keys((goal.function.parameters as { properties: object }).properties)).toEqual(['goal'])
+    })
+  })
+
+  describe('d78: hide yourself / show yourself', () => {
+    const quick = async (text: string) => {
+      const llmToolsStore = useLlmToolsStore()
+      await useTamagotchiMcpToolsStore().refresh()
+      const tool = llmToolsStore.getToolsByNames('jarvis_quick_command')[0]!
+      return tool.execute({ text }, {} as Parameters<Tool['execute']>[1])
+    }
+
+    it('hides at once, silently, and never asks the PC router or any model', async () => {
+      invokeMocks.hiddenSet.mockClear()
+      invokeMocks.callMcpTool.mockClear()
+      const answer = await quick('hide yourself')
+      expect(invokeMocks.hiddenSet).toHaveBeenCalledWith({ hidden: true })
+      expect(invokeMocks.callMcpTool).not.toHaveBeenCalled()
+      expect(answer).toEqual({ structuredContent: { handled: true, silent: true } })
+    })
+
+    it('shows again on "show yourself"', async () => {
+      invokeMocks.hiddenSet.mockClear()
+      await quick('show yourself')
+      expect(invokeMocks.hiddenSet).toHaveBeenCalledWith({ hidden: false })
+    })
+
+    it('leaves every other command to the PC router', async () => {
+      invokeMocks.hiddenSet.mockClear()
+      invokeMocks.callMcpTool.mockClear()
+      await quick('open notepad')
+      expect(invokeMocks.hiddenSet).not.toHaveBeenCalled()
+      expect(invokeMocks.callMcpTool).toHaveBeenCalledWith(expect.objectContaining({ name: 'jarvis::desktop__quick_command', arguments: { text: 'open notepad' } }))
+    })
+
+    it('a sentence that only contains the words is not a command', async () => {
+      invokeMocks.hiddenSet.mockClear()
+      await quick('please hide the notepad window')
+      expect(invokeMocks.hiddenSet).not.toHaveBeenCalled()
     })
   })
 })

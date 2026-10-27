@@ -39,6 +39,7 @@ import {
   shortModel,
 } from '../components/hud/hud-model'
 import { useJarvisHudSettingsStore } from '../stores/settings/jarvis-hud'
+import { useJarvisLookStore } from '../stores/settings/jarvis-look'
 import { resolveInitialRendererRoutePath, resolveRendererWindowContext } from '../window-context'
 import { pageIsHidden, POLL_CALL_TIMEOUT_MS, POLL_WAIT_MS, shouldPollNow, withDeadline } from './poll-guard'
 
@@ -104,7 +105,10 @@ export function useJarvisHud() {
   // and they do not even create the stores that the signals come from.
   const eligible = windowContext.stageRuntime === 'full' && resolveInitialRendererRoutePath(route.path) === '/'
   const look = computed(() => hudLook(settings.mode))
-  const visible = computed(() => eligible && look.value.visible)
+  // D78: in the orb and bar looks the orb is the interface, so the HUD layer is not drawn, but its signals are still collected (the orb reads them)
+  const jarvisLook = useJarvisLookStore()
+  const visible = computed(() => eligible && look.value.visible && jarvisLook.look === 'avatar')
+  const collecting = computed(() => eligible && (look.value.visible || jarvisLook.look !== 'avatar'))
 
   if (!eligible)
     return { visible, look, mode: computed(() => settings.mode) }
@@ -163,7 +167,7 @@ export function useJarvisHud() {
       clearInterval(timer)
     timer = undefined
   }
-  watch([visible, () => hud.taskActive], ([on, active], previous) => {
+  watch([collecting, () => hud.taskActive], ([on, active], previous) => {
     stop()
     if (!on)
       return

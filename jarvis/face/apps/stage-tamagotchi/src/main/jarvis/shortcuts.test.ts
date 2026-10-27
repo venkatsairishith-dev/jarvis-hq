@@ -18,10 +18,12 @@ function driver(taken: string[] = [], throwOn: string[] = []) {
   }
 }
 
-const wanted = (hide = 'Control+Alt+J', reset = 'Control+Alt+Shift+J') => ({
-  hide: { accelerator: hide, onTriggered: () => {} },
-  reset: { accelerator: reset, onTriggered: () => {} },
-})
+function wanted(hide = 'Control+Alt+J', reset = 'Control+Alt+Shift+J') {
+  return {
+    hide: { accelerator: hide, onTriggered: () => {} },
+    reset: { accelerator: reset, onTriggered: () => {} },
+  }
+}
 
 describe('isValidGlobalAccelerator', () => {
   it.each(['Control+Alt+J', 'Ctrl+Alt+Shift+J', 'CommandOrControl+Alt+F12', 'Alt+Space', 'Super+Home'])('accepts %s', (a) => {

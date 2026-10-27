@@ -75,7 +75,7 @@ import { electronPluginToolsChanged } from '../shared/eventa/plugin/tools'
 import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
 import { initializeIOTraceHubBridge } from './bridges/io-trace-hub'
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
-import { pageIsHidden, POLL_CALL_TIMEOUT_MS } from './composables/poll-guard'
+import { pageIsHidden, POLL_CALL_TIMEOUT_MS, spokenPollPaused } from './composables/poll-guard'
 import { useJarvisHud } from './composables/use-jarvis-hud'
 import { conversationTurns, createMemorySaver, memoryEnabled } from './composables/use-jarvis-memory'
 import { createSpokenPoller, proactiveEnabled } from './composables/use-jarvis-spoken'
@@ -315,7 +315,7 @@ function createFullStageRuntime() {
         await removeAuthenticationProviderConfiguration()
       // JARVIS: empty chat, hearing and speech settings start on the privacy gateway and the local speech server.
       await configureJarvisDefaultsIfEmpty()
-      await cardStore.adoptRuntimeDefaultsWhereEmpty()    // the character's saved defaults were captured empty before the line above
+      await cardStore.adoptRuntimeDefaultsWhereEmpty() // the character's saved defaults were captured empty before the line above
       // JARVIS has no account and nothing to set up: the welcome dialog (sign in / choose a provider) is never needed.
       if (!onboardingStore.hasCompletedSetup)
         onboardingStore.closeAfterAuthentication()
@@ -404,7 +404,7 @@ const memorySaver = fullStageRuntime
 const spokenPoller = fullStageRuntime
   ? createSpokenPoller({
       call: name => callMcpTool({ name, timeoutMs: POLL_CALL_TIMEOUT_MS }),
-      paused: pageIsHidden,
+      paused: spokenPollPaused,
       say: text => chatStore.send({ sessionId: chatSessionForSpoken.activeSessionId, text, tools: [] }),
       busy: () => chatStore.activeTurns.length > 0,
       lastOwnerActivity: () => lastOwnerActivity,

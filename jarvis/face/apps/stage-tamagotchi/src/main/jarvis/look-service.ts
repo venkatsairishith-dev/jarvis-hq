@@ -11,17 +11,17 @@
 
 import type { BrowserWindow, Display } from 'electron'
 
-import type { HiddenState, LookSettings, OrbLayoutSnapshot, Rect, ShortcutStatus } from '../../shared/jarvis-look'
 import type { JarvisLookSnapshot } from '../../shared/eventa/jarvis-look'
-import type { StoredLook } from './look-config'
+import type { HiddenState, LookSettings, OrbLayoutSnapshot, Rect, ShortcutStatus } from '../../shared/jarvis-look'
 import type { DisplayInfo } from '../../shared/orb-layout'
+import type { StoredLook } from './look-config'
 
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { useLogg } from '@guiiai/logg'
 import { defineInvokeHandler } from '@moeru/eventa'
-import { app, BrowserWindow as ElectronBrowserWindow, dialog, globalShortcut, Notification, screen } from 'electron'
+import { app, dialog, BrowserWindow as ElectronBrowserWindow, globalShortcut, Notification, screen } from 'electron'
 import { any, boolean, number, object, optional, string } from 'valibot'
 
 import {
@@ -33,8 +33,8 @@ import {
   electronJarvisOrbNudge,
   electronJarvisOrbRequest,
   electronJarvisOrbReset,
-  electronJarvisQuit,
 } from '../../shared/eventa/jarvis-look'
+import { DEFAULT_LOOK_SETTINGS } from '../../shared/jarvis-look'
 import { createConfig } from '../libs/electron/persistence'
 import { createWindowContext } from '../libs/electron/window-context'
 import { createHiddenMode, resolveStartHidden } from './hidden-mode'
@@ -106,6 +106,7 @@ export function setupLookService(): LookService {
 
   // ---- the gate goes in front of every window, now
   let broadcast: (() => void) | undefined
+  let settingsNow: () => LookSettings = () => DEFAULT_LOOK_SETTINGS
   let unhideSeqState: HiddenState = { hidden: false, queued: 0, forgotten: false, unhideSeq: 0 }
   let shortcutStatus: ShortcutStatus = {
     hide: { accelerator: '', ok: false },
@@ -115,7 +116,7 @@ export function setupLookService(): LookService {
   let mainWindow: BrowserWindow | undefined
 
   const gate = createWindowGate({
-    forgottenHours: () => controller.settings().forgottenHours,
+    forgottenHours: () => settingsNow().forgottenHours,
     log: message => log.log(message),
     onChange: () => broadcast?.(),
   })
@@ -142,6 +143,7 @@ export function setupLookService(): LookService {
     emit: () => broadcast?.(),
     log: message => log.log(message),
   })
+  settingsNow = () => controller.settings()
   // the first start writes the choice down, so a profile that started as an avatar never flips to the orb by itself
   controller.persist()
 
@@ -264,7 +266,6 @@ export function setupLookService(): LookService {
         hidden.show()
       return snapshot().hidden
     })
-    defineInvokeHandler(context, electronJarvisQuit, () => app.quit())
   }
   for (const window of ElectronBrowserWindow.getAllWindows())
     attachWindow(window)
@@ -291,5 +292,3 @@ export function setupLookService(): LookService {
     },
   }
 }
-
-export type { LookSettings }

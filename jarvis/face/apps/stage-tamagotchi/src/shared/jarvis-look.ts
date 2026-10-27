@@ -23,8 +23,8 @@ export const BAR_SIZE: Record<LookSize, { width: number, height: number }> = {
   L: { width: 480, height: 56 },
 }
 /** The "what I am doing" pill (D72) under the orb, and the small right-click menu, as the window must make room for them. */
-export const ORB_PILL = { width: 264, height: 34, gap: 4 } as const
-export const ORB_MENU = { width: 232, height: 348 } as const
+export const ORB_PILL = { width: 264, height: 48, gap: 4 } as const
+export const ORB_MENU = { width: 232, height: 404 } as const
 /** The card beside the orb (ask form, timeline, preview): the width the panels already use, and at most this tall. */
 export const ORB_CARD = { width: 460, height: 600, gap: 8 } as const
 /** The space kept between a snapped orb and the screen edge. */
@@ -36,6 +36,20 @@ export type Anchor = 'right' | 'left' | 'below' | 'above'
 
 export function normalizeLook(raw: unknown, fallback: Look = 'orb'): Look {
   return LOOKS.includes(raw as Look) ? raw as Look : fallback
+}
+
+/**
+ * The look the page starts with, from the `jarvis-look` query the main process puts on the main window's address. A window without it (settings,
+ * chat) is not the orb's window: it reads `avatar` until the store has the real answer. Pure, so it is tested.
+ */
+export function initialLookFromSearch(search: string | undefined): Look {
+  try {
+    const raw = new URLSearchParams(search ?? '').get('jarvis-look')
+    return raw ? normalizeLook(raw, 'avatar') : 'avatar'
+  }
+  catch {
+    return 'avatar'
+  }
 }
 
 export function normalizeLookSize(raw: unknown, fallback: LookSize = 'M'): LookSize {
@@ -86,7 +100,7 @@ export interface OrbLayoutRequest {
   menu: boolean
 }
 
-/** Where everything is inside the window, as the main process worked it out. All rectangles are relative to the window; `null` for the avatar look. */
+/** Where everything is, as the main process worked it out: `window` is on the screen, the other rectangles are inside the window. All `null` for the avatar look. */
 export interface OrbLayoutSnapshot {
   look: Look
   size: LookSize
@@ -116,28 +130,3 @@ export interface ShortcutStatus {
 }
 
 export type ShortcutFailure = 'invalid' | 'conflict' | 'error'
-
-const HIDE_YOURSELF = /^(?:please\s+)?(?:hide|go\s+hidden)\s+yourself(?:\s+please)?$/i
-const SHOW_YOURSELF = /^(?:please\s+)?(?:show|unhide)\s+yourself(?:\s+please)?$/i
-/** Short forms count only after the name ("Jarvis, hide"), so an ordinary sentence that starts with "show" or "hide" is never taken. */
-const HIDE_SHORT = /^(?:please\s+)?(?:hide|go\s+hidden)(?:\s+now)?(?:\s+please)?$/i
-const SHOW_SHORT = /^(?:please\s+)?(?:show|unhide|come\s+back|appear)(?:\s+now)?(?:\s+please)?$/i
-const FILLER = /^(?:(?:hey|ok|okay|hi)\s+jarvis[,\s]+|jarvis[,\s]+)+/i
-
-/**
- * "hide yourself" / "show yourself" (and, after the name, "hide" / "show") as the owner says or types them; `null` for anything else.
- * WHOLE phrases only. Used by the face before any model is asked, like the other quick commands (D60). It only changes what is DRAWN:
- * a hide is never a permission and never approves anything (voice cannot approve: unchanged).
- */
-export function parseVisibilityCommand(text: string | undefined | null): 'hide' | 'show' | null {
-  const clean = String(text ?? '').replace(/[.!?,]+$/g, '').replace(/\s+/g, ' ').trim()
-  const body = clean.replace(FILLER, '').replace(/[.!?,]+$/g, '').trim()
-  const named = body.length !== clean.length
-  if (!body || body.length > 40)
-    return null
-  if (HIDE_YOURSELF.test(body) || (named && HIDE_SHORT.test(body)))
-    return 'hide'
-  if (SHOW_YOURSELF.test(body) || (named && SHOW_SHORT.test(body)))
-    return 'show'
-  return null
-}

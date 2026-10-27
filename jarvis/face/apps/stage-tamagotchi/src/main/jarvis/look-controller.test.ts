@@ -1,7 +1,7 @@
 import type { OrbLayoutSnapshot, Rect } from '../../shared/jarvis-look'
+import type { DisplayInfo } from '../../shared/orb-layout'
 import type { StoredLook } from './look-config'
 import type { LookPorts } from './look-controller'
-import type { DisplayInfo } from '../../shared/orb-layout'
 
 import { describe, expect, it } from 'vitest'
 
@@ -24,7 +24,10 @@ function setup(options: { stored?: StoredLook, existing?: boolean, displays?: Di
     setBoundsCalls: 0,
     isDestroyed() { return this.destroyed },
     getBounds() { return this.bounds },
-    setBounds(b: Rect) { this.bounds = b; this.setBoundsCalls += 1 },
+    setBounds(b: Rect) {
+      this.bounds = b
+      this.setBoundsCalls += 1
+    },
     setResizable(r: boolean) { this.resizable = r },
   }
   const emitted: OrbLayoutSnapshot[] = []
@@ -121,7 +124,7 @@ describe('look controller: moving', () => {
     expect(t.win.bounds).toBe(before)
   })
 
-  it('Alt+arrow moves it by a step and keeps it on the screen', () => {
+  it('alt+arrow moves it by a step and keeps it on the screen', () => {
     const t = setup()
     const before = t.controller.layout().window!
     t.controller.nudge('left')

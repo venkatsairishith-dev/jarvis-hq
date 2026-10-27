@@ -11,7 +11,7 @@ import type { ShortcutFailure, ShortcutStatus } from '../../shared/jarvis-look'
 
 const MODIFIERS = /^(?:control|ctrl|commandorcontrol|cmdorctrl|alt|option|altgr|shift|super|meta|command|cmd)$/i
 const NEEDS_ONE_OF = /^(?:control|ctrl|commandorcontrol|cmdorctrl|alt|option|altgr|super|meta|command|cmd)$/i
-const KEY = /^(?:[a-z0-9]|f(?:[1-9]|1\d|2[0-4])|space|tab|backspace|delete|insert|return|enter|up|down|left|right|home|end|pageup|pagedown|escape|esc|plus|[-=[\]\\;',./`])$/i
+const KEY = /^(?:[a-z0-9\-=[\]\\;',./`]|f(?:[1-9]|1\d|2[0-4])|space|tab|backspace|delete|insert|return|enter|up|down|left|right|home|end|pageup|pagedown|escape|esc|plus)$/i
 
 /**
  * Whether `accelerator` is an Electron accelerator that is safe as a GLOBAL shortcut: at least one of Ctrl, Alt, Super or Command (Shift alone

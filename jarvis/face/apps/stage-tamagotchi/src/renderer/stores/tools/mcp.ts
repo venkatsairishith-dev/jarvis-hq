@@ -5,6 +5,7 @@ import { useElectronEventaInvoke } from '@proj-airi/electron-vueuse'
 import { setToolsWithoutCallSummary } from '@proj-airi/stage-ui/stores/ai/chat-llm/tool-call-summary'
 import { useLlmToolsStore } from '@proj-airi/stage-ui/stores/ai/chat-llm/tools'
 import { setTimingSink } from '@proj-airi/stage-ui/stores/chat/latency-trace'
+import { parseVisibilityCommand } from '@proj-airi/stage-ui/stores/chat/quick-intent'
 import { QUICK_TOOL_NAME } from '@proj-airi/stage-ui/stores/chat/quick-reply'
 import { useJarvisSpeedStore } from '@proj-airi/stage-ui/stores/jarvis-speed'
 import { TOOL_ICONS } from '@proj-airi/stage-ui/tools/icons'
@@ -13,6 +14,7 @@ import { defineStore } from 'pinia'
 import { watch } from 'vue'
 
 import { electronMcpCallTool, electronMcpListTools, jarvisSpeedEnv, jarvisTimingMarks } from '../../../shared/eventa'
+import { electronJarvisHiddenSet } from '../../../shared/eventa/jarvis-look'
 
 /** Waits for the tool server again after a failed list: 5 s, then 10, 20, 30 and every 30 s while direct mode is on and the list is not there. */
 export const DIRECT_RETRY_MS = [5_000, 10_000, 20_000, 30_000]
@@ -29,6 +31,7 @@ export const useTamagotchiMcpToolsStore = defineStore('tamagotchi-mcp-tools', ()
   const speed = useJarvisSpeedStore()
   const listMcpTools = useElectronEventaInvoke(electronMcpListTools)
   const callMcpTool = useElectronEventaInvoke(electronMcpCallTool)
+  const setHiddenMode = useElectronEventaInvoke(electronJarvisHiddenSet)
   const readSpeedEnv = useElectronEventaInvoke(jarvisSpeedEnv)
   const sendTimingMarks = useElectronEventaInvoke(jarvisTimingMarks)
   const toolIdPrefix = 'mcp:'
@@ -144,7 +147,16 @@ export const useTamagotchiMcpToolsStore = defineStore('tamagotchi-mcp-tools', ()
       function: { name: QUICK_TOOL_NAME, description: 'Runs one plain PC command by rules, with no model.', parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
       requiresExplicitSelection: true,
       defaultActive: false,
-      execute: input => callMcpTool({ name: QUICK_COMMAND_MCP_NAME, arguments: { text: String((input as { text?: unknown } | null)?.text ?? '') } }),
+      execute: async (input) => {
+        const text = String((input as { text?: unknown } | null)?.text ?? '')
+        // D78: "hide yourself" / "show yourself" change only what is drawn. Never a permission, never an approval; answered here, silently.
+        const visibility = parseVisibilityCommand(text)
+        if (visibility) {
+          await setHiddenMode({ hidden: visibility === 'hide' })
+          return { structuredContent: { handled: true, silent: true } }
+        }
+        return callMcpTool({ name: QUICK_COMMAND_MCP_NAME, arguments: { text } })
+      },
     })
   }
 

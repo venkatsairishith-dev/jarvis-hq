@@ -7,11 +7,10 @@
  */
 
 import type { Look, LookSettings, OrbLayoutRequest, OrbLayoutSnapshot, Rect } from '../../shared/jarvis-look'
+import type { Direction, DisplayInfo, PlacementStore } from '../../shared/orb-layout'
 import type { LookChange, StoredLook } from './look-config'
-import type { DisplayInfo, Direction, PlacementStore } from '../../shared/orb-layout'
 
 import { ORB_CARD, zoneSize } from '../../shared/jarvis-look'
-import { describeLookChange, mergeLookSettings, resolveLookSettings, windowKind } from './look-config'
 import {
   clampRect,
   computeOrbWindow,
@@ -27,6 +26,7 @@ import {
   snapRect,
   toSpot,
 } from '../../shared/orb-layout'
+import { describeLookChange, mergeLookSettings, resolveLookSettings, windowKind } from './look-config'
 
 /** The part of the main window that the controller drives. */
 export interface WindowPort {

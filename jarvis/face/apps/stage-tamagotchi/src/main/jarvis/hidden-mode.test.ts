@@ -41,7 +41,13 @@ function setup(overrides: Partial<HiddenModeDeps> & { settings?: HiddenModeDeps[
     now: () => t,
     ...overrides,
   })
-  return { mode, gate, windows, trayCalls, persisted, emitted, ensureOrbShown, advance: (ms: number) => { t += ms }, setHours: (h: number) => { hours = h } }
+  const advance = (ms: number) => {
+    t += ms
+  }
+  const setHours = (h: number) => {
+    hours = h
+  }
+  return { mode, gate, windows, trayCalls, persisted, emitted, ensureOrbShown, advance, setHours }
 }
 
 describe('start-up visibility: a hidden face is never lost', () => {

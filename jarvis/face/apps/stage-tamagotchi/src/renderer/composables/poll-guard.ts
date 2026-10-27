@@ -25,8 +25,29 @@ export function withDeadline<T>(promise: Promise<T>, ms: number, label = 'the ca
   })
 }
 
-/** True while the page cannot be seen (minimized, hidden). A background poll skips its turn then. */
+/**
+ * D78: the owner hid JARVIS (the hidden mode). The main process hides every window, and the look store tells this window here, so the polls
+ * stop even where the page's own `visibilityState` is not reliable. `mayBeHeard` is the owner's "speak while hidden" setting.
+ */
+let hostHidden = false
+let hostMayBeHeard = false
+export function setHostHidden(hidden: boolean, mayBeHeard = false): void {
+  hostHidden = hidden
+  hostMayBeHeard = mayBeHeard
+}
+
+/** True while the page cannot be seen (minimized, hidden, or hidden by the owner). A background poll skips its turn then. */
 export function pageIsHidden(doc: Pick<Document, 'hidden'> | undefined = globalThis.document): boolean {
+  return hostHidden || doc?.hidden === true
+}
+
+/**
+ * The proactive spoken notices ("JARVIS speaks first", D41) wait while the window cannot be seen, as before. While the owner has hidden
+ * JARVIS they wait unless he allowed sound while hidden; they stay on the tool server until the next poll, nothing is lost.
+ */
+export function spokenPollPaused(doc: Pick<Document, 'hidden'> | undefined = globalThis.document): boolean {
+  if (hostHidden)
+    return !hostMayBeHeard
   return doc?.hidden === true
 }
 

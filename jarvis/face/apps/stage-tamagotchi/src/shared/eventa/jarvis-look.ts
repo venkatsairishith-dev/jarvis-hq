@@ -28,4 +28,3 @@ export const electronJarvisOrbReset = defineInvokeEventa<void>('eventa:invoke:el
 
 /** Hide or show JARVIS (the orb menu, the voice phrase, the settings page). The global shortcut is handled in the main process. */
 export const electronJarvisHiddenSet = defineInvokeEventa<HiddenState, { hidden: boolean }>('eventa:invoke:electron:jarvis-look:hidden-set')
-export const electronJarvisQuit = defineInvokeEventa<void>('eventa:invoke:electron:jarvis-look:quit')

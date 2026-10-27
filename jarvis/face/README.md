@@ -45,6 +45,7 @@ its CJK display fonts (62 MB).
 | **Name.** App id `jarvis.face`, product name JARVIS, window titles, tray, English interface text. Uninstalling keeps the face's settings. | `electron-builder.config.ts`, `src/main/windows/`, `packages/i18n/` |
 | **English only.** The 10 other interface languages and the translation glossary are removed. JARVIS still answers in the language the owner speaks. | `packages/i18n/` |
 | **No Spine runtime.** Spine avatars need the Spine Runtimes, which only a Spine Editor licence holder may integrate. The runtime is removed; a Spine avatar shows a notice. | `packages/stage-ui-spine/` |
+| **Look and hidden mode (D78).** Three looks, switched live from the orb's menu or Settings > System > General: **Orb** (the default of a new profile; a profile that existed keeps the avatar until the owner switches), **Avatar**, **Minimal bar**. The orb and the bar are CSS only: no Live2D, VRM or WebGL, no model files, no Cubism core, no frame loop while idle. Drag it anywhere (it snaps to edges and corners, is remembered per display, never covers the taskbar or leaves the screen), sizes S / M / L, Alt+arrows, reset position. **Hide** (default Ctrl+Alt+J, or "hide yourself"): every window is hidden, no taskbar button, no tray icon (unless chosen), nothing can open a window (one window gate in the main process holds the requests and counts them), no sound unless chosen; restarts always show the orb unless "start hidden" is on. It does NOT hide JARVIS from screen capture, the task list or monitoring software, and nothing detects such software. | `src/main/jarvis/` (`window-gate*`, `hidden-mode`, `look-*`, `shortcuts`), `src/shared/orb-layout.ts`, `src/renderer/components/orb/` |
 | **Smaller fonts.** The three CJK display fonts are stand-ins that map their names to fonts already on the PC. | `packages/font-*` |
 
 ## Build and run (Windows laptop, or Linux for tests)
@@ -92,6 +93,7 @@ pnpm -F @proj-airi/stage-tamagotchi run check:csp      # injection attempts agai
 pnpm -F @proj-airi/stage-tamagotchi run check:preview  # the Preview panel (show my things) rendered and attacked in Chromium
 pnpm -F @proj-airi/stage-tamagotchi run check:launch   # the real app for 45 s under a virtual display (Linux)
 pnpm -F @proj-airi/stage-tamagotchi run check:render   # the real app: every console error and policy refusal in every window (Windows or Linux)
+pnpm -F @proj-airi/stage-tamagotchi exec vitest run --project node src/main/jarvis src/shared src/renderer/components/orb   # D78: window gate, hidden mode, placement, orb states, import graph
 python -m pytest jarvis/bridge/test_face_tools.py jarvis/tools/test_face_guard.py
 ```
 

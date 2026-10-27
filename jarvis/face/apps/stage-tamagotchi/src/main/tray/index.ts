@@ -1,10 +1,10 @@
 import type { LocaleDetector } from '@intlify/core'
-import type { BrowserWindow, Rectangle } from 'electron'
+import type { BrowserWindow, MenuItemConstructorOptions, Rectangle } from 'electron'
 
 import type { globalAppConfigSchema } from '../configs/global'
+import type { LookService } from '../jarvis/look-service'
 import type { Config } from '../libs/electron/persistence'
 import type { I18n } from '../libs/i18n'
-import type { LookService } from '../jarvis/look-service'
 import type { ServerChannel } from '../services/airi/channel-server'
 import type { setupBeatSync } from '../windows/beat-sync'
 import type { setupCaptionWindowManager } from '../windows/caption'
@@ -169,6 +169,77 @@ const setupTrayOnce = once((params: SetupTrayParams): void => {
     const halfHeightTarget = Math.floor(areaHeight / 2)
     const halfWidthTarget = Math.floor(halfHeightTarget * ASPECT_RATIO)
 
+    const zoneLook = !!params.look && params.look.controller.settings().look !== 'avatar'
+    // D78: the avatar window can be resized and aligned from here; the orb and the bar have their own size and snapping
+    const avatarOnlyItems: MenuItemConstructorOptions[] = zoneLook
+      ? []
+      : [
+          {
+            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.adjust_sizes'),
+            submenu: [
+              {
+                label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.recommended_size'),
+                type: 'checkbox',
+                checked: isSizeMatch(params.mainWindow, RECOMMENDED_WIDTH, RECOMMENDED_HEIGHT),
+                click: () => applyMainWindowSize(RECOMMENDED_WIDTH, RECOMMENDED_HEIGHT),
+              },
+              {
+                label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.full_height'),
+                type: 'checkbox',
+                checked: isSizeMatch(params.mainWindow, fullWidthTarget, fullHeightTarget),
+                click: () => applyMainWindowSize(fullWidthTarget, fullHeightTarget),
+              },
+              {
+                label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.half_height'),
+                type: 'checkbox',
+                checked: isSizeMatch(params.mainWindow, halfWidthTarget, halfHeightTarget),
+                click: () => applyMainWindowSize(halfWidthTarget, halfHeightTarget),
+              },
+              {
+                label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.full_screen'),
+                type: 'checkbox',
+                checked: isSizeMatch(params.mainWindow, areaWidth, areaHeight),
+                click: () => applyMainWindowSize(areaWidth, areaHeight, areaX, areaY),
+              },
+            ],
+          },
+          {
+            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.align_to'),
+            submenu: [
+              {
+                label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.center'),
+                type: 'checkbox',
+                checked: isPositionMatch(params.mainWindow, areaX + Math.floor((areaWidth - windowWidth) / 2), areaY + Math.floor((areaHeight - windowHeight) / 2)),
+                click: () => animateMainWindowTo(currentDisplay.workArea, 'center'),
+              },
+              { type: 'separator' },
+              {
+                label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.top_left'),
+                type: 'checkbox',
+                checked: isPositionMatch(params.mainWindow, areaX, areaY),
+                click: () => animateMainWindowTo(currentDisplay.workArea, 'top-left'),
+              },
+              {
+                label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.top_right'),
+                type: 'checkbox',
+                checked: isPositionMatch(params.mainWindow, areaX + areaWidth - windowWidth, areaY),
+                click: () => animateMainWindowTo(currentDisplay.workArea, 'top-right'),
+              },
+              {
+                label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.bottom_left'),
+                type: 'checkbox',
+                checked: isPositionMatch(params.mainWindow, areaX, areaY + areaHeight - windowHeight),
+                click: () => animateMainWindowTo(currentDisplay.workArea, 'bottom-left'),
+              },
+              {
+                label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.bottom_right'),
+                type: 'checkbox',
+                checked: isPositionMatch(params.mainWindow, areaX + areaWidth - windowWidth, areaY + areaHeight - windowHeight),
+                click: () => animateMainWindowTo(currentDisplay.workArea, 'bottom-right'),
+              },
+            ],
+          },
+        ]
     const contextMenu = Menu.buildFromTemplate([
       { label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.show'), click: () => toggleWindowShow(params.mainWindow) },
       ...params.look
@@ -178,71 +249,7 @@ const setupTrayOnce = once((params: SetupTrayParams): void => {
           ]
         : [],
       { type: 'separator' },
-      {
-        label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.adjust_sizes'),
-        submenu: [
-          {
-            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.recommended_size'),
-            type: 'checkbox',
-            checked: isSizeMatch(params.mainWindow, RECOMMENDED_WIDTH, RECOMMENDED_HEIGHT),
-            click: () => applyMainWindowSize(RECOMMENDED_WIDTH, RECOMMENDED_HEIGHT),
-          },
-          {
-            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.full_height'),
-            type: 'checkbox',
-            checked: isSizeMatch(params.mainWindow, fullWidthTarget, fullHeightTarget),
-            click: () => applyMainWindowSize(fullWidthTarget, fullHeightTarget),
-          },
-          {
-            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.half_height'),
-            type: 'checkbox',
-            checked: isSizeMatch(params.mainWindow, halfWidthTarget, halfHeightTarget),
-            click: () => applyMainWindowSize(halfWidthTarget, halfHeightTarget),
-          },
-          {
-            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.full_screen'),
-            type: 'checkbox',
-            checked: isSizeMatch(params.mainWindow, areaWidth, areaHeight),
-            click: () => applyMainWindowSize(areaWidth, areaHeight, areaX, areaY),
-          },
-        ],
-      },
-      {
-        label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.align_to'),
-        submenu: [
-          {
-            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.center'),
-            type: 'checkbox',
-            checked: isPositionMatch(params.mainWindow, areaX + Math.floor((areaWidth - windowWidth) / 2), areaY + Math.floor((areaHeight - windowHeight) / 2)),
-            click: () => animateMainWindowTo(currentDisplay.workArea, 'center'),
-          },
-          { type: 'separator' },
-          {
-            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.top_left'),
-            type: 'checkbox',
-            checked: isPositionMatch(params.mainWindow, areaX, areaY),
-            click: () => animateMainWindowTo(currentDisplay.workArea, 'top-left'),
-          },
-          {
-            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.top_right'),
-            type: 'checkbox',
-            checked: isPositionMatch(params.mainWindow, areaX + areaWidth - windowWidth, areaY),
-            click: () => animateMainWindowTo(currentDisplay.workArea, 'top-right'),
-          },
-          {
-            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.bottom_left'),
-            type: 'checkbox',
-            checked: isPositionMatch(params.mainWindow, areaX, areaY + areaHeight - windowHeight),
-            click: () => animateMainWindowTo(currentDisplay.workArea, 'bottom-left'),
-          },
-          {
-            label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.bottom_right'),
-            type: 'checkbox',
-            checked: isPositionMatch(params.mainWindow, areaX + areaWidth - windowWidth, areaY + areaHeight - windowHeight),
-            click: () => animateMainWindowTo(currentDisplay.workArea, 'bottom-right'),
-          },
-        ],
-      },
+      ...avatarOnlyItems,
       { type: 'separator' },
       { label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.settings'), click: () => void params.settingsWindow.openWindow('/settings') },
       { label: params.i18n.t('tamagotchi.electron.tray.menu.labels.label.about'), click: () => params.aboutWindow().then(window => toggleWindowShow(window)) },

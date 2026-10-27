@@ -1,4 +1,4 @@
-import type { GateElectron, GatedWindowLike } from './window-gate-electron'
+import type { GatedWindowLike, GateElectron } from './window-gate-electron'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -36,8 +36,16 @@ function makeElectron() {
     isDestroyed() { return this.destroyed }
     isVisible() { return this.visible }
     hide() { this.visible = false }
-    show() { this.visible = true; this.calls.push('show') }
-    showInactive() { this.visible = true; this.calls.push('showInactive') }
+    show() {
+      this.visible = true
+      this.calls.push('show')
+    }
+
+    showInactive() {
+      this.visible = true
+      this.calls.push('showInactive')
+    }
+
     focus() { this.calls.push('focus') }
     restore() { this.calls.push('restore') }
     moveTop() { this.calls.push('moveTop') }
@@ -72,7 +80,11 @@ describe('installWindowGate', () => {
     const gate = createWindowGate()
     uninstall = installWindowGate(gate, electron)
     const w = new FakeWindow()
-    w.show(); w.focus(); w.showInactive(); w.restore(); w.moveTop()
+    w.show()
+    w.focus()
+    w.showInactive()
+    w.restore()
+    w.moveTop()
     expect(w.calls).toEqual(['show', 'focus', 'showInactive', 'restore', 'moveTop'])
   })
 
@@ -82,7 +94,12 @@ describe('installWindowGate', () => {
     uninstall = installWindowGate(gate, electron)
     gate.hide([])
     const w = new FakeWindow()
-    w.show(); w.focus(); w.showInactive(); w.show(); w.restore(); w.moveTop()
+    w.show()
+    w.focus()
+    w.showInactive()
+    w.show()
+    w.restore()
+    w.moveTop()
     expect(w.calls).toEqual([])
     expect(w.visible).toBe(false)
     expect(gate.state().queued).toBe(1)

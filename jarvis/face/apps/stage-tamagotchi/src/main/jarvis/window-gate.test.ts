@@ -18,14 +18,27 @@ class FakeWindow implements GateWindow {
   isDestroyed() { return this.destroyed }
   isVisible() { return this.visible }
   hide() { this.visible = false }
-  showInactive() { this.visible = true; this.shows.push('showInactive') }
-  show() { this.visible = true; this.shows.push('show') }
+  showInactive() {
+    this.visible = true
+    this.shows.push('showInactive')
+  }
+
+  show() {
+    this.visible = true
+    this.shows.push('show')
+  }
+
   setSkipTaskbar(skip: boolean) { this.skipTaskbar = skip }
 }
 
 function clock(start = 1_000_000) {
   let t = start
-  return { now: () => t, advance: (ms: number) => { t += ms } }
+  return {
+    now: () => t,
+    advance: (ms: number) => {
+      t += ms
+    },
+  }
 }
 
 describe('window gate: hidden refuses every show path', () => {
@@ -107,7 +120,9 @@ describe('window gate: hidden refuses every show path', () => {
     const gate = createWindowGate()
     gate.hide([])
     const after = vi.fn()
-    gate.request('window', () => { throw new Error('boom') })
+    gate.request('window', () => {
+      throw new Error('boom')
+    })
     gate.request('window', after)
     const result = gate.unhide()
     expect(after).toHaveBeenCalledOnce()
