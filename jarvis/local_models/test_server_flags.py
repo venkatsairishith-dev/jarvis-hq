@@ -210,4 +210,7 @@ def test_the_models_over_the_vram_budget_are_flagged_in_the_config():
     assert "VRAM budget (D50" in text and "2048 MB" in text and "OVER" in text
     _, cmds = server_commands(path)
     big = [c for c in cmds if "Qwen3-4B" in c]
-    assert len(big) == 2 and all("-ngl 99" in c for c in big)
+    # 2026-10-26: the chosen decider (Instruct-2507, alias `decider`) now keeps 24 of 36 layers on the GPU (about 1.85 GB, measured); the plain Qwen3-4B stays at -ngl 99
+    # (the OVER case the config describes) and two partial variants exist for measuring.
+    assert len(big) == 4 and sum("-ngl 99" in c for c in big) == 1 and sum("-ngl 24" in c for c in big) == 2 and sum("-ngl 18" in c for c in big) == 1
+    assert all("Instruct-2507" in c for c in big if "-ngl 24" in c or "-ngl 18" in c)

@@ -9,9 +9,9 @@ afterEach(() => vi.useRealTimers())
 const idle = { speaking: false, thinking: false, listening: false, lastInteractionAt: 0, now: 1_000_000 }
 
 describe('stageFrameRateFor', () => {
-  it('draws 30 frames a second when nothing happens', () => {
+  it('draws 15 frames a second when nothing happens', () => {
     expect(stageFrameRateFor(idle)).toBe(IDLE_FPS)
-    expect(IDLE_FPS).toBe(30)
+    expect(IDLE_FPS).toBe(15)
   })
 
   it('draws 60 while the character speaks, thinks or listens', () => {
@@ -54,7 +54,7 @@ describe('useStageFrameRate', () => {
     rate.stop()
   })
 
-  it('goes to 60 while speaking and back to 30 three seconds after it ends', async () => {
+  it('goes to 60 while speaking and back to 15 three seconds after it ends', async () => {
     const { signals, rate } = setup()
     await vi.advanceTimersByTimeAsync(ACTIVE_HOLD_MS + 100)
     signals.speaking.value = true

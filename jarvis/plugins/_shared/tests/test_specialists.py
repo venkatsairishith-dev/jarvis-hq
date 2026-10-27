@@ -30,7 +30,7 @@ def test_a_missing_file_means_the_built_in_defaults_which_equal_the_shipped_tabl
 
 def test_resolve_gives_the_alias_and_an_unknown_kind_is_a_clear_error():
     assert S.resolve("ui_decide").alias == "decider"
-    assert S.resolve("screen_read").aliases == ("vision", "vision-ground")
+    assert S.resolve("screen_read").aliases == ("vision-qwen35", "vision-ground")
     with pytest.raises(S.SpecialistError, match="no specialist for task kind 'telepathy'.*known kinds"):
         S.resolve("telepathy")
 

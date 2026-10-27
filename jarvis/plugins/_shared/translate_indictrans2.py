@@ -15,7 +15,7 @@ tokens per call (so long text is split into sentences here), and no romanized in
 
 Threads (D50: 3): the export creates its ONNX Runtime sessions without SessionOptions, so ONNX Runtime would use every core. `_capped()` wraps
 InferenceSession for the time the folder is loaded so each session gets intra_op_num_threads = the configured threads. UNVERIFIED on the real export.
-Memory (D50: one model at a time): a loaded model is released after `idle_unload_s` without a call (a daemon timer), so an idle PC holds none.
+Memory (D50): the loaded models are released after `idle_unload_s` without a call (a daemon timer), so an idle PC holds none; both directions stay loaded meanwhile (`one_at_a_time: true` in the config goes back to one).
 """
 from __future__ import annotations
 
@@ -99,8 +99,11 @@ class IndicTrans2Onnx(Backend):
     name = "indictrans2-onnx"
     confidence = 0.85            # an assumption (no per-sentence score from greedy decoding); the eval file replaces it with a measured chrF++
 
-    def __init__(self, root: str | Path = DEFAULT_ROOT, threads: int = 3, idle_unload_s: float = 120.0, loader=None):
+    def __init__(self, root: str | Path = DEFAULT_ROOT, threads: int = 3, idle_unload_s: float = 120.0, loader=None, one_at_a_time: bool = False):
         self.root, self.threads, self.idle = Path(root), int(threads), float(idle_unload_s)
+        # One model at a time was the first design (D50). Measured live 2026-10-26 (3 threads): each switch of direction cost a 4.3 to 4.7 s load, and every owner turn
+        # needs both directions (his words to English, the reply back), so a turn paid about 9 s of loading. Both stay loaded now (about 0.5 GB together) until idle.
+        self.one_at_a_time = bool(one_at_a_time)
         self._loader = loader or (lambda folder: _Model(folder, self.threads))
         self._models: dict[str, _Model] = {}
         self._last = 0.0
@@ -126,9 +129,9 @@ class IndicTrans2Onnx(Backend):
     def _model(self, key: str) -> _Model:
         with self._lock:
             if key not in self._models:
-                # one translation model at a time: the other direction's model is released first
-                for k in list(self._models):
-                    self._models.pop(k)
+                if self.one_at_a_time:                        # the other direction's model is released first
+                    for k in list(self._models):
+                        self._models.pop(k)
                 t0 = time.monotonic()
                 self._models[key] = self._loader(self._folder(key))
                 self.load_seconds[key] = round(time.monotonic() - t0, 2)
@@ -169,5 +172,5 @@ class IndicTrans2Onnx(Backend):
 def build(cfg: dict):
     """The backend for the config's "indictrans2" section, or None when neither model folder is there (then it is simply "not installed yet")."""
     sec = (cfg or {}).get("indictrans2") or {}
-    b = IndicTrans2Onnx(sec.get("root") or DEFAULT_ROOT, int(sec.get("threads", 3)), float(cfg.get("idle_unload_s", 120)))
+    b = IndicTrans2Onnx(sec.get("root") or DEFAULT_ROOT, int(sec.get("threads", 3)), float(cfg.get("idle_unload_s", 120)), one_at_a_time=bool(sec.get("one_at_a_time", False)))
     return b if b.ready() else None

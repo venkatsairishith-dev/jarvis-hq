@@ -1,0 +1,27 @@
+{
+ "time": "2026-10-27 00:00:23",
+ "rows": [
+  {
+   "model": "decider",
+   "gpu_mb_before_load": 887,
+   "first_answer_s": 4.5,
+   "first_reply": "OK.",
+   "tokens_per_s": 35.3,
+   "prompt_tokens_per_s": 127.1,
+   "generated_tokens": 200,
+   "peak_ram_mb": 3096,
+   "peak_gpu_mb": 3484
+  },
+  {
+   "model": "decider-qwen3-1.7b",
+   "gpu_mb_before_load": 903,
+   "first_answer_s": 36.1,
+   "first_reply": "OK. Let me know how I can",
+   "tokens_per_s": 87.4,
+   "prompt_tokens_per_s": 299.7,
+   "generated_tokens": 126,
+   "peak_ram_mb": 3081,
+   "peak_gpu_mb": 2250
+  }
+ ]
+}

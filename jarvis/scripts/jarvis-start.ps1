@@ -116,6 +116,15 @@ if (-not (Listening 48970)) {
     -RedirectStandardOutput "$logs\face-tools.out.log" -RedirectStandardError "$logs\face-tools.err.log" | Out-Null
   foreach ($i in 1..40) { if (Listening 48970) { break }; Start-Sleep 1 }
 }
+# The local translation service (D58) on 127.0.0.1:48960: IndicTrans2 for Telugu and Hindi, one process that both the gateway and the face's language layer call.
+# Its own venv (D:\jarvis\tools\translate-venv: onnxruntime, tokenizers, IndicTransToolkit as plain Python) and models (D:\jarvis\models\translate). A missing venv or
+# model means no translation (the original text goes on), never an error. The models load on the first request (5 s) and go after 120 s idle.
+$trPy = "D:\jarvis\tools\translate-venv\Scripts\python.exe"
+if ((Test-Path $trPy) -and (Test-Path "D:\jarvis\models\translate") -and -not (Listening 48960)) {
+  $env:PYTHONPATH = $repo
+  Start-Process $trPy -ArgumentList (Join-Path $repo "jarvis\scripts\translate_server.py") -WorkingDirectory $repo -WindowStyle Hidden -RedirectStandardOutput "$logs\translate.out.log" -RedirectStandardError "$logs\translate.err.log" | Out-Null
+  Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+}
 # Footprint governor (D50: JARVIS may use 20% of the laptop): BELOW_NORMAL + EcoQoS for every JARVIS process, one Job Object with the CPU hard cap and a
 # memory backstop, and a soft loop that unloads idle models when the total is over budget. One copy only (it refuses a second). Log: data\logs\governor.jsonl.
 $govScript = Join-Path $PSScriptRoot "..\tools\governor.py"

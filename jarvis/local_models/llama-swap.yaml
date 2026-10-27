@@ -45,10 +45,19 @@ models:
   decider-qwen3-4b:
     cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-4B-Q4_K_M.gguf -ngl 99 -c 4096 -np 1
     ttl: 120
+  # VRAM measurements (2026-10-26, jarvis/evals/local_models/measure_local.py, GPU counter minus the 0.9 GB other apps already hold): the 4B at -ngl 99 takes
+  # about 2.6 GB (over the 2 GB budget of D50), Qwen3-1.7B about 1.35 GB. These two put part of the 4B on the CPU to fit the budget; see results/local-*.json.
+  decider-qwen3-4b-ngl24:
+    cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-4B-Instruct-2507-Q4_K_M.gguf -ngl 24 -c 2048 -np 1
+    ttl: 120
+  decider-qwen3-4b-ngl18:
+    cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-4B-Instruct-2507-Q4_K_M.gguf -ngl 18 -c 2048 -np 1
+    ttl: 120
   # the chosen decision model (PC_CONTROL_BENCHMARK.md): 92.9% dev, 3.3 s median on this GPU
   decider-qwen3-4b-2507:
     aliases: [decider]
-    cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-4B-Instruct-2507-Q4_K_M.gguf -ngl 99 -c 2048 -np 1
+    # 24 of 36 layers on the GPU: about 1.85 GB of VRAM, inside the 2 GB of D50 (all 36: about 2.6 GB), at 15 tokens a second instead of 35 (measured 2026-10-26)
+    cmd: ${server} -m D:\jarvis\models\gguf\Qwen3-4B-Instruct-2507-Q4_K_M.gguf -ngl 24 -c 2048 -np 1
     ttl: 120
   # Vision for one window (jarvis/node/jarvis_node/vision.py; QUALITY_95_RESEARCH.md section 6), used only when OCR cannot
   # name the thing: UI-Venus-1.5-2B (grounding specialist, ScreenSpot-V2 92.8) + its F16 projector (never BF16 on RDNA1).
@@ -97,5 +106,5 @@ groups:
   specialists:
     swap: true
     exclusive: true
-    members: [ling-tiny, qwen-coder-1.5b, qwen-math-1.5b, decider-qwen3-1.7b, decider-qwen3-4b, decider-qwen3-4b-2507,
+    members: [ling-tiny, qwen-coder-1.5b, qwen-math-1.5b, decider-qwen3-1.7b, decider-qwen3-4b, decider-qwen3-4b-2507, decider-qwen3-4b-ngl24, decider-qwen3-4b-ngl18,
               vision-ui-venus-2b, vision-qwen35-2b, lightonocr-docreader, ling-heretic, granite-abliterated]

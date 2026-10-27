@@ -532,7 +532,11 @@ def test_the_indictrans2_backend_is_simply_not_installed_when_its_folders_are_mi
     out = b.translate("ఒకటి. రెండు.", "te", "en")
     assert out == "[tel_Telu>eng_Latn] ఒకటి. [tel_Telu>eng_Latn] రెండు."
     b.translate("hello", "en", "te")
-    assert list(b._models) == ["out"], "one translation model at a time: the other direction was released"
+    assert sorted(b._models) == ["in", "out"], "both directions stay loaded: every turn needs both and a switch cost 4.5 s of loading (measured 2026-10-26)"
+    one = I2.IndicTrans2Onnx(tmp_path, 3, 0, loader=lambda folder: type("M", (), {"translate": lambda self, s, a, t: s})(), one_at_a_time=True)
+    one.translate("x", "te", "en")
+    one.translate("hello", "en", "te")
+    assert list(one._models) == ["out"], "one_at_a_time: true keeps the old rule"
 
 
 def test_long_sentences_are_split_for_the_128_token_limit():

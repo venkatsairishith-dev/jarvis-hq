@@ -18,6 +18,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import types
 import unittest
 import urllib.error
@@ -1096,3 +1097,167 @@ class LatencyIsMeasuredPerProvider(unittest.TestCase):
         self.assertTrue(lat, lat)
         row = next(iter(lat.values()))[-1]
         self.assertTrue(all(k in row for k in ("redact_ms", "first_ms", "total_ms")))
+
+
+class AStalledProviderIsGivenUpOn(unittest.TestCase):
+    """2026-10-27 (reliability quick run on the laptop): Groq and Dahl sometimes sent no first byte for 45 s to 315 s; the owner's goal ended with no answer.
+    A streamed request waits for the first byte of a provider that is not the last link only `first_byte_timeout_s`, then asks the next one."""
+
+    def test_a_provider_that_never_starts_is_skipped_for_the_next(self):
+        seen = {"slow": 0, "local": 0}
+        release = threading.Event()
+
+        def handler_for(name, slow):
+            class H(BaseHTTPRequestHandler):
+                def log_message(self, *a):
+                    pass
+
+                def do_POST(self):
+                    self.rfile.read(int(self.headers["Content-Length"]))
+                    seen[name] += 1
+                    if slow:
+                        release.wait(8)                       # no first byte
+                        return
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    self.wfile.write(b'data: {"choices":[{"index":0,"delta":{"content":"hello"}}]}\n\ndata: [DONE]\n\n')
+                    self.wfile.flush()
+            return H
+        servers = []
+        for name, slow in (("slow", True), ("local", False)):
+            sv = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(name, slow))
+            threading.Thread(target=sv.serve_forever, daemon=True).start()
+            servers.append(sv)
+        self.addCleanup(lambda: (release.set(), [(sv.shutdown(), sv.server_close()) for sv in servers]))
+        provs = [{"name": "slow", "enabled": True, "first_byte_timeout_s": 0.6, "base_url": f"http://127.0.0.1:{servers[0].server_address[1]}/v1"},
+                 {"name": "local", "enabled": True, "local": True, "model": "local-chat", "base_url": f"http://127.0.0.1:{servers[1].server_address[1]}/v1"}]
+        gateway._cooldown.clear()
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 20, 60.0)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        req = urllib.request.Request(f"http://127.0.0.1:{gw.server_address[1]}/v1/chat/completions", method="POST", headers={"Content-Type": "application/json"},
+                                     data=json.dumps({"model": "x", "stream": True, "messages": [{"role": "user", "content": "hi"}]}).encode())
+        t0 = time.time()
+        with urllib.request.urlopen(req, timeout=20) as r:
+            body = r.read().decode()
+        self.assertIn("hello", body)
+        self.assertLess(time.time() - t0, 5)
+        self.assertEqual((seen["slow"], seen["local"]), (1, 1))
+
+
+class ABusyProviderIsAskedAgainOnce(unittest.TestCase):
+    """2026-10-27: Dahl said 429 "at concurrency capacity" for a moment; the request fell to Groq (daily tokens used up) and to the local model (500) and the owner got
+    nothing. A 429 with a short Retry-After is waited out once on the same provider before the weaker ones are tried."""
+
+    def _run(self, retry_after):
+        seen = {"busy": 0, "local": 0}
+
+        def handler_for(name):
+            class H(BaseHTTPRequestHandler):
+                def log_message(self, *a):
+                    pass
+
+                def do_POST(self):
+                    self.rfile.read(int(self.headers["Content-Length"]))
+                    seen[name] += 1
+                    if name == "busy" and seen["busy"] == 1:
+                        body = b'{"error":{"message":"This model is at concurrency capacity."}}'
+                        self.send_response(429)
+                        if retry_after is not None:
+                            self.send_header("Retry-After", str(retry_after))
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return
+                    body = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": name + " answered"}, "finish_reason": "stop"}]}).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+            return H
+        servers = []
+        for name in ("busy", "local"):
+            sv = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(name))
+            threading.Thread(target=sv.serve_forever, daemon=True).start()
+            servers.append(sv)
+        self.addCleanup(lambda: [(sv.shutdown(), sv.server_close()) for sv in servers])
+        provs = [{"name": "busy", "enabled": True, "base_url": f"http://127.0.0.1:{servers[0].server_address[1]}/v1"},
+                 {"name": "local", "enabled": True, "local": True, "model": "local-chat", "base_url": f"http://127.0.0.1:{servers[1].server_address[1]}/v1"}]
+        gateway._cooldown.clear()
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 20, 60.0)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        req = urllib.request.Request(f"http://127.0.0.1:{gw.server_address[1]}/v1/chat/completions", method="POST", headers={"Content-Type": "application/json"},
+                                     data=json.dumps({"model": "x", "messages": [{"role": "user", "content": "hi"}]}).encode())
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read())["choices"][0]["message"]["content"], seen
+
+    def test_a_short_retry_after_is_waited_out_on_the_same_provider(self):
+        text, seen = self._run(1)
+        self.assertEqual(text, "busy answered")
+        self.assertEqual(seen, {"busy": 2, "local": 0})
+
+    def test_a_429_without_a_header_but_with_concurrency_capacity_is_asked_again(self):
+        text, seen = self._run(None)
+        self.assertEqual(text, "busy answered")
+        self.assertEqual(seen["local"], 0)
+
+    def test_a_long_retry_after_moves_on_to_the_next_provider(self):
+        text, seen = self._run(600)
+        self.assertEqual(text, "local answered")
+        self.assertEqual(seen, {"busy": 1, "local": 1})
+
+
+class ABusyModelIsReplacedByASiblingOfTheSameProvider(unittest.TestCase):
+    """2026-10-27: Dahl said 429 "this model is at concurrency capacity" (Retry-After 10) for an hour at a time while its other models were free."""
+
+    def test_the_provider_s_model_fallbacks_are_tried_before_the_next_provider(self):
+        seen = []
+
+        class Busy(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_POST(self):
+                req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                seen.append(req["model"])
+                if req["model"] == "big":
+                    body = b'{"error":{"message":"This model is at concurrency capacity."}}'
+                    self.send_response(429)
+                    self.send_header("Retry-After", "10")
+                else:
+                    body = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": req["model"] + " answered"}, "finish_reason": "stop"}]}).encode()
+                    self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+        sv = ThreadingHTTPServer(("127.0.0.1", 0), Busy)
+        threading.Thread(target=sv.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (sv.shutdown(), sv.server_close()))
+        provs = [{"name": "online", "enabled": True, "model_fallbacks": ["small", "other"], "base_url": f"http://127.0.0.1:{sv.server_address[1]}/v1"}]
+        gateway._cooldown.clear()
+        handler = gateway.make_handler(LabelledFakeDetector(), provs, 20, 60.0)
+        handler.log_message = lambda *a, **k: None
+        gw = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        gw.daemon_threads = True
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (gw.shutdown(), gw.server_close()))
+        req = urllib.request.Request(f"http://127.0.0.1:{gw.server_address[1]}/v1/chat/completions", method="POST", headers={"Content-Type": "application/json"},
+                                     data=json.dumps({"model": "big", "messages": [{"role": "user", "content": "hi"}]}).encode())
+        t0 = time.time()
+        with urllib.request.urlopen(req, timeout=20) as r:
+            text = json.loads(r.read())["choices"][0]["message"]["content"]
+        self.assertEqual(text, "small answered")
+        self.assertEqual(seen, ["big", "small"])
+        self.assertLess(time.time() - t0, 5)                 # no waiting for the Retry-After of 10 s

@@ -48,7 +48,7 @@ class Specialist:
 BUILT_IN = {
     "reason": {"where": "online", "note": "the online provider through the privacy gateway"},
     "ui_decide": {"where": "local", "alias": "decider", "fallback": "decider-ling", "max_tokens": 400},
-    "screen_read": {"where": "local", "alias": "vision", "fallback": "vision-ground", "max_tokens": 200},
+    "screen_read": {"where": "local", "alias": "vision-qwen35", "fallback": "vision-ground", "max_tokens": 200},
     "screen_locate": {"where": "local", "alias": "vision-ground", "fallback": "vision", "max_tokens": 200},
     "doc_read": {"where": "local", "alias": "lightonocr-docreader", "fallback": "ocr-docs", "max_tokens": 1800},
     "chat_simple": {"where": "local", "alias": "local-chat", "fallback": "general", "max_tokens": 400},

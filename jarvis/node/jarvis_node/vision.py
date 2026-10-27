@@ -22,6 +22,11 @@ from .paths import local_result_dir, sweep_local
 
 VISION_URL = os.environ.get("JARVIS_VISION_URL", "http://127.0.0.1:8080/v1/chat/completions")
 VISION_MODEL = os.environ.get("JARVIS_VISION_MODEL", "vision-ground")
+# Two jobs, two models (measured 2026-10-26 on 10 windows the test opened itself, evals/local_models/results/vision-*.json): UI-Venus-1.5-2B finds where a thing
+# is (the close button: 9 of 10 right, 0.4 s) and Qwen3.5-2B says what is on the screen (richer and more exact text: "Standard mode, 0, no history yet", the
+# user's name in Settings; 16.7 s against 21.1 s a window, but only 5 of 10 close buttons right and 15 s to answer). The describe step uses the second and falls
+# back to the first when it is not installed or does not answer.
+VISION_READ_MODEL = os.environ.get("JARVIS_VISION_READ_MODEL", "vision-qwen35")
 
 CAPTURE = r"""
 $ErrorActionPreference='Stop'
@@ -238,7 +243,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
 
 
-def ask_vision(png: str, prompt: str, schema: dict | None = None, timeout: float = 120) -> str:
+def ask_vision(png: str, prompt: str, schema: dict | None = None, timeout: float = 120, model: str | None = None) -> str:
     """The local vision model's answer (INFERRED, never treated as observation). The screenshot goes only to a model on THIS PC:
     JARVIS_VISION_URL pointing anywhere else is refused before the picture is even read (a screenshot is the most private thing
     this node holds)."""
@@ -246,7 +251,7 @@ def ask_vision(png: str, prompt: str, schema: dict | None = None, timeout: float
         raise VisionError("the vision model's address is not on this PC, so the screenshot was not sent")
     with open(png, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
-    body = {"model": VISION_MODEL, "temperature": 0, "max_tokens": 200,
+    body = {"model": model or VISION_MODEL, "temperature": 0, "max_tokens": 200,
             "messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
                                                       {"type": "text", "text": prompt}]}]}
     if schema:
@@ -284,7 +289,11 @@ def describe(proc: str, question: str) -> dict:
     png, size = capture(proc)
     try:
         lines = ocr(png, size.get("scale", 1))
-        answer = ask_vision(png, question[:300] + " Answer briefly, only from what is visible.")
+        prompt = question[:300] + " Answer briefly, only from what is visible."
+        try:
+            answer = ask_vision(png, prompt, model=VISION_READ_MODEL)
+        except VisionError:                                    # the reading model is not installed or did not answer: the grounding model can still describe
+            answer = ask_vision(png, prompt)
     finally:
         try:
             os.remove(png)
