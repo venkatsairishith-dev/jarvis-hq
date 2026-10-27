@@ -30,6 +30,7 @@ import secrets
 import stat
 import threading
 import time
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -62,11 +63,15 @@ ALL = r"(?:all|every|each|whole|entire)"
 PATHISH = re.compile(r"(?i)(?:[a-z]:[\\/]|\\\\|~[\\/]|\b(?:folder|directory|dir)\b|\bcollege\b|\bmy (?:lab|labs|assignments?|homework)\b|\bproblem\s+(?:statements?|cases?|sets?)\b)")
 FOLDER_ALL = re.compile(rf"(?i)\b{VERB}\b[^.?!]{{0,60}}?\b{ALL}\b(?:\s+(?:of\s+)?(?:them|the|my|these|those))?[^.?!]{{0,40}}?\b{THING}\b")
 FOLDER_STATEMENTS = re.compile(rf"(?i)\b{VERB}\b[^.?!]{{0,60}}?\b(?:the\s+|my\s+)?(?:problem\s+(?:statements?|cases?|sets?)|question\s+papers?|lab\s+(?:programs?|problems?|questions?)|practice\s+(?:problems?|questions?|sets?))\b[^.?!]{{0,30}}?\b(?:in|from|of|inside|under)\b")
+FOLDER_THE_PATH = re.compile(rf"(?i)\b{VERB}\b[^.?!]{{0,60}}?\b{THING}\b[^.?!]{{0,20}}?\b(?:in|from|inside|under)\s+[\"']?(?:[a-z]:[\\/]|~[\\/])")
 FOLDER_ALL_OF_THEM = re.compile(r"(?i)\bwrite\s+all\s+of\s+them\b")
 SCREEN_RX = re.compile(r"(?i)\b(?:on|in)\s+(?:the\s+|my\s+|this\s+)?(?:screen|window|display)\b|\bon-?screen\b|\bin front of me\b|\bshown\b")
 VSCODE_RX = re.compile(r"(?i)\b(?:vs\s?code|visual\s+studio\s+code)\b")
 SOLVE_RX = re.compile(r"(?i)\b(?:solve|answer|work\s+out|crack|complete|do)\b")
 TYPE_RX = re.compile(r"(?i)\b(?:type|write|enter|put|paste)\b")
+WEB_URL = re.compile(r"(?i)\bhttps?://[^\s,;\"'<>)\]]+")
+WEB_HERE = re.compile(r"(?i)\b(?:this|the (?:open|current)|my (?:open|current))\s+(?:web ?page|page|tab|site|web ?site|problem ?set|set|browser)\b|\b(?:in|on)\s+(?:the\s+|my\s+)?browser\b")
+WEB_THING = re.compile(r"(?i)\b(?:problems?|questions?|exercises?|challenges?|tasks?|problem\s+sets?|practice\s+(?:sets?|problems?|questions?))\b")
 LANG_NAMED = re.compile(r"(?i)\b(?:in|using|with|use)\s+(python3?|py|c\+\+|cpp|java\s?script|javascript|node(?:\.?js)?|js|java|c)(?![\w+#])")
 SAVE_IN = re.compile(r"(?i)\b(?:save|put|store|write|place|keep)\b(?:\s+(?:them|these|the\s+(?:solutions?|answers?|code|files?)|it|all))?\s+(?:in|into|to|under|inside)\s+(?P<out>\"[^\"]{1,200}\"|'[^']{1,200}'|[a-z]:[\\/][^\n,;]{1,200}?(?=\s+(?:and|then|with|in)\b|[,;.]?$)|(?:the\s+|a\s+)?(?:new\s+)?[\w .\\/-]{1,80}?\s*(?:folder|directory|dir)\b)")
 EXPLAIN_YES = re.compile(r"(?i)\b(?:with|add|include|and)\s+(?:short\s+|brief\s+|some\s+)?(?:explanations?|comments|notes)|\bexplain\s+(?:each|them|the\s+(?:solutions?|code))|\bexplained\b")
@@ -86,14 +91,14 @@ def parse_request(text: Any) -> dict | None:
     if not t:
         return None
     screen = bool(SOLVE_RX.search(t) and SCREEN_RX.search(t) and VSCODE_RX.search(t) and TYPE_RX.search(t) and re.search(r"(?i)\b(?:problem|question|exercise|statement|program|task)\b", t))
-    folder = bool((FOLDER_ALL.search(t) or FOLDER_STATEMENTS.search(t) or FOLDER_ALL_OF_THEM.search(t)) and PATHISH.search(t))
-    if not (screen or folder):
+    folder = bool((FOLDER_ALL.search(t) or FOLDER_STATEMENTS.search(t) or FOLDER_ALL_OF_THEM.search(t) or FOLDER_THE_PATH.search(t)) and PATHISH.search(t) and not WEB_URL.search(t))
+    # D77, the web judge: "solve the problems on this page", "solve the practice set at https://..." (the code goes into the page's editor, Run is clicked, Submit never)
+    web = bool(not folder and not screen and SOLVE_RX.search(t) and WEB_THING.search(t) and (WEB_URL.search(t) or WEB_HERE.search(t))
+               and not re.search(r"(?i)\b(?:folder|directory)\b|(?<![a-z])[a-z]:[\\/]", t))
+    if not (screen or folder or web):
         return None
-    if screen and not folder:
-        kind = "screen"
-    else:
-        kind = "folder"
-    out: dict[str, Any] = {"source": kind, "folder_phrase": "", "language": "", "out_phrase": "", "explain": None, "vscode_type": False, "vscode_open": False}
+    kind = "web" if web else "screen" if (screen and not folder) else "folder"
+    out: dict[str, Any] = {"source": kind, "folder_phrase": "", "language": "", "out_phrase": "", "explain": None, "vscode_type": False, "vscode_open": False, "url": ""}
     lm = LANG_NAMED.search(t)
     if lm:
         out["language"] = cr.norm_language(re.sub(r"(?i)^node.*", "node", lm.group(1).replace(" ", ""))) or ""
@@ -106,6 +111,9 @@ def parse_request(text: Any) -> dict | None:
         out["explain"] = True
     if VSCODE_RX.search(t):
         out["vscode_type" if kind == "screen" or TYPE_RX.search(t) and re.search(r"(?i)\btype\b", t) else "vscode_open"] = True
+    if kind == "web":
+        um = WEB_URL.search(t)
+        out["url"] = um.group(0).rstrip(".") if um else ""
     if kind == "folder":
         rest = t[:sm.start()] + " " + t[sm.end():] if sm else t
         pm = WIN_PATH.search(rest)
@@ -340,6 +348,11 @@ class Prepared:
     summary: str = ""
 
 
+def job_tool(job: str, base: Path | None = None) -> str:
+    """The step that runs this job: "webjudge" for a practice page in the browser, else "problemset"."""
+    return "webjudge" if _load_json(job_dir(job, base) / "params.json").get("source") == "web" else "problemset"
+
+
 def job_dir(job: str, base: Path | None = None) -> Path:
     return (base or DATA) / re.sub(r"[^a-z0-9-]", "", job)[:40]
 
@@ -398,6 +411,18 @@ def prepare(text: str, utterance: str = "", *, ask: Callable[[dict, float], dict
                               "vscode_type": req["vscode_type"], "created": clock(), "request_words": " ".join(str(spoken).split())[:300]}
     if req["source"] == "screen":
         params["out"] = req["out_phrase"] or ""
+        _save_json(job_dir(job, base) / "params.json", params)
+        return Prepared("ready", goal=f"{' '.join(str(text).split())[:600]} (problem-set job {job})", job=job)
+    if req["source"] == "web":                          # D77: a practice page or set in the owner's Chrome (webjudge.py); the page named in his words, else the tab he has open
+        url = req["url"]
+        if url:
+            host = (urllib.parse.urlsplit(url).hostname or "").lower()
+            if not host or not written_by_owner(url, spoken):
+                return Prepared("refused", summary="I did not start: that address is not in your words.")
+            params["url"] = url[:500]
+        else:
+            params["url"] = ""                          # "this page": the page that is open in his Chrome now
+        params["out"] = ""
         _save_json(job_dir(job, base) / "params.json", params)
         return Prepared("ready", goal=f"{' '.join(str(text).split())[:600]} (problem-set job {job})", job=job)
     folder, cands, why = resolve_folder(req["folder_phrase"], spoken, home, exts)
@@ -901,7 +926,7 @@ class Job:
         self.m["phase"] = "gated"
         self.save()
 
-    def _ask_exam(self, flagged: dict[str, exam_guard.Verdict]) -> None:
+    def _ask_exam(self, flagged: dict[str, exam_guard.Verdict], mark: bool = True) -> None:
         decline = any(v.level == exam_guard.DECLINE for v in flagged.values())
         reasons: list[str] = []
         for v in flagged.values():
@@ -933,7 +958,7 @@ class Job:
         if choice == "practice" and not decline:
             self.m["exam"]["owner_attested_practice"] = {"by": "his answer on the form", "at": time.time()}
             self.event("the owner said the flagged material is practice (recorded)")
-        for p in self.m["problems"]:
+        for p in (self.m["problems"] if mark else []):          # (the web judge marks the one page it is on itself)
             if p["file"] in flagged:
                 p["exam_level"] = flagged[p["file"]].level
                 if choice == "study":
@@ -999,28 +1024,35 @@ class Job:
 
     def solve_one(self, p: dict) -> None:
         mode = p.get("mode") or "solve"
+        if mode == "teach":
+            lang, _note = self.language_for(p)
+            return self.teach_one(p, lang, [T.Sample(s["input"], s["output"]) for s in p.get("samples", [])])
+        best, lang, lang_note, samples, explain, _text = self.solve_core(p)
+        self.finish_problem(p, best, samples, lang, lang_note, explain)
+
+    def solve_core(self, p: dict, feedback: str = "", prior: str = "", attempts: int | None = None):
+        """The model proposes, the restricted runner checks the proposal on the statement's sample cases, one retry with the failure fed back. Returns
+        (best = (Proposal, [SampleRun], how) or None, language, language note, samples, explain, the model's last raw reply). No file is written here."""
         lang, lang_note = self.language_for(p)
         samples = [T.Sample(s["input"], s["output"]) for s in p.get("samples", [])]
         prob = T.Problem(p["n"], p["title"], p["text"])
         common = p.get("common", "")
-        if mode == "teach":
-            return self.teach_one(p, lang, samples)
         ok_tool, hint = self.d.runner.tool_status(lang)
         explain = bool(self.params.get("explain"))
         redacted = self.d.release(common + "\n" + prob.text if common else prob.text)
         if not getattr(redacted, "allowed", False) or not str(getattr(redacted, "text", "")).strip():
             raise ModelError(str(getattr(redacted, "note", "") or "the privacy gateway did not clear the statement, so nothing was sent"))
         prob_sent = T.Problem(prob.number, "", redacted.text)
-        feedback, prior = "", ""
         best: tuple[Proposal, list[SampleRun], str] | None = None
+        text = prior
         max_tokens = self.budget.solve_tokens_explained if explain else self.budget.solve_tokens
-        attempts = 1 + max(0, self.budget.retries)
+        attempts = (1 + max(0, self.budget.retries)) if attempts is None else attempts
         for attempt in range(1, attempts + 1):
             self.check_stop()
             if attempt > 1 and (self.over_time() or self.over_tokens()):
                 break
             msgs = build_messages(prob_sent, "", lang, explain, feedback, prior)
-            p["attempts"] = attempt
+            p["attempts"] = int(p.get("attempts") or 0) + 1
             text, provider = self.call_model(msgs, max_tokens)
             self.add_tokens(_estimate_tokens("".join(m["content"] for m in msgs), text))
             p["provider"] = str(provider or "gateway")[:40]
@@ -1061,7 +1093,7 @@ class Job:
                 best = (prop, [], "no_tool")
                 break
             feedback, prior = feedback_for(runs, samples, compile_err), text
-        self.finish_problem(p, best, samples, lang, lang_note, explain)
+        return best, lang, lang_note, samples, explain, text
 
     def finish_problem(self, p: dict, best: tuple[Proposal, list[SampleRun], str] | None, samples: list[T.Sample], lang: str, lang_note: str, explain: bool) -> None:
         if best is None:
@@ -1138,8 +1170,9 @@ class Job:
             p["saved_as"] = path.name
             p["saved_path"] = str(path)
 
-    def teach_one(self, p: dict, lang: str, samples: list[T.Sample]) -> None:
-        """Study help instead of an answer: the concept, and worked examples on DIFFERENT problems. The actual question is not solved; code that passes its sample cases is removed."""
+    def teach_text(self, p: dict, lang: str, samples: list[T.Sample]) -> tuple[str, int]:
+        """Study help instead of an answer: the concept, and worked examples on DIFFERENT problems. The actual question is not solved; code that passes its sample cases is
+        removed. Returns (the notes, how many solving code blocks were removed)."""
         redacted = self.d.release(p["text"][:2500])
         if not getattr(redacted, "allowed", False):
             raise ModelError(str(getattr(redacted, "note", "") or "nothing could be sent safely"))
@@ -1163,7 +1196,11 @@ class Job:
                     return "[a code block was removed: it solved the actual question]"
                 return m.group(0)
             text = re.sub(r"```[A-Za-z0-9_+#-]*[ \t]*\n(.*?)```", check, text, flags=re.S)
-        text = PLACEHOLDER.sub("", text)
+        return PLACEHOLDER.sub("", text), removed
+
+    def teach_one(self, p: dict, lang: str, samples: list[T.Sample]) -> None:
+        """The study notes of a problem as a file in the output folder."""
+        text, removed = self.teach_text(p, lang, samples)
         title = safe_title("", p.get("title", ""))
         body = f"# Study notes: problem {p['n']:02d}" + (f" ({title})" if title else "") + "\n\nWritten by JARVIS as study help; this is not a solution to the question.\n\n" + text.strip() + "\n"
         out = Path(self.m.get("out") or "")
@@ -1218,6 +1255,9 @@ def render_markdown(m: dict, runner_note: str = "") -> str:
                UNSAFE: "refused (unsafe code)", BLOCKED: "blocked", SKIPPED: "skipped", NOT_TRIED: "not attempted"}.get(r["status"], r["status"])
         lines.append(f"| {r['n']} | {r['problem'].replace('|', '/')} | {r['language']} | {r['file']} | {r['tests']} | {res}{(': ' + r['why'][:100].replace('|', '/')) if r['why'] and r['status'] != PASSED else ''} |")
     lines += ["", "Sample cases only: a solution marked passed passed the sample cases in its statement when I ran it; hidden tests are unknown."]
+    if m.get("web"):
+        lines.append("Web judge: the code was typed into the page's editor and the page's own Run button was used. Submit, Finish and anything that grades a problem was never clicked "
+                     f"({m['web'].get('submit_refused', 0)} attempt(s) were refused by the guard).")
     if runner_note:
         lines.append(f"Code was run: {runner_note}.")
     for s in m.get("skipped", []):
@@ -1317,10 +1357,13 @@ def deliver(j: Job, status: str) -> dict:
             folder_note = " VS Code was opened on the solutions folder." if isinstance(r, dict) and r.get("ok") else " VS Code could not be opened on the folder."
         except Exception:  # noqa: BLE001
             folder_note = " VS Code could not be opened on the folder."
-    result = {"ok": bool(files) or bool(m.get("problems")) and status in ("held",), "status": status, "summary": summary + folder_note, "table": table_rows(m), "counts": c, "files": files,
+    typed = sum(1 for p in m.get("problems", []) if p.get("typed"))
+    result = {"ok": bool(files) or bool(typed) or bool(m.get("problems")) and status in ("held",), "status": status, "typed": typed, "summary": summary + folder_note, "table": table_rows(m), "counts": c, "files": files,
               "out": m.get("out", ""), "skipped": m.get("skipped", []), "runner": j.d.runner_note, "tokens_estimated": int(m.get("tokens") or 0), "markdown": md,
               "exam": (m.get("exam") or {}).get("answer"), "facts": [], "unverified": []}
-    if done_pass:
+    if done_pass and j.params.get("source") == "web":
+        result["facts"].append(f"{done_pass} of {len(m.get('problems', []))} solution(s) passed the page's own Run on its sample tests (sample cases only, hidden tests unknown; Submit was not clicked)")
+    elif done_pass:
         result["facts"].append(f"{done_pass} of {len(m.get('problems', []))} solution(s) passed their sample cases when run (sample cases only, hidden tests unknown)")
     if c.get(UNTESTED):
         result["unverified"].append(f"{c[UNTESTED]} solution(s) were written but could not be tested")

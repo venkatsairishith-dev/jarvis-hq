@@ -1526,6 +1526,47 @@ class DesktopPlugin(PluginBase):
                            type_in_vscode=type_in_vscode, open_vscode=open_vs, show_summary=lambda md, res: ps.write_preview(md, res), cfg=cfg)
             return ps.run(str(step.get("job") or ""), deps)
 
+        def webjudge_agent(step):
+            """D77, the web judge: the owner's practice problems on a web page or a set of pages in his own Chrome. The D64 browser engine reads each problem and its sample tests,
+            the code is typed into the page's editor, the page's own Run button is clicked, the verdict is read from the page and Next goes on to the following problem; at the end of
+            the set it stops. The browser is wrapped by webjudge.SubmitGuard: Submit, Finish and anything that grades is NEVER clicked, practice or not. The live-test guard runs
+            before every problem. Every browser action is a kernel job as usual."""
+            from jarvis.plugins._shared import code_runner, owner_ask
+            from . import browser_agent as BA, ppt_flow, webjudge as wj
+            from .browser_backend import GrantsClient, KernelBackend
+            from .browser_planner import LocalPlanner
+            ps = problemset_mod
+            op = coord.current_op()
+            stopped = lambda: bool(abort and abort()) or (op is not None and op.stop_flag.is_set())      # noqa: E731
+            cfg = dict(ps.T.load_config())
+            cfg.setdefault("work_dir", str(ps.DATA / "run"))
+            chosen = code_runner.choose_runner(cfg)
+            budget = ps.budget_from(cfg)
+            profile = alias(step.get("profile", "Default"))
+
+            def say(what, n, total):
+                if op is not None:
+                    op.touch("problem set")
+                core.set_activity("working", "Problem set (web): " + ("done" if what == "done" else (f"problem {n}" if n else "reading the page")))      # content-free: no names
+
+            def ask_model(messages, max_tokens):
+                try:
+                    return goal_mod.ask_online(messages, timeout=float(budget.model_call_s), max_tokens=max_tokens)
+                except goal_mod.GoalError as e:
+                    raise ps.ModelError(str(e)) from None
+
+            def make_agent(hosts):
+                backend = KernelBackend(pc_raw, profile, take_local=core.take_local)
+                guard = wj.SubmitGuard(backend)
+                agent = BA.Agent(guard, goal="solve the owner's practice problems on the page (never Submit)", hosts=hosts, planner=LocalPlanner(), ask=owner_ask.ask,
+                                 journal=jc.record_web_step, stop=stopped, budget=BA.Budget(max_seconds=float(budget.time_s), max_actions=600),
+                                 banners=ppt_flow.load_banners(), grants=GrantsClient(owner=core.owner))
+                return agent, guard
+
+            deps = ps.Deps(ask_model=ask_model, release=goal_mod.release_owner_text, runner=chosen.runner, runner_note=chosen.why, ask_owner=owner_ask.ask if owner_ask.available() else None,
+                           stop=stopped, progress=say, show_summary=lambda md, res: ps.write_preview(md, res), cfg=cfg)
+            return wj.run_web(str(step.get("job") or ""), deps, wj.WebHands(make_agent))
+
         agents = {
             "open_website": lambda s: pc({"op": "browser", "action": "open", "profile": alias(s["profile"]), "url": s["url"]}, 90),
             "play_media": lambda s: (lambda r: dict(r, windows_media=[f"{m.get('title')} ({m.get('status')})" for m in
@@ -1537,7 +1578,7 @@ class DesktopPlugin(PluginBase):
             "window": window, "type_text": type_text, "press_key": press_key, "open_file": open_file, "check_pc": check,
             "troubleshoot": troubleshoot, "research": research, "open_output": open_output, "stop": stop,
             "open_in_vscode": open_in_vscode, "type_in_editor": type_in_editor, "save_as": save_as, "drive": drive, "simple_task": simple_task,
-            "web_task": web_task, "problemset": problemset_agent,
+            "web_task": web_task, "problemset": problemset_agent, "webjudge": webjudge_agent,
         }
         wrapped = AgentSet({k: jc.wrap_agent(k, _with_approval(fn)) for k, fn in agents.items()})       # D61: one journal line per step run
 

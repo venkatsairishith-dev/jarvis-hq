@@ -847,7 +847,10 @@ def problemset_rule(request: str, profiles: list[dict]) -> "Plan | None":
     problemset.prepare, i.e. only after the owner's own explicit request and his form answers; a raw request without it is not started from here."""
     m = problemset.JOB_RX.search(request or "")
     if m:
-        return Plan([{"tool": "problemset", "job": m.group(1), "post": "the solutions were written, run on their sample cases and reported"}], "ok", model="rule")
+        tool = problemset.job_tool(m.group(1))
+        post = ("the solutions were typed into the page's editor, run with the page's own Run button on its sample cases and reported (Submit is never clicked)"
+                if tool == "webjudge" else "the solutions were written, run on their sample cases and reported")
+        return Plan([{"tool": tool, "job": m.group(1), "post": post}], "ok", model="rule")
     if problemset.parse_request(request) is not None:
         return Plan([], "fallback", problems=["a problem-set request is started through the mission door (it asks which folder first); say it again as 'solve all the problems in <folder>'"], model="rule")
     return None

@@ -42,12 +42,12 @@ AGENT = {"open_website": "browser", "play_media": "browser", "browser": "browser
          "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator",
          "open_in_vscode": "desktop", "type_in_editor": "desktop", "save_as": "desktop", "drive": "desktop", "simple_task": "desktop",      # D54
          "web_task": "desktop",                                                                                           # D64: a deck on a free web generator
-         "problemset": "desktop"}                                                                                         # D77: the owner's problem statements, solved and run on their sample cases
+         "problemset": "desktop", "webjudge": "browser"}                                                                                         # D77: the owner's problem statements, solved and run on their sample cases
 TRANSIENT = re.compile(r"(?i)timeout|timed out|connection failed|not answering|temporarily|busy")
 # Steps that change nothing when run twice (open, focus, read, check). Typing, keys, clicks, playing, repairs and
 # research are not: a failure reported as a timeout may come after they already acted, so they are never re-run blindly.
 # D77: "problemset" is repeat-safe: its job record skips every problem already done, and it only creates files (never overwrites), so a second run continues, never repeats.
-REPEAT_SAFE = {"open_website", "open_app", "window", "check_pc", "open_file", "problemset"}
+REPEAT_SAFE = {"open_website", "open_app", "window", "check_pc", "open_file", "problemset", "webjudge"}
 REPEAT_SAFE_BROWSER = {"read", "find", "tabs", "whoami"}
 
 
@@ -1480,11 +1480,11 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
         if not facts:
             return True, "the steps were sent", unobserved(loose or "nothing about their effect could be checked on the PC")
         return True, facts, unobserved(loose) if loose else ""
-    if t == "problemset":                                  # D77: passes on files that were really written; solved = ran on the sample cases; the rest is said
+    if t in ("problemset", "webjudge"):                    # D77: passes on files that were really written; solved = ran on the sample cases; the rest is said
         if r.get("stopped"):
             return False, "stopped by the owner", str(r.get("summary") or "")[:200]
-        files, st = r.get("files") or [], r.get("status")
-        if not files and st != "held":
+        files, st, typed = r.get("files") or [], r.get("status"), int(r.get("typed") or 0)        # (the web judge's work is code typed into the page's editor, not files)
+        if not files and not typed and st != "held":
             return False, "no solution file was written", str(r.get("summary") or r.get("error") or "")[:240]
         said = "; ".join(str(x) for x in (r.get("facts") or []) + (r.get("unverified") or []))
         note = [str(r.get("summary") or "")] if st in ("partial", "held") else []
