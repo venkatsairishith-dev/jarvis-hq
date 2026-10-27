@@ -173,7 +173,8 @@ function inspect(withAudit) {
         continue // the whole label is the target
       if (el.tagName === 'A' && cs.display === 'inline')
         continue
-      const target = el.tagName === 'INPUT' && el.labels?.[0] ? el.labels[0].getBoundingClientRect() : r
+      const useLabel = el.tagName === 'INPUT' && /(checkbox|radio)/.test(el.type) && el.labels?.[0]
+      const target = useLabel ? el.labels[0].getBoundingClientRect() : r
       if (target.width < 32 || target.height < 32)
         out.smallTargets.push(`${describe(el)} ${Math.round(target.width)}x${Math.round(target.height)}`)
     }
@@ -293,6 +294,33 @@ async function one([screen, w, h, theme]) {
             execFileSync(process.env.PYTHON ?? 'python3', [join(here, 'webp.py'), `${base}.png`, `${base}.webp`])
             rmSync(`${base}.png`)
           }
+        }
+        if (audit && theme === 'light' && w === 900) {
+          // keyboard: Tab through the screen; every stop must show a ring (an outline or a shadow) and stay on screen
+          await page.evaluate(() => document.activeElement?.blur?.())
+          const seen = new Set()
+          for (let i = 0; i < 60; i++) {
+            await page.keyboard.press('Tab')
+            await page.waitForTimeout(60) // a ring that fades in is read after it has faded in
+            const stop = await page.evaluate(() => {
+              const el = document.activeElement
+              if (!el || el === document.body)
+                return null
+              const cs = getComputedStyle(el)
+              const r = el.getBoundingClientRect()
+              const outline = cs.outlineStyle !== 'none' && Number.parseFloat(cs.outlineWidth) > 0
+              const label = `${el.tagName.toLowerCase()}${typeof el.className === 'string' && el.className ? `.${el.className.trim().split(/\s+/)[0]}` : ''} "${(el.getAttribute('aria-label') || el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 30)}"`
+              return { label: `${label} [outline ${cs.outlineStyle} ${cs.outlineWidth}, shadow ${String(cs.boxShadow).slice(0, 30)}, focus-visible ${el.matches(':focus-visible')}]`, ring: outline || (cs.boxShadow && cs.boxShadow !== 'none'), onScreen: r.bottom > 0 && r.right > 0 && r.left < innerWidth && r.top < innerHeight }
+            })
+            if (!stop || seen.has(stop.label))
+              break
+            seen.add(stop.label)
+            if (!stop.ring)
+              warnings.push(`${id} noFocusRing: ${stop.label}`)
+            if (!stop.onScreen)
+              warnings.push(`${id} focusOffScreen: ${stop.label}`)
+          }
+          report.screens.push({ id: `${id} (tab stops)`, problems: [], warn: { tabStops: [...seen] } })
         }
         const problems = []
         if (m.overflowX) problems.push('page scrolls sideways')

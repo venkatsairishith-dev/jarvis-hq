@@ -89,6 +89,7 @@ describe('parseJarvisStatus', () => {
       goalN: 0,
       goalTotal: 0,
       goalExec: '',
+      pcLine: '',
     })
     const viaText = parseJarvisStatus({ content: [{ type: 'text', text: JSON.stringify(wire().structuredContent) }] })
     expect(viaText?.kernelUp).toBe(true)
@@ -249,6 +250,13 @@ describe('jARVIS D60: the instant acknowledgement and the progress line', () => 
     expect(goalLine(goal({ ...base, pc_line: 'I am waiting because you are using the PC.' }))).toBe('I am waiting because you are using the PC.')
     expect(goalLine(goal({ ...base, pc_line: '<script>alert(1)</script>' }))).toBe('Working on the PC')
     expect(goalLine(goal({ goal_state: 'waiting', pc_line: 'I am clicking in notepad' }))).toBe('Waiting for your approval')
+  })
+
+  it('shows "Safe mode" in the same line, with or without a task (D71 words, D72 line)', () => {
+    expect(goalLine(goal({ pc_line: 'Safe mode' }))).toBe('Safe mode')
+    expect(goalLine(goal({ pc_line: 'Safe mode - I am typing into notepad' }))).toBe('Safe mode - I am typing into notepad')
+    // a line from the plugin that is longer than the cap is dropped, never cut in the middle of a word
+    expect(goalLine(goal({ pc_line: 'x'.repeat(141) }))).toBe('')
   })
 
   it('prefers the goal step over the acknowledgement and shows the acknowledgement until there is one', () => {

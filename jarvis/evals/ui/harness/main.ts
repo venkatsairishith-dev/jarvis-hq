@@ -50,6 +50,7 @@ async function chatScreen() {
   const { default: TitleBar } = await import('../../../face/apps/stage-tamagotchi/src/renderer/components/Window/TitleBar.vue')
   const { useChatSessionStore } = await import('@proj-airi/stage-ui/stores/chat/session-store')
   const { useChatStreamStore } = await import('@proj-airi/stage-ui/stores/chat/stream-store')
+  const { useChatStore } = await import('@proj-airi/stage-ui/stores/chat')
   const { useConsciousnessStore } = await import('@proj-airi/stage-ui/stores/modules/consciousness')
   const { useAiriCardStore } = await import('@proj-airi/stage-ui/stores/modules/airi-card')
   const pinia = createPinia()
@@ -69,7 +70,9 @@ async function chatScreen() {
       session.sessionMessages.s1 = JSON.parse(JSON.stringify(histories[which] ?? histories.mixed))
       useAiriCardStore()
       if (name === 'waiting') {
-        useChatStreamStore().updateActiveTurns([{ sessionId: 's1', message: { role: 'assistant', content: '', slices: [], tool_results: [] } } as any])
+        // a turn is under way and nothing has been written yet: the history shows its three-dot loader
+        useChatStore().activeTurns = [{ sessionId: 's1', turnId: 't1' }]
+        useChatStreamStore().updateActiveTurns([{ sessionId: 's1', turnId: 't1', message: { role: 'assistant', content: '', slices: [], tool_results: [] } } as any])
       }
       return () => h(ChatPageShell, null, { default: () => [h(TitleBar, { title: 'JARVIS', icon: 'i-solar:chat-line-bold', clickable: true }), h(InteractiveArea, { class: 'interaction-area block' })] })
     },

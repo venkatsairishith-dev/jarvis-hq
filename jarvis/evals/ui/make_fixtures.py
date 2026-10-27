@@ -79,6 +79,30 @@ def chat() -> dict:
     return {"mixed": mixed, "tools": tools, "waiting": [user(1, 0, "Summarise the board deck for me, please.")], "empty": []}
 
 
+def extra_ask_forms() -> dict:
+    """Forms with the owner's own languages and very long words, built by the real backend like the others (no PC needed)."""
+    sys.path.insert(0, str(ROOT.parent))
+    from jarvis.bridge import ask as A
+    from jarvis.bridge import ui_patterns as U
+
+    long_path = "D:\\jarvis\\data\\deliverables\\20261027-101500-quarterly-report-final-copy-of-the-board-deck-with-speaker-notes-and-appendix\\report.pptx"
+    specs = {
+        "indic-choose": U.build("choose", {"title": "ఏది తెరవాలి?", "question": "మీరు ఏ ఫైల్\u200cను తెరవమంటారు? कौन सी फ़ाइल खोलूँ?", "options": [
+            {"id": "a", "label": "త్రైమాసిక నివేదిక", "detail": "అంతర్జాతీయవిమానాశ్రయములలోనిప్రయాణికులసౌకర్యములు"},
+            {"id": "b", "label": "बोर्ड बैठक की प्रस्तुति", "detail": "अंतरराष्ट्रीयहवाईअड्डोंपरयात्रियोंकीसुविधाएं"},
+            {"id": "c", "label": "Board deck (final copy)", "detail": long_path}]}),
+        "indic-text": U.build("text", {"title": "పేరు పెట్టండి", "question": "కొత్త ఫోల్డర్‌కు ఏ పేరు పెట్టాలి? नए फ़ोल्डर का नाम क्या हो?", "placeholder": "ఉదాహరణకు: నా ప్రణాళిక"}),
+        "long-confirm": U.build("confirm", {"title": "Send the report?", "rows": [["File", long_path], ["To", "venkatasatyanarayanamurthy.subrahmanyeswara@example-organisation.example"], ["Size", "4.0 MB"]],
+                                           "warn": "This sends the file outside your PC.", "approve_label": "Send it"}),
+    }
+    out = {}
+    for name, spec in specs.items():
+        broker = A.AskBroker(home=ROOT)
+        broker.show(spec)
+        out[name] = {"structuredContent": broker.wanted(0)}
+    return out
+
+
 def run(script: Path, *args: str) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "out.json"
@@ -92,7 +116,7 @@ def main() -> int:
     ids = list(patterns.get("patterns", {}))
     data = {
         "chat": chat(),
-        "ask": run(SCRIPTS / "ask-harness" / "make_fixtures.py"),
+        "ask": {**run(SCRIPTS / "ask-harness" / "make_fixtures.py"), **extra_ask_forms()},
         "timeline": run(SCRIPTS / "timeline-harness" / "make_fixtures.py"),
         "preview": run(SCRIPTS / "preview-harness" / "make_fixtures.py", BEACON),
         "patterns": ids,
