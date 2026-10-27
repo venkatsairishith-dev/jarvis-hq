@@ -59,7 +59,7 @@ function options(state, extra = {}) {
   return {
     state,
     notices: state === 'idle' ? 0 : 2,
-    ...(state === 'acting' ? { busy: 1 } : {}),
+    ...(state === 'acting' ? { busy: 1, line: 'Step 2 of 3: reading the window, then I will type it into notepad and save the file' } : {}),
     ...(state === 'offline' ? { link: 'down' } : {}),
     ...extra,
   }
@@ -82,7 +82,12 @@ function measure() {
     const text = range.getBoundingClientRect()
     return text.right > box.right - Number.parseFloat(getComputedStyle(e).paddingRight) + 0.5 || text.left < box.left - 0.5 || e.scrollWidth > e.clientWidth + 1
   })
+  const lineEl = document.querySelector('.jhud-line')
+  const lineBox = lineEl?.getBoundingClientRect()
   return {
+    // D72: the line for what JARVIS is doing sits under the strip, wraps (three lines at most, then an ellipsis and the full text as a tooltip), and always stays inside the window
+    lineBad: lineEl ? (lineBox.left < -0.5 || lineBox.right > W + 0.5 || lineBox.height > 62 || lineBox.width < 40) : false,
+    lineShown: !!lineEl,
     docOverflow: document.documentElement.scrollWidth > W,
     chromeOut: chrome.left < -0.5 || chrome.right > W + 0.5,
     stripOut: stripRect.left < -0.5 || stripRect.right > W + 0.5,
@@ -112,7 +117,7 @@ try {
         await page.waitForTimeout(400)
         await page.screenshot({ path: join(shots, `hud-${w}x${h}-${look}-${state}.png`) })
         const m = await page.evaluate(measure)
-        check(`${state} (${look}) fits at ${w}x${h}`, !m.docOverflow && !m.chromeOut && !m.stripOut && !m.stripClip && !m.reactorHidden && !m.clipped && m.segments > 0, m.clipped)
+        check(`${state} (${look}) fits at ${w}x${h}`, !m.docOverflow && !m.chromeOut && !m.stripOut && !m.stripClip && !m.reactorHidden && !m.clipped && !m.lineBad && m.segments > 0, m.clipped || (m.lineBad ? 'the status line' : ''))
         await context.close()
       }
     }
@@ -132,7 +137,7 @@ try {
           await page.setViewportSize({ width: w, height: 400 })
           samples++
           const m = await page.evaluate(measure)
-          if (m.docOverflow || m.chromeOut || m.stripOut || m.stripClip || m.reactorHidden || m.clipped || m.segments === 0)
+          if (m.docOverflow || m.chromeOut || m.stripOut || m.stripClip || m.reactorHidden || m.clipped || m.lineBad || m.segments === 0)
             failed.push(`${state}/${link}/${notices}@${w}: ${JSON.stringify(m)}`)
         }
       }

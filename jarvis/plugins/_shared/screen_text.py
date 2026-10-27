@@ -150,13 +150,22 @@ def neutral_paths(text: Any, bare_names: bool = True) -> str:
     return s
 
 
+def cut_text(text: str, n: int) -> str:
+    """text[:n], but never ending inside a half tag: "[PERSO" would reach the model or the owner as a stray fragment of a placeholder (D73)."""
+    if len(text) <= n:
+        return text
+    head = text[:n]
+    i = head.rfind("[")
+    return head[:i] if i != -1 and "]" not in head[i:] and n - i <= 40 else head
+
+
 def clean_message(text: Any, limit: int = 300, emails: bool = True) -> str:
     """A message that may reach a model, a log or the owner's status line: secrets, file names and (emails=True) e-mail addresses
     out, cut short."""
     s, _ = scrub_text(neutral_paths(text))
     if emails:
         s = _EMAIL.sub("[email]", s)
-    return " ".join(s.split())[:limit]
+    return cut_text(" ".join(s.split()), limit)
 
 
 def sanitize_meta(value: Any, skip_keys: tuple[str, ...] = ("url",), _depth: int = 0) -> Any:
@@ -226,7 +235,9 @@ def gateway_state() -> tuple[bool, str]:
 def gateway_redact(text: str) -> str:
     """The text with private details AND names and places replaced by the privacy gateway. Raises RuntimeError (with a message
     that holds none of the text) unless the gateway's own answer confirms names and the PII model were active for this call."""
-    req = urllib.request.Request(_gateway_base() + "/redact", data=json.dumps({"text": text, "names": True}).encode(),
+    # "restorable" (D73): the gateway keeps the map tag -> real value in its own memory, so the owner's display and voice can get the real values back;
+    # a secret is never kept and comes back as [REDACTED:kind]. An older gateway ignores the key and answers as before (plain tags nothing restores).
+    req = urllib.request.Request(_gateway_base() + "/redact", data=json.dumps({"text": text, "names": True, "restorable": True}).encode(),
                                  headers={"Content-Type": "application/json"})
     try:
         with loopback_http.urlopen(req, timeout=GATEWAY_TIMEOUT_S) as r:
@@ -239,6 +250,17 @@ def gateway_redact(text: str) -> str:
     if answer.get("names") is not True or answer.get("deep") is not True or answer.get("ready") is False:
         raise RuntimeError("names or the PII model were not active for this check")
     return out
+
+
+_TAG = re.compile(r"\[(?:[A-Z_]+_\d+|REDACTED:[a-z_]+|[a-z_ ]{3,24} removed)\]")
+TAG_HINT = (" Tags such as [PERSON_1] or [NUMBER_2] stand for real values that stay on this PC: copy a tag exactly as written into your answer and the owner "
+            "sees and hears the real value (never guess it, never spell it out). A mark like [REDACTED:kind] or [card number removed] is a secret that is never shown: say that you hid a secret.")
+CLEARED_NOTE = "names, places and private details were hidden by the privacy gateway; file names are shown as their class"
+
+
+def with_tag_hint(note: str, text: str) -> str:
+    """The note that travels with cleared screen text; when the text holds gateway tags it also tells the model how to give them back to the owner."""
+    return note + TAG_HINT if _TAG.search(text or "") else note
 
 
 def _before_gateway(text: str) -> str:
@@ -266,8 +288,8 @@ def release(text: Any, *, model_url: str | None = None) -> Released:
             return _withheld()
         # The gateway hides names, places, numbers and keys; measured with the real Presidio + spaCy (en_core_web_sm) it does NOT
         # hide a file path, a file name or (for an unusual top-level domain) an e-mail address. Those are reduced here first.
-        return Released(gateway_redact(_before_gateway(clean)), True, "gateway",
-                        "names, places and private details were hidden by the privacy gateway; file names are shown as their class")
+        cleared = gateway_redact(_before_gateway(clean))
+        return Released(cleared, True, "gateway", with_tag_hint(CLEARED_NOTE, cleared))
     except Exception:  # noqa: BLE001 - any failure at all withholds; the raw text is never the fallback
         return _withheld()
 
@@ -289,8 +311,8 @@ def release_for_request(text: Any) -> Released:
         ready, why = gateway_state()
         if not ready:
             return _withheld(f"the privacy gateway is not ready ({why}), so the window's text was not sent")
-        return Released(gateway_redact(_before_gateway(clean)), True, "gateway",
-                        "names, places and private details were hidden by the privacy gateway; file names are shown as their class")
+        cleared = gateway_redact(_before_gateway(clean))
+        return Released(cleared, True, "gateway", with_tag_hint(CLEARED_NOTE, cleared))
     except Exception:  # noqa: BLE001 - any failure at all withholds
         return _withheld("redaction could not be confirmed, so the window's text was not sent")
 

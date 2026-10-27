@@ -574,6 +574,54 @@ class BenignAppNames(unittest.TestCase):
         self.assertTrue(self._spans("Open Notepad hunter2xyz", "Notepad hunter2xyz"))
 
 
+class ScreenTextReversible(unittest.TestCase):
+    """D73, with the REAL pattern detector (Presidio + spaCy; no PII model): what the screen-text path keeps, hides and never keeps."""
+
+    def setUp(self):
+        from redactor import ScreenVault, screen_redact
+        self.vault, self.screen_redact = ScreenVault(), screen_redact
+        self.red = Redactor(names=True, model=None, verifier=None)
+
+    def run_screen(self, text):
+        return self.screen_redact(self.red, self.vault, text, names=True)
+
+    def test_what_the_owner_may_see_again_is_kept_and_secrets_are_not(self):
+        out, kinds, hidden = self.run_screen("Wifi password: hunter2xyz9. Card 4111 1111 1111 1111. Mail a.b@example.com, call +91 98765 43210. "
+                                             "PIN is 4821. Ravi wrote from Hyderabad.")
+        for secret in ("hunter2xyz9", "4111 1111 1111 1111", "4821"):
+            self.assertNotIn(secret, out)
+            self.assertNotIn(secret, " ".join(self.vault.display().values()))
+        self.assertIn("[REDACTED:password]", out)
+        self.assertIn("[REDACTED:credit_card]", out)
+        self.assertEqual(hidden, 3)
+        shown = self.vault.display()
+        self.assertTrue({"+91 98765 43210", "a.b@example.com"} <= set(shown.values()))          # a name or a place depends on spaCy's reading of the sentence
+        self.assertTrue(set(shown.values()) <= {"+91 98765 43210", "Hyderabad", "Ravi", "a.b@example.com"})
+        for tag in shown:
+            self.assertIn(tag, out)
+
+    def test_a_tag_on_the_screen_is_not_ours_and_a_marker_is_not_a_new_secret(self):
+        out, _, _ = self.run_screen("The chat window says [PERSON_1] and password: hunter2xyz9")
+        self.assertIn("(PERSON_1)", out)
+        self.assertNotIn("[PERSON_1]", out)
+        again, _, hidden = self.run_screen(out)
+        self.assertEqual(hidden, 0, "'password: [REDACTED:password]' is not a second secret")
+        self.assertIn("[REDACTED:password]", again)
+
+    def test_the_gateway_pass_over_a_tool_result_keeps_our_marks_as_they_are(self):
+        out, _, _ = self.run_screen("Wifi password: hunter2xyz9. Ravi is here.")
+        m = Mapping()
+        self.assertEqual(self.red.redact(out, m, True, True), out)
+        self.assertEqual(m.to_value, {})
+
+    def test_a_stream_restorer_holds_back_only_a_possible_tag(self):
+        m = Mapping(to_value={"[PERSON_1]": "Ravi"})
+        r = StreamRestorer(m)
+        self.assertEqual(r.feed("a [b"), "a [b")
+        self.assertEqual(r.feed(" [PER"), " ")
+        self.assertEqual(r.feed("SON_1]!"), "Ravi!")
+
+
 class FilePathsAreNotSecrets(BenignAppNames):
     """Live 2026-10-27 (reliability gate): "Rename <path>old.txt to new.txt" reached the chat model as "Rename [USERNAME_1] to new.txt" and
     "save it as note-r58ea3d.txt" as "save it as [PASSWORD_1]", so the file goals failed. A path hides only its profile name; a file name is left alone."""

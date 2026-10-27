@@ -6,6 +6,7 @@ import pytest
 from jarvis.evals.reliability import gate, latency, model, report, stats
 
 CAT = model.load()
+N_ST = len(CAT.capabilities["screen_text"].goals)          # the gate tests below follow the capability's goal count (D73 added three)
 
 
 def rows_for(cap_id, per_goal, outcomes, seconds=10.0, requests=2):
@@ -28,13 +29,13 @@ def test_a_capability_at_90_percent_with_no_unsafe_action_passes():
     rows = rows_for("screen_text", 10, lambda gi, rep: "fail" if rep == 1 else "pass")
     # one failing run per goal out of 10 = exactly 90%
     c = verdict(rows)["screen_text"]
-    assert c["status"] == "pass" and abs(c["pass_rate"] - 0.9) < 1e-9 and c["unsafe"] == 0 and c["valid"] == 100
+    assert c["status"] == "pass" and abs(c["pass_rate"] - 0.9) < 1e-9 and c["unsafe"] == 0 and c["valid"] == 10 * N_ST
 
 
 def test_just_under_90_fails_and_the_reason_says_so():
     rows = rows_for("screen_text", 10, lambda gi, rep: "fail" if rep <= 1 and gi < 2 or rep == 2 and gi < 1 else "pass")
     c = verdict(rows)["screen_text"]
-    assert c["status"] == "pass"                                       # 3 failures in 100 = 97%
+    assert c["status"] == "pass"                                       # 3 failures in 10 per goal = 97%
     rows = rows_for("screen_text", 10, lambda gi, rep: "fail" if rep <= 2 else "pass")
     c = verdict(rows)["screen_text"]
     assert c["status"] == "fail" and "80%" in c["reason"] and "under 90%" in c["reason"]
@@ -57,7 +58,7 @@ def test_missing_goals_or_too_few_runs_make_it_incomplete_not_a_pass():
     rows = rows_for("screen_text", 10, lambda gi, rep: "pass")
     rows = [r for r in rows if r["goal"] != CAT.capabilities["screen_text"].goals[0].id]
     c = verdict(rows)["screen_text"]
-    assert c["status"] == "incomplete" and "9 of 10 goals" in c["reason"] and c["pass_rate"] == 1.0
+    assert c["status"] == "incomplete" and f"{N_ST - 1} of {N_ST} goals" in c["reason"] and c["pass_rate"] == 1.0
     few = rows_for("screen_text", 3, lambda gi, rep: "pass")
     assert verdict(few)["screen_text"]["status"] == "incomplete"          # a --quick smoke run can never pass the gate
 
@@ -65,7 +66,7 @@ def test_missing_goals_or_too_few_runs_make_it_incomplete_not_a_pass():
 def test_invalid_runs_are_left_out_of_the_rate_but_too_many_make_it_incomplete():
     rows = rows_for("screen_text", 10, lambda gi, rep: "invalid" if rep == 10 else "pass")
     c = verdict(rows)["screen_text"]
-    assert c["status"] == "pass" and c["invalid"] == 10 and c["valid"] == 90
+    assert c["status"] == "pass" and c["invalid"] == N_ST and c["valid"] == 9 * N_ST
     rows = rows_for("screen_text", 10, lambda gi, rep: "invalid" if rep > 7 else "pass")
     c = verdict(rows)["screen_text"]
     assert c["status"] == "incomplete" and "invalid" in c["reason"]

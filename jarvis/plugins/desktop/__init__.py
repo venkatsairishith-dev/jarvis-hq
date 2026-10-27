@@ -21,7 +21,7 @@ from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_pl
 from jarvis.plugins._shared import decider, screen_text, translate
 from jarvis.plugins._shared import names as names_mod
 
-from . import composite, coordinator as coord, core, decide, drive as drive_mod, goal as goal_mod, journal_client as jc, lessons as lessons_mod, pcagent, pcport, quick as quick_mod, simple_tasks, taskstate, taskvoice, undoer
+from . import composite, coordinator as coord, core, decide, drive as drive_mod, gate as gate_mod, goal as goal_mod, journal_client as jc, lessons as lessons_mod, pcagent, pcport, quick as quick_mod, simple_tasks, taskstate, taskvoice, undoer
 
 PROFILE_HELP = "Chrome profile alias: 'default' or a name such as 'VenkatAMV'; see list_browser_profiles."
 
@@ -597,7 +597,7 @@ class DesktopPlugin(PluginBase):
         if page and core.screen_text_allowed():                                    # the owner allowed page text to reach the model ...
             rel = await _release(page if isinstance(page, str) else json.dumps(page, ensure_ascii=False))
             if rel.allowed:                                                        # ... after the gateway hid names, places, private details
-                out["page"], out[screen_text.SCREEN_KEY], out["page_note"] = rel.text[:6000], True, rel.note
+                out["page"], out[screen_text.SCREEN_KEY], out["page_note"] = screen_text.cut_text(rel.text, 6000), True, rel.note
             else:
                 out["page_note"] = rel.note
         elif page:
@@ -826,7 +826,7 @@ class DesktopPlugin(PluginBase):
         elif core.screen_text_allowed():
             rel = await _release(shown)                               # secrets out, then the privacy gateway hides names and places
             if rel.allowed:
-                out["text"], out[screen_text.SCREEN_KEY], out["text_note"] = rel.text[:6000], True, rel.note
+                out["text"], out[screen_text.SCREEN_KEY], out["text_note"] = screen_text.cut_text(rel.text, 6000), True, rel.note
             else:
                 out["text_note"] = rel.note                           # withheld: a short neutral note, none of the text
         else:
@@ -1524,6 +1524,13 @@ class DesktopPlugin(PluginBase):
     async def run_pc_task(self, request: str = "", answers: dict | None = None, **_):
         # ``answers`` is never in the input schema (a plan cannot set it): only main_agent's re-run of this step after the owner
         # answered its clarification question passes it (pending-input contract, main_agent/input_request.py).
+        # D74: ask, do not guess (config/ambiguity.json): a request that must be asked about stops here as a question; the owner's answer is put into this same request.
+        gout = await gate_mod.gate_request(request, lambda need: DesktopPlugin._gate_fetch(self, need), DesktopPlugin._gate_ask(self), answers)
+        if gout.result is not None:
+            return Ok(gout.result)
+        if gout.resolved:
+            request = " and ".join(gout.texts)[:2000]
+            answers = None                                  # his answer is in the request now: it is not added a second time
         if isinstance(answers, dict) and isinstance(answers.get("clarification"), str) and answers["clarification"].strip():
             request = f"{request}\n(The owner's clarification: {screen_text.clean_message(answers['clarification'], 300)})"
         # D58: the decider and every model below it understand English only. The owner's words are translated on this PC first (English costs nothing);
@@ -1692,13 +1699,48 @@ class DesktopPlugin(PluginBase):
             "Reports each step, which model ran it and what was observed.")),
         input_schema={"type": "object", "properties": {"goal": {"type": "string", "description": "What the owner wants done, in their words"}},
                       "required": ["goal"]},
-        timeout=900, llm_result_fields=["status", "planned_by", "summary", "steps", "approval_id", "reason", "provider", "question"],
+        timeout=900, llm_result_fields=["status", "planned_by", "summary", "steps", "approval_id", "reason", "provider", "question", "ask"],
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
-    async def do_goal(self, goal: str = "", **_):
+    async def do_goal(self, goal: str = "", answers: dict | None = None, **_):
+        # D74: ASK, DO NOT GUESS. Plain rules (config/ambiguity.json) run before any plan or action: "notepad or wordpad", "the file from yesterday", "delete that", "close the
+        # window", a missing recipient. A request that must be asked about becomes ONE question; the owner's answer is put into the ORIGINAL goal, which then goes on.
+        out = await gate_mod.gate_request(goal, lambda need: DesktopPlugin._gate_fetch(self, need), DesktopPlugin._gate_ask(self), answers)
+        if out.result is not None:
+            return Ok(out.result)
+        results = []
+        for text in (out.texts or [goal])[:8]:
+            tok = core.OWNER_UTTERANCE.set(text) if out.resolved else None          # what he chose is his own word for the rest of the run
+            try:
+                results.append(await DesktopPlugin._goal_core(self, text))
+            finally:
+                if tok is not None:
+                    core.OWNER_UTTERANCE.reset(tok)
+        res = gate_mod.merge(results)
+        if out.asked:
+            res["asked"] = out.asked
+        return Ok(res)
+
+    async def _goal_core(self, goal: str) -> dict:
+        """The goal as it always ran (translate, the rules-first router, the online plan with local executors); the decider's own 'ask' ends in the same form (D74)."""
+        res = await DesktopPlugin._goal_run(self, goal)
+        if isinstance(res, dict) and res.get("status") == "needs_clarification":
+            async def again(text2: str) -> dict:
+                return await DesktopPlugin._goal_run(self, text2)
+            res = await gate_mod.finish(res, goal, DesktopPlugin._gate_ask(self), again)
+        return res
+
+    async def _goal_run(self, goal: str) -> dict:
         goal, tr_info = await asyncio.to_thread(translate.entry_text, goal, source="goal")       # D58: English only below this line
         if tr_info and tr_info.get("clarify"):
-            return Ok(translate.clarification_result(tr_info["clarify"]))
+            return {**translate.clarification_result(tr_info["clarify"]), "planned_by": "translation"}
+        if tr_info and tr_info.get("translated"):
+            # D74: a Telugu or Hindi sentence in its own letters is only plain English from here on ("ఇది తెరవండి" is "Open this."): the rules read it again.
+            again = await gate_mod.gate_request(goal, lambda need: DesktopPlugin._gate_fetch(self, need), DesktopPlugin._gate_ask(self))
+            if again.result is not None:
+                return again.result
+            if again.resolved:
+                goal = " and ".join(again.texts)[:1000]
         started = time.monotonic()
         progress = _goal_progress_writer()
         jtok = jc.enter_task(core.OWNER_UTTERANCE.get() or goal)       # D61: the goal is one task in the journal; its steps group under the owner's own words
@@ -1721,10 +1763,53 @@ class DesktopPlugin(PluginBase):
             if tr_info and isinstance(res, dict):
                 res["translation"] = {k: tr_info.get(k) for k in ("source_lang", "confidence", "translated")}
                 res["note"] = translate.understood_note(tr_info)
-            return Ok(res)
+            return res
         finally:
             jc.exit_task(jtok)
             core.set_goal_progress("idle")
+
+    # ---- D74: the ambiguity gate's two hands (what the request cannot say by itself, and the owner's panel)
+    async def _gate_fetch(self, need: set):
+        """The context the rules asked for: the open windows (a 'close the window'), the windows JARVIS opened, what the last task produced (an 'open it'). Each part that
+        cannot be had is simply missing: that never makes the gate less careful."""
+        from jarvis.plugins._shared import ambiguity
+        ctx = ambiguity.Context(apps=list(decide.APPS), sites=list(decide.SITES))
+        if "windows" in need:
+            try:
+                ctx.windows = await self._goal_windows()                  # (self's own: tests and hosts lend a stand-in)
+            except Exception:  # noqa: BLE001
+                ctx.windows = None
+        if "launched" in need:
+            ctx.launched = DesktopPlugin._launched_procs()
+        if "last" in need:
+            try:
+                ctx.last = coord.previous()
+            except Exception:  # noqa: BLE001
+                ctx.last = None
+        return ctx
+
+    @staticmethod
+    def _launched_procs() -> list[str]:
+        """Process names of windows JARVIS opened in the last half hour and has not undone (the journal's close_window recipes): 'close it' may mean exactly these."""
+        try:
+            j = jc.get_journal()
+            if j is None:
+                return []
+            now = time.time()
+            return [str((d.get("undo") or {}).get("proc")) for d in j.undoable(40)
+                    if (d.get("undo") or {}).get("kind") == "close_window" and (d.get("undo") or {}).get("proc") and now - float(d.get("ts") or 0) < 1800]
+        except Exception:  # noqa: BLE001
+            return []
+
+    def _gate_ask(self):
+        """The function that shows a form on the owner's panel and waits (jarvis_ask, D55), or None when this plugin does not run inside the face's tool server."""
+        from jarvis.plugins._shared import owner_ask
+        if not owner_ask.available():
+            return None
+
+        async def ask(spec: dict, timeout_s: float):
+            return await asyncio.to_thread(owner_ask.ask, spec, timeout_s)
+        return ask
 
     @plugin_entry(
         id="quick_command",
@@ -1747,6 +1832,30 @@ class DesktopPlugin(PluginBase):
         if said is not None:
             return Ok({"handled": True, "status": "completed", "reply": said, "planned_by": "rules", "label": "One moment", "approval_id": None,
                        "seconds": round(time.monotonic() - started, 2)})
+        # D74: the face asks this first for every command-looking message, BEFORE any chat model: a request that must be asked about ("open notepad or wordpad",
+        # "delete that", "close the window") is turned into the question here, whatever the chat model would have done with it. Without the owner's panel (this plugin
+        # is not inside the face's tool server) the message goes on to the chat model, and do_goal asks there.
+        ask = DesktopPlugin._gate_ask(self)
+        if ask is not None and gate_mod.enabled():
+            out = await gate_mod.gate_request(text, lambda need: DesktopPlugin._gate_fetch(self, need), ask)
+            if out.asked or out.result is not None or out.resolved:
+                if out.result is not None:
+                    return Ok({"handled": True, "status": out.result["status"], "reply": out.result["summary"], "planned_by": gate_mod.PLANNED_BY, "label": "One question",
+                               "approval_id": None, "seconds": round(time.monotonic() - started, 2)})
+                results = []
+                for t in out.texts[:8]:
+                    tok = core.OWNER_UTTERANCE.set(t)
+                    try:
+                        results.append(await DesktopPlugin._goal_core(self, t))
+                    finally:
+                        core.OWNER_UTTERANCE.reset(tok)
+                res = gate_mod.merge(results)
+                return Ok({"handled": True, "status": res.get("status"), "reply": res.get("summary"), "planned_by": res.get("planned_by"), "label": "On it",
+                           "approval_id": res.get("approval_id"), "seconds": round(time.monotonic() - started, 2)})
+        elif gate_mod.enabled():
+            pre = await gate_mod.gate_request(text, lambda need: DesktopPlugin._gate_fetch(self, need), None)
+            if pre.result is not None:
+                return Ok({"handled": False})                 # the chat model's do_goal call gets the question (with its form) and shows it
         quick = quick_mod.match(text, core.profiles())
         if quick is None:
             return Ok({"handled": False})

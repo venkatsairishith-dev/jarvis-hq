@@ -358,7 +358,26 @@ class FaceTools:
         except Exception:  # noqa: BLE001 - the gate must never stop an English task or break a result
             return None
 
+    def _ambiguity(self, task: str):
+        """D74: the owner's words, read by the ask-do-not-guess rules (plugins/_shared/ambiguity.py over config/ambiguity.json) BEFORE the language gate rewrites them (a
+        rewrite to plain English dropped the second choice of 'Notepad leda Wordpad teruvu'). A Verdict, or None (clear, or the gate is off or failed)."""
+        if os.environ.get("JARVIS_AMBIGUITY_GATE", "").strip().lower() in ("0", "false", "no", "off"):
+            return None
+        try:
+            from jarvis.plugins._shared import ambiguity
+            return ambiguity.check(task)
+        except Exception:  # noqa: BLE001 - the gate must never break a task
+            return None
+
     async def do(self, task: str) -> dict:
+        v = self._ambiguity(task)
+        if v is not None and not v.auto_text:
+            from jarvis.plugins._shared import ambiguity
+            form = ambiguity.form(v)
+            labels = " / ".join(str(o.get("label", "")) for o in form.get("options") or [])
+            return self._out({"ok": True, "asked": True, "form": form,
+                              "message": "Nothing was started: I need one answer first. Ask the owner: " + v.question + (f" Options: {labels}." if labels else "")
+                              + " Show it with jarvis_ask, then call jarvis_do again with the original request and the answer put in."})
         gate = self._language_gate(task)
         if gate is not None and gate.action == "ask":
             form = gate.form or {}

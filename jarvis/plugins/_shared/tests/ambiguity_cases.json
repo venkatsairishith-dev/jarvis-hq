@@ -1,0 +1,666 @@
+{
+ "_note": "D74. Labelled requests for the ambiguity gate (jarvis/plugins/_shared/ambiguity.py over jarvis/config/ambiguity.json). 'clear' requests name what they work on and must pass UNTOUCHED (the false-ask budget is zero); 'ambiguous' ones must be asked about, with the right kind of question. The catalogue's own examples (config/simple_tasks.json) and the reliability gate's act / pin goals (evals/reliability/goals.json) are added by the test as more clear requests. Languages: en, te (Telugu in English letters), hi (Hindi in English letters). Add a case here when a real request is asked about too much or too little.",
+ "clear": [
+  "open notepad",
+  "open the downloads folder",
+  "open my documents",
+  "play despacito",
+  "play some bach piano music",
+  "play a relaxing song on youtube",
+  "play music on spotify",
+  "minimize notepad",
+  "close notepad",
+  "close the calculator",
+  "quit chrome",
+  "exit notepad",
+  "shut down notepad",
+  "type hello into notepad",
+  "write hello in notepad and save it as hello.txt in documents",
+  "open notepad and write hello",
+  "send hello to ravi on whatsapp",
+  "email the report to john@example.com",
+  "send an email to the bank",
+  "text mom hello",
+  "whatsapp mom hello",
+  "message ravi hi there",
+  "delete the file report.docx",
+  "delete test.txt in Downloads",
+  "delete old.txt from Downloads for good",
+  "remove the folder Old Notes from Desktop",
+  "get rid of draft.docx",
+  "delete the oldest file in D:\\work\\age-1",
+  "delete everything in D:\\work\\Documents-1",
+  "rename report.docx to final.docx",
+  "move report.docx to documents",
+  "move notes.txt into Documents/backup",
+  "copy a.txt to b.txt",
+  "copy report.docx from Documents to Desktop",
+  "copy the text from notepad to the clipboard",
+  "paste it into notepad",
+  "paste",
+  "undo",
+  "stop",
+  "turn it up",
+  "turn it down",
+  "pause it",
+  "mute it",
+  "remind me at 5 pm to call mom",
+  "remind me in 10 minutes to stretch",
+  "set a timer for 5 minutes",
+  "set an alarm for 07:00",
+  "remind me tomorrow to pay rent",
+  "make a 5 slide deck about solar power",
+  "make a pdf about tea",
+  "create a report on backups",
+  "write a one-page report about why backups matter and show it to me",
+  "make a deck about our week and open it",
+  "take a screenshot and save it",
+  "search for pasta recipes",
+  "google weather in hyderabad",
+  "search for cats or dogs",
+  "what's the weather in paris",
+  "what is 2 plus 2",
+  "tell me a joke",
+  "hello",
+  "thanks",
+  "who is the president or prime minister of India?",
+  "I like tea or coffee",
+  "is it raining or sunny in paris?",
+  "do you want tea or coffee?",
+  "answer yes or no",
+  "type yes or no in notepad",
+  "open notepad and type 'a or b'",
+  "show me my desktop",
+  "show the desktop",
+  "open settings",
+  "open file explorer",
+  "open file explorer and close it",
+  "open chrome",
+  "open youtube",
+  "go to example.com",
+  "open budget.xlsx",
+  "open the file report.pdf from Downloads",
+  "open the file D:\\work\\main.py in vs code",
+  "open the folder D:\\docs in file explorer",
+  "mute the volume",
+  "turn the volume up",
+  "volume up",
+  "pause the music",
+  "skip the song",
+  "lock the screen",
+  "empty the recycle bin",
+  "clean up my pc",
+  "free up space",
+  "uninstall vlc",
+  "install 7-zip",
+  "change the wallpaper to sea.jpg",
+  "set brightness to 60",
+  "turn off the wifi",
+  "open a new tab",
+  "what is on my screen",
+  "read the first line of the notepad window",
+  "does the notepad window mention a deadline? if so, when is it?",
+  "Notepad open chesi hello rayandi",
+  "Chrome lo example.com teruvu",
+  "Calculator teruvu",
+  "Notepad ni muyyi",
+  "Paris weather cheppu",
+  "naa screen mida emundo cheppu",
+  "ee file ni recycle bin lo veyyi: D:\\x\\del.txt",
+  "Notepad kholo aur hello likho",
+  "Calculator kholo",
+  "Notepad band karo",
+  "Paris ka mausam batao",
+  "mere screen par kya hai batao",
+  "ye file recycle bin mein daalo: D:\\x\\del.txt",
+  "Mohan ko mail karo report.pdf",
+  "Ravi ki hello pampu",
+  "open the calculator and calculate 5 plus 5",
+  "send an email to john@example.com saying hello",
+  "copy report.docx to the desktop",
+  "delete the file named notes in downloads",
+  "open youtube and play despacito",
+  "write hello world in notepad and save it to the desktop as hw.txt",
+  "rename notes.txt to todo.txt",
+  "move all pdf files in downloads to documents",
+  "close microsoft word",
+  "open the recycle bin",
+  "what's in the downloads folder",
+  "make a spreadsheet of monthly expenses",
+  "create a folder called Projects on the desktop",
+  "play the song Imagine by John Lennon",
+  "text John that I'm running late",
+  "search the web for best laptops under 500 dollars",
+  "mail karo ravi ko report",
+  "download the file from example.com",
+  "set the volume to 30",
+  "take a screenshot of the notepad window",
+  "open vs code and create hello.py",
+  "show me the files in documents",
+  "open both notepad and calculator",
+  "open notepad and also calculator",
+  "Notepad aur Calculator kholo",
+  "Notepad mariyu Calculator teruvu",
+  "delete temp files from downloads",
+  "zip the folder photos",
+  "unzip archive.zip",
+  "email the invoice pdf to accounts@example.com",
+  "remind me to call mom at 6 pm",
+  "play something by arijit singh",
+  "play a song by queen",
+  "whatsapp ravi that I am late",
+  "open the website for the bank of india",
+  "open Google Chrome",
+  "turn off bluetooth",
+  "turn on dark mode",
+  "close all notepad windows",
+  "close the calculator and the notepad",
+  "read the notepad aloud",
+  "search for the weather in Delhi"
+ ],
+ "clear_excluded": {
+  "post this on twitter": "genuinely ambiguous: 'this' has nothing to stand for (a catalogue example, class C: it would wait for the PIN anyway)"
+ },
+ "ambiguous": [
+  {
+   "say": "Open it.",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Delete the old file.",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "Open the other one.",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Send it to him.",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Make a pdf.",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "Open notepad or wordpad.",
+   "kind": "either_or",
+   "lang": "en"
+  },
+  {
+   "say": "Move that to the folder.",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Play something.",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "Close the window.",
+   "kind": "close",
+   "lang": "en"
+  },
+  {
+   "say": "Rename it.",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Email the report.",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "Save it.",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Search for the thing I mentioned.",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Open the file I was working on yesterday.",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Delete this.",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "Open Chrome or Edge",
+   "kind": "either_or",
+   "lang": "en"
+  },
+  {
+   "say": "Delete everything",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "Delete the old stuff",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "Close everything",
+   "kind": "close",
+   "lang": "en"
+  },
+  {
+   "say": "Close this",
+   "kind": "close",
+   "lang": "en"
+  },
+  {
+   "say": "Open the same one",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Open the usual",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Remind me to drink water",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "Send the report",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "Move report.docx",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "Rename report.docx",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "Open youtube or gmail",
+   "kind": "either_or",
+   "lang": "en"
+  },
+  {
+   "say": "Delete or move report.docx",
+   "kind": "either_or",
+   "lang": "en"
+  },
+  {
+   "say": "Play a song",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "Open Downloads or Documents",
+   "kind": "either_or",
+   "lang": "en"
+  },
+  {
+   "say": "Could you please open it for me",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "hey jarvis, delete that",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "Copy it to the desktop",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Open it in notepad",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Open file",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "Delete the file",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "Send an email",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "Notepad leda Wordpad teruvu",
+   "kind": "either_or",
+   "lang": "te"
+  },
+  {
+   "say": "Chrome leda Edge teruvu",
+   "kind": "either_or",
+   "lang": "te"
+  },
+  {
+   "say": "adi open cheyyi",
+   "kind": "reference",
+   "lang": "te"
+  },
+  {
+   "say": "aa file ni delete cheyyi",
+   "kind": "destructive",
+   "lang": "te"
+  },
+  {
+   "say": "pata files anni delete cheyyi",
+   "kind": "destructive",
+   "lang": "te"
+  },
+  {
+   "say": "edaina paata play cheyyi",
+   "kind": "slot",
+   "lang": "te"
+  },
+  {
+   "say": "ayanaki pampu",
+   "kind": "reference",
+   "lang": "te"
+  },
+  {
+   "say": "ninna nenu pani chesina file open cheyyi",
+   "kind": "reference",
+   "lang": "te"
+  },
+  {
+   "say": "ee window muyyi",
+   "kind": "close",
+   "lang": "te"
+  },
+  {
+   "say": "email pampu",
+   "kind": "slot",
+   "lang": "te"
+  },
+  {
+   "say": "oka pdf create cheyyi",
+   "kind": "slot",
+   "lang": "te"
+  },
+  {
+   "say": "Notepad ya wordpad kholo",
+   "kind": "either_or",
+   "lang": "hi"
+  },
+  {
+   "say": "ise delete karo",
+   "kind": "destructive",
+   "lang": "hi"
+  },
+  {
+   "say": "wahi file kholo",
+   "kind": "reference",
+   "lang": "hi"
+  },
+  {
+   "say": "kuch bajao",
+   "kind": "slot",
+   "lang": "hi"
+  },
+  {
+   "say": "purani files delete karo",
+   "kind": "destructive",
+   "lang": "hi"
+  },
+  {
+   "say": "usko bhej do",
+   "kind": "reference",
+   "lang": "hi"
+  },
+  {
+   "say": "kal wali file kholo",
+   "kind": "reference",
+   "lang": "hi"
+  },
+  {
+   "say": "pdf banao",
+   "kind": "slot",
+   "lang": "hi"
+  },
+  {
+   "say": "isko band karo",
+   "kind": "close",
+   "lang": "hi"
+  },
+  {
+   "say": "sab kuch band karo",
+   "kind": "close",
+   "lang": "hi"
+  },
+  {
+   "say": "report ko mail karo",
+   "kind": "slot",
+   "lang": "hi"
+  },
+  {
+   "say": "yaad dilao paani peena",
+   "kind": "slot",
+   "lang": "hi"
+  },
+  {
+   "say": "wo file rename karo",
+   "kind": "reference",
+   "lang": "hi"
+  },
+  {
+   "say": "open the other file",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "delete these",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "send that to mom",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "move those to documents",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "play some music",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "open word or excel",
+   "kind": "either_or",
+   "lang": "en"
+  },
+  {
+   "say": "open the one I used yesterday",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "rename this",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "copy it",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "email him the report",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "delete the old ones",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "open the file from last week",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "save that",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "close all windows",
+   "kind": "close",
+   "lang": "en"
+  },
+  {
+   "say": "shut this",
+   "kind": "close",
+   "lang": "en"
+  },
+  {
+   "say": "open it please",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "can you delete it",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "open paint or notepad",
+   "kind": "either_or",
+   "lang": "en"
+  },
+  {
+   "say": "Mail the document",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "create a presentation",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "make a deck",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "make slides",
+   "kind": "slot",
+   "lang": "en"
+  },
+  {
+   "say": "send her the file",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "remove old files",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "trash it",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "delete those files",
+   "kind": "destructive",
+   "lang": "en"
+  },
+  {
+   "say": "pause or play the music",
+   "kind": "either_or",
+   "lang": "en"
+  },
+  {
+   "say": "open the usual app",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "save this document",
+   "kind": "reference",
+   "lang": "en"
+  },
+  {
+   "say": "wo kholo",
+   "kind": "reference",
+   "lang": "hi"
+  },
+  {
+   "say": "isko delete karo",
+   "kind": "destructive",
+   "lang": "hi"
+  },
+  {
+   "say": "usko mail karo",
+   "kind": "slot",
+   "lang": "hi"
+  },
+  {
+   "say": "notepad ya paint kholo",
+   "kind": "either_or",
+   "lang": "hi"
+  },
+  {
+   "say": "paint leda notepad open cheyyi",
+   "kind": "either_or",
+   "lang": "te"
+  },
+  {
+   "say": "kuch chalao",
+   "kind": "slot",
+   "lang": "hi"
+  },
+  {
+   "say": "aa file ni teesey",
+   "kind": "destructive",
+   "lang": "te"
+  },
+  {
+   "say": "ee file teruvu",
+   "kind": "reference",
+   "lang": "te"
+  },
+  {
+   "say": "vallaki pampu",
+   "kind": "slot",
+   "lang": "te"
+  },
+  {
+   "say": "purane files hatao",
+   "kind": "destructive",
+   "lang": "hi"
+  }
+ ]
+}

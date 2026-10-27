@@ -21,7 +21,7 @@ const { t } = useI18n()
       </span>
       <BasicButton
         size="unset"
-        :class="['rounded-lg bg-primary-500 px-3 py-1 text-sm text-white']"
+        :class="['min-h-8 rounded-lg bg-primary-700 px-3 py-1 text-sm text-white hover:bg-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500']"
         @click="emit('configure')"
       >
         {{ t('stage.chat.provider-configuration.action') }}

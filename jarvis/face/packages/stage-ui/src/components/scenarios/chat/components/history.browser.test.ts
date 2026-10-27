@@ -1882,7 +1882,7 @@ describe('chat history', () => {
       props: { messages: [message], style: 'height: 480px; width: 480px; overflow-y: auto;' },
       global: { plugins: [createEnglishI18n()] },
     })
-    await screen.getByText('2-hit combo', { exact: true }).click()
+    await screen.getByText('2 steps', { exact: true }).click()
     await screen.getByLabelText('Run again').nth(1).click()
     expect(screen.emitted('toolCallRerun')).toEqual([[expect.objectContaining({ invocationId: 'invocation-1', toolCallId: 'same' })]])
   })

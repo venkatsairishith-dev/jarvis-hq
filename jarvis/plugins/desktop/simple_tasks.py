@@ -537,11 +537,22 @@ def h_arrange(entry, args, env, step):
     return out(True, facts, ["the final positions are not read back"])
 
 
+GENERIC_APP_WORDS = {"window", "windows", "this", "that", "it", "them", "everything", "all", "app", "apps", "program", "tab", "current", "active", "front", "top"}
+
+
 def h_close_app(entry, args, env, step):
     app = args.get("app", "")
+    if " ".join(str(app).lower().split()) in GENERIC_APP_WORDS or not str(app).strip():      # D74: "close the window" names no app: it is a question (the ambiguity gate asks), never a guess here
+        return out(False, error="I need to know which window to close; say the app's name", expected_missing=["a named window to close"])
     proc = env.process(app)
     if not proc:
         return out(False, error=f"no open window for {app}", expected_missing=[f"the {app} window to be found"])
+    try:                                                   # D74: JARVIS's own face / chat / console window is never closed by an action (kernel policy and the node say the same)
+        from jarvis.plugins._shared import ambiguity
+        if ambiguity.own_window(proc):
+            return out(False, error="that is one of JARVIS's own windows, and JARVIS does not close its own windows", expected_missing=[f"the {app} window closed"])
+    except ImportError:
+        pass
     r = env.pc({"op": "ui", "action": "close", "target": f"{proc}|", "text": ""}, 60)
     h = held(r)
     if h:

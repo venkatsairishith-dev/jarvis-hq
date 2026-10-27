@@ -25,7 +25,7 @@ const visible = computed(() => v.mode.value !== 'off' || !!v.did.value || !!v.no
   <div v-if="visible" class="ask-voice" role="group" aria-label="Voice">
     <p v-if="v.mode.value !== 'off'" class="ask-voice-line ask-voice-listening" role="status" aria-live="polite">
       <span class="ask-voice-dot" :class="`ask-voice-dot-${v.micState()}`" aria-hidden="true" />
-      <span class="ask-voice-text">{{ v.understanding.value ? 'Understanding...' : listeningText }}</span>
+      <span class="ask-voice-text">{{ v.understanding.value ? 'Understanding…' : listeningText }}</span>
     </p>
     <p v-if="v.mode.value !== 'off' && v.interim.value && v.mode.value === 'command'" class="ask-voice-interim" aria-hidden="true">
       {{ v.interim.value }}

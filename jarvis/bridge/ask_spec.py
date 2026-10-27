@@ -149,16 +149,57 @@ def _file_rows(folder: Path, limit: int, images_only: bool = False) -> list[tupl
     return rows[:limit]
 
 
-def file_options(source: str, home: Path | None = None, limit: int = RECENT_FILE_LIMIT, thumbs: bool = False) -> list[dict]:
+def _day_range(day: str, now: float | None = None) -> tuple[float, float] | None:
+    """(start, end) epoch seconds of a local day: today, yesterday, last_week (the 7 days before today) or YYYY-MM-DD. None when it cannot be read."""
+    import datetime as _dt
+    today = _dt.datetime.fromtimestamp(now if now is not None else __import__("time").time()).replace(hour=0, minute=0, second=0, microsecond=0)
+    day = str(day or "").strip().lower()
+    if day == "today":
+        a, b = today, today + _dt.timedelta(days=1)
+    elif day == "yesterday":
+        a, b = today - _dt.timedelta(days=1), today
+    elif day == "last_week":
+        a, b = today - _dt.timedelta(days=7), today
+    elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+        try:
+            a = _dt.datetime.strptime(day, "%Y-%m-%d")
+        except ValueError:
+            return None
+        b = a + _dt.timedelta(days=1)
+    else:
+        return None
+    return a.timestamp(), b.timestamp()
+
+
+def _apply_filter(rows: list, flt: dict | None, now: float | None = None) -> list:
+    """A BACKEND-side narrowing of a file list (D74): the caller may say which names, which day, which extensions, oldest first. It never adds a file: it only
+    chooses among the ones the backend found in the known folders. rows: (mtime, name, size, path)."""
+    if not flt:
+        return rows
+    words = [str(w).lower() for w in flt.get("name_like") or [] if str(w).strip()][:6]
+    exts = [("." + str(e).lower().lstrip(".")) for e in flt.get("ext") or [] if str(e).strip()][:8]
+    span = _day_range(flt["day"], now) if flt.get("day") else None
+    if words:
+        rows = [r for r in rows if any(w in r[1].lower() for w in words)]
+    if exts:
+        rows = [r for r in rows if r[1].lower().endswith(tuple(exts))]
+    if span:
+        rows = [r for r in rows if span[0] <= r[0] < span[1]]
+    rows = sorted(rows, key=lambda r: r[0], reverse=not flt.get("oldest"))
+    return rows
+
+
+def file_options(source: str, home: Path | None = None, limit: int = RECENT_FILE_LIMIT, thumbs: bool = False, flt: dict | None = None) -> list[dict]:
     """What a file_choice or gallery lists: the newest plain files of a known folder (`recent` = Downloads, Documents and Desktop together,
-    `folders` = the save folders). `path` stays on the server; the panel answers with the option id."""
+    `folders` = the save folders). `path` stays on the server; the panel answers with the option id. `flt` (D74): name words, a day, extensions, oldest first."""
     if source == "folders":
         return [{"id": f"d{i}", "label": label, "detail": plain(p, 100), "path": str(p)} for i, (label, p) in enumerate(save_folders(home))]
     folders = [known_folder(k, home) for k in ("downloads", "documents", "desktop")] if source == "recent" else [known_folder(source, home)]
     rows: list[tuple[float, str, int, Path]] = []
     for folder in folders:
-        rows += _file_rows(folder, limit, images_only=thumbs and source != "recent")
+        rows += _file_rows(folder, 400 if flt else limit, images_only=thumbs and source != "recent")
     rows.sort(key=lambda r: r[0], reverse=True)
+    rows = _apply_filter(rows, flt)
     out, budget = [], THUMBS_TOTAL_MAX
     for i, (_, name, size, p) in enumerate(rows[:limit]):
         o: dict[str, Any] = {"id": f"f{i}", "label": name, "detail": p.parent.name, "size": size, "path": str(p)}
@@ -328,7 +369,11 @@ def clean_node(raw: Any, ctx: _Ctx, depth: int = 0) -> dict | None:
         if source not in FILE_SOURCES:
             return _fallback(raw, ctx, "A file list asked for a place that is not allowed.")
         out["source"] = source
-        listed = file_options(source, ctx.home, GALLERY_LIMIT if t == "gallery" else RECENT_FILE_LIMIT, thumbs=True)    # the caller's own options are ignored
+        flt = raw.get("filter") if isinstance(raw.get("filter"), dict) else None
+        listed = file_options(source, ctx.home, GALLERY_LIMIT if t == "gallery" else RECENT_FILE_LIMIT, thumbs=True, flt=flt)    # the caller's own options are ignored
+        if flt and not listed:                                        # D74: nothing matched the description: the newest files, said so (never an empty choice)
+            listed = file_options(source, ctx.home, GALLERY_LIMIT if t == "gallery" else RECENT_FILE_LIMIT, thumbs=True)
+            ctx.note("No file matched what was described, so these are the newest files.")
         out["options"] = [o for o in (_option(x, set(), ctx, backend=True) for x in listed) if o]
         out["multiple"] = t == "gallery" and raw.get("multiple") is True
     elif t == "text":
