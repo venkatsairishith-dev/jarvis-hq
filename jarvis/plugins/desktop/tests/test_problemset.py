@@ -419,7 +419,8 @@ def test_unsafe_code_patterns_are_caught():
     for code in ("import subprocess", "os.system('x')", "import socket", "__import__('os')", "eval(input())", "Runtime.getRuntime().exec(x)", "system(\"ls\");", "fork();",
                  "require('child_process')", "urllib.request.urlopen(u)", "ProcessBuilder pb", "open('/etc/passwd')" if False else "import ctypes"):
         assert P.UNSAFE_CODE.search(code), code
-    for code in ("print(sum(map(int, input().split())))", "import math", "#include <stdio.h>\nint main(){printf(\"%d\",1);}", "System.out.println(1);"):
+    for code in ("print(sum(map(int, input().split())))", "import math", "#include <stdio.h>\nint main(){printf(\"%d\",1);}", "System.out.println(1);",
+                 "requests.append(x)", "const fs = require('fs'); const t = fs.readFileSync(0, 'utf8');", "import sys\nfor line in sys.stdin: pass", "Scanner s = new Scanner(System.in);"):
         assert not P.UNSAFE_CODE.search(code), code
 
 

@@ -99,6 +99,39 @@ def norm_language(name: Any) -> str:
     return n if n in LANGUAGES else ""
 
 
+# ------------------------------------------------------------------------------------------------------------- comparing outputs
+def norm_out(s: str) -> list[str]:
+    lines = [ln.rstrip() for ln in str(s or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    while lines and not lines[-1]:
+        lines.pop()
+    while lines and not lines[0]:
+        lines.pop(0)
+    return lines
+
+
+def same_output(actual: str, expected: str) -> bool:
+    """Equal after trailing spaces and blank edge lines are ignored; token by token a number may differ by 1e-6 (relative) when the EXPECTED one is written with a decimal
+    point or an exponent. Never looser than that: a wrong word, a missing token or an extra line is a difference."""
+    a, e = norm_out(actual), norm_out(expected)
+    if a == e:
+        return True
+    ta, te = " ".join(a).split(), " ".join(e).split()
+    if len(ta) != len(te):
+        return False
+    for x, y in zip(ta, te):
+        if x == y:
+            continue
+        try:
+            fx, fy = float(x), float(y)
+        except ValueError:
+            return False
+        if "." not in y and "e" not in y.lower():
+            return False
+        if abs(fx - fy) > 1e-6 * max(1.0, abs(fy)):
+            return False
+    return True
+
+
 # ------------------------------------------------------------------------------------------------------------- the tool allowlist
 INSTALL_HINTS = {
     "python": "Python 3 is not installed in the places JARVIS may run code from. Install it from python.org (tick 'Add to PATH' is not needed) and tell me to try again.",

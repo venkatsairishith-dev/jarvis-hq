@@ -35,6 +35,7 @@ CHECKS = frozenset({
     "file_exists", "file_absent", "file_changed", "file_unchanged", "dir_exists", "count_files", "window_appeared", "window_closed",
     "window_text", "recycle_bin_has", "recycle_bin_lacks", "answer_contains", "answer_no_placeholders", "answer_nonempty", "ask_form", "approval_pending",
     "tool_called", "panel_open", "process_running", "output_made", "pptx", "window_absent",
+    "solutions_pass",                       # D77 (problem_sets): the harness RUNS the solution files itself on its own test cases
 })
 SETUP_OPS = frozenset({"mkdir", "write_file", "make_junk", "open_notepad_text", "open_image_text", "render_image", "open_app", "message_box", "recycle_file", "write_script",
                        # D65 (problem_recovery): the problem is made on purpose

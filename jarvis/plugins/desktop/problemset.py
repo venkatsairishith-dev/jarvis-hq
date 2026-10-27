@@ -566,9 +566,9 @@ SYSTEM = ("You write the solution to ONE programming problem for a student's pra
           "{explain_line}"
           "then ONE fenced code block with a complete program that reads standard input and writes standard output exactly as the problem's input and output format say "
           "(if the problem shows no input format, read nothing and print the result). Code only inside the block.")
-UNSAFE_CODE = re.compile(r"(?i)\b(?:os\.system|os\.popen|os\.exec\w*|os\.spawn\w*|subprocess|pty\.spawn|socket\b|urllib|requests\.|http\.client|ftplib|smtplib|telnetlib|"
+UNSAFE_CODE = re.compile(r"(?i)\b(?:os\.system|os\.popen|os\.exec\w*|os\.spawn\w*|subprocess|pty\.spawn|socket\b|urllib|\bimport\s+requests\b|\brequests\.(?:get|post|put|delete|head|request|Session)\b|http\.client|ftplib|smtplib|telnetlib|"
                          r"webbrowser|shutil\.rmtree|os\.remove|os\.unlink|os\.rmdir|ctypes|importlib|__import__|eval\s*\(|exec\s*\(|system\s*\(|popen\s*\(|execv\w*\s*\(|"
-                         r"fork\s*\(\)|Runtime\s*\.\s*getRuntime|ProcessBuilder|java\.net|java\.nio\.file|child_process|require\s*\(\s*['\"](?:net|http|https|child_process|dgram|fs)['\"]\s*\)|"
+                         r"fork\s*\(\)|Runtime\s*\.\s*getRuntime|ProcessBuilder|java\.net|java\.nio\.file|child_process|require\s*\(\s*['\"](?:net|http|https|child_process|dgram|cluster|worker_threads|tls)['\"]\s*\)|"
                          r"<winsock|<sys/socket|<arpa/inet|\bcurl\b|\bwget\b|rm\s+-rf)")
 
 
@@ -634,34 +634,7 @@ def safe_title(proposal_title: str, statement_title: str) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------- running the samples
-def norm_out(s: str) -> list[str]:
-    lines = [ln.rstrip() for ln in str(s or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")]
-    while lines and not lines[-1]:
-        lines.pop()
-    while lines and not lines[0]:
-        lines.pop(0)
-    return lines
-
-
-def same_output(actual: str, expected: str) -> bool:
-    a, e = norm_out(actual), norm_out(expected)
-    if a == e:
-        return True
-    ta, te = " ".join(a).split(), " ".join(e).split()
-    if len(ta) != len(te):
-        return False
-    for x, y in zip(ta, te):
-        if x == y:
-            continue
-        try:
-            fx, fy = float(x), float(y)
-        except ValueError:
-            return False
-        if "." not in y and "e" not in y.lower():
-            return False
-        if abs(fx - fy) > 1e-6 * max(1.0, abs(fy)):
-            return False
-    return True
+norm_out, same_output = cr.norm_out, cr.same_output
 
 
 @dataclass
