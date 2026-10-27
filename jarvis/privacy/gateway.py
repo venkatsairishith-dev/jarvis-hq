@@ -275,7 +275,18 @@ class CachedRedaction:
     Safety rules: a text that already holds something that looks like a placeholder is never cached (the template could not tell the owner's
     literal "[PASSWORD_1]" from ours); a result made while the detector reported a degraded check (decision model unreachable, `stats.jev_unreachable`
     grew) is not remembered, as in the detector itself; the cache lives in memory only, is bounded (entries and text size), and holds no more than
-    the detector's own cache already holds. Everything the detector exposes (model, names, stats ...) is passed through."""
+    the detector's own cache already holds. Everything the detector exposes (model, names, stats ...) is passed through.
+
+    Widened (D80): the key is built from the text with its LEADING AND TRAILING WHITESPACE STRIPPED, and that whitespace is put back around the
+    result unchanged, so "tools and the system message identical to the byte" (D60) still hits even when a caller's JSON round-trip adds or drops
+    a trailing newline or an extra space. This is safe because no recognizer here ever starts or ends a span on whitespace (every pattern and the
+    PII model's own `_widen` only grows over non-space characters; checked against the real Presidio + spaCy engine, not only the fake one, in
+    `test_privacy.py`), so the interior redaction cannot differ because of what sits outside it, and the stripped characters themselves can never
+    be a secret. CASE is deliberately left OUT of the key: spaCy's NER is case-sensitive ("Turing" is a PERSON, "turing" and "TURING" are not, measured
+    against the real engine 2026-10-27), so folding case before the lookup could serve a text's redaction to a DIFFERENTLY-cased text that should have
+    gotten its own, and a cache meant to save time must never cost a missed secret; same for a sentence-by-sentence split of the WHOLE-TEXT pass (only
+    the PII model already reads sentence by sentence, by design, because surrounding text changes its scores). Neither is done here without the real
+    detector to measure it against, which the laptop session has and this sandbox does not."""
 
     MAX_ENTRIES = 4096
     MAX_TEXT = 256 * 1024
@@ -296,6 +307,14 @@ class CachedRedaction:
     def _key(text: str, deep, names) -> tuple:
         return (hashlib.sha256(text.encode("utf-8", "surrogatepass")).digest(), bool(deep), names if isinstance(names, str) else bool(names) if names is not None else None)
 
+    @staticmethod
+    def _edges(text: str) -> tuple[str, str, str]:
+        """(leading whitespace, the rest, trailing whitespace). Always text == lead + core + trail."""
+        lead = text[:len(text) - len(text.lstrip())]
+        trail = text[len(text.rstrip()):]
+        core = text[len(lead):len(text) - len(trail)] if trail else text[len(lead):]
+        return lead, core, trail
+
     def snapshot(self) -> dict:
         with self._lock:
             return {"hits": self.hits, "misses": self.misses, "uncacheable": self.uncacheable, "size": len(self._entries)}
@@ -306,7 +325,8 @@ class CachedRedaction:
                 with self._lock:
                     self.uncacheable += 1
             return self._red.redact(text, mapping, deep, names)
-        key = self._key(text, deep, names)
+        lead, core, trail = self._edges(text)
+        key = self._key(core, deep, names)
         with self._lock:
             entry = self._entries.get(key)
             if entry is not None:
@@ -315,15 +335,15 @@ class CachedRedaction:
         if entry is not None:
             template, values = entry
             if not values:
-                return template
+                return lead + template + trail
             local = {}
             for tag, entity, value in values:             # in order of first appearance, as the detector would have tagged them
                 local[tag] = mapping.tag(entity, value)
-            return redactor_placeholder_sub(lambda mm: local.get(mm.group(0), mm.group(0)), template)
-        # a miss: run the detector on a scratch mapping, so the template and its values can be kept; then tag them in the real one
+            return lead + redactor_placeholder_sub(lambda mm: local.get(mm.group(0), mm.group(0)), template) + trail
+        # a miss: run the detector on the core text with a scratch mapping, so the template and its values can be kept; then tag them in the real one
         scratch = Mapping()
         before = _degraded_count(self._red)
-        out = self._red.redact(text, scratch, deep, names)
+        out = self._red.redact(core, scratch, deep, names)
         with self._lock:
             self.misses += 1
         values = []
@@ -343,7 +363,7 @@ class CachedRedaction:
                 self._entries.move_to_end(key)
                 while len(self._entries) > self._max:
                     self._entries.popitem(last=False)
-        return result
+        return lead + result + trail
 
 
 def _degraded_count(red) -> int:
@@ -728,6 +748,15 @@ class ReplayResponse:
         return False
 
 
+# D80: investigated whether this can be shrunk to show the owner a live connection sooner on a silent (reasoning-only) stream.
+# NOT shrunk: the deadline check below (`return head, "ok"`) fires on elapsed TIME ALONE, whatever `ok` is, so it is also the
+# only thing standing between a stream that is merely slow and one that is about to resolve "empty" or "error" - a deadline
+# shorter than how long a genuinely bad stream can legitimately take would silently skip the BAD_TOOL_JSON failover for it
+# (proved by test_the_deadline_cannot_tell_a_slow_good_stream_from_a_slow_bad_one in test_gateway_plumbing.py). The owner's own
+# measured total_ms for a SUCCESSFUL round is already p50 8.0 s / p90 22.8 s (D60); nothing here measures how long a bad or
+# empty round can take, so there is no safe margin to shrink into. It also does not change the common case at all: the
+# owner's own first_ms (p50 1.2 s) shows real content usually arrives long before 60 s, so peek_stream already returns almost
+# at once for a normal reply, deadline or no deadline (see test_content_breaks_out_at_once_whatever_the_deadline_is).
 PEEK_DEADLINE_S = 60.0
 
 

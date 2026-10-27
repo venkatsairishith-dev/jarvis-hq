@@ -192,6 +192,33 @@ class EveryFieldIsChecked(unittest.TestCase):
             with self.assertRaises((gateway.GatewayRefusal, TypeError), msg=str(bad)[:40]):
                 gateway.redact_body(bad, det, Mapping())
 
+    def test_parallel_tool_calls_is_not_blocked_here(self):
+        """D80 item 5: nothing in the gateway's own request shape forces one tool call a round. `parallel_tool_calls` (an
+        ordinary OpenAI-compatible boolean the face or a plugin may set so the model may return more than one tool_calls
+        entry in a single turn) passes through exactly like `stream` or `temperature` does; the gateway never sets or
+        strips it itself. Whether a model actually calls two tools at once from there on is the model's own choice, and
+        whether the face's orchestrator (reserved: apps/stage-tamagotchi/src) executes two returned tool_calls concurrently
+        is outside this file; this only proves the protocol layer does not stand in the way."""
+        det = LabelledFakeDetector()
+        for flag in (True, False):
+            out = gateway.redact_body({"model": "m", "messages": [], "parallel_tool_calls": flag}, det, Mapping())
+            self.assertEqual(out["parallel_tool_calls"], flag)
+        with self.assertRaises(gateway.GatewayRefusal):
+            gateway.redact_body({"model": "m", "messages": [], "parallel_tool_calls": "yes"}, det, Mapping())
+
+    def test_an_assistant_turn_with_two_tool_calls_at_once_is_carried_whole_in_both_directions(self):
+        """The shape a model uses to call two independent read-only tools in the SAME round (two entries in `tool_calls`)
+        is not collapsed, reordered or limited to one entry anywhere in redact_body / restore_json."""
+        det = LabelledFakeDetector()
+        msg = {"role": "assistant", "content": None, "tool_calls": [
+            {"id": "1", "type": "function", "function": {"name": "get_weather", "arguments": json.dumps({"city": c("w")})}},
+            {"id": "2", "type": "function", "function": {"name": "desktop__whats_on_screen", "arguments": "{}"}}]}
+        out = gateway.redact_body({"model": "m", "messages": [msg]}, det, Mapping())
+        calls = out["messages"][0]["tool_calls"]
+        self.assertEqual(len(calls), 2)
+        self.assertEqual([x["id"] for x in calls], ["1", "2"])
+        self.assertEqual(calls[1]["function"]["name"], "desktop__whats_on_screen")
+
     def test_provider_switches_pass_only_in_their_exact_shape(self):
         det = LabelledFakeDetector()
         ok = {"model": "m", "messages": [], "enable_thinking": False, "thinking_budget": 4096, "reasoning_effort": "low",
@@ -930,8 +957,10 @@ class FaceReasoningAtTheHttpEdge(unittest.TestCase):
         self.assertEqual(by["dahl"]["face_extra_body"], {}, "off until Dahl's behaviour is checked live (D49)")
         with open(os.path.join(HERE, "providers.json"), encoding="utf-8") as fh:
             raw = json.load(fh)
-        self.assertEqual(raw["providers"][0]["_face_extra_body_example"], {"chat_template_kwargs": {"enable_thinking": False}})
+        self.assertEqual(raw["providers"][0]["_face_extra_body_example"], {"thinking": {"type": "disabled"}}, "D80: GLM's own docs, not a chat_template_kwargs guess")
         self.assertTrue(gateway.clean_extra_body(raw["providers"][0]["_face_extra_body_example"]), "the example is in a shape the gateway accepts")
+        self.assertEqual(raw["providers"][0]["_face_extra_body_example_deepseek"], {"reasoning_effort": "none"}, "D80: DeepSeek's own docs name 'none' as disabling thinking")
+        self.assertTrue(gateway.clean_extra_body(raw["providers"][0]["_face_extra_body_example_deepseek"]), "the example is in a shape the gateway accepts")
         self.assertEqual(next(p for p in raw["providers"] if p["name"] == "groq")["extra_body"], {"reasoning_effort": "low"})
 
 
@@ -1084,6 +1113,40 @@ class PinFileAndPeekRobustness(unittest.TestCase):
                 yield b'data: {"choices":[{"delta":{"role":"assistant"}}]}\n'
                 raise __import__("http.client").client.IncompleteRead(b"")
         self.assertEqual(gateway.peek_stream(Broken())[1], "error")
+
+    def test_content_breaks_out_at_once_whatever_the_deadline_is(self):
+        """D80: the happy path never waits on PEEK_DEADLINE_S. Content breaks the loop the moment it is seen (the `ok and not
+        whole` check runs before the deadline check, every iteration), so first-token latency is not a function of the deadline's
+        size - proof the deadline is a tail-risk knob, not something a chat turn's first token is waiting on."""
+        old = gateway.PEEK_DEADLINE_S
+        gateway.PEEK_DEADLINE_S = 0.0           # already "expired" before the loop even starts
+        try:
+            def one_good_line():
+                yield b'data: {"choices":[{"delta":{"content":"hi"}}]}\n'
+                raise AssertionError("peek_stream read a second line: it did not break out on the first one")
+            head, verdict = gateway.peek_stream(one_good_line())
+        finally:
+            gateway.PEEK_DEADLINE_S = old
+        self.assertEqual(verdict, "ok")
+        self.assertEqual(len(head), 1)
+
+    def test_the_deadline_cannot_tell_a_slow_good_stream_from_a_slow_bad_one(self):
+        """Why the deadline is not shrunk (D80): once wall time passes it, EVERY still-open stream reads "ok", whatever it would
+        have become a moment later - there is no separate check for 'still silent, likely to answer soon' versus 'still silent,
+        about to end empty'. A stream that never produces an answer and never sends [DONE] is still judged "ok" once the
+        deadline passes, exactly like a merely-slow good one would be; the only question is how long is safe to wait."""
+        def never_answers_and_never_ends():
+            while True:
+                yield b'data: {"choices":[{"delta":{"role":"assistant"}}]}\n'      # a real shape sent before the answer; neither content nor an error
+        old = gateway.PEEK_DEADLINE_S
+        gateway.PEEK_DEADLINE_S = 0.02
+        try:
+            head, verdict = gateway.peek_stream(never_answers_and_never_ends())
+        finally:
+            gateway.PEEK_DEADLINE_S = old
+        self.assertEqual(verdict, "ok", "a shorter deadline makes exactly this case (a stream that would really resolve "
+                                        "empty or bad if it ran long enough) relay as if it were fine, skipping failover")
+        self.assertGreaterEqual(len(head), 1)
 
 
 class LatencyIsMeasuredPerProvider(unittest.TestCase):
