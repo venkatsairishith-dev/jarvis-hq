@@ -14,6 +14,11 @@ to results/reliability-<date>.json, so a stopped session loses nothing and `--re
 
 Safety brakes: nothing is ever approved by the runner (the PIN is the owner's); a CRITICAL unsafe outcome (severity 1) stops the whole run at once
 (`--keep-going` overrides); a capability's goals can never touch a path outside the run folder because every path comes from {work}.
+
+A goal's own driver call is also watched from OUTSIDE (`watchdog.py`, D81): if it hangs past `g.timeout_s` plus a grace margin (`--watchdog-grace`,
+default 60 s) even though the driver's own internal timeout should have fired, the watchdog reads the PC (window list, a screen read, log tails),
+writes one stuck-report under `results/stuck/`, recovers narrowly (closes only a new, matching window; cancels and, if tracked, ends a stuck child
+process), and the run moves on to the next goal with that one marked invalid - a stuck goal never stops the whole gate.
 """
 from __future__ import annotations
 
@@ -29,7 +34,7 @@ from typing import Any, Callable
 
 from jarvis.plugins._shared import ask_form
 
-from . import checks, classify, drivers, model, probes
+from . import checks, classify, drivers, model, probes, watchdog
 from .env import EnvError, LocalEnv, WindowsEnv
 from .records import Baseline, CheckResult
 
@@ -95,7 +100,8 @@ class Runner:
     def __init__(self, cat: model.Catalog, env: LocalEnv, driver: Any, sampler: Any = None, *, work_root: str, outputs: str, results_path: Path,
                  repeats: int = 10, attended: bool = False, pin: PinSwitch | None = None, wall: Callable[[], float] = time.time,
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic, log: Callable[[str], None] = print, within_s: float = 8.0,
-                 forbid_within_s: float = 1.0, setup_settle_s: float = 2.0, stop_on_critical: bool = True, meta: dict | None = None):
+                 forbid_within_s: float = 1.0, setup_settle_s: float = 2.0, stop_on_critical: bool = True, meta: dict | None = None,
+                 watchdog_grace_s: float = watchdog.DEFAULT_GRACE_S):
         self.cat, self.env, self.driver, self.sampler = cat, env, driver, sampler
         self.work_root, self.outputs, self.path = work_root, outputs, Path(results_path)
         self.repeats, self.attended, self.pin = repeats, attended, pin
@@ -103,6 +109,7 @@ class Runner:
         self.within_s, self.forbid_within_s, self.setup_settle_s, self.stop_on_critical = within_s, forbid_within_s, setup_settle_s, stop_on_critical
         self.ignore = tuple(cat.rules.get("ignore_processes", []))
         self.closable = list(cat.rules.get("cleanup", {}).get("closable", []))
+        self.watchdog_grace_s = watchdog_grace_s          # D81: how far past g.timeout_s the external deadline waits before it steps in
         self.meta = meta or {}
         self.data: dict = {"schema": SCHEMA, "runs": []}
         self.stopped_for_safety = ""
@@ -221,7 +228,11 @@ class Runner:
             self._setup(g, ctx, base)
             self._snapshot(base)
             base.t0 = self.wall()
-            obs = self.driver.run(g.text, g.timeout_s, self.attended)
+            # D81: the same call as before, but under an EXTERNAL deadline (g.timeout_s + a grace margin) that fires even if the driver's own
+            # internal timeout is ignored or outran somewhere further down the chain; on a hang this diagnoses, reports, recovers (closes the
+            # offending window / cancels / terminates a tracked process) and returns a normal harness_error Observation instead of blocking forever.
+            obs = watchdog.run_with_recovery(self.driver, self.env, g.text, g.timeout_s, self.attended, pre_hwnds=pre_hwnds, closable=self.closable,
+                                             ignore=self.ignore, grace_s=self.watchdog_grace_s, results_dir=self.path.parent, goal_id=g0.id, rep=rep)
         except (EnvError, RuntimeError, OSError) as e:
             row.update(outcome=classify.INVALID, cause=f"setup: {type(e).__name__}: {str(e)[:100]}", seconds=0.0, harness=True)
             self._cleanup(ctx, pre_hwnds, g.cleanup)
@@ -352,6 +363,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--fresh", action="store_true", help="ignore an existing results file for this date")
     ap.add_argument("--max-minutes", type=float, default=0, help="stop starting new runs after this many minutes")
     ap.add_argument("--keep-going", action="store_true", help="do not stop at a critical unsafe outcome")
+    ap.add_argument("--watchdog-grace", type=float, default=float(os.environ.get("JARVIS_RELIABILITY_WATCHDOG_GRACE_S", watchdog.DEFAULT_GRACE_S)),
+                   help="D81: seconds past a goal's own timeout before the external watchdog steps in and recovers (default 60)")
     ap.add_argument("--reset", choices=("inplace", "face", "none"), default="inplace", help="face driver: clear the chat in place (default), or restart the face before each run (slow, cleanest)")
     ap.add_argument("--pin-file", default=os.environ.get("JARVIS_GATEWAY_PIN_FILE", ""), help="the gateway's pin file (capabilities with a pin need it)")
     ap.add_argument("--mcp-url", default=drivers.MCP_URL)
@@ -403,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
     results = Path(args.out_dir) / f"reliability-{args.date}.json"
     pin = PinSwitch(args.pin_file or None)
     runner = Runner(cat, env, driver, sampler, work_root=args.work_root, outputs=args.outputs, results_path=results, repeats=repeats, attended=args.attended,
-                    pin=pin, stop_on_critical=not args.keep_going, meta={"date": args.date, "quick": args.quick})
+                    pin=pin, stop_on_critical=not args.keep_going, meta={"date": args.date, "quick": args.quick}, watchdog_grace_s=args.watchdog_grace)
     caps = [c for c in args.capability.split(",") if c]
     for c in caps:
         if c not in cat.capabilities:
