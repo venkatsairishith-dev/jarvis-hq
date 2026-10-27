@@ -446,6 +446,8 @@ SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".clau
                      "safe_mode.json", "safe_mode.py", "safe_mode_ctl.py",
                      # D64 (2026-10-26): the per-site grants of the browser agent and the owner's alias e-mail: console-only, sealed by the kernel.
                      "trusted_sites.json", "identity.json", "sitegrants.py",
+                     # D79 (2026-10-27): where the VM2 viewer and control live, and which tasks go to VM2: console-only (the face adds the viewer host to its network lock from it).
+                     "vm2.json",
                      # Audit M10 (2026-10-18): the files that decide what leaves, what is checked and who may close a task. Names that
                      # only JARVIS has are RED wherever they are; the generic names are in JARVIS_SAFETY_FILES below.
                      "gitleaks_gate.py", "llm_proxy.py", "projectfix.py", "lab_runner.py", "control_auth.py",

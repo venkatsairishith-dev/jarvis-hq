@@ -394,7 +394,7 @@ class Owner:
     def _grant_request_from(self, body):
         from . import sitegrants
         try:
-            return sitegrants.clean_request(body.get("hosts") or body.get("host"), body.get("abilities"), body.get("days"), body.get("note"))
+            return sitegrants.clean_request(body.get("hosts") or body.get("host"), body.get("abilities"), body.get("days"), body.get("note"), body.get("target") or "pc")
         except sitegrants.GrantError as e:
             raise OwnerError(str(e)[:200], 400)
 
@@ -430,7 +430,7 @@ class Owner:
         except sitegrants.GrantError as e:
             raise OwnerError(str(e)[:200], 500)
         self.k.audit.append("owner_site_grant_created", {"hosts": req["hosts"], "abilities": req["abilities"], "days": req["days"], "approval": aid})
-        return {"granted": [{"host": e["host"], "allowed": e["allowed"], "expires": e["expires"]} for e in made]}
+        return {"granted": [{"host": e["host"], "allowed": e["allowed"], "expires": e["expires"], "target": e.get("target", "pc")} for e in made]}
 
     def site_grant_revoke(self, body: dict):
         from . import sitegrants
