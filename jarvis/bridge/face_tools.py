@@ -270,15 +270,26 @@ def read_pc_line(path=None, now=None) -> dict:
         line, state, at = snap["line"], snap["state"], float(snap["updated"])
     except (OSError, ValueError, KeyError, TypeError):
         return {}
-    if state not in ("running", "paused_owner", "asking", "waiting_approval") or now - at > PC_LINE_STALE_S or not isinstance(line, str) or not PC_LINE_OK.match(line):
+    if state not in ("running", "paused_owner", "asking", "waiting_approval", "needs_owner") or now - at > PC_LINE_STALE_S or not isinstance(line, str) or not PC_LINE_OK.match(line):
         return {}
     return {"pc_line": line}
+
+
+def read_vm2_hud(path=None, config=None) -> dict:
+    """D79: VM2's state as one fixed word and a short fixed sentence ("VM2 ready" / "busy" / "needs you" / "offline"). {} when VM2 is not set up. The state file is re-probed (3 s
+    at most) when it is older than a minute, so the HUD's frequent polling does not touch the network."""
+    try:
+        from jarvis.plugins._shared import vm2
+        return vm2.hud_fields(path, config=config)
+    except Exception:  # noqa: BLE001 - a broken VM2 line must never hide the rest of the status
+        return {}
 
 
 class FaceTools:
     """The tools as plain async functions; `build_server` only registers them. `client_factory` returns a JarvisClient."""
 
-    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None, goal_progress_path=None, pc_line_path=None):
+    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None, goal_progress_path=None, pc_line_path=None, vm2_state_path=None, vm2_config=None):
+        self.vm2_state_path, self.vm2_config = vm2_state_path, vm2_config
         self.goal_progress_path = goal_progress_path
         self.pc_line_path = pc_line_path
         self.console = console or _load_console_client()
@@ -333,7 +344,13 @@ class FaceTools:
         out.update(await asyncio.to_thread(read_pc_operations, self.pc_ops_path))
         out.update(await asyncio.to_thread(read_goal_progress, self.goal_progress_path))
         out.update(await asyncio.to_thread(read_pc_line, self.pc_line_path))
+        vm2 = await asyncio.to_thread(read_vm2_hud, self.vm2_state_path, self.vm2_config)
         res = self._out(out)
+        if vm2:                                                          # D79: one fixed word, and the words in the HUD line next to the PC task's (fixed words too, added after the cleaner)
+            res["vm2"] = vm2["vm2"]
+            line = res.get("pc_line")
+            joined = f"{line} - {vm2['vm2_line']}" if isinstance(line, str) and PC_LINE_OK.match(line) else vm2["vm2_line"]
+            res["pc_line"] = joined[:140] if PC_LINE_OK.match(joined[:140]) else vm2["vm2_line"]
         if safe_mode.active():                                           # D71: the plain words "Safe mode" on the HUD's line (fixed words, so added after the cleaner), and one boolean
             res["safe_mode"] = True
             line = res.get("pc_line")
