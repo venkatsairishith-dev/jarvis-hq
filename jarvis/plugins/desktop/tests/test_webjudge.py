@@ -431,3 +431,33 @@ def test_a_web_request_is_recognised_only_when_he_asks_for_it():
                  "write a poem about this page", "solve 2+2"):
         assert P.parse_request(text) is None, text
     assert P.parse_request("solve all the problems in my college folder")["source"] == "folder"           # the folder flow is unchanged
+
+
+# ----------------------------------------------------------------------------- the plugin's own agent, planned by the rule, run by the coordinator, through the real kernel and node
+@needs_python
+def test_the_plugins_webjudge_agent_runs_a_set_end_to_end_and_the_coordinator_counts_it(rig, tmp_path, monkeypatch):
+    import types
+    from jarvis.plugins._shared import owner_ask
+    from jarvis.plugins.desktop import DesktopPlugin, coordinator as C
+    import jarvis.plugins.desktop as pkg
+    real = core.Pc
+    monkeypatch.setattr(core, "Pc", lambda **kw: real(call=rig.call, sleep=lambda s: None, approval_wait_s=0, **kw))
+    monkeypatch.setattr(pkg, "time", types.SimpleNamespace(sleep=lambda s: None, time=time.time, monotonic=time.monotonic, strftime=time.strftime, localtime=time.localtime))
+    model = JudgeModel()
+    monkeypatch.setattr(pkg.goal_mod, "ask_online", lambda messages, post=None, timeout=None, max_tokens=500: model(messages, max_tokens))
+    monkeypatch.setattr(pkg.goal_mod, "release_owner_text", lambda text: screen_text.Released(str(text), True, "gateway", "cleared"))
+    monkeypatch.setattr(owner_ask, "available", lambda: False)
+    monkeypatch.setattr(P, "DATA", tmp_path / "psdata")
+    monkeypatch.setenv("DELIVERABLES_OUT_DIR", str(tmp_path / "deliverables"))
+    prep = P.prepare("solve all the problems at https://judge.test/problems/1", base=tmp_path / "psdata")
+    plan = D.decide(prep.goal, [])
+    assert [s["tool"] for s in plan.steps] == ["webjudge"]
+    agents = DesktopPlugin._agents(types.SimpleNamespace(), None)
+    rec = C.Coordinator(agents, [{"profile": "Default", "name": "V", "account": "v***@x", "default": True, "say": ["default"]}], tasks_dir=tmp_path / "tasks",
+                        lock_path=tmp_path / "lock").run(prep.goal, plan)
+    assert rec["status"] == "completed", rec
+    step = rec["steps"][0]
+    assert step["tool"] == "webjudge" and step["passed"] is True
+    assert step["result"]["counts"] == {"passed": 3, "untested": 1} and step["result"]["submit_clicked"] == 0
+    assert len(list((tmp_path / "deliverables").glob("*-problem-set/problem-set-summary.md"))) == 1
+    assert "Submit" not in " ".join(rig.world.click_log)
