@@ -27,7 +27,7 @@
   --ask-s4: #7a52c4;
   --ask-s5: #c2410c;
   --ask-s6: #566b78;
-  --ask-font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ask-font: var(--jarvis-font, system-ui, -apple-system, 'Segoe UI', sans-serif);
   --ask-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
   --ask-row-h: 48px;
 }
@@ -75,7 +75,7 @@ html.dark .ask-root {
   border-radius: 12px;
   background: var(--ask-bg);
   color: var(--ask-fg);
-  font: 13px/1.45 var(--ask-font);
+  font: 13px/var(--jarvis-line, 1.5) var(--ask-font);
   box-shadow: var(--ask-shadow);
   container: ask / inline-size;
   animation: ask-in 0.18s ease-out;
@@ -582,7 +582,7 @@ html.dark .ask-root {
   border: 1px solid var(--ask-accent);
   border-radius: 999px;
   color: var(--ask-accent);
-  font: 600 10px var(--ask-mono);
+  font: 600 11px var(--ask-mono);
 }
 .ask-proscons {
   margin: 4px 0 0;
@@ -664,7 +664,7 @@ select.ask-input option {
 }
 .ask-range {
   width: 100%;
-  height: 28px;
+  height: 32px;
   margin: 0;
   accent-color: var(--ask-accent);
 }
@@ -686,17 +686,24 @@ select.ask-input option {
   position: relative;
   flex: none;
   width: 44px;
-  height: 24px;
+  height: 32px; /* the touch target; the track is drawn by ::before, 24 px high */
   padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.ask-switch::before {
+  content: '';
+  position: absolute;
+  inset: 4px 0;
   border: 1px solid var(--ask-line);
   border-radius: 999px;
   background: var(--ask-soft);
-  cursor: pointer;
   transition: background-color 0.18s, border-color 0.18s;
 }
 .ask-switch-knob {
   position: absolute;
-  top: 2px;
+  top: 6px;
   left: 2px;
   width: 18px;
   height: 18px;
@@ -704,7 +711,7 @@ select.ask-input option {
   background: var(--ask-dim);
   transition: transform 0.18s, background-color 0.18s;
 }
-.ask-switch[aria-checked='true'] {
+.ask-switch[aria-checked='true']::before {
   border-color: var(--ask-accent);
   background: var(--ask-accent-soft);
 }
@@ -768,6 +775,10 @@ select.ask-input option {
   text-transform: uppercase;
 }
 .ask-sort {
+  display: inline-flex;
+  align-items: center;
+  min-width: 32px;
+  min-height: 32px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -779,7 +790,7 @@ select.ask-input option {
 }
 .ask-sortmark {
   margin-left: 4px;
-  font-size: 9px;
+  font-size: 11px;
 }
 .ask-selectable {
   cursor: pointer;
@@ -831,7 +842,7 @@ select.ask-input option {
 }
 .ask-axis-text {
   fill: var(--ask-dim);
-  font: 9px var(--ask-mono);
+  font: 11px var(--ask-mono);
 }
 .ask-s1 { fill: var(--ask-s1); background: var(--ask-s1); }
 .ask-s2 { fill: var(--ask-s2); background: var(--ask-s2); }
@@ -873,7 +884,7 @@ select.ask-input option {
   margin: 0;
 }
 .ask-small {
-  height: 26px;
+  min-height: 32px;
   padding: 0 10px;
   border: 1px solid var(--ask-line);
   border-radius: 6px;
@@ -1096,7 +1107,7 @@ select.ask-input option {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 28px;
+  min-height: 32px;
 }
 .ask-labelrow .ask-label {
   flex: 1;
@@ -1104,14 +1115,14 @@ select.ask-input option {
   margin: 0;
 }
 
-/* the microphone of one field: a 28 px round button (32 px under 480 px wide, for a thumb) */
+/* the microphone of one field: a 32 px round button */
 .ask-mic {
   position: relative;
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 1px solid var(--ask-line);
   border-radius: 50%;
@@ -1192,7 +1203,7 @@ select.ask-input option {
 
 /* an editable heading: a deck title, a file name, a reminder text. Plain text, larger. */
 .ask-heading-field .ask-label {
-  font-size: 10.5px;
+  font-size: 11px;
 }
 .ask-heading-input {
   min-height: 44px;

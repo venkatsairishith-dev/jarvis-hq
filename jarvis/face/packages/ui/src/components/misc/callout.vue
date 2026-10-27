@@ -19,7 +19,7 @@ const themeClasses: Record<ThemeVariant, {
       `before:bg-primary-500/30 before:content-[''] before:dark:bg-primary-200/20`,
     ],
     label: [
-      'text-primary-500 dark:text-primary-200 font-semibold',
+      'text-primary-700 dark:text-primary-200 font-semibold',
     ],
   },
   lime: {
@@ -29,7 +29,7 @@ const themeClasses: Record<ThemeVariant, {
       `before:bg-lime-500/30 before:content-[''] before:dark:bg-lime-200/20`,
     ],
     label: [
-      'text-lime-500 dark:text-lime-200 font-semibold',
+      'text-lime-700 dark:text-lime-200 font-semibold',
     ],
   },
   violet: {
@@ -39,7 +39,7 @@ const themeClasses: Record<ThemeVariant, {
       `before:bg-violet-500/30 before:content-[''] before:dark:bg-violet-200/20`,
     ],
     label: [
-      'text-violet-500 dark:text-violet-200 font-semibold',
+      'text-violet-700 dark:text-violet-200 font-semibold',
     ],
   },
   orange: {
@@ -49,7 +49,7 @@ const themeClasses: Record<ThemeVariant, {
       `before:bg-orange-500/30 before:content-[''] before:dark:bg-orange-200/20`,
     ],
     label: [
-      'text-orange-500 dark:text-orange-200 font-semibold',
+      'text-orange-700 dark:text-orange-200 font-semibold',
     ],
   },
 }

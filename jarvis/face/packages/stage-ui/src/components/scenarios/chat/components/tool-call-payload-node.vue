@@ -43,11 +43,11 @@ const NESTED_CLASSES = [
   <div v-else-if="props.node.kind === 'object'" :class="['grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1']">
     <template v-for="entry in props.node.entries" :key="entry.key">
       <template v-if="entry.value.kind === 'text'">
-        <span :class="['break-all text-[10px]', 'text-neutral-500 dark:text-neutral-400']">{{ entry.key }}</span>
+        <span :class="['break-all text-[11px]', 'text-neutral-500 dark:text-neutral-400']">{{ entry.key }}</span>
         <ToolCallPayloadNode :node="entry.value" />
       </template>
       <template v-else>
-        <span :class="['col-span-2 break-all text-[10px]', 'text-neutral-500 dark:text-neutral-400']">{{ entry.key }}</span>
+        <span :class="['col-span-2 break-all text-[11px]', 'text-neutral-500 dark:text-neutral-400']">{{ entry.key }}</span>
         <div :class="['col-span-2', NESTED_CLASSES]">
           <ToolCallPayloadNode :node="entry.value" />
         </div>

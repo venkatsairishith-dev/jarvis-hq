@@ -9,6 +9,7 @@ import { formatClock, kernelLabel, noticeCount, noticeText, taskLabel } from './
  * The telemetry strip: one slim line. State, clock, kernel link, the PC task (or idle), the model, unread notices.
  *
  * Every segment has a fixed width in characters, so a changing value (the clock, a task's age) never moves its neighbours.
+ * D72: the line for what JARVIS is doing is not squeezed in here any more (at 450 px it left 14 px, one letter): HudLayer draws it under the strip.
  */
 const props = defineProps<{
   state: HudState
@@ -18,8 +19,6 @@ const props = defineProps<{
   /** Epoch ms of the last good status; keeps a task's age moving between polls. */
   statusAt: number
   modelLabel: string
-  /** D60: one short line for the task under way; it takes the place of the model name while it shows. */
-  line?: string
 }>()
 
 const now = ref(Date.now())
@@ -52,7 +51,7 @@ const waitingApprovals = computed(() => (props.status?.approvalsWaiting ?? 0) > 
       <i class="jhud-dot" />{{ kernelLabel(link) }}
     </span>
     <span class="jhud-seg jhud-seg-task" :data-busy="busy">{{ task }}</span>
-    <span class="jhud-seg jhud-seg-model" :title="line || modelLabel" :data-line="!!line" aria-live="polite">{{ line || modelLabel || '—' }}</span>
+    <span class="jhud-seg jhud-seg-model" :title="modelLabel">{{ modelLabel || '—' }}</span>
     <span class="jhud-seg jhud-seg-notices" :data-count="notices" :data-approval="waitingApprovals">
       <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" focusable="false"><path d="M1.5 3h9v6.5h-9zM1.5 3l4.5 3.6L10.5 3" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round" /></svg>
       {{ noticeText(notices) }}

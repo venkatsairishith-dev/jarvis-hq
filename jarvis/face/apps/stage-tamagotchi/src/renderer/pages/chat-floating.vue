@@ -401,7 +401,7 @@ function moveByKeyboard(delta: WindowDelta) {
               >
                 <span class="i-solar:chat-line-bold" />
               </span>
-              <span class="truncate text-sm font-medium">{{ activeCard?.name || 'AIRI' }}</span>
+              <span class="truncate text-sm font-medium">{{ activeCard?.name || 'JARVIS' }}</span>
             </button>
             <div :class="['mx-0.5 h-4 w-px shrink-0', 'bg-neutral-200 dark:bg-neutral-700']" />
             <div :class="['flex shrink-0 items-center gap-0.5', characterOnLeft ? 'flex-row-reverse' : '']">

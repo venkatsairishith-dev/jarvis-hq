@@ -388,7 +388,7 @@ defineExpose({
           <div :class="['chat-empty-state-icon size-14 flex items-center justify-center rounded-2xl bg-primary-100/60 text-primary-500 dark:bg-primary-900/30']">
             <span :class="['i-solar:chat-line-bold-duotone size-7']" />
           </div>
-          <span :class="['font-cute text-xl text-neutral-700 dark:text-neutral-200']">{{ assistantLabel || 'AIRI' }}</span>
+          <span :class="['font-cute text-xl text-neutral-700 dark:text-neutral-200']">{{ assistantLabel || 'JARVIS' }}</span>
           <p :class="['chat-empty-state-description text-sm text-neutral-500 dark:text-neutral-400']">
             {{ t('stage.chat.images.empty') }}
           </p>
@@ -473,7 +473,7 @@ defineExpose({
             >
               <img :src="entry.url || ''" class="h-full w-full object-cover">
               <div :class="['absolute inset-0 flex items-end p-1', 'bg-gradient-to-t from-black/60 to-transparent']">
-                <span class="truncate text-[8px] text-white font-medium">{{ entry.title }}</span>
+                <span class="truncate text-[11px] text-white font-medium">{{ entry.title }}</span>
               </div>
 
               <!-- Save Button (Top Right, Hover Only) -->
@@ -482,7 +482,8 @@ defineExpose({
                   'absolute right-1 top-1 z-10 p-1 rounded-md bg-black/40 text-white backdrop-blur-sm',
                   'opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/60',
                 ]"
-                title="Save to computer"
+                :title="t('stage.chat.journal.save')"
+                :aria-label="t('stage.chat.journal.save')"
                 @click.stop="journalPreviewStore.downloadImage(entry.url || '', entry.title)"
               >
                 <div class="i-solar:download-minimalistic-bold-duotone text-[10px]" />

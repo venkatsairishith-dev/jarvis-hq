@@ -21,7 +21,7 @@
   --tl-warn: #9a5200;
   --tl-err: #b3261e;
   --tl-shadow: 0 8px 32px rgb(0 0 0 / 0.28);
-  --tl-font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --tl-font: var(--jarvis-font, system-ui, -apple-system, 'Segoe UI', sans-serif);
   --tl-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
 }
 
@@ -62,7 +62,7 @@ html.dark .tl-root {
   border-radius: 12px;
   background: var(--tl-bg);
   color: var(--tl-fg);
-  font: 13px/1.4 var(--tl-font);
+  font: 13px/var(--jarvis-line, 1.5) var(--tl-font);
   box-shadow: var(--tl-shadow);
   container: tl / inline-size;
   animation: tl-in 0.18s ease-out;
@@ -174,7 +174,7 @@ html.dark .tl-root {
   padding: 6px 16px 8px;
 }
 .tl-chip {
-  min-height: 30px;
+  min-height: 32px;
   padding: 0 12px;
   border: 1px solid var(--tl-line);
   border-radius: 999px;
@@ -220,7 +220,7 @@ html.dark .tl-root {
 }
 .tl-report-x {
   width: 26px;
-  height: 26px;
+  height: 32px;
   font-size: 12px;
 }
 .tl-error {
@@ -424,7 +424,7 @@ html.dark .tl-root {
 }
 
 .tl-btn {
-  min-height: 30px;
+  min-height: 32px;
   padding: 0 12px;
   border: 1px solid color-mix(in srgb, var(--tl-accent) 60%, transparent);
   border-radius: 8px;
@@ -444,7 +444,7 @@ html.dark .tl-root {
   cursor: progress;
 }
 .tl-task-meta .tl-btn {
-  min-height: 26px;
+  min-height: 32px;
 }
 
 /* the open step: what was seen, how to undo, and the two pictures */
@@ -493,7 +493,7 @@ html.dark .tl-root {
 }
 .tl-shot figcaption {
   color: var(--tl-dim);
-  font: 600 10.5px var(--tl-mono);
+  font: 600 11px var(--tl-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -568,7 +568,7 @@ html.dark .tl-root {
 .tl-narrow .tl-meta { grid-area: meta; align-self: start; gap: 6px; }
 .tl-narrow .tl-act { grid-area: act; min-width: 0; }
 .tl-narrow .tl-meta { justify-content: flex-start; }
-.tl-narrow .tl-badge { width: 18px; height: 18px; font-size: 10px; }
+.tl-narrow .tl-badge { width: 18px; height: 18px; font-size: 11px; }
 .tl-narrow .tl-dur { min-width: 0; }
 .tl-narrow .tl-btn-undo { min-height: 34px; padding: 0 10px; }
 .tl-narrow .tl-foot { display: none; }

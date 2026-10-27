@@ -48,13 +48,13 @@ const partial = computed(() => props.count !== undefined && props.total !== unde
         <span
           :class="[
             row.icon, 'size-6 shrink-0',
-            row.active ? 'text-amber-500 dark:text-amber-400' : 'text-neutral-400 dark:text-neutral-500',
+            row.active ? 'text-amber-500 dark:text-amber-400' : 'text-neutral-600 dark:text-neutral-400',
           ]"
           aria-hidden="true"
         />
         <span :class="['min-w-0 flex flex-1 flex-col']">
           <span :class="['truncate text-xs font-medium', 'text-neutral-800 dark:text-neutral-100']">{{ row.name }}</span>
-          <span :class="['truncate text-[10px]', 'text-neutral-400 dark:text-neutral-500']">{{ row.entityId }}</span>
+          <span :class="['truncate text-[11px]', 'text-neutral-600 dark:text-neutral-400']">{{ row.entityId }}</span>
         </span>
         <span
           :class="[

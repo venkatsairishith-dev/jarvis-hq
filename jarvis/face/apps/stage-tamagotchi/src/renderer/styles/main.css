@@ -46,3 +46,31 @@ html.dark {
   width: 100%;
   height: 2px;
 }
+
+/*
+ * D72: the owner's "reduce motion" setting stops every CSS animation and transition in every window, not only in the panels that said so
+ * (the HUD, the ask panel and the timeline already did). Pure CSS, nothing runs per frame; the avatar is drawn by script and is not touched.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * D72: a keyboard user always sees where the focus is, also on controls whose own classes forgot to say so. :where() keeps the specificity at
+ * zero, so every control that has its own ring (the panels, the chat buttons) keeps it; a mouse click shows no ring (:focus-visible).
+ */
+:where(button, [role='button'], a[href], input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--jarvis-focus, #0a6f94);
+  outline-offset: 2px;
+}
+
+html.dark {
+  --jarvis-focus: #5ad7ff;
+}

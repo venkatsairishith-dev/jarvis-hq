@@ -24,6 +24,7 @@ import AskVoiceBar from './AskVoiceBar.vue'
 import { formatSize, keyAction, plural, progressFraction, progressText, selectedTotal, walk } from '../../composables/jarvis-ask-logic'
 import { ASK_VOICE_KEY } from '../../composables/use-jarvis-ask-voice'
 
+import '../jarvis-ui-tokens.css'
 import './ask.css'
 
 const props = defineProps<{ controller: AskController, voice?: AskVoice | null }>()
@@ -207,7 +208,7 @@ onBeforeUnmount(() => {
       <div class="ask-body">
         <div v-if="working" class="ask-working" role="status" aria-live="polite">
           <p class="ask-working-text">
-            <span>{{ form.status || 'Working...' }}</span>
+            <span>{{ form.status || 'Working…' }}</span>
             <span class="ask-mono">{{ progressText(form.progress) }}</span>
           </p>
           <div class="ask-bar" role="progressbar" aria-label="Progress" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="bar === null ? undefined : Math.round(bar * 100)">

@@ -46,7 +46,7 @@ const readableLabel = computed(() => {
       :aria-pressed="showFullDate"
       :title="fullLabel"
       :class="[
-        'rounded px-2 py-1 text-xs font-normal',
+        'min-h-8 rounded px-2 py-1 text-xs font-normal',
         'hover:text-neutral-700 dark:hover:text-neutral-200',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-400',
       ]"

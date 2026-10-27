@@ -81,6 +81,7 @@ defineExpose({
   min-height: 0;
   max-height: calc(100% - 1rem);
   margin: 0 1rem 1rem;
+  margin-inline: max(1rem, calc((100% - 56rem) / 2));
   overflow: hidden;
 }
 
@@ -94,6 +95,8 @@ defineExpose({
   box-sizing: border-box;
   border-radius: 0 !important;
   padding: 1rem;
+  /* A wide window keeps a readable line (about 56rem, 90 characters) instead of stretching a message across the screen; a narrow one keeps 1rem. */
+  padding-inline: max(1rem, calc((100% - 56rem) / 2));
 }
 
 .chat-viewport-layout :deep(.chat-history-list)::after {
