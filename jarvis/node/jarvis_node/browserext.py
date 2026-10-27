@@ -27,7 +27,7 @@ import urllib.parse
 from . import runtime
 from .sensitive import ai_chat_site
 from .paths import local_result_dir, sweep_local
-from . import connectclick
+from . import connectclick, safe_mode
 
 CHROME = next((p for p in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
@@ -270,7 +270,7 @@ class Session:
             # 2026-10-26) and waits for a click. JARVIS answers that page itself (connectclick.py: only the extension's own connect page, only for the
             # client "jarvis", only the row of THIS launch's relay port), for the whole session, unless a token file already skips the page. Not for a test
             # double (session_factory) and not for the isolated headless Chrome: they show no page.
-            if not (self._factory is not None or self._isolated or token_file(self.profile["dir"])):
+            if not (self._factory is not None or self._isolated or token_file(self.profile["dir"]) or safe_mode.active()):   # D71: in safe mode the owner clicks it
                 self._watch = connectclick.Approver(limit_s=75.0)
                 self._watch.__enter__()
             self.s.handshake(timeout=60)                # the owner may have to allow the connection in the extension

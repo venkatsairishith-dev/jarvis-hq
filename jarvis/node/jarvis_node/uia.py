@@ -29,6 +29,8 @@ import sys
 import threading
 import time
 
+from . import safe_mode
+
 NOWIN = 0x08000000 if os.name == "nt" else 0       # CREATE_NO_WINDOW; no priority class is set: the worker runs at the node's normal priority
 PROTO = 1
 MAX_LINE = 1024 * 1024                            # bytes of one answer line; the worker caps itself at the same size
@@ -341,7 +343,7 @@ def switch() -> str:
 def enabled() -> bool:
     """On by default on Windows once the uia-venv exists; JARVIS_UIA_WORKER=0 turns it off; =1 asks for it on any OS (development)."""
     v = switch()
-    if v in ("0", "off", "false", "no"):
+    if v in ("0", "off", "false", "no") or safe_mode.active():       # D71: safe mode turns the worker off, whatever else is set
         return False
     if _injected:
         return _client is not None
