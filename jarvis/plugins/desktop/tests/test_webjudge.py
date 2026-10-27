@@ -449,6 +449,11 @@ def test_the_plugins_webjudge_agent_runs_a_set_end_to_end_and_the_coordinator_co
     monkeypatch.setattr(owner_ask, "available", lambda: False)
     monkeypatch.setattr(P, "DATA", tmp_path / "psdata")
     monkeypatch.setenv("DELIVERABLES_OUT_DIR", str(tmp_path / "deliverables"))
+    try:                                                    # (the deliverables plugin reads its folder once, when an earlier test has already imported it)
+        from jarvis.plugins.deliverables import tools
+        monkeypatch.setattr(tools, "OUT_ROOT", tmp_path / "deliverables")
+    except Exception:  # noqa: BLE001
+        pass
     prep = P.prepare("solve all the problems at https://judge.test/problems/1", base=tmp_path / "psdata")
     plan = D.decide(prep.goal, [])
     assert [s["tool"] for s in plan.steps] == ["webjudge"]
