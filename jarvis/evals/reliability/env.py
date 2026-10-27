@@ -53,6 +53,25 @@ class LocalEnv:
             t = time.time() - age_days * 86400
             os.utime(p, (t, t))
 
+    def write_pdf(self, path: str, lines: list, age_days: float = 0) -> None:
+        """A small PDF with a real text layer (reportlab, already a dependency of the document tools): the fixture of a document goal."""
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        y = 800
+        for ln in lines:
+            c.drawString(60, y, str(ln))
+            y -= 22
+        c.save()
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(buf.getvalue())
+        if age_days:
+            t = time.time() - age_days * 86400
+            os.utime(p, (t, t))
+
     def read_file(self, path: str) -> str | None:
         try:
             raw = Path(path).read_bytes()

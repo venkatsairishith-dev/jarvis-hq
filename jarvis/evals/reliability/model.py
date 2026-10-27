@@ -35,11 +35,13 @@ CHECKS = frozenset({
     "file_exists", "file_absent", "file_changed", "file_unchanged", "dir_exists", "count_files", "window_appeared", "window_closed",
     "window_text", "recycle_bin_has", "recycle_bin_lacks", "answer_contains", "answer_no_placeholders", "answer_nonempty", "ask_form", "approval_pending",
     "tool_called", "panel_open", "process_running", "output_made", "pptx", "window_absent",
+    # D76 (practical_tasks): a table the task made (CSV / XLSX) and a brief (the research rules), both read from the file itself
+    "table_rows", "brief_rules",
 })
-SETUP_OPS = frozenset({"mkdir", "write_file", "make_junk", "open_notepad_text", "open_image_text", "render_image", "open_app", "message_box", "recycle_file", "write_script",
+SETUP_OPS = frozenset({"mkdir", "write_file", "make_junk", "open_notepad_text", "open_image_text", "render_image", "open_app", "message_box", "recycle_file", "write_script", "write_pdf",
                        # D65 (problem_recovery): the problem is made on purpose
                        "minimize", "start_later", "message_box_later", "slow_form", "close_later", "type_unsaved"})
-FIELDS = frozenset({"work", "sep", "tok", "num", "date", "weekday", "day", "month", "year", "outputs", "screenshots", "docs"})
+FIELDS = frozenset({"work", "sep", "tok", "num", "date", "weekday", "day", "month", "year", "outputs", "screenshots", "docs", "downloads"})
 UNFORMATTED_KEYS = frozenset({"regex", "pattern"})
 
 
@@ -78,6 +80,7 @@ class Capability:
     needs_driver: str = ""               # "face" = only the face chat shows the thing being measured (the final message)
     latency_class: str = "pc_action"
     note: str = ""
+    priority: str = "normal"             # D76: "low" = the old toy goals (open Calculator, type in Notepad): still measured, run after the practical ones
 
 
 @dataclass
@@ -117,7 +120,7 @@ def load(path: Path | str | None = None) -> Catalog:
     for cid, c in data["capabilities"].items():
         goals = [_goal(cid, g, defaults) for g in c.get("goals", [])]
         caps[cid] = Capability(cid, c["name"], goals, c.get("estimate"), c.get("pin", ""), c.get("needs_driver", ""),
-                               c.get("latency_class", "pc_action"), c.get("note", ""))
+                               c.get("latency_class", "pc_action"), c.get("note", ""), c.get("priority", "normal"))
     return Catalog(data.get("rules", {}), defaults, caps, data.get("probes", {}), data.get("panels", {}), data.get("latency", {}),
                    data.get("levers", {}))
 
@@ -204,10 +207,11 @@ class Context:
     year: str = ""
     screenshots: str = ""
     docs: str = ""
+    downloads: str = ""
 
     def as_dict(self) -> dict:
         return {"work": self.work, "sep": self.sep, "tok": self.tok, "num": self.num, "date": self.date, "weekday": self.weekday, "outputs": self.outputs,
-                "day": self.day, "month": self.month, "year": self.year, "screenshots": self.screenshots, "docs": self.docs}
+                "day": self.day, "month": self.month, "year": self.year, "screenshots": self.screenshots, "docs": self.docs, "downloads": self.downloads}
 
 
 def make_context(work_root: str, sep: str, outputs: str, seed: str, now: float | None = None) -> Context:
@@ -218,7 +222,8 @@ def make_context(work_root: str, sep: str, outputs: str, seed: str, now: float |
     num = str(10000 + int(h[6:12], 16) % 90000)
     shots = os.path.join(os.path.expanduser("~"), "Pictures", "Screenshots")
     return Context(f"{work_root.rstrip(sep)}{sep}{tok}", sep, tok, num, time.strftime("%Y-%m-%d", t), time.strftime("%A", t), outputs,
-                   str(t.tm_mday), time.strftime("%B", t), time.strftime("%Y", t), shots, os.path.join(os.path.expanduser("~"), "Documents"))
+                   str(t.tm_mday), time.strftime("%B", t), time.strftime("%Y", t), shots, os.path.join(os.path.expanduser("~"), "Documents"),
+                   os.path.join(os.path.expanduser("~"), "Downloads"))
 
 
 def _fill(value: Any, ctx: dict, key: str = "") -> Any:

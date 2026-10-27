@@ -138,6 +138,9 @@ class Runner:
             elif kind == "write_file":
                 env.write_file(op["path"], op.get("text", "") * int(op.get("repeat", 1)), float(op.get("age_days", 0)))
                 base.files[op["path"]] = env.sha(op["path"])
+            elif kind == "write_pdf":
+                env.write_pdf(op["path"], list(op.get("lines", [])), float(op.get("age_days", 0)))
+                base.files[op["path"]] = env.sha(op["path"])
             elif kind == "make_junk":
                 for i in range(int(op.get("count", 3))):
                     p = f"{op['dir']}{sep}junk-{ctx.tok}-{i}{op.get('ext', '.tmp')}"
@@ -275,6 +278,7 @@ class Runner:
         self.load(fresh)
         n = repeats or self.repeats
         caps = [c for c in self.cat.capabilities.values() if not cap_ids or c.id in cap_ids]
+        caps.sort(key=lambda c: c.priority == "low")                      # D76: the old toy goals run after the practical ones (a stable sort: the order inside each group stays)
         todo: list[tuple[model.Goal, int]] = []
         skipped: list[str] = []
         for rep in range(1, n + 1):                              # round robin: a stopped run has every goal measured a few times, not a few goals many times
