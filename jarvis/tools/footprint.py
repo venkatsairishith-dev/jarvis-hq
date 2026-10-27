@@ -312,7 +312,9 @@ def verdicts(total: dict, cpu_avg: float, window_covered_s: float, bud: B.Budget
     if outside is not None:
         mine = outside["jarvis_mb"]
         suspects = outside["suspect_mb"]
-        st = "OVER" if outside["jarvis_items"] else ("CHECK" if outside["suspect_items"] else "OK")
+        # The console keeps a run folder with its token file under %LOCALAPPDATA%\jarvis (0.0 MB, by design: it must be where the user session can read it), so a JARVIS
+        # item outside D: is OVER only when it holds something: 0.5 MB or more. Smaller is CHECK (the nightly self-test told the owner "over the budget" about 0.0 MB every night).
+        st = "OVER" if outside["jarvis_items"] and mine >= 0.5 else ("CHECK" if outside["jarvis_items"] or outside["suspect_items"] else "OK")
         out.append({"metric": "outside_d", "value": mine, "limit": 0, "unit": "MB JARVIS-owned outside D:", "status": st,
                     "note": f"{outside['jarvis_items']} item(s); tool caches that may be JARVIS's: {outside['suspect_items']} item(s), {suspects} MB"})
     return out
