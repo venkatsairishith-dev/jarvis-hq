@@ -205,7 +205,8 @@ def lim(name, soft, hard=None):
         rep.setdefault("limit_errors", []).append(name + ":" + type(e).__name__); return False
 os.setsid()
 L = spec["limits"]
-lim("RLIMIT_CPU", int(L["cpu_s"]) + 0, int(L["cpu_s"]) + 1)
+cpu = max(1, int(-(-float(L["cpu_s"]) // 1)))                  # whole seconds, rounded up (a limit of 0 would kill the program at once)
+lim("RLIMIT_CPU", cpu, cpu + 1)
 rep["memory"] = "limited" if lim("RLIMIT_DATA", int(L["mem_mb"]) * 1024 * 1024) else "not limited"
 lim("RLIMIT_FSIZE", int(L["fsize_mb"]) * 1024 * 1024)
 lim("RLIMIT_NOFILE", 256)
@@ -433,7 +434,8 @@ class LocalRunner:
     def __init__(self, tool_paths: dict[str, list[str]] | None = None, work_base: str | os.PathLike | None = None, cfg: dict | None = None,
                  clock: Callable[[], float] = time.monotonic):
         self.tools = tool_paths or tool_paths_from(cfg)
-        self.work_base = Path(work_base) if work_base else None
+        wb = work_base or (cfg.get("work_dir") if isinstance(cfg, dict) and isinstance(cfg.get("work_dir"), str) and cfg.get("work_dir").strip() else None)
+        self.work_base = Path(wb) if wb else None             # where each run's temp folder is made (the owner's rule: D: for anything that is not tiny); None = the system temp
         self.clock = clock
 
     # ---- tools

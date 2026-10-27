@@ -1487,7 +1487,8 @@ class DesktopPlugin(PluginBase):
             ps = problemset_mod
             op = coord.current_op()
             stopped = lambda: bool(abort and abort()) or (op is not None and op.stop_flag.is_set())      # noqa: E731
-            cfg = ps.T.load_config()
+            cfg = dict(ps.T.load_config())
+            cfg.setdefault("work_dir", str(ps.DATA / "run"))        # the temp folders of the runs live under JARVIS's own data folder (D: on the laptop), not on C:
             chosen = code_runner.choose_runner(cfg)             # VM2 is preferred only when config says so AND the host lends a connection (none here yet: the line says so)
 
             def say(what, n, total):

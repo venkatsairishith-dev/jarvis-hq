@@ -305,3 +305,16 @@ def test_a_vm2_transport_that_fails_is_an_error_result_not_a_crash():
 def test_the_module_never_imports_the_lab_or_touches_vm2():
     src = Path(C.__file__).read_text(encoding="utf-8")
     assert "jarvis.lab" not in src and "import lab" not in src and "paramiko" not in src and "ssh " not in src.lower().replace("ssh)", "")
+
+
+@have("python")
+def test_a_fraction_of_a_second_of_cpu_time_is_rounded_up_not_to_zero():
+    r = one("python", "print(1+1)", lim=C.Limits(cpu_s=0.5, wall_s=4, mem_mb=256))
+    assert r.status == "ok" and r.stdout.strip() == "2"
+
+
+@have("python")
+def test_runs_are_made_under_the_configured_work_dir(tmp_path):
+    runner = C.LocalRunner(cfg={"work_dir": str(tmp_path / "runs")})
+    r = runner.execute("python", "import os\nprint(os.getcwd())", [""], FAST)[0]
+    assert r.status == "ok" and r.stdout.strip().startswith(str((tmp_path / "runs").resolve())) and list((tmp_path / "runs").iterdir()) == []

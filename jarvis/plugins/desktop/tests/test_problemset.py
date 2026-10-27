@@ -781,3 +781,11 @@ def test_output_comparison_is_whitespace_and_float_tolerant_but_not_sloppy():
     assert P.same_output("120\n", "120") and P.same_output("1 2  3 \n", "1 2 3") and P.same_output("3.1415927", "3.14159265")
     assert not P.same_output("121", "120") and not P.same_output("abc", "abd") and not P.same_output("1\n2", "1 2 3")
     assert P.same_output("a\nb\n\n", "a\nb")
+
+
+def test_the_ambiguity_gate_does_not_ask_about_a_clear_problem_set_request():
+    """D74 runs before the doors: a request that names its folder (or says 'my college folder') must reach the problem-set door, not be turned into another question."""
+    from jarvis.plugins._shared import ambiguity as A
+    rules = A.load()
+    for text in POSITIVE:
+        assert A.check(text, A.Context(apps=[], sites=[]), rules) is None, text

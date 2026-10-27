@@ -486,13 +486,8 @@ def default_read(path: Path, max_pages: int = 30) -> FileRead:
             except Exception:  # noqa: BLE001
                 return FileRead(re.sub(r"<[^>]+>", " ", raw), 1, engine="html")
         if ext == ".docx":
-            import docx
-            d = docx.Document(str(path))
-            lines = [p.text for p in d.paragraphs]
-            for table in d.tables:
-                for row in table.rows:
-                    lines.append(" | ".join(c.text.strip() for c in row.cells))
-            return FileRead("\n".join(lines), 1, engine="docx")
+            from jarvis.plugins.doc_tools import core as doc_tools          # reuse: paragraphs, then the tables as "cell | cell" lines
+            return FileRead(doc_tools._read_docx(path), 1, engine="docx")
         if ext in (".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".bmp"):
             return _read_doc_reader(path, max_pages)
     except Exception as e:  # noqa: BLE001
