@@ -337,6 +337,17 @@ def test_window_text_lists_texts_and_buttons_of_each_window_and_each_dialog_and_
     assert ask(ops, "window_text", name="nothere")["result"] == {"rows": []}
 
 
+def test_window_text_gives_the_document_text_of_an_editable_control_not_its_name():
+    """Laptop, 2026-10-27: the native interface names Notepad's edit control "Text Editor"; the document's own text is its value. The PowerShell path answered the text."""
+    b, ops = make()
+    ask(ops, "window_text", name="notepad")
+    for w in b.d.windows.values():
+        if w["proc"] == "notepad":
+            w["root"]["children"][0]["value"] = "The meeting is on Thursday."
+    rows = ask(ops, "window_text", name="notepad")["result"]["rows"]
+    assert "The meeting is on Thursday." in rows[0]["texts"] and "Text editor" not in rows[0]["texts"]
+
+
 # ------------------------------------------------------------------------------------------------------------------------------ the adapter
 def test_the_real_adapter_and_the_fake_implement_every_primitive_so_a_library_can_be_swapped():
     import uia_lib_uiautomation as real

@@ -347,6 +347,13 @@ class Ops:
         walk(root, 1)
         return {"window": root.name, "process": b.process_name(root.pid), "class": root.cls, "elements": out, "truncated": len(out) >= max_n}
 
+    def _value_of(self, e) -> str:
+        try:
+            v = self.b.get_value(e)
+        except Exception:                                    # noqa: BLE001 - no value pattern, a stale element: the name will do
+            return ""
+        return str(v)[:4000] if v else ""
+
     def window_text(self, a):
         """diag.py WINDOW_TEXT: every top-level window of the process, dialogs included, with its texts and button names."""
         name = str(a.get("name", ""))
@@ -367,12 +374,19 @@ class Ops:
             desc = b.descendants(w, max(budget[0], 0))
             budget[0] -= len(desc)
             for e in desc:
-                if e.password or not e.name:
+                if e.password:
+                    continue
+                editable = e.ctype in ("Edit", "Document") or e.cls in TEXT_CLASSES
+                if not e.name and not editable:
                     continue
                 if e.ctype == "Button" or e.cls in BUTTON_CLASSES:
                     buttons.append(e.name)
-                elif e.ctype in ("Text", "Edit", "Document") or e.cls in TEXT_CLASSES:
-                    texts.append(e.name)
+                elif e.ctype == "Text" or editable:
+                    # The managed UI Automation the PowerShell script uses answered the document's own text as the NAME of Notepad's edit control; the native
+                    # interface names it "Text Editor" (laptop, 2026-10-27, classic Notepad on Windows 10), so an editable element's text is its value when it has one.
+                    val = self._value_of(e) if editable else ""
+                    if val or e.name:
+                        texts.append(val or e.name)
                 if len(texts) > 60:
                     break
             rows.append({"title": w.name, "class": w.cls, "dialog": w.cls == "#32770", "texts": texts, "buttons": buttons})
