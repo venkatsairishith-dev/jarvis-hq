@@ -631,6 +631,8 @@ class GoalRunner:
         out = {**s, "status": status, "model": alias, "result": _short(text), "done_text": _short(observed)}
         if rec.get("approval_id"):
             out["approval_id"] = rec["approval_id"]
+        if isinstance(rec.get("ask"), dict):                         # D74: the control loop's own question to the owner (a form): lifted into the goal's result by _result
+            out["ask"] = rec["ask"]
         out["verified"] = bool(steps) and all(x.get("passed") for x in steps) and not rec.get("uncertain")
         # what coordinator.summary says too: a step that passed on the node's "ok" alone, and the parts of the request the plan had to leave out
         out["uncertain"] = [_short(u) for u in (rec.get("uncertain") or [])][:5]
@@ -691,7 +693,8 @@ class GoalRunner:
             summary = f"{head} {bad['result']}"
         else:
             summary = f"{head} I could not finish: step {bad['n']} ({bad['executor']}): {bad['result']}"
-        steps = [{k: v for k, v in s.items() if k not in ("done_text", "check")} for s in steps]
+        lifted = next((s.get("ask") for s in steps if isinstance(s.get("ask"), dict)), None)
+        steps = [{k: v for k, v in s.items() if k not in ("done_text", "check", "ask")} for s in steps]
         try:                                                    # D59 lever b, wired (D65): the sentence must agree with what the steps VERIFIED, or the one built from them replaces it
             st, fx = final_answer.effects_from_goal_result({"status": status, "steps": steps})
             guarded = final_answer.guard(summary, st, fx, approval_id=str((bad or {}).get("approval_id") or (rec or {}).get("approval_id") or ""), question=str((bad or {}).get("result") or ""))
@@ -700,6 +703,8 @@ class GoalRunner:
         except Exception:  # noqa: BLE001 - a safety net, never a reason to lose the sentence
             pass
         out = {"status": status, "planned_by": planned_by, "summary": summary[:1500], "steps": steps}
+        if lifted is not None and status == "needs_clarification":
+            out["ask"] = lifted
         aid = bad.get("approval_id") if bad else None
         if aid or (rec or {}).get("approval_id") and status == "waiting_for_permission":
             out["approval_id"] = aid or rec.get("approval_id")

@@ -298,6 +298,10 @@ def ui_action(p: dict, backend=None, lister=None) -> dict:
         why = sensitive.sensitive_window(target.partition("|")[0], lister)
     if why:
         return {"ok": False, "error": "refused: that window belongs to a password manager, wallet, bank, broker or payment app"}
+    from . import ownwin
+    mine = ownwin.refuse_close(op, target, text, lister)                 # D74: JARVIS's own face / chat / console window is never closed by an action
+    if mine:
+        return {"ok": False, "error": mine}
     from . import savefile
     stuck = savefile.refuse_replace_answer(op, target, text, lister)     # D54: Yes on a Replace prompt is never JARVIS's to press
     if stuck:

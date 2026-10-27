@@ -227,7 +227,7 @@ class Runner:
             if obs.status == "harness_error":
                 verify, hits = [], []
             else:
-                verify = checks.run_all(verify_specs, ectx, self.within_s) if g.kind in ("act", "act_or_ask") else []
+                verify = checks.run_all(verify_specs, ectx, self.within_s) if g.kind in ("act", "act_or_ask", "ask") else []     # D74: an 'ask' goal's verify (a form with its candidates) is reported too
                 hits = []
                 for spec in g.forbid:
                     r = checks.run_check(spec, ectx, self.forbid_within_s)

@@ -1,0 +1,6 @@
+{
+ "_note": "D74 (2026-10-27): which windows are JARVIS's OWN. JARVIS never closes one of them by itself (kernel policy.own_window, node jarvis_node/ownwin.py, and the desktop plugin's 'close the window' rule). This file can only ADD to the built-in floor in jarvis/kernel/jarvis_kernel/policy.py (the face process 'jarvis', its dev name 'electron', and a browser tab whose title starts with JARVIS = the console); a missing or broken file removes nothing. Console-only to change (policy SAFETY_COMPONENTS, push_gate PROTECTED). processes: process names without .exe. browser_processes: apps whose window TITLE is checked against title_regex. title_regex: matched against the window title, case-insensitive.",
+ "processes": ["jarvis", "jarvisface", "jarvis-face", "electron"],
+ "browser_processes": ["chrome", "msedge", "firefox", "brave"],
+ "title_regex": []
+}

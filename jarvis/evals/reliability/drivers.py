@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -205,6 +207,37 @@ class McpDriver:
             pass
 
 
+def panel_form_as_ask_form(wanted: Any) -> dict | None:
+    """The form the owner's ask panel is showing (the tool server's `jarvis_ask_wanted`) as an ask form (ask_form.py): the question, and the labels of its choices. This is the
+    evidence of 'JARVIS asked' that does not depend on the chat model repeating the form in a message (D74): a form that was really on the panel was really shown."""
+    form = wanted.get("form") if isinstance(wanted, dict) else None
+    if not isinstance(form, dict):
+        return None
+    labels: list[str] = []
+    other = False
+
+    def walk(nodes: Any) -> None:
+        nonlocal other
+        for n in nodes if isinstance(nodes, list) else []:
+            if not isinstance(n, dict):
+                continue
+            if n.get("type") in ("radio", "checkbox_group", "select", "cards", "file_choice", "gallery", "split"):
+                labels.extend(str(o.get("label") or "") for o in n.get("options") or [] if isinstance(o, dict))
+            elif n.get("type") == "text":
+                other = True
+            walk(n.get("children"))
+            for tab in n.get("tabs") or []:
+                walk(tab.get("children") if isinstance(tab, dict) else [])
+    walk(form.get("fields"))
+    q = str(form.get("intro") or form.get("title") or "").strip()
+    if not q:
+        return None
+    return ask_form.build_form(q, [x for x in labels if x], source="panel", allow_other=other or len(labels) < 2)
+
+
+ASK_CALL = re.compile(r"(?<![\w])jarvis_ask(?![\w])")
+
+
 class FaceDriver:
     name = "face"
 
@@ -227,12 +260,17 @@ class FaceDriver:
             except (OSError, subprocess.TimeoutExpired) as e:
                 return Observation(status="harness_error", harness_error=f"the face reset command failed ({type(e).__name__})")
         before = set(self._waiting())
+        watch = _AskWatcher(self.c)                    # D74: a form that is on the owner's panel while the goal runs is a question JARVIS really asked
+        watch.start()
         t0 = time.monotonic()
         try:
             proc = self._run([self.node, self.script, goal_text, str(int(timeout_s))], capture_output=True, text=True, timeout=timeout_s + 120,
                              encoding="utf-8", errors="replace")
         except (OSError, subprocess.TimeoutExpired) as e:
+            watch.stop()
             return Observation(status="harness_error", harness_error=f"the face driver did not finish ({type(e).__name__})")
+        finally:
+            watch.stop()
         lines = [ln for ln in (proc.stdout or "").splitlines() if ln.strip().startswith("{")]
         if not lines:
             return Observation(status="harness_error", harness_error=("the face driver printed nothing: " + (proc.stderr or "")[:160]))
@@ -240,10 +278,50 @@ class FaceDriver:
             row = json.loads(lines[-1])
         except ValueError:
             return Observation(status="harness_error", harness_error="the face driver printed something that is not JSON")
-        return observation_from_face_row(row, [a for a in self._waiting() if a not in before], time.monotonic() - t0)
+        obs = observation_from_face_row(row, [a for a in self._waiting() if a not in before], time.monotonic() - t0)
+        if not ask_form.is_form(obs.ask_form) and watch.form is not None:
+            obs.ask_form, obs.asked_in_prose = watch.form, False
+        return obs
 
     def cancel_all(self) -> None:
         McpDriver(self.c).cancel_all()
+
+
+class _AskWatcher:
+    """Polls the tool server's `jarvis_ask_wanted` (read-only; the same call the face's panel makes) while a goal runs, and keeps the first form that was not already open
+    when the goal started. Its own client (the MCP session is not shared between threads). Any trouble is silence: it can only ADD evidence of a question."""
+
+    def __init__(self, client: McpClient, every_s: float = 1.0):
+        self.client = McpClient(client.url, timeout=5.0, opener=client._open)
+        self.every_s, self.form, self._stale, self._stop, self._t = every_s, None, "", threading.Event(), None
+
+    def _look(self) -> dict | None:
+        try:
+            return self.client.call("jarvis_ask_wanted", {"seen": 0, "wait_s": 0})
+        except Exception:  # noqa: BLE001 - no panel, no tool, no server: nothing to add
+            return None
+
+    def start(self) -> None:
+        first = self._look() or {}
+        f = first.get("form") if isinstance(first, dict) else None
+        self._stale = str(f.get("id") or "") if isinstance(f, dict) else ""
+        self._t = threading.Thread(target=self._loop, name="reliability-ask-watch", daemon=True)
+        self._t.start()
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self.every_s):
+            w = self._look()
+            f = w.get("form") if isinstance(w, dict) else None
+            if isinstance(f, dict) and str(f.get("id") or "") != self._stale:
+                made = panel_form_as_ask_form(w)
+                if made is not None:
+                    self.form = made
+                    return
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._t is not None and self._t.is_alive():
+            self._t.join(3.0)
 
 
 def observation_from_face_row(row: dict, new_approvals: list[str], wall_s: float) -> Observation:
@@ -251,6 +329,9 @@ def observation_from_face_row(row: dict, new_approvals: list[str], wall_s: float
     if row.get("harness_error"):
         return Observation(status="harness_error", harness_error=str(row["harness_error"])[:200])
     form = row.get("ask_form") if ask_form.is_form(row.get("ask_form")) else ask_form.find_form(row.get("chat_tail"))
+    calls = [str(c) for c in row.get("calls") or []]
+    if form is None and any(ASK_CALL.search(c) for c in calls):         # D74: the chat model called jarvis_ask: the owner saw a form, whatever the tool result held
+        form = ask_form.build_form("(the chat model showed a form with jarvis_ask)", [], source="tool_call")
     text = str(row.get("final_text") or "")
     errors = [str(e) for e in row.get("errors_on_screen") or []] + [f"HTTP {s}" for s in row.get("statuses") or [] if s != 200]
     prose = text.rstrip().endswith("?") and form is None
