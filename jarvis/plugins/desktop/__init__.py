@@ -362,6 +362,9 @@ class DesktopPlugin(PluginBase):
             missions.E.agents = self._agents(loop, abort=missions.cancel_requested)
             # the whole decision (ok, clarify, fallback): a question for the owner reaches the owner (audit PC-D5)
             missions.E.plan_fn = lambda goal, ctx: decide.decide(goal, core.profiles(), context=ctx)
+            # D76: the open-ended task path: the online model plans milestones (text only, through the gateway); the rules plan when it is down
+            from . import taskrun
+            missions.E.task_plan_fn = lambda goal, ctx: taskrun.mission_plan(goal, ctx, ask_online=goal_mod.ask_online if goal_mod.flag_on() else None)
             missions.E.on_cancel = lambda: [setattr(p, "stopped", True) or (p.current_job and p.cancel(p.current_job))
                                             for p in list(getattr(self, "_active_pcs", []))]
             DBOS.launch()
@@ -1469,6 +1472,11 @@ class DesktopPlugin(PluginBase):
                 res.update(opened=o.get("opened"), opened_verified=bool(o.get("opened_verified")), open_note=o.get("open_note") or o.get("error"))
             return res
 
+        def task_step(step):
+            """D76: one milestone of an open-ended task (taskrun.py): web, PC loop, documents, outputs, a question to the owner. Verified by its effect before the next one."""
+            from . import taskglue
+            return taskglue.run_task_step(step, taskglue.Ctx(pc_raw=pc_raw, pc=pc, agents=agents, call=call, plugins=self.plugins, alias=alias, abort=abort))
+
         def stop(step):
             for p in list(active):
                 p.stopped = True
@@ -1486,7 +1494,7 @@ class DesktopPlugin(PluginBase):
             "window": window, "type_text": type_text, "press_key": press_key, "open_file": open_file, "check_pc": check,
             "troubleshoot": troubleshoot, "research": research, "open_output": open_output, "stop": stop,
             "open_in_vscode": open_in_vscode, "type_in_editor": type_in_editor, "save_as": save_as, "drive": drive, "simple_task": simple_task,
-            "web_task": web_task,
+            "web_task": web_task, "task_step": task_step,
         }
         wrapped = AgentSet({k: jc.wrap_agent(k, _with_approval(fn)) for k, fn in agents.items()})       # D61: one journal line per step run
 
@@ -1753,8 +1761,14 @@ class DesktopPlugin(PluginBase):
             # D60: one plain command ("open notepad", "pause", "open notepad and write hello") needs no online plan: the rules plan it, the
             # coordinator and the kernel run it exactly as before. Anything else is planned online and run by the local models as before.
             quick = quick_mod.match(goal, core.profiles())
+            task_route = None
+            if quick is None:
+                from . import taskroute
+                task_route = taskroute.route(goal) if taskroute.enabled() else None
             if quick is not None:
                 res = await quick_mod.run(quick, self._goal_pc, progress)
+            elif task_route is not None and task_route["task"] and await self._missions_ready():
+                res = await DesktopPlugin._task_goal(self, goal)          # D76: an open-ended task: a mission of milestones, each verified by its effect
             else:
                 hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}), on_progress=progress,
                                        read_window=getattr(self, "_goal_read_window", None), pick_editor=getattr(self, "_goal_pick_editor", None))      # a host without them never takes the solve path
@@ -1772,6 +1786,42 @@ class DesktopPlugin(PluginBase):
         finally:
             jc.exit_task(jtok)
             core.set_goal_progress("idle")
+
+    async def _task_goal(self, goal: str) -> dict:
+        """D76: run the goal as a mission of kind "task" and wait for it (up to TASK_WAIT_S); a mission that is still working is left running and named, so 'how is it going' and
+        'stop' reach it. The answer is built from what the milestones verified (taskrun.final_text)."""
+        from . import missions
+        mid = await asyncio.to_thread(missions.start, goal, "task")
+        deadline = time.monotonic() + self.TASK_WAIT_S
+        rec = None
+        while time.monotonic() < deadline:
+            rec = await asyncio.to_thread(missions.load, mid)
+            if rec and rec.get("status") not in ("queued", "running"):
+                break
+            await asyncio.sleep(1.0)
+        else:
+            return {"status": "running", "planned_by": "task_mission", "mission": mid, "steps": [],
+                    "summary": "I am still working on it in the background. Ask me how the mission is going, or say stop."}
+        status = {"completed": "completed", "waiting_for_permission": "waiting_for_permission", "needs_clarification": "needs_clarification", "needs_owner": "needs_clarification",
+                  "cancelled": "cancelled"}.get(rec.get("status"), "failed")
+        try:
+            st = taskstate.TaskState()
+            st.d = dict(taskstate.read() or {"v": 1})
+            st.end("done" if status == "completed" else "stopped" if status == "cancelled" else "failed", "done" if status == "completed" else "")
+        except Exception:  # noqa: BLE001
+            pass
+        steps = [{k: s.get(k) for k in ("n", "tool", "passed", "checked", "uncertainty")} for s in rec.get("steps", [])]
+        out = {"status": status, "planned_by": "task_mission", "mission": mid, "summary": screen_text.clean_message(rec.get("explain") or "", 1400), "steps": steps}
+        shown = next((s.get("result", {}).get("shown") for s in reversed(rec.get("steps", [])) if s.get("passed") and (s.get("result") or {}).get("shown")), None)
+        if shown:
+            out["file"] = shown
+        if rec.get("approval_id"):
+            out["approval_id"] = rec["approval_id"]
+        if rec.get("question") or rec.get("error") and rec.get("status") == "needs_owner":
+            out["question"] = rec.get("question") or rec.get("error")
+        return out
+
+    TASK_WAIT_S = 780.0
 
     # ---- D74: the ambiguity gate's two hands (what the request cannot say by itself, and the owner's panel)
     async def _gate_fetch(self, need: set):

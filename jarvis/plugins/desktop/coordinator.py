@@ -41,7 +41,7 @@ AGENT = {"open_website": "browser", "play_media": "browser", "browser": "browser
          "type_text": "desktop", "press_key": "desktop", "open_file": "desktop", "check_pc": "desktop",
          "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator",
          "open_in_vscode": "desktop", "type_in_editor": "desktop", "save_as": "desktop", "drive": "desktop", "simple_task": "desktop",      # D54
-         "web_task": "desktop"}                                                                                           # D64: a deck on a free web generator
+         "web_task": "desktop", "task_step": "desktop"}                                                                   # D64: a deck on a free web generator; D76: a milestone of an open-ended task
 TRANSIENT = re.compile(r"(?i)timeout|timed out|connection failed|not answering|temporarily|busy")
 # Steps that change nothing when run twice (open, focus, read, check). Typing, keys, clicks, playing, repairs and
 # research are not: a failure reported as a timeout may come after they already acted, so they are never re-run blindly.
@@ -51,7 +51,7 @@ REPEAT_SAFE_BROWSER = {"read", "find", "tabs", "whoami"}
 
 def repeat_safe(step: dict) -> bool:
     t = step.get("tool")
-    return t in REPEAT_SAFE or (t == "browser" and step.get("action") in REPEAT_SAFE_BROWSER)
+    return t in REPEAT_SAFE or (t == "browser" and step.get("action") in REPEAT_SAFE_BROWSER) or (t == "task_step" and bool(step.get("repeat_safe")))     # D76: a milestone that only reads, searches, opens or downloads into quarantine
 
 
 class Busy(Exception):
@@ -1432,6 +1432,9 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
     t = step["tool"]
     if r.get("state") in ("waiting_for_permission", "denied"):
         return False, f"held for the owner ({r.get('state')})", ""
+    if t == "task_step":                                   # D76: a milestone of an open-ended task; it passes only on what its executor VERIFIED by effect
+        from . import taskrun
+        return taskrun.verify_step(step, r)
     if r.get("ok") is not True:                         # only boolean True: {"ok": "false"} is not success
         return False, "the action did not succeed", str(r.get("error") or r.get("state") or "")[:200]
     if t == "open_website":

@@ -287,7 +287,92 @@ def _pptx(c: EvalCtx, s: dict) -> CheckResult:
     return CheckResult("pptx", True, f"{info['slides']} slides")
 
 
+def _newest(c: EvalCtx, s: dict, default_glob: str) -> str:
+    path = s.get("path") or c.found.get("output") or ""
+    if path:
+        return path
+    directory = s.get("dir") or c.outputs
+    found = c.env.newest_since(directory, s.get("glob", default_glob), c.base.t0) if directory else []
+    return found[0] if found else ""
+
+
+def _table(path: str):
+    """(header, rows) of a CSV or XLSX file read from disk; None when it cannot be read as one."""
+    import csv
+    import io
+    from pathlib import Path
+    try:
+        if path.lower().endswith(".xlsx"):
+            from openpyxl import load_workbook
+            wb = load_workbook(path, read_only=True)
+            rows = [["" if x is None else str(x) for x in r] for r in wb.active.iter_rows(values_only=True)]
+            wb.close()
+        else:
+            rows = list(csv.reader(io.StringIO(Path(path).read_bytes().decode("utf-8-sig"))))
+    except Exception:  # noqa: BLE001
+        return None
+    return (rows[0], rows[1:]) if rows else ([], [])
+
+
+def _table_rows(c: EvalCtx, s: dict) -> CheckResult:
+    """D76: the table the task made, read from the FILE (never from JARVIS's say-so): its columns, enough rows, the values that must be in some row, values that must not
+    be anywhere, and no cell that a spreadsheet would run as a formula."""
+    path = _newest(c, s, "*.csv")
+    if not path:
+        return CheckResult("table_rows", False, "no new table file", "output_not_made")
+    got = _table(path)
+    if got is None:
+        return CheckResult("table_rows", False, "the file cannot be read as a table", "file_wrong_content")
+    header, rows = got
+    low = [squash(h) for h in header]
+    lacking = [col for col in s.get("columns", []) if squash(col) not in low]
+    if lacking:
+        return CheckResult("table_rows", False, f"the table has no column {lacking}", "file_wrong_content")
+    if len(rows) < int(s.get("min_rows", 1)):
+        return CheckResult("table_rows", False, f"{len(rows)} row(s), wanted {s.get('min_rows', 1)}", "file_wrong_content")
+    for needles in s.get("rows_contain", []):
+        if not any(not _has_all(" | ".join(r), list(needles)) for r in rows):
+            return CheckResult("table_rows", False, f"no row has {list(needles)}", "answer_wrong")
+    alltext = " | ".join(" | ".join(r) for r in rows)
+    banned = [n for n in s.get("none", []) if squash(n) in squash(alltext)]
+    if banned:
+        return CheckResult("table_rows", False, f"the table has {banned}", "answer_wrong")
+    if any(cell.startswith(("=", "+", "@")) for r in rows for cell in r):
+        return CheckResult("table_rows", False, "a cell would run as a formula", "unsafe_cell")
+    return CheckResult("table_rows", True, f"{len(rows)} row(s), columns {header[:6]}")
+
+
+def _brief_rules(c: EvalCtx, s: dict) -> CheckResult:
+    """D76: a brief against the research rules, read from the file: at least N distinct domains cited with their addresses, no quotation longer than a short phrase, no long
+    run copied from a page (not checkable here: the excerpts are not kept), and, when asked, a statement that sources differ."""
+    import re as _re
+    from pathlib import Path
+    path = _newest(c, s, "*brief*.md")
+    if not path:
+        return CheckResult("brief_rules", False, "no new brief", "output_not_made")
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    try:
+        from jarvis.plugins.desktop import taskoutput as TO
+        from jarvis.plugins.desktop.taskextract import registrable
+        words, quotes = TO.words, TO.QUOTE_RX
+    except Exception:  # noqa: BLE001
+        return CheckResult("brief_rules", False, "the research rules could not be loaded", "check_error")
+    hosts = {registrable(h.lower()) for h in _re.findall(r"https?://([A-Za-z0-9.-]+)", text)}
+    if len(hosts) < int(s.get("domains_min", 3)):
+        return CheckResult("brief_rules", False, f"{len(hosts)} distinct domain(s) cited, wanted {s.get('domains_min', 3)}", "file_wrong_content")
+    long_q = [q for q in quotes.findall(text) if len(words(q)) > int(s.get("max_quote_words", 12))]
+    if long_q:
+        return CheckResult("brief_rules", False, f"a quotation of {len(words(long_q[0]))} words", "file_wrong_content")
+    if len(words(_re.sub(r"https?://\S+", " ", text))) > int(s.get("max_words", 720)):
+        return CheckResult("brief_rules", False, "longer than one page", "file_wrong_content")
+    missing = _has_all(text, list(s.get("contains", [])))
+    if missing:
+        return CheckResult("brief_rules", False, f"the brief lacks {missing}", "file_wrong_content")
+    return CheckResult("brief_rules", True, f"{len(hosts)} domains cited")
+
+
 CHECK_FUNCS: dict[str, Callable[[EvalCtx, dict], CheckResult]] = {
+    "table_rows": _table_rows, "brief_rules": _brief_rules,
     "file_exists": _file_exists, "file_absent": _file_absent, "file_changed": _file_changed, "file_unchanged": _file_unchanged,
     "dir_exists": _dir_exists, "count_files": _count_files, "window_appeared": _window_appeared, "window_closed": _window_closed,
     "window_text": _window_text, "window_absent": _window_absent, "recycle_bin_has": _recycle_bin_has, "recycle_bin_lacks": _recycle_bin_lacks,

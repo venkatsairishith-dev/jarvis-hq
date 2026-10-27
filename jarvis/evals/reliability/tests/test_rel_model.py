@@ -103,7 +103,9 @@ def test_every_path_a_goal_touches_is_inside_the_runs_own_folder():
             yield x
     for g in CAT.goals():
         for p in walk([g.setup, g.verify, g.forbid]):
-            assert p.startswith(ok_prefix), f"{g.id}: {p}"
+            assert p.startswith(ok_prefix) or p == "{downloads}", f"{g.id}: {p}"
+        for p in walk([g.setup]):
+            assert p != "{downloads}", f"{g.id}: the harness never writes into the owner's Downloads"       # D76: {downloads} is only ever READ (a forbid check: nothing may have been downloaded)
 
 
 def test_validate_catches_mistakes():

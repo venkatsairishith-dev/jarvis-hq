@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import threading
 
-_STATE: dict = {"broker": None, "loop": None}
+_STATE: dict = {"broker": None, "loop": None, "preview": None}
 _LOCK = threading.Lock()
 
 
@@ -24,6 +24,23 @@ def install(broker, loop) -> None:
 
 def uninstall() -> None:
     install(None, None)
+    _STATE["preview"] = None
+
+
+def install_preview(fn) -> None:
+    """D76: the Preview panel's own queue (bridge/output_preview.OutputPreview.show_path): a task that has made a file shows it by itself."""
+    _STATE["preview"] = fn
+
+
+def show_file(path: str) -> bool:
+    """Queue a file the task made for the Preview panel; True when the panel took it. Never raises; False without a panel (the chat model then says `jarvis_show`)."""
+    fn = _STATE["preview"]
+    if fn is None:
+        return False
+    try:
+        return bool(fn(str(path)))
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def available() -> bool:

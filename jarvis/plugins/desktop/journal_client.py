@@ -400,6 +400,13 @@ def classify(tool: str, step: dict, res: dict) -> tuple[str, str, str]:
         return "A", "Research a topic" + (f" and make a {made}" if made and made != "none" else ""), ""
     if tool == "web_task":
         return ("C" if waiting else "B"), "Make a deck on a free web generator", str(res.get("site") or "")[:60]
+    if tool == "task_step":                                # D76: a milestone of an open-ended task: a fixed phrase by what it does, and the site's host name
+        words = {"open": "Open a website", "search": "Search a website", "follow": "Follow a link", "read": "Read a page", "lookup": "Look something up on a website",
+                 "download": "Download a file into quarantine", "fill": "Fill in a form (nothing is submitted)", "sources": "Read several sources on a topic",
+                 "files": "Read documents", "download_read": "Read the downloaded file", "csv": "Write a table", "xlsx": "Write a table", "brief": "Write a brief",
+                 "confirm_submit": "Ask before a form is submitted", "question": "Ask a question", "do": "Do a step in an app"}
+        mode = str(step.get("mode") or "")
+        return ("C" if waiting else "B" if mode in ("fill", "download", "confirm_submit") else "A"), words.get(mode, "Do one step of a task"), re.sub(r"[^A-Za-z0-9.\-]", "", str(step.get("site") or ""))[:60]
     if tool == "open_output":
         return "A", "Open a file JARVIS made", ""
     if tool == "stop":
