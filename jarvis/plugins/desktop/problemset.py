@@ -68,7 +68,9 @@ LANG_NAMED = re.compile(r"(?i)\b(?:in|using|with|use)\s+(python3?|py|c\+\+|cpp|j
 SAVE_IN = re.compile(r"(?i)\b(?:save|put|store|write|place|keep)\b(?:\s+(?:them|these|the\s+(?:solutions?|answers?|code|files?)|it|all))?\s+(?:in|into|to|under|inside)\s+(?P<out>\"[^\"]{1,200}\"|'[^']{1,200}'|[a-z]:[\\/][^\n,;]{1,200}?(?=\s+(?:and|then|with|in)\b|[,;.]?$)|(?:the\s+|a\s+)?(?:new\s+)?[\w .\\/-]{1,80}?\s*(?:folder|directory|dir)\b)")
 EXPLAIN_YES = re.compile(r"(?i)\b(?:with|add|include|and)\s+(?:short\s+|brief\s+|some\s+)?(?:explanations?|comments|notes)|\bexplain\s+(?:each|them|the\s+(?:solutions?|code))|\bexplained\b")
 EXPLAIN_NO = re.compile(r"(?i)\b(?:no|without)\s+(?:explanations?|comments|notes)\b")
-WIN_PATH = re.compile(r"(?i)(?:\"([a-z]:[\\/][^\"\n]{1,260})\"|'([a-z]:[\\/][^'\n]{1,260})'|\b([a-z]:[\\/][^\n\"',;]{1,260}?)(?=\s+(?:and|then|in|with|using|save|put|write|into|to)\b|[,;]|\.\s|\.$|$))")
+_END = r"(?=\s+(?:and|then|in|with|using|save|put|write|into|to)\b|[,;]|\.\s|\.$|$)"
+WIN_PATH = re.compile(r"(?i)(?:\"([a-z]:[\\/][^\"\n]{1,260})\"|'([a-z]:[\\/][^'\n]{1,260})'|\b([a-z]:[\\/][^\n\"',;]{1,260}?)" + _END +
+                      r"|(?<![\w./:])((?:~|)/[^\s\"',;][^\n\"',;]{0,260}?)" + _END + ")")
 FOLDER_NAMED = re.compile(r"(?i)\b(?:in|from|of|inside|under)\s+(?:the\s+|my\s+)?(?:folder\s+(?:called\s+|named\s+)?)?(?:\"([^\"]{1,120})\"|'([^']{1,120})'|((?:[\w.&+-]+\s+){0,4}?[\w.&+-]+?)\s+(?:folder|directory|dir)\b)")
 FOLDER_LOOSE = re.compile(r"(?i)\b(?:in|from|of|inside|under)\s+(?:the\s+|my\s+)?((?:college|school|university|lab|labs|class|assignments?|homework|dsa|os|dbms|cn|java|python|c)(?:\s+[\w.&+-]+){0,3}?)(?=\s+(?:and|then|in|with|using|save|put|write|into|to|please)\b|[,;.?!]|$)")
 FILLER = {"my", "the", "a", "an", "folder", "directory", "dir", "files", "file", "pc", "on", "in", "of", "from", "called", "named", "laptop", "computer", "all", "college"}
@@ -105,7 +107,7 @@ def parse_request(text: Any) -> dict | None:
         rest = t[:sm.start()] + " " + t[sm.end():] if sm else t
         pm = WIN_PATH.search(rest)
         if pm:
-            out["folder_phrase"] = (pm.group(1) or pm.group(2) or pm.group(3) or "").strip().rstrip(".")
+            out["folder_phrase"] = (pm.group(1) or pm.group(2) or pm.group(3) or pm.group(4) or "").strip().rstrip(".")
         else:
             fm = FOLDER_NAMED.search(rest) or FOLDER_LOOSE.search(rest)
             if fm:
@@ -732,6 +734,11 @@ class Deps:
     model_thread_poll_s: float = 0.2
 
 
+def probe_of(text: str) -> str:
+    """What the exam guard reads of one file: all of it when short, else its start and its end (banners and 'Submit Test' sit at the ends)."""
+    return text if len(text) <= 9000 else text[:6000] + "\n" + text[-3000:]
+
+
 def _estimate_tokens(*parts: str) -> int:
     return sum(len(p) for p in parts) // 4 + 1
 
@@ -822,6 +829,7 @@ class Job:
         self.m["files_found"] = len(files)
         problems: list[dict] = []
         skipped: list[dict] = []
+        probes: dict[str, str] = {}
         for i, f in enumerate(files[:self.budget.max_files], 1):
             self.check_stop()
             self.d.progress("reading", i, min(len(files), self.budget.max_files))
@@ -833,6 +841,7 @@ class Job:
             if fr.unreadable:
                 skipped.append({"file": rel[:120], "why": f"page(s) {', '.join(map(str, fr.unreadable[:10]))} could not be read, so the problems on them were not solved", "partial": True})
             text = untrusted.clean_untrusted(fr.text)
+            probes[rel[:120]] = probe_of(text)
             sp = T.split_problems(text, self.rules)
             for p in sp.problems:
                 samples = T.extract_samples(p.text, self.rules)
@@ -843,7 +852,7 @@ class Job:
             skipped.append({"file": f"{len(files) - self.budget.max_files} more file(s)", "why": f"over the limit of {self.budget.max_files} files per job"})
         for k, p in enumerate(problems, 1):
             p["n"] = k
-        self.m.update(problems=problems, skipped=skipped, folder=str(folder), out=str(out))
+        self.m.update(problems=problems, skipped=skipped, folder=str(folder), out=str(out), probes=probes)
 
     def _gather_screen(self) -> None:
         if self.d.read_screen is None:
@@ -855,6 +864,7 @@ class Job:
             return
         text = untrusted.clean_untrusted(str(got["text"]))
         sp = T.split_problems(text, self.rules)
+        probes = {"(screen)": probe_of(text)}
         problems = []
         for p in sp.problems[:self.budget.max_problems]:
             samples = T.extract_samples(p.text, self.rules)
@@ -863,7 +873,7 @@ class Job:
                              "pages_unreadable": [], "notes": [f"read from the {got.get('app') or 'front'} window by {got.get('source') or 'screen'}"], "status": "", "attempts": 0})
         for k, p in enumerate(problems, 1):
             p["n"] = k
-        self.m.update(problems=problems, skipped=[], screen={"title": str(got.get("title") or "")[:200], "url": str(got.get("url") or "")[:300], "app": str(got.get("app") or "")[:40]},
+        self.m.update(problems=problems, skipped=[], probes=probes, screen={"title": str(got.get("title") or "")[:200], "url": str(got.get("url") or "")[:300], "app": str(got.get("app") or "")[:40]},
                       out=self.params.get("out") or str(known_roots()["documents"]))
 
     # ---- phase 2: the exam gate
@@ -875,15 +885,12 @@ class Job:
         flagged: dict[str, exam_guard.Verdict] = {}
         screen = self.m.get("screen") or {}
         if self.params.get("source") == "screen":
-            v = exam_guard.assess(screen.get("title", ""), screen.get("url", ""), [p["text"][:3000] for p in self.m["problems"]], [])
+            v = exam_guard.assess(screen.get("title", ""), screen.get("url", ""), [self.m.get("probes", {}).get("(screen)", "")], [])
             if v.hit:
                 flagged["(screen)"] = v
         else:
-            by_file: dict[str, list[dict]] = {}
-            for p in self.m["problems"]:
-                by_file.setdefault(p["file"], []).append(p)
-            for rel, ps in by_file.items():
-                v = exam_guard.assess(Path(rel).name, "", [p["text"][:3000] for p in ps][:6], [folder_name, rel])
+            for rel, probe in (self.m.get("probes") or {}).items():          # the WHOLE file's text (its start and its end), not only the problems: a banner sits before Problem 1
+                v = exam_guard.assess(Path(rel).name, "", [probe], [folder_name, rel])
                 if v.hit:
                     flagged[rel] = v
         if flagged:
@@ -1076,7 +1083,8 @@ class Job:
         else:
             bad = next((r for r in runs if not r.ok), None)
             p["status"] = FAILED
-            p["why"] = (f"sample {bad.n}: {bad.status.replace('_', ' ')}" + (f"; expected {bad.expected[:60]!r}, got {bad.actual[:60]!r}" if bad.status == cr.OK else (f" ({bad.note[:80]})" if bad.note else ""))) if bad else "failed"
+            p["why"] = ((f"sample {bad.n}: wrong output; expected {bad.expected.strip()[:60]!r}, got {bad.actual.strip()[:60]!r}" if bad.status == cr.OK
+                         else f"sample {bad.n}: {bad.status.replace('_', ' ')}" + (f" ({bad.note[:80]})" if bad.note else ""))) if bad else "failed"
         self.write_solution(p, prop, use_lang, explain)
 
     def write_solution(self, p: dict, prop: Proposal, lang: str, explain: bool) -> None:
