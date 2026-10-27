@@ -863,3 +863,19 @@ def _number_typo_fix(line: str):
     if not t:
         return None
     return m.group(0), m.group(1) + t.group(1) + t.group(2)
+
+
+def window_prepared_note(prepared, app: str) -> str:
+    """One plain line when the node restored a minimised window or enlarged a small one so it could be read (node vision.prepare); '' otherwise."""
+    if not isinstance(prepared, dict) or not prepared.get("changed"):
+        return ""
+    parts = []
+    if prepared.get("restored"):
+        parts.append("brought it back from minimised")
+    if prepared.get("enlarged"):
+        was, now = prepared.get("was") or {}, prepared.get("now") or {}
+        if all(isinstance(v.get(k), int) for v in (was, now) for k in ("w", "h")):
+            parts.append(f"made it bigger ({was['w']}x{was['h']} to {now['w']}x{now['h']})")
+        else:
+            parts.append("made it bigger")
+    return f"The {app} window was {'small' if prepared.get('enlarged') else 'minimised'}, so I " + " and ".join(parts) + " to read it; it stays that way." if parts else ""

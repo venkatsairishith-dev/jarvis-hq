@@ -814,6 +814,9 @@ class DesktopPlugin(PluginBase):
         if reading.agreed_with:
             out["agreed_with"] = reading.agreed_with
             out["source"] = f"{label}; confirmed by {reading.agreed_with}"
+        note = core.window_prepared_note((res.get("result") or {}).get("prepared"), app)
+        if note:
+            out["window_note"] = note                                 # the owner's window was restored or enlarged to be read: said, not hidden
         if reading.conflict:
             out["conflict"] = True
         if removed:

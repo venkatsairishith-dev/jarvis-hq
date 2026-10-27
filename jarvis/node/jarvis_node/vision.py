@@ -73,6 +73,73 @@ try {
 """
 
 
+# A window too small to read from (or minimised) is made readable first, the way a person would drag it bigger before looking (owner, 2026-10-27:
+# "see what's on the notepad ... the window is small, then I can make it big"). Restores a minimised window; enlarges a small one that has a sizing
+# border, keeping its top-left corner and staying inside the monitor's work area; leaves a maximised, fixed-size or already big-enough window alone.
+# It is left that way (a click may follow a locate, so the coordinates must not move again) and the result says so.
+MIN_READ_W, MIN_READ_H = 640, 420
+WANT_READ_W, WANT_READ_H = 960, 640
+PREPARE = r"""
+$ErrorActionPreference='Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class PR { [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint f);
+  public struct RECT { public int L, T, R, B; } }
+'@
+__PICK__
+$h = $p.MainWindowHandle
+$out = @{ changed = $false; restored = $false; enlarged = $false }
+if ([PR]::IsIconic($h)) { [void][PR]::ShowWindow($h, 9); Start-Sleep -Milliseconds 400; $out.restored = $true; $out.changed = $true }
+if ([PR]::IsIconic($h)) { throw 'window is minimized' }
+if (-not [PR]::IsZoomed($h)) {
+  $r = New-Object PR+RECT; [void][PR]::GetWindowRect($h, [ref]$r)
+  $w = $r.R - $r.L; $hh = $r.B - $r.T
+  $sizable = (([PR]::GetWindowLong($h, -16) -band 0x00040000) -ne 0)               # WS_THICKFRAME: only a window the owner could drag bigger
+  if ($sizable -and ($w -lt [int]$env:JARVIS_MIN_W -or $hh -lt [int]$env:JARVIS_MIN_H)) {
+    $wa = [System.Windows.Forms.Screen]::FromHandle($h).WorkingArea
+    $nw = [Math]::Min([Math]::Max($w, [int]$env:JARVIS_WANT_W), [int]($wa.Width * 0.9))
+    $nh = [Math]::Min([Math]::Max($hh, [int]$env:JARVIS_WANT_H), [int]($wa.Height * 0.9))
+    $nx = [Math]::Max($wa.Left, [Math]::Min($r.L, $wa.Right - $nw))
+    $ny = [Math]::Max($wa.Top, [Math]::Min($r.T, $wa.Bottom - $nh))
+    [void][PR]::SetWindowPos($h, [IntPtr]::Zero, $nx, $ny, $nw, $nh, 0x0014)       # SWP_NOZORDER | SWP_NOACTIVATE
+    Start-Sleep -Milliseconds 400
+    $out.enlarged = $true; $out.changed = $true; $out.was = @{ w = $w; h = $hh }; $out.now = @{ w = $nw; h = $nh }
+  }
+}
+$out | ConvertTo-Json -Compress
+"""
+
+
+def prepare(proc: str) -> dict:
+    """Make the window readable (restore if minimised, enlarge if small). Best effort: a failure here never stops the read (capture then reports what it finds)."""
+    if os.environ.get("JARVIS_AUTO_ENLARGE", "1").strip().lower() in ("0", "off", "no", "false"):
+        return {"changed": False}
+    from . import windowpick
+    try:
+        r = runtime.powershell(PREPARE.replace("__PICK__", _pick()), {
+            "JARVIS_UI_PROC": proc, "JARVIS_MIN_W": str(MIN_READ_W), "JARVIS_MIN_H": str(MIN_READ_H),
+            "JARVIS_WANT_W": str(WANT_READ_W), "JARVIS_WANT_H": str(WANT_READ_H), **windowpick.pick_env(proc, mutating=False)}, 20)
+        if r.returncode:
+            return {"changed": False}
+        got = json.loads((r.stdout or "").strip().splitlines()[-1])
+    except Exception:  # noqa: BLE001 - best effort by design
+        return {"changed": False}
+    if not isinstance(got, dict) or not got.get("changed"):
+        return {"changed": False}
+    keep = {"changed": True, "restored": bool(got.get("restored")), "enlarged": bool(got.get("enlarged"))}
+    for k in ("was", "now"):
+        v = got.get(k)
+        if isinstance(v, dict) and all(isinstance(v.get(a), int) for a in ("w", "h")):
+            keep[k] = {"w": v["w"], "h": v["h"]}
+    return keep
+
+
 class VisionError(Exception):
     pass
 
@@ -83,9 +150,11 @@ def _pick() -> str:
 
 
 def capture(proc: str, scale: int = 2) -> tuple[str, dict]:
-    """PNG of that one window (local file), enlarged `scale` times, and the window's own size/position."""
+    """PNG of that one window (local file), enlarged `scale` times, and the window's own size/position. A minimised or small window is made readable first
+    (prepare); `size["prepared"]` says what was done."""
     if not re.fullmatch(r"[A-Za-z0-9_.\- ]{1,80}", proc or ""):
         raise VisionError("bad target")
+    prepared = prepare(proc)
     sweep_local()
     os.makedirs(local_result_dir(), exist_ok=True)       # the folder is not made by anything else on a fresh layout: PowerShell's Save then fails ("capture failed")
     path = os.path.join(local_result_dir(), f"window-{secrets.token_hex(4)}.png")
@@ -95,7 +164,10 @@ def capture(proc: str, scale: int = 2) -> tuple[str, dict]:
     if r.returncode or not os.path.isfile(path):
         msg = "no window" if "no window" in (r.stderr or "") else ("window is minimized" if "minimized" in (r.stderr or "") else "capture failed")
         raise VisionError(msg)
-    return path, json.loads(r.stdout.strip().splitlines()[-1])
+    size = json.loads(r.stdout.strip().splitlines()[-1])
+    if prepared.get("changed"):
+        size["prepared"] = prepared
+    return path, size
 
 
 def ocr(png: str, scale: int = 1) -> list[dict]:
@@ -232,6 +304,8 @@ def look(proc: str, label: str = "", use_model: bool = True) -> dict:
         lines = ocr(png, size.get("scale", 1))
         res = {"ok": True, "size": {"width": size["width"], "height": size["height"]}, "lines": len(lines),
                "words": sum(len(ln.get("words") or []) for ln in lines)}
+        if size.get("prepared"):
+            res["prepared"] = size["prepared"]
         local = os.path.join(local_result_dir(), f"ocr-{secrets.token_hex(4)}.json")
         with open(local, "w", encoding="utf-8") as f:
             json.dump({"observed_lines": [ln["text"] for ln in lines]}, f)
@@ -264,6 +338,8 @@ def see(proc: str, label: str = "*") -> dict:
     try:
         lines = ocr(png, size.get("scale", 1))
         res: dict = {"ok": True, "size": {"width": size["width"], "height": size["height"]}, "lines": len(lines)}
+        if size.get("prepared"):
+            res["prepared"] = size["prepared"]
         if label in ("", "*"):
             answer = ask_vision(png, "Transcribe the text that is visible in this window. Only what you can read; no commentary.")
             local = os.path.join(local_result_dir(), f"vision-{secrets.token_hex(4)}.json")
