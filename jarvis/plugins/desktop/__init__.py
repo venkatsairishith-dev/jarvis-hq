@@ -1520,7 +1520,7 @@ class DesktopPlugin(PluginBase):
                 spec, why = ps._vscode_folder(_P(folder))
                 return open_in_vscode({"folder": spec}) if spec else {"ok": False, "error": f"VS Code opens only known folders ({why})"}
 
-            deps = ps.Deps(ask_model=ask_model, release=screen_text.release_for_request, runner=chosen.runner, runner_note=chosen.why, read_file=ps.default_read,
+            deps = ps.Deps(ask_model=ask_model, release=goal_mod.release_owner_text, runner=chosen.runner, runner_note=chosen.why, read_file=ps.default_read,
                            ask_owner=owner_ask.ask if owner_ask.available() else None, stop=stopped, progress=say, read_screen=read_screen,
                            type_in_vscode=type_in_vscode, open_vscode=open_vs, show_summary=lambda md, res: ps.write_preview(md, res), cfg=cfg)
             return ps.run(str(step.get("job") or ""), deps)

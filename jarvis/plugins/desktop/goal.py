@@ -328,6 +328,13 @@ EDITOR_WORDS = {"vscode": "vs code", "visualstudiocode": "vs code", "notepad": "
                 "sublime": "sublime_text", "sublimetext": "sublime_text", "pycharm": "pycharm64", "idle": "idle"}
 
 
+def release_owner_text(text: str):
+    """D77: the same explicit-request release as the solve step (secret pass, then the privacy gateway's confirmed redaction; down = withheld) for the text of the problem
+    statement files the owner NAMED when he asked for a problem set to be solved. It lives here, beside the solve step it copies, so that nothing outside screen_text.py and this
+    module names the release function (tests/test_release_for_request.py)."""
+    return screen_text.release_for_request(text)
+
+
 def solve_request(goal: str) -> dict | None:
     """The owner asked JARVIS to solve what is on his screen and type the solution (needs all three: solve, on screen, type). Returns what he
     named: {"read_app": the window to read or None (the front one), "type_app": the editor to type into or None (the front editor),

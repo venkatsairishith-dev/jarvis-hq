@@ -719,7 +719,7 @@ def budget_from(cfg: dict) -> Budget:
 class Deps:
     """What the host lends. Every one is replaceable in a test; none of them reaches a network on its own."""
     ask_model: Callable[[list[dict], int], tuple[str, str]]                 # (messages, max_tokens) -> (text, provider); raises ModelError
-    release: Callable[[str], Any]                                           # screen_text.release_for_request: .allowed .text .note
+    release: Callable[[str], Any]                                           # goal.release_owner_text (the gateway release): .allowed .text .note
     runner: cr.Runner
     runner_note: str = ""
     read_file: Callable[[Path], FileRead] = default_read

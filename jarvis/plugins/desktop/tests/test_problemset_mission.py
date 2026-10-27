@@ -225,7 +225,7 @@ def pc(tmp_path, monkeypatch):
         pass
     model = Model(GOOD)
     monkeypatch.setattr(pkg.goal_mod, "ask_online", lambda messages, post=None, timeout=None, max_tokens=500: model(messages, max_tokens))
-    monkeypatch.setattr(screen_text, "release_for_request", lambda text: screen_text.Released(str(text), True, "gateway", "cleared"))
+    monkeypatch.setattr(pkg.goal_mod, "release_owner_text", lambda text: screen_text.Released(str(text), True, "gateway", "cleared"))
     monkeypatch.setattr(owner_ask, "available", lambda: False)
     fw.model = model
 
