@@ -442,6 +442,8 @@ SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".clau
                      "sensitive_sites.json", "auto_click.json",
                      # D74 (2026-10-27): the rules that decide when a request must be asked about (not guessed) and which windows are JARVIS's own: console-only.
                      "ambiguity.json", "own_windows.json",
+                     # D77 (2026-10-27): what counts as a live graded or proctored exam (JARVIS never completes one): console-only.
+                     "exam_signals.json",
                      # D71 (2026-10-27): the safe-mode switch (the owner's flag file, the reader that is copied into four packages, the owner's tool).
                      "safe_mode.json", "safe_mode.py", "safe_mode_ctl.py",
                      # D64 (2026-10-26): the per-site grants of the browser agent and the owner's alias e-mail: console-only, sealed by the kernel.

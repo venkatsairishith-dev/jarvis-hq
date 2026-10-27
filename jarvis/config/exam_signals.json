@@ -1,0 +1,62 @@
+{
+  "_about": "D77: what counts as a LIVE graded or proctored test, so JARVIS (which solves PRACTICE material for the owner) does not complete one. Read by jarvis/plugins/_shared/exam_guard.py. CONSOLE-ONLY: an agent cannot edit this file (kernel policy.SAFETY_COMPONENTS, push_gate.PROTECTED). The owner's own command to solve the problems in a folder or file he names is his statement that they are practice, so ordinary files and ordinary practice pages never match; only strong live-test signals do. Tiers: 'decline' = proctoring, webcam, screen-share, lock-down browser, a contest page, a proctoring vendor (nothing the owner says overrides it; JARVIS offers to teach the concept with different examples); 'ask' = an assessment host, honor-code or pledge text, an 'online assessment' banner (one short question; only 'it is practice' continues); 'weak' = a weight, and the total of the weak signals must reach ask_threshold. Practice words (practice, mock, sample, lab, homework ...) take weight off the weak signals only. Each 'why' is the fixed sentence the owner reads; a page never supplies it.",
+  "ask_threshold": 3,
+  "hosts": [
+    {"match": "hackerrank.com/test", "level": "ask", "why": "a HackerRank assessment page"},
+    {"match": "hackerrank.com/contests", "level": "decline", "why": "a contest page"},
+    {"match": "hackerrank.com/work", "level": "ask", "why": "a HackerRank interview or assessment page"},
+    {"match": "hackerearth.com/assessment", "level": "ask", "why": "a HackerEarth assessment page"},
+    {"match": "assessment.hackerearth.com", "level": "ask", "why": "a HackerEarth assessment page"},
+    {"match": "app.codility.com", "level": "ask", "why": "a Codility test page"},
+    {"match": "codesignal.com/assessment", "level": "ask", "why": "a CodeSignal assessment page"},
+    {"match": "codesignal.com/test", "level": "ask", "why": "a CodeSignal assessment page"},
+    {"match": "coderbyte.com/assessment", "level": "ask", "why": "a Coderbyte assessment page"},
+    {"match": "devskiller.com", "level": "ask", "why": "a hiring-test platform page"},
+    {"match": "testgorilla.com", "level": "ask", "why": "a hiring-test platform page"},
+    {"match": "mettl.com", "level": "ask", "why": "an online-exam platform page"},
+    {"match": "imocha.io", "level": "ask", "why": "a hiring-test platform page"},
+    {"match": "tcsion.com", "level": "ask", "why": "an online-exam platform page"},
+    {"match": "leetcode.com/contest", "level": "decline", "why": "a contest page"},
+    {"match": "leetcode.cn/contest", "level": "decline", "why": "a contest page"},
+    {"match": "codeforces.com/contest", "level": "decline", "why": "a contest page"},
+    {"match": "codeforces.com/gym", "level": "decline", "why": "a contest page"},
+    {"match": "atcoder.jp/contests", "level": "decline", "why": "a contest page"},
+    {"match": "codechef.com/contests", "level": "decline", "why": "a contest page"},
+    {"match": "topcoder.com/challenges", "level": "decline", "why": "a contest page"},
+    {"match": "kaggle.com/competitions", "level": "decline", "why": "a competition page"},
+    {"match": "proctorio.com", "level": "decline", "why": "a proctoring service page"},
+    {"match": "honorlock.com", "level": "decline", "why": "a proctoring service page"},
+    {"match": "examsoft.com", "level": "decline", "why": "a proctored-exam service page"},
+    {"match": "examity.com", "level": "decline", "why": "a proctoring service page"},
+    {"match": "proctortrack.com", "level": "decline", "why": "a proctoring service page"},
+    {"match": "respondus.com", "level": "decline", "why": "a lock-down browser page"},
+    {"match": "talview.com", "level": "decline", "why": "a proctoring service page"},
+    {"match": "exam.net", "level": "ask", "why": "an online-exam page"}
+  ],
+  "paths": [
+    {"rx": "codechef\\.com/start\\d+", "level": "decline", "why": "a contest page"},
+    {"rx": "/mod/quiz/(?:attempt|startattempt|processattempt)\\.php", "level": "weak", "weight": 2, "why": "an LMS quiz attempt page"},
+    {"rx": "/courses/\\d+/quizzes/\\d+/take", "level": "weak", "weight": 2, "why": "an LMS quiz attempt page"},
+    {"rx": "/(?:take|start)[-_]?(?:the[-_]?)?(?:exam|test|assessment)", "level": "weak", "weight": 1, "why": "a page that starts a test"}
+  ],
+  "text": [
+    {"rx": "\\bproctor(?:ed|ing|s)?\\b|\\bremote invigilat\\w*|\\binvigilat(?:ed|ion|or)\\b", "level": "decline", "why": "the page speaks of proctoring"},
+    {"rx": "(?:turn|switch) on (?:your )?(?:web ?cam|camera)|\\bweb ?cam (?:must|has to|needs to|is required|access|will be)|\\b(?:allow|enable|grant)(?: access to)? (?:your |the )?(?:web ?cam|camera)\\b[^\\n]{0,40}\\b(?:exam|test|assessment|proctor)|\\bkeep your (?:web ?cam|camera) on\\b|\\bcamera (?:must|has to) (?:remain|stay) on\\b", "level": "decline", "why": "the page asks for the webcam during the test"},
+    {"rx": "\\bshare your (?:entire |whole |full )?screen\\b|\\bscreen[- ]?shar(?:e|ing) (?:is |will be )?(?:required|mandatory|must)|\\byou (?:must|have to|need to) share your screen\\b|\\bscreen (?:is being )?recorded\\b|\\bscreen recording (?:is )?(?:required|enabled)\\b", "level": "decline", "why": "the page asks to share or record the screen during the test"},
+    {"rx": "\\block ?down browser\\b|\\brespondus\\b|\\bsafe exam browser\\b", "level": "decline", "why": "a lock-down browser is required"},
+    {"rx": "\\b(?:tab|window) (?:switching|changes?) (?:is |are |will be )?(?:monitored|recorded|detected|flagged|not allowed)|\\bleaving (?:this|the) (?:tab|page|window|full[- ]?screen) (?:will be|is) (?:flagged|recorded|reported)|\\bdo not (?:leave|switch|exit)(?: from)? (?:this|the) (?:tab|page|window|full[- ]?screen)\\b", "level": "decline", "why": "the page watches for you leaving it during the test"},
+    {"rx": "\\bhonou?r code\\b|\\bhonou?r pledge\\b|\\bi (?:will|shall) not (?:give|receive|use) (?:any )?(?:unauthori[sz]ed|outside) (?:aid|help|assistance)|\\bintegrity (?:pledge|agreement|statement|declaration)\\b|\\bby (?:starting|beginning|continuing|clicking)[^\\n]{0,60}\\b(?:exam|test|assessment)\\b[^\\n]{0,60}\\b(?:agree|confirm|certify|affirm)", "level": "ask", "why": "honor-code or integrity-pledge wording"},
+    {"rx": "\\b(?:online|timed|proctored|graded|live) (?:assessment|exam|test)\\b|\\bthis (?:exam|test|assessment) is (?:graded|timed|being timed|for credit|counted|mandatory)|\\byour (?:answers|submission)[^\\n]{0,40}\\b(?:will be|are) (?:graded|evaluated|scored|reviewed by (?:the )?(?:recruiter|employer|company|examiner))", "level": "ask", "why": "the page says this is a graded or timed assessment"},
+    {"rx": "\\bsubmit (?:the |your )?(?:test|exam|assessment|quiz)\\b|\\bfinal submission\\b|\\bfinish attempt\\b|\\bend (?:the )?(?:test|exam|assessment)\\b|\\bfinish (?:the )?(?:test|exam|assessment)\\b", "level": "weak", "weight": 2, "discountable": false, "why": "a final submit button for a test"},
+    {"rx": "\\b(?:time (?:left|remaining)|remaining time|time limit)\\b[^\\n]{0,14}\\d|\\b\\d{1,3}:\\d{2}(?::\\d{2})?\\s*(?:left|remaining|min(?:ute)?s? left)\\b|\\bcountdown\\b", "level": "weak", "weight": 1, "discountable": false, "why": "a countdown"},
+    {"rx": "\\b(?:final|mid[- ]?term|end[- ]?sem(?:ester)?|semester|internal|board|entrance|certification) (?:exam|examination|test|assessment)\\b|\\bquiz attempt\\b|\\bexamination hall\\b", "level": "weak", "weight": 1, "why": "an exam banner"},
+    {"rx": "\\bacademic (?:integrity|honesty|misconduct)\\b|\\bplagiarism (?:policy|will be)\\b|\\bcheating\\b[^\\n]{0,30}\\b(?:will|may) (?:result|lead)", "level": "weak", "weight": 1, "why": "integrity wording"}
+  ],
+  "names": [
+    {"rx": "(?<![a-z])(?:exam|exams|examination|midterm|mid-term|mid_term|final|finals|assessment|quiz[ _-]?attempt|end[ _-]?sem|endsem)(?![a-z])", "weight": 1, "why": "a file or folder named like an exam or assessment"}
+  ],
+  "practice": {
+    "rx": "\\b(?:practice|practise|practicing|mock|sample|samples|previous[ _-]?years?|past[ _-]?(?:papers?|year)|old[ _-]?papers?|revision|revise|tutorial|exercises?|homework|home[ _-]?work|lab|labs|worksheet|assignment|study|solved|examples?|model[ _-]?papers?|prep|preparation|question[ _-]?bank|problem[ _-]?sets?|syllabus|notes)\\b|(?:^|[ _.-])(?:prep|pyq|pyqs)(?:$|[ _.-])",
+    "discount": 1
+  }
+}

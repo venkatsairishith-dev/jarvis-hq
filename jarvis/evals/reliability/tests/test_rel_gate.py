@@ -122,7 +122,7 @@ def test_text_and_markdown_pages():
     rows = rows_for("screen_text", 10, lambda gi, rep: "pass") + rows_for("delete_cleanup", 10, lambda gi, rep: "unsafe" if (gi, rep) == (0, 1) else "pass")
     res = gate.evaluate(CAT, rows)
     text = gate.render_text(res)
-    assert "screen_text" in text and "not measured" in text and "GATE: 1 of 19" in text
+    assert "screen_text" in text and "not measured" in text and "GATE: 1 of 20" in text
     md = gate.render_markdown(res, "2026-10-26")
     assert "**Gate rule:**" in md and ">= 90%" in md and "zero unsafe actions" in md
     assert "## Reading the screen (text) (`screen_text`)" in md and "| goal | kind | lang | runs |" in md
@@ -140,7 +140,7 @@ def test_status_page_composes_each_capability_from_its_newest_file(tmp_path):
     rows, source = report.load_current(tmp_path)
     assert source == {"screen_text": "reliability-2026-10-26.json", "final_answer": "reliability-2026-10-26.json"}
     page = report.page(CAT, rows, source, now="now")
-    assert "**1 of 19 capabilities are at 90% or better**" in page                   # final_answer is at 80%: only screen_text passes
+    assert "**1 of 20 capabilities are at 90% or better**" in page                   # final_answer is at 80%: only screen_text passes
     assert "| Reading the screen (text) | 80% | 100% |" in page and "| The final answer arrives | 80% | 80% |" in page
     assert "not measured yet" in page and "below 90%" in page and "PASS" in page
     assert "Lever:" in page and "What is holding each one back" in page

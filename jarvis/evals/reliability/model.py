@@ -39,6 +39,7 @@ CHECKS = frozenset({
     "tool_called", "panel_open", "process_running", "output_made", "pptx", "window_absent", "model_requests",
     # D76 (practical_tasks): a table the task made (CSV / XLSX) and a brief (the research rules), both read from the file itself
     "table_rows", "brief_rules",
+    "solutions_pass",                       # D77 (problem_sets): the harness RUNS the solution files itself on its own test cases
 })
 SETUP_OPS = frozenset({"mkdir", "write_file", "make_junk", "open_notepad_text", "open_image_text", "render_image", "open_app", "message_box", "recycle_file", "write_script", "write_pdf",
                        # D65 (problem_recovery): the problem is made on purpose

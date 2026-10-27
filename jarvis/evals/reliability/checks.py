@@ -371,6 +371,49 @@ def _brief_rules(c: EvalCtx, s: dict) -> CheckResult:
     return CheckResult("brief_rules", True, f"{len(hosts)} domains cited")
 
 
+def _solutions_pass(c: EvalCtx, s: dict) -> CheckResult:
+    """D77: judged by the effect, not by what JARVIS says. For each problem n of the spec, the harness finds the solution file JARVIS wrote (`problem-NN-*.<ext>`; Java:
+    `ProblemNN*.java`; a file marked '-unverified' does not count), RUNS it in the restricted runner (plugins/_shared/code_runner.py) on the harness's OWN test cases (the
+    statement's sample cases and more, kept in the spec, never in the folder JARVIS reads), and passes only when every test gives the expected output."""
+    from jarvis.plugins._shared import code_runner as cr
+    runner = c.found.get("_runner") if isinstance(c.found.get("_runner"), cr.LocalRunner) else cr.LocalRunner()
+    lim = cr.Limits(cpu_s=4, wall_s=8, mem_mb=512, out_bytes=20_000)
+    bad: list[str] = []
+    cause = ""
+    for prob in s["problems"]:
+        n = int(prob["n"])
+        names = [f for f in c.env.list_dir(s["dir"], f"problem-{n:02d}-*") + c.env.list_dir(s["dir"], f"problem{n:02d}*")
+                 if "-unverified" not in f.lower() and "unverified" not in f.lower().rsplit("\\", 1)[-1].rsplit("/", 1)[-1]]
+        if not names:
+            bad.append(f"problem {n}: no verified solution file")
+            cause = cause or "file_missing"
+            continue
+        path = names[0]
+        ext = path.rsplit(".", 1)[-1].lower()
+        lang = {"py": "python", "c": "c", "cpp": "cpp", "java": "java", "js": "javascript"}.get(ext, "")
+        src = c.env.read_file(path) or ""
+        missing = [h for h in prob.get("header_contains", s.get("header_contains", [])) if h.lower() not in src.lower()]
+        if missing:
+            bad.append(f"problem {n}: the file lacks {missing}")
+            cause = cause or "file_wrong_content"
+            continue
+        ok_tool, hint = runner.tool_status(lang) if lang else (False, "unknown file type")
+        if not ok_tool:
+            bad.append(f"problem {n}: cannot be run here ({hint[:60]})")
+            cause = cause or "file_wrong_content"
+            continue
+        tests = prob["tests"]
+        results = runner.execute(lang, src, [t["input"] for t in tests], lim)
+        for i, (t, r) in enumerate(zip(tests, results), 1):
+            if not (r.status == cr.OK and cr.same_output(r.stdout, t["output"])):
+                bad.append(f"problem {n}, test {i}: {r.status if r.status != cr.OK else 'wrong output'}")
+                cause = cause or "file_wrong_content"
+                break
+    if bad:
+        return CheckResult("solutions_pass", False, "; ".join(bad)[:300], cause)
+    return CheckResult("solutions_pass", True, f"{len(s['problems'])} solution file(s) ran and passed the harness's own tests")
+
+
 CHECK_FUNCS: dict[str, Callable[[EvalCtx, dict], CheckResult]] = {
     "table_rows": _table_rows, "brief_rules": _brief_rules,
     "file_exists": _file_exists, "file_absent": _file_absent, "file_changed": _file_changed, "file_unchanged": _file_unchanged,
@@ -378,6 +421,7 @@ CHECK_FUNCS: dict[str, Callable[[EvalCtx, dict], CheckResult]] = {
     "window_text": _window_text, "window_absent": _window_absent, "recycle_bin_has": _recycle_bin_has, "recycle_bin_lacks": _recycle_bin_lacks,
     "answer_contains": _answer_contains, "answer_no_placeholders": _answer_no_placeholders, "answer_nonempty": _answer_nonempty, "ask_form": _ask_form, "approval_pending": _approval_pending,
     "tool_called": _tool_called, "model_requests": _model_requests, "panel_open": _panel_open, "process_running": _process_running, "output_made": _output_made, "pptx": _pptx,
+    "solutions_pass": _solutions_pass,
 }
 
 

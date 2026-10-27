@@ -19,6 +19,8 @@ JobObjectExtendedLimitInformation = 9
 JobObjectCpuRateControlInformation = 15
 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
 JOB_OBJECT_LIMIT_JOB_MEMORY = 0x200
+JOB_OBJECT_LIMIT_ACTIVE_PROCESS = 0x8                # D77: a runner for model-written code caps the processes (a fork bomb)
+JOB_OBJECT_LIMIT_PROCESS_TIME = 0x2                  # D77: and the user CPU time of each process
 JOB_OBJECT_CPU_RATE_CONTROL_ENABLE = 0x1
 JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP = 0x4
 ProcessPowerThrottling = 4
@@ -37,6 +39,8 @@ class JobLimits:
     job_memory_bytes: int | None = None
     kill_on_close: bool = True          # the supervisor's tree: True. The governor's adoption job: False (closing it must not kill JARVIS)
     throttle: bool = True               # BELOW_NORMAL + EcoQoS for every process put in the job
+    active_processes: int | None = None  # D77: at most this many live processes in the job (None = no cap)
+    process_time_s: float | None = None  # D77: each process's user CPU time limit in seconds (None = no cap)
 
 
 def cpu_rate_value(percent: float) -> int:
@@ -96,6 +100,12 @@ def _apply_limits(job, limits: JobLimits) -> list[str]:
     if limits.job_memory_bytes:
         flags |= JOB_OBJECT_LIMIT_JOB_MEMORY
         info.JobMemoryLimit = int(limits.job_memory_bytes)
+    if limits.active_processes:
+        flags |= JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+        info.BasicLimitInformation.ActiveProcessLimit = int(limits.active_processes)
+    if limits.process_time_s:
+        flags |= JOB_OBJECT_LIMIT_PROCESS_TIME
+        info.BasicLimitInformation.PerProcessUserTimeLimit = int(float(limits.process_time_s) * 10_000_000)      # 100 ns units
     info.BasicLimitInformation.LimitFlags = flags
     if not _k32.SetInformationJobObject(job, JobObjectExtendedLimitInformation, ctypes.byref(info), ctypes.sizeof(info)):
         problems.append(f"job limits (kill/memory) error {ctypes.get_last_error()}")

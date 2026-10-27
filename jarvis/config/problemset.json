@@ -1,0 +1,44 @@
+{
+  "_about": "D77: the problem-set mission's rules as DATA (jarvis/plugins/desktop/problemset.py). Numbering rules (how a file that holds many problems is split), the markers of sample cases, how a language is read from a statement, budgets, the limits of the restricted runner, the tool allowlist override and the VM2 switch. Owner-editable. A bad entry is skipped, never fatal. NOTHING here can widen what the mission may read (only the folder the owner names), send anywhere (nothing is uploaded or submitted) or run (only the restricted runner). The exam rules are NOT here: they are console-only in config/exam_signals.json.",
+  "run_on_vm2": false,
+  "vm2_note": "true = prefer running the model's code on the VM2 Agent PC (jarvis/lab) when a connection is lent by the host; default false because whether VM2 is up is the owner's server state. This mission never touches VM2 by itself.",
+  "budget": {"max_problems": 30, "max_files": 60, "time_s": 1800, "tokens": 90000, "retries": 1, "model_call_s": 150, "solve_tokens": 1400, "solve_tokens_explained": 2200},
+  "limits": {"cpu_s": 5, "wall_s": 10, "mem_mb": 512, "out_bytes": 64000, "max_procs": 32},
+  "max_samples": 8,
+  "max_statement_chars": 6000,
+  "max_common_chars": 800,
+  "folder_depth": 2,
+  "default_language": "python",
+  "languages": {
+    "python": {"label": "Python", "ext": ".py", "comment": "#", "words": ["python", "py"]},
+    "c": {"label": "C", "ext": ".c", "comment": "//", "words": ["c"]},
+    "cpp": {"label": "C++", "ext": ".cpp", "comment": "//", "words": ["c++", "cpp"]},
+    "java": {"label": "Java", "ext": ".java", "comment": "//", "words": ["java"]},
+    "javascript": {"label": "JavaScript", "ext": ".js", "comment": "//", "words": ["javascript", "js", "node"]}
+  },
+  "language_in_statement": [
+    {"language": "cpp", "rx": "\\bc\\+\\+|\\bcpp\\b"},
+    {"language": "javascript", "rx": "\\bjava\\s?script\\b|\\bnode\\.?js\\b"},
+    {"language": "java", "rx": "\\bjava\\b"},
+    {"language": "python", "rx": "\\bpython\\b"},
+    {"language": "c", "rx": "\\bc\\s+(?:program|language|code)\\b|\\b(?:in|using|with|a|an)\\s+c\\b(?![+#\\w-])"}
+  ],
+  "statement_extensions": [".txt", ".md", ".markdown", ".rst", ".html", ".htm", ".docx", ".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".bmp"],
+  "numbering": [
+    {"id": "word_number", "rx": "^\\s*(?:#{1,4}\\s*)?(?:problem|prob|question|exercise|task|program|practical|experiment|assignment|lab|challenge)\\s*(?:no\\.?|number|#)?\\s*(?P<num>\\d{1,3})\\b\\s*[:.)\\-\\u2013\\u2014]*\\s*(?P<title>.*)$", "single": true},
+    {"id": "q_short", "rx": "^\\s*(?:#{1,4}\\s*)?Q\\s?\\.?\\s?(?P<num>\\d{1,3})(?:\\s*[:.)\\-\\u2013\\u2014]\\s*|\\s+)(?P<title>\\S.*)?$", "single": true},
+    {"id": "hindi", "rx": "^\\s*(?:#{1,4}\\s*)?(?:\\u092a\\u094d\\u0930\\u0936\\u094d\\u0928|\\u0938\\u0935\\u093e\\u0932|\\u0938\\u092e\\u0938\\u094d\\u092f\\u093e|\\u092a\\u094d\\u0930\\u094b\\u0917\\u094d\\u0930\\u093e\\u092e|\\u0905\\u092d\\u094d\\u092f\\u093e\\u0938)\\s*(?:\\u0938\\u0902\\u0916\\u094d\\u092f\\u093e\\s*)?(?P<num>[0-9\\u0966-\\u096f]{1,3})\\s*[:.)\\-\\u2013\\u2014]*\\s*(?P<title>.*)$", "single": true},
+    {"id": "telugu", "rx": "^\\s*(?:#{1,4}\\s*)?(?:\\u0c2a\\u0c4d\\u0c30\\u0c36\\u0c4d\\u0c28|\\u0c38\\u0c2e\\u0c38\\u0c4d\\u0c2f|\\u0c2a\\u0c4d\\u0c30\\u0c4b\\u0c17\\u0c4d\\u0c30\\u0c3e\\u0c2e\\u0c4d|\\u0c35\\u0c4d\\u0c2f\\u0c3e\\u0c2f\\u0c3e\\u0c2e\\u0c02)\\s*(?P<num>[0-9\\u0c66-\\u0c6f]{1,3})\\s*[:.)\\-\\u2013\\u2014]*\\s*(?P<title>.*)$", "single": true},
+    {"id": "numbered", "rx": "^\\s*\\(?(?P<num>\\d{1,3})\\s*[.)]\\s+(?P<title>\\S.*)$", "single": false},
+    {"id": "table_pipe", "rx": "^\\s*\\|?\\s*(?P<num>\\d{1,3})\\s*\\|\\s*(?P<title>[^|].*?)\\s*\\|?\\s*$", "single": false}
+  ],
+  "sample_markers": {
+    "section": "^\\s*(?:#{1,4}\\s*)?(?:sample|example|test\\s*case|testcase|e\\.g\\.)\\b.*$",
+    "input": "^\\s*(?:#{1,4}\\s*)?(?:(?:sample|example|test\\s*case)\\s*)?(?:input|inp|i/p)\\s*(?:#?\\s*\\d+)?\\s*(?:\\(s\\))?\\s*[:=\\-]?\\s*(?P<rest>.*)$",
+    "output": "^\\s*(?:#{1,4}\\s*)?(?:(?:sample|example|test\\s*case)\\s*)?(?:expected\\s+)?(?:output|out|o/p)\\s*(?:#?\\s*\\d+)?\\s*(?:\\(s\\))?\\s*[:=\\-]?\\s*(?P<rest>.*)$",
+    "not_a_sample": "(?:format|description|constraints?|specification|specifications|explanation|note)\\b",
+    "stop": "^\\s*(?:#{1,4}\\s*)?(?:explanation|note|notes|constraints?|follow[- ]?up|hint|solution|approach|time complexity)\\b"
+  },
+  "install_note": "Compilers are looked up only in the fixed allowlist inside plugins/_shared/code_runner.py (override per tool below with absolute path patterns). A missing one is reported with how to install it; installing is the owner's step.",
+  "tool_paths": {}
+}

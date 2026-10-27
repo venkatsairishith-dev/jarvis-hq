@@ -496,6 +496,8 @@ def explain(rec: dict) -> str:
         r = s.get("result") or {}
         if s["tool"] == "research" and r.get("summary"):
             parts.append("Findings: " + str(r["summary"])[:600])
+        if s["tool"] == "problemset" and r.get("summary"):                 # D77: the table's one-line summary (sample cases only), the folder the files are in
+            parts.append(str(r["summary"])[:600] + (f" Solutions folder: {r['out']}" if r.get("out") else ""))
         if r.get("path") or r.get("file"):
             parts.append(f"File: {r.get('path') or r.get('file')}")
     unsure = [f"step {s.get('n')} ({s['tool']}): {s['uncertainty']}" for s in done if s.get("uncertainty")]
