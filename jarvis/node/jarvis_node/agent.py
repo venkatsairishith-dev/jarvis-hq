@@ -118,6 +118,30 @@ def run(url, name, once=False, collect_every=60, beat=15, poll=1, clock=time.tim
         sleep(poll)
 
 
+_MUTEX = []          # keeps the handle alive for the life of the process
+
+
+def single_instance(name: str = "Local\\JarvisNodeRun") -> bool:
+    """True when this is the only `jarvis_node run` of the user's session. Stop-ScheduledTask ends only the wrapper script, not the node it started, so every restart
+    left one more node polling for the same jobs (laptop 2026-10-27: three of them, the oldest running code from hours earlier; a job went to whichever answered
+    first and "Open Settings" failed in one of them). A named mutex is released by Windows when the process dies, however it dies."""
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.CreateMutexW.restype = ctypes.c_void_p
+        handle = k.CreateMutexW(None, False, name)
+        if not handle:
+            return True                                   # cannot tell: run
+        if ctypes.get_last_error() == 183:                # ERROR_ALREADY_EXISTS
+            return False
+        _MUTEX.append(handle)
+        return True
+    except Exception:                                     # noqa: BLE001 - a guard that cannot work must not stop the node
+        return True
+
+
 def main():
     p = argparse.ArgumentParser(prog="jarvis-node")
     p.add_argument("cmd", choices=["pair", "run", "once"])
@@ -128,6 +152,9 @@ def main():
     if a.cmd == "pair":
         pair(a.url, a.code_file, a.name)
     else:
+        if a.cmd == "run" and not single_instance():
+            print("another jarvis_node run is already running in this session; this one exits")
+            return
         run(a.url, a.name, once=(a.cmd == "once"))
 
 

@@ -4004,14 +4004,17 @@
     },
     {
      "id": "sm-folder",
-     "text": "Create a folder named docs-{tok} in {work}.",
+     "text": "Create a folder named docs-{tok} in Documents.",
      "kind": "act",
      "lang": "en",
      "verify": [
       {
        "check": "dir_exists",
-       "path": "{work}{sep}docs-{tok}"
+       "path": "{docs}{sep}docs-{tok}"
       }
+     ],
+     "cleanup": [
+      "{docs}{sep}docs-{tok}"
      ]
     },
     {
