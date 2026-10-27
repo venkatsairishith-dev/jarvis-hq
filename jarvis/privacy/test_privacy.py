@@ -572,3 +572,28 @@ class BenignAppNames(unittest.TestCase):
 
     def test_a_word_that_is_not_an_app_name_still_counts(self):
         self.assertTrue(self._spans("Open Notepad hunter2xyz", "Notepad hunter2xyz"))
+
+
+class FilePathsAreNotSecrets(BenignAppNames):
+    """Live 2026-10-27 (reliability gate): "Rename <path>old.txt to new.txt" reached the chat model as "Rename [USERNAME_1] to new.txt" and
+    "save it as note-r58ea3d.txt" as "save it as [PASSWORD_1]", so the file goals failed. A path hides only its profile name; a file name is left alone."""
+
+    BS = chr(92)
+
+    def test_a_bare_file_name_is_left_alone(self):
+        self.assertEqual(self._spans("Save it as note-r58ea3d.txt please", "note-r58ea3d.txt"), [])
+
+    def test_a_windows_path_hides_only_the_profile_name(self):
+        b = self.BS
+        path = "C:" + b + "Users" + b + "venkat" + b + "Documents" + b + "old.txt"
+        sentence = "Rename " + path + " to new.txt."
+        got = self._spans(sentence, path)
+        self.assertEqual([sentence[s:e] for _k, s, e, _sc in got], ["venkat"])
+
+    def test_a_path_without_a_profile_name_is_not_hidden(self):
+        b = self.BS
+        path = "D:" + b + "work" + b + "src-1.txt"
+        self.assertEqual(self._spans("Copy " + path + " to dst-1.txt", path), [])
+
+    def test_a_credential_that_looks_like_user_slash_password_still_counts(self):
+        self.assertTrue(self._spans("login is admin/hunter2xyz ok", "admin/hunter2xyz"))

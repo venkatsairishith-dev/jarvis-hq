@@ -116,6 +116,13 @@ BENIGN_WORDS = {
     "open", "launch", "start", "close", "run", "play", "show", "use", "type", "write", "save", "the", "my", "app", "a", "an", "in", "on", "to", "and", "or",
     "editor", "text", "browser", "folder", "window"}
 _TRAILING = ".,;:?)\"'"
+# A file path or a file name is not a secret. The deep model marked "C:\\Users\\venkat\\Documents\\old.txt" as a username and "note-r58ea3d.txt" as a password, so
+# "Rename it to new.txt" reached the chat model as "Rename [USERNAME_1] to new.txt" (live 2026-10-27, /redact on the running gateway: sm-copy, sm-rename, sm-folder and
+# the Save As goals of the reliability gate). A path keeps only its profile-name segment hidden ("C:\\Users\\<name>\\..."); a bare file name is left alone.
+_FILE_EXT = r"(?:txt|md|csv|json|pdf|docx?|xlsx?|pptx?|png|jpe?g|gif|bmp|log|ini|py|js|ts|zip|ps1|bat|lnk|rtf|odt|html?)"
+_PATHY = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)|^[\\/][\w.\-]+[\\/][\w.\-/\\ ]*\." + _FILE_EXT + r"$", re.I)
+_BARE_FILE = re.compile(r"^[\w()\-. ]+\." + _FILE_EXT + r"$", re.I)
+_PROFILE = re.compile(r"(?i)[\\/](?:users|home)[\\/]([^\\/\s]+)")
 
 
 def _widen(sentence: str, s: int, e: int) -> tuple[int, int]:
@@ -140,6 +147,14 @@ def model_candidates(model, sentence: str):
         s, e = _widen(sentence, ent["start"], ent["end"])
         if len(sentence[s:e].strip()) < 4:       # "AI" became [API_KEY_1] in a research query (seen live); real
             continue                             # secrets this short are caught by the cue patterns ("pin 123")
+        piece = sentence[s:e]
+        if _PATHY.search(piece):
+            m = _PROFILE.search(piece)
+            if not m:
+                continue                         # a path or a drive: not a secret
+            s, e = s + m.start(1), s + m.end(1)  # hide only the profile name
+        elif _BARE_FILE.match(piece):
+            continue                             # a file name: not a secret
         words = sentence[s:e].lower().split()
         if words and all(w.strip(_TRAILING) in CUE_WORDS for w in words):
             continue
