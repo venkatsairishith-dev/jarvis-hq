@@ -26,7 +26,9 @@ writes the audit log and honours the kill switch. Approvals are given in the JAR
 | `jarvis/kernel`, `jarvis/node`, `jarvis/console`, `jarvis/ui` | The kernel (the only authority), the laptop node, the owner console and its UI. |
 | `jarvis/privacy`, `jarvis/egress` | The privacy gateway (redaction) and the outbound-request guard. |
 | `jarvis/lab`, `jarvis/hermes`, `jarvis/hub`, `jarvis/coding` | The lab agents, Hermes plugins, the hub and the coding tools. |
-| `jarvis/evals`, `jarvis/bench` | The benchmark (v2) and the evaluation suites. |
+| `jarvis/evals`, `jarvis/bench` | The benchmark (v2) and the evaluation suites, including `evals/reliability` (the 90% gate, `results/STATUS.md`) and `evals/ui` (the face's screenshot harness). |
+| `jarvis/scout` | How JARVIS looks for ready-made tools/models/methods to reuse before building custom code; `scout/findings/*.md` are dated sweeps. |
+| `jarvis/muse` | JARVIS's own background worker: briefs, ideas, finance, a heartbeat. |
 | `jarvis/docs` | The five main documents (`01_RESEARCH_AUDIT.md` to `05_OPERATIONS.md`) and `reports/` (dated reports and evidence). |
 
 Start reading with `jarvis/docs/05_OPERATIONS.md` ("Running JARVIS") and `jarvis/CLAUDE.md` (the rules every session follows).
@@ -57,10 +59,12 @@ Linux test image: `jarvis/scripts/test-container/`. Python pins: `jarvis/tools/r
 
 ## Status
 
-What was measured, where, and what could not be tested is in `jarvis/docs/reports/CAPABILITY_STATUS_2026-10-19.md` and the
-newest decision records (`03_DECISIONS.md`, D31 to D34). Nothing is claimed as production ready; the face has not yet been
-run on the owner's laptop (pilot pending), and every real-hardware check (microphone, GPU, live desktop) is listed as pending.
-GitHub Actions is off for this repository on purpose; pushes happen when the owner asks.
+The face runs on the owner's real laptop (Windows 10 Pro). What was measured there, and what still needs a live check, is
+in `jarvis/evals/reliability/results/STATUS.md` (updated after every phase) and the decision log `jarvis/docs/03_DECISIONS.md`
+(D1 onward; read the newest entries first). As of D1-D80: none of the 15 reliability capabilities is confirmed at the 90%
+bar yet, mainly because of provider capacity and features still awaiting a live run; the gate is honest about this rather
+than claiming otherwise. Nothing here is claimed production-ready until `STATUS.md` says a capability passed at 90%+ with
+zero unsafe actions. GitHub Actions is off for this repository on purpose; pushes happen as the owner's sessions work.
 
 ## Licence and credits
 
