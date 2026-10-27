@@ -1,0 +1,13 @@
+/*
+ * Tokens shared by the three panels (ask.css, timeline.css, PreviewPanel.vue), so they read as one face (D72). Local only: no remote font, no image.
+ *
+ * --jarvis-font  body text. The same Latin face as the chat (DM Sans, bundled), then the bundled Noto Sans Telugu and Devanagari
+ *                (packages/font-indic, SIL OFL), then the Windows fallbacks. Without the Indic names in the stack a panel showed the owner's
+ *                Telugu or Hindi in whatever the OS picked, while the chat showed the bundled font.
+ * --jarvis-line  line height of body text: Telugu and Devanagari marks sit above and below the line, so 1.5 and not 1.4.
+ * The smallest text that carries meaning is 11 px (monospace labels and numbers); nothing in the panels is smaller.
+ */
+:root {
+  --jarvis-font: 'DM Sans Variable', 'DM Sans', system-ui, -apple-system, 'Segoe UI', 'Noto Sans Telugu', 'Noto Sans Devanagari', 'Nirmala UI', sans-serif;
+  --jarvis-line: 1.5;
+}

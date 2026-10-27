@@ -181,7 +181,7 @@ try {
   // 13. a wide window, dark mode, and no sideways scroll at the app window size
   await page.setViewportSize({ width: 1100, height: 760 })
   await page.evaluate(() => document.documentElement.classList.add('dark'))
-  check('dark mode switches the panel colors', (await page.evaluate(() => getComputedStyle(document.querySelector('.pv-root')).getPropertyValue('--pv-bg').trim())) === '#1d1c24')
+  check('dark mode switches the panel colors', (await page.evaluate(() => getComputedStyle(document.querySelector('.pv-root')).getPropertyValue('--pv-bg').trim())) === '#050f18')
   await page.click('button[aria-label="Make larger or smaller"]')
   await settle()
   await shot('10-deck-expanded-dark-1100x760')

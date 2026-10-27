@@ -36,6 +36,7 @@ import {
   visibleWindow,
 } from '../../composables/jarvis-timeline-logic'
 
+import '../jarvis-ui-tokens.css'
 import './timeline.css'
 
 const props = defineProps<{ controller: TimelineController }>()

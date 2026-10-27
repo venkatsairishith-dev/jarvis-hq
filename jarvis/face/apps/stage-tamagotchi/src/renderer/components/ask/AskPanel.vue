@@ -24,6 +24,7 @@ import AskVoiceBar from './AskVoiceBar.vue'
 import { formatSize, keyAction, plural, progressFraction, progressText, selectedTotal, walk } from '../../composables/jarvis-ask-logic'
 import { ASK_VOICE_KEY } from '../../composables/use-jarvis-ask-voice'
 
+import '../jarvis-ui-tokens.css'
 import './ask.css'
 
 const props = defineProps<{ controller: AskController, voice?: AskVoice | null }>()

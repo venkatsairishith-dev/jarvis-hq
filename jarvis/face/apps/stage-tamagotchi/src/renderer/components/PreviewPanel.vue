@@ -34,6 +34,8 @@ import {
   stopLinkNavigation,
 } from '../composables/jarvis-preview-logic'
 
+import './jarvis-ui-tokens.css'
+
 const props = defineProps<{ controller: PreviewController }>()
 const { items, current, open, loading, error, note, itemIndex, page, pageCount } = props.controller
 const { process } = useMarkdown()
@@ -292,14 +294,15 @@ function age(modified: number): string {
 
 <style scoped>
 .pv-root {
+  /* D72: the same palette as the ask panel and the timeline (the HUD's: cyan, mint, amber, red), so the three panels look like one face */
   --pv-bg: #ffffff;
-  --pv-fg: #1c1b22;
-  --pv-dim: #62606e;
-  --pv-line: #dcdbe3;
-  --pv-soft: #f3f2f8;
-  --pv-accent: #4b3fd6;
-  --pv-ok: #1d7a43;
-  --pv-warn: #a85a00;
+  --pv-fg: #0f2530;
+  --pv-dim: #4c6676;
+  --pv-line: #cddbe4;
+  --pv-soft: #eef4f8;
+  --pv-accent: #0a6f94;
+  --pv-ok: #17703f;
+  --pv-warn: #9a5200;
   --pv-err: #b3261e;
 }
 .pv-launch {
@@ -338,7 +341,7 @@ function age(modified: number): string {
   border-radius: 12px;
   background: var(--pv-bg);
   color: var(--pv-fg);
-  font: 13px/1.45 system-ui, sans-serif;
+  font: 13px/var(--jarvis-line, 1.5) var(--jarvis-font, system-ui, sans-serif);
   box-shadow: 0 8px 32px rgb(0 0 0 / 0.28);
 }
 .pv-expanded {
@@ -383,8 +386,8 @@ function age(modified: number): string {
 .pv-actions button,
 .pv-pager button {
   flex: none;
-  min-width: 28px;
-  height: 28px;
+  min-width: 32px;
+  height: 32px;
   padding: 0 6px;
   border: 0;
   border-radius: 6px;
@@ -545,7 +548,7 @@ button:focus-visible {
   border-radius: 4px;
   background: rgb(0 0 0 / 0.6);
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
 }
 .pv-text {
   padding: 12px 16px;
@@ -619,7 +622,7 @@ button:focus-visible {
   border-top: 1px solid var(--pv-line);
 }
 .pv-primary {
-  height: 28px;
+  height: 32px;
   padding: 0 12px;
   border: 0;
   border-radius: 6px;
@@ -686,14 +689,14 @@ button:focus-visible {
     grid-area: 2 / 2;
   }
   .pv-actions button {
-    min-width: 26px;
-    height: 26px;
+    min-width: 32px;
+    height: 32px;
     padding: 0 4px;
   }
   .pv-badge {
     margin-left: 4px;
     padding: 0 5px;
-    font-size: 10px;
+    font-size: 11px;
   }
   /* the words stay for a screen reader; the sighted reader sees the mark */
   .pv-badge-long {
@@ -720,7 +723,7 @@ button:focus-visible {
   }
   .pv-pager button {
     min-width: 36px;
-    height: 28px;
+    height: 32px;
   }
   .pv-pager-word {
     display: none;
@@ -743,6 +746,7 @@ button:focus-visible {
   }
   .pv-thumb {
     width: 52px;
+    min-height: 32px;
   }
   .pv-text {
     padding: 8px 10px;
@@ -756,7 +760,7 @@ button:focus-visible {
   }
   .pv-primary {
     flex: none;
-    height: 30px;
+    height: 32px;
   }
   .pv-foot .pv-note {
     min-width: 0;
@@ -770,15 +774,15 @@ button:focus-visible {
 <!-- The face marks dark mode with a `dark` class on <html>. Plain (not scoped) so the selectors keep their parent. -->
 <style>
 html.dark .pv-root {
-  --pv-bg: #1d1c24;
-  --pv-fg: #ecebf3;
-  --pv-dim: #a09eb0;
-  --pv-line: #3a3946;
-  --pv-soft: #272631;
-  --pv-accent: #9d94ff;
-  --pv-ok: #6fd69a;
-  --pv-warn: #f0b266;
-  --pv-err: #ff8d86;
+  --pv-bg: #050f18;
+  --pv-fg: #d4eaf4;
+  --pv-dim: #8db0c2;
+  --pv-line: rgb(140 210 240 / 0.22);
+  --pv-soft: rgb(90 215 255 / 0.07);
+  --pv-accent: #5ad7ff;
+  --pv-ok: #6ff2d0;
+  --pv-warn: #ffb347;
+  --pv-err: #ff6a6a;
 }
 /* shiki writes the light colors inline and the dark ones as variables; inline wins unless the rule says !important */
 html.dark .pv-root .pv-rich .shiki {
@@ -790,6 +794,6 @@ html.dark .pv-root .pv-rich .shiki span {
   background-color: transparent !important;
 }
 html.dark .pv-root .pv-primary {
-  color: #14131a;
+  color: #04121a;
 }
 </style>
