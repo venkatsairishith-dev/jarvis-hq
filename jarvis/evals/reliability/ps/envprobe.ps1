@@ -202,7 +202,16 @@ switch ($Cmd) {
             "`$b = New-Object System.Windows.Forms.Button; `$b.Text = 'OK'; `$b.Name = 'OK'; `$b.Left = 90; `$b.Top = 50; " +
             "`$b.Add_Click({ Set-Content -LiteralPath '$marker' -Value 'pressed'; `$f.Close() }); `$f.Controls.Add(`$b); " +
             "`$f.Add_Shown({ Start-Sleep -Seconds $secs }); [void]`$f.ShowDialog()"
-    Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-Command', $code)
+    # A script file, not -Command: the quoting of a long -Command through Start-Process lost the window on Windows 10 (reliability selftest 2026-10-27).
+    # The file sits next to the marker (the run's own folder on D:), which the harness removes at the end of the run.
+    $file = [System.IO.Path]::ChangeExtension([string]$Rest[1], '.slow.ps1')
+    # Not -WindowStyle Hidden: the SW_HIDE of the start-up info is applied to the first window the process shows, which is the form (it never appeared).
+    # The script hides its own console instead.
+    $hide = @'
+Add-Type -Namespace RelHide -Name K -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);'; [void][RelHide.K]::ShowWindow([RelHide.K]::GetConsoleWindow(), 0);
+'@
+    Set-Content -LiteralPath $file -Value ($hide + ' ' + $code) -Encoding UTF8
+    Start-Process -FilePath powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $file + '"'))
     Out-Json ([pscustomobject]@{ ok = $true })
   }
   'close-title' {

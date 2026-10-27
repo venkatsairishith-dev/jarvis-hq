@@ -83,7 +83,7 @@ def test_the_model_decides_what_no_rule_knows_and_is_cached():
 
 
 def test_below_the_threshold_it_asks_instead_of_choosing():
-    d = D.decide("intent", "maybe the thing from before", list(D.INTENTS), post=model("pc_task", 0.35))        # the intent threshold is 0.4 since the laptop's eval_decider run
+    d = D.decide("intent", "maybe the thing from before", list(D.INTENTS), post=model("pc_task", 0.4), threshold=0.7, cfg=D.config())     # not the measured value of config/decider.json
     assert d.choice is None and d.ask and "threshold" in d.why
     d = D.decide("intent", "maybe the thing from before", list(D.INTENTS), post=model("pc_task", 0.35), threshold=0.3, cfg=D.config())
     assert d.choice == "pc_task" and not d.ask

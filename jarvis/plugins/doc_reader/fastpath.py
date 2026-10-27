@@ -153,9 +153,17 @@ def default() -> FastParse | None:
     return cli if cli.available() else None
 
 
+_TELUGU = re.compile("[\u0c00-\u0c7f]")
+
+
 def is_real_text(text: str) -> bool:
-    """True when a page's text layer is worth using: enough characters that are not blanks, and not mostly garbage."""
+    """True when a page's text layer is worth using: enough characters that are not blanks, and not mostly garbage.
+    Telugu is never trusted: on the laptop (2026-10-27, a Chrome-made PDF) LiteParse 2.17.0 returned "ుగు పేజీ" for "తెలుగు పేజీ" and dropped whole syllables
+    without any replacement character, while the text layer itself (read with pypdf) was complete. Hindi came out right in the same file. A Telugu page is
+    therefore left to the other readers (doc_tools reads text layers with pypdf)."""
     t = text or ""
+    if _TELUGU.search(t):
+        return False
     solid = re.sub(r"\s", "", t)
     if len(solid) < MIN_REAL_CHARS:
         return False

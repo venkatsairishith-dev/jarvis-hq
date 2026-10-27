@@ -14,6 +14,7 @@
     "python": {"tests": [], "bench_areas": ["N"]},
     "orchestration": {"tests": ["python -m pytest jarvis/plugins/desktop/tests -q -p no:cacheprovider"], "bench_areas": ["D"]},
     "documents": {"tests": ["python -m pytest jarvis/plugins/deliverables/tests jarvis/plugins/doc_reader/tests -q -p no:cacheprovider"], "bench_areas": ["I"]},
+    "document": {"tests": ["python -m pytest jarvis/plugins/deliverables/tests jarvis/plugins/doc_reader/tests -q -p no:cacheprovider"], "bench_areas": ["I"]},
     "research": {"tests": ["python -m pytest jarvis/plugins/research/tests -q -p no:cacheprovider"], "bench_areas": ["H"]},
     "context": {"tests": [], "bench_areas": ["X"]},
     "dev": {"tests": [], "bench_areas": ["N"]},

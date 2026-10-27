@@ -43,9 +43,14 @@ EXAMPLES: dict[str, tuple[list, list]] = {
     **{f"desktop:{e}": ([BRIEF_OK], [BRIEF_BAD, {"state": "denied", "ok": False}, {"state": "cancelled", "ok": False, "error": "stopped"},
                                      {"state": "waiting_for_permission", "approval_id": "ab12", "ok": False}, {}, None])
        for e in ("open_website", "play_youtube", "run_browser_action", "run_pc_action")},
+    **{f"desktop:{e}": ([{"ok": True, "status": "completed", "summary": "done"}], [{"ok": False, "status": "failed", "error": "x"}, {"status": "waiting_for_permission", "ok": False}, {}])
+       for e in ("do_goal", "quick_command")},
     "desktop:check_pc": ([{"state": "done", "ok": True, "rows": [{"free_gb": 120}]}], [BRIEF_BAD, {"error": "refused"}]),
     "desktop:read_window_text": ([{"ok": True, "app": "notepad", "lines": 3, "source": "from OCR (less reliable)"}],
                                  [{"ok": False, "error": "no window"}]),
+    "desktop:whats_on_screen": ([{"ok": True, "windows": [{"app": "notepad", "title": "Untitled - Notepad"}]}], [{"ok": False, "error": "no windows"}]),
+    "desktop:undo_steps": ([{"ok": True, "undone": 1, "not_undone": 0, "results": [], "summary": "Undid 1 step."}],
+                           [{"ok": False, "undone": 0, "not_undone": 0, "results": [], "summary": "There was nothing to undo."}]),
     "desktop:find_on_screen": ([{"ok": True, "found": False, "source": "from OCR"}], [{"ok": False, "error": "capture failed"}]),
     "desktop:list_browser_profiles": ([{"profiles": [{"name": "default"}]}], [{"error": "no registry"}]),
     "desktop:recent_pc_alerts": ([{"alerts": [], "count": 0}], [{"error": "monitor off"}]),

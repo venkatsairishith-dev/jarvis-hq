@@ -55,7 +55,10 @@ class UiautomationBackend(Backend):
         from ctypes import wintypes
         self.auto, self.comtypes, self.ct, self.wt = auto, comtypes, ctypes, wintypes
         self.com_error = comtypes.COMError
-        self.iua = auto._AutomationClient.instance().IUIAutomation          # the library's one private door: its COM connection (a public wrapper for FindAll does not exist)
+        # the library's one private door: its COM connection (a public wrapper for FindAll does not exist). `import uiautomation` does `from .uiautomation import *`,
+        # which leaves out names with a leading underscore (found on the laptop 2026-10-27: AttributeError), so the private name is read from the submodule.
+        import uiautomation.uiautomation as auto_impl
+        self.iua = auto_impl._AutomationClient.instance().IUIAutomation
         self.true = self.iua.CreateTrueCondition()
         self.walker = self.iua.ControlViewWalker
         self._win32()

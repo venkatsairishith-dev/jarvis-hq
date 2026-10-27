@@ -143,6 +143,8 @@ def test_outside_d_verdict_levels():
     mine = {"jarvis_items": 1, "jarvis_mb": 55.0, "suspect_items": 0, "suspect_mb": 0}
     st = lambda o: [v for v in F.verdicts(t, 1, 5, B.Budget(), o, True) if v["metric"] == "outside_d"][0]["status"]  # noqa: E731
     assert (st(none), st(caches), st(mine)) == ("OK", "CHECK", "OVER")
+    run_folder = {"jarvis_items": 1, "jarvis_mb": 0.0, "suspect_items": 0, "suspect_mb": 0}              # the console's token file: 0.0 MB, not an alarm
+    assert st(run_folder) == "CHECK"
 
 
 def test_top_offenders_name_the_biggest_over_budget_components():
