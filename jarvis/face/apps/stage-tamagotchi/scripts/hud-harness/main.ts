@@ -16,6 +16,7 @@ const st = reactive({
   approvals: Number(q.get('approvals') || 0),
   age: Number(q.get('age') || 72),
   model: q.get('model') ?? 'zai-org/GLM-5.3-Flash',
+  line: q.get('line') ?? '',
   level: 0,
 })
 ;(window as any).hud = st
@@ -50,6 +51,7 @@ createApp({
         status,
         statusAt: Date.now(),
         modelLabel: st.model.split('/').pop() || '',
+        line: st.line,
         level: st.level,
       }),
     ])

@@ -70,8 +70,11 @@ watch(() => props.level, (v) => {
         :status="status"
         :status-at="statusAt"
         :model-label="modelLabel"
-        :line="line"
       />
+    </div>
+    <!-- D72: what JARVIS is doing, in words, under the strip: it wraps (three lines at most, the full text in the tooltip) instead of being cut to a sliver inside it. A status for screen readers too. -->
+    <div v-if="line" class="jhud-line" role="status" :title="line" data-ambient-light-opaque="true">
+      {{ line }}
     </div>
   </div>
 </template>
