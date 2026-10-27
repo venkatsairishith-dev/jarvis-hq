@@ -35,6 +35,7 @@ PROBE_UI = HERE / "drive" / "probe_ui.mjs"
 PROBE_STARTUP = HERE / "drive" / "probe_startup.mjs"
 GATEWAY = os.environ.get("JARVIS_GATEWAY_URL", "http://127.0.0.1:48950")
 LOCAL_SWAP = os.environ.get("JARVIS_LOCAL_MODEL_URL", "http://127.0.0.1:8080")
+STARTUP_GRACE_S = 30.0    # D81: how far past the probe's own timeout_s this module waits before it stops trusting the child process to exit by itself
 
 
 @dataclass
@@ -160,8 +161,9 @@ class NodeSampler:
     """Samples through the Node scripts in drive/ (the face's debug port) and the Windows window poll for startup."""
 
     def __init__(self, node: str = "node", cfg: dict | None = None, env: Any = None, runner: Any = None, clock: Callable[[], float] = time.time,
-                 sleep: Callable[[float], None] = time.sleep):
+                 sleep: Callable[[float], None] = time.sleep, popen: Any = None):
         self.node, self.cfg, self.env, self._run, self.clock, self.sleep = node, cfg or {}, env, runner or subprocess.run, clock, sleep
+        self._popen = popen or subprocess.Popen       # D81: injectable so a hung child process can be exercised with a fake in tests
 
     def _node_json(self, script: Path, *args: str, timeout: float = 120.0) -> dict:
         cwd = os.environ.get("JARVIS_FACE_DIR")
@@ -192,11 +194,18 @@ class NodeSampler:
             self._run(c["stop_cmd"], capture_output=True, text=True, timeout=60)
             self.sleep(float(c.get("after_stop_s", 3)))
         t_launch = self.clock()
-        launcher = subprocess.Popen(c["launch_cmd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) if c.get("launch_cmd") else None
-        probe = subprocess.Popen([self.node, str(PROBE_STARTUP), str(c.get("timeout_s", 40)), c.get("page", "main")], stdout=subprocess.PIPE, text=True,
-                                 cwd=os.environ.get("JARVIS_FACE_DIR"), encoding="utf-8", errors="replace")
+        launcher = self._popen(c["launch_cmd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) if c.get("launch_cmd") else None
+        probe = self._popen([self.node, str(PROBE_STARTUP), str(c.get("timeout_s", 40)), c.get("page", "main")], stdout=subprocess.PIPE, text=True,
+                            cwd=os.environ.get("JARVIS_FACE_DIR"), encoding="utf-8", errors="replace")
         t_window = None
         title = (c.get("window_title") or "").lower()
+        # D81 root-cause fix: this loop used to have NO deadline of its own - `probe.poll()` waits forever for the child to exit, and the child's
+        # `timeout_s` argument is only a request the Node script makes to itself; nothing on this side enforced it. The laptop already saw this exact
+        # shape of bug live (results/STATUS.md, Phase 3: "the harness's Playwright probe said 24 s for 'first click' and was wrong: connectOverCDP
+        # itself returned after 20 s" - a CDP call that did not resolve when the script's own timeout expected it to). An external wall-clock deadline
+        # (the probe's own timeout_s plus a grace margin) now kills the child and raises instead of spinning here forever; `run_probe`'s existing
+        # `except Exception` turns that into an invalid repeat, never a hang.
+        deadline = self.clock() + float(c.get("timeout_s", 40)) + STARTUP_GRACE_S
         while probe.poll() is None:
             if t_window is None and self.env is not None and title:
                 try:
@@ -204,6 +213,12 @@ class NodeSampler:
                         t_window = self.clock()
                 except Exception:  # noqa: BLE001
                     pass
+            if self.clock() >= deadline:
+                try:
+                    probe.kill()
+                except Exception:  # noqa: BLE001
+                    pass
+                raise RuntimeError("the startup probe's own process did not exit within its timeout plus grace (D81): killed, not waited on forever")
             self.sleep(0.1)
         out_text, _ = probe.communicate(timeout=10)
         if launcher is not None:
