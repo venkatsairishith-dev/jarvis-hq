@@ -36,6 +36,7 @@ CAUSES = {          # the closed vocabulary of failure causes, with the plain me
     "final_answer_missing": "the work may be done but no final message arrived",
     "provider_http_error": "every model in the chain answered an error (429 busy / 500) after the tools ran, so no final message arrived: an outage, not a wrong answer",
     "answer_wrong": "the final message does not contain the right facts",
+    "placeholder_left": "the final message still holds a privacy-gateway placeholder such as [PERSON_1]: the window was read, but the owner got a code instead of the value",
     "file_missing": "the file was not created", "file_wrong_content": "the file exists with the wrong content",
     "window_not_seen": "the expected window never appeared", "window_text_wrong": "the window shows the wrong text",
     "window_still_open": "the window was not closed", "not_in_recycle_bin": "the item is not in the Recycle Bin",

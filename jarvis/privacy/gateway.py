@@ -24,6 +24,13 @@ nothing is forwarded, and no request text is ever put in a log or an error. Set 
 pattern-only pass (the owner's choice; /health still lists it). POST /redact {"text":..., "names": true} also hides people and
 places for that call ("names": "people": people only) and answers with what was really active ("names", "deep", "ready").
 
+Screen text is reversible for the owner (D73): POST /redact {"text":..., "names": true, "restorable": true} (what the desktop plugin sends for a window's text)
+keeps the map tag -> real value in a ScreenVault in this process's memory (never written, logged or put in a header): people, places, e-mail, phone and plain numbers
+become [PERSON_1], [NUMBER_2] ..., secrets become [REDACTED:kind] and are not kept at all. A reply to the FACE (never another caller) gets the vault's real values put
+back into its text (streamed too, a tag split across chunks is held back until it is whole); tool-call arguments are not restored from the vault. Every later request
+has the vault's real values replaced by their tags first (the face sends back what it showed), so a real screen value never reaches a provider.
+JARVIS_SCREEN_RESTORE=0 turns it off. /health shows only the number of entries.
+
 The face's reasoning stays out of its chat (D49): a request that carries the face's placeholder key ("jarvis-local") gets a reply
 without `reasoning_content` / `reasoning` deltas and without <think>...</think> text (also one that opens and never closes), because
 the face would show it to the owner, sometimes for minutes. Other callers get the reply as the provider sent it. A provider entry in
@@ -58,7 +65,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import redactor as redactor_module  # noqa: E402
 import safe_mode  # noqa: E402  (D71: a copy of jarvis/safe_mode.py, so the gateway still starts as a plain script)
-from redactor import Mapping, Redactor, StreamRestorer, restore  # noqa: E402
+from redactor import Mapping, Redactor, ScreenVault, StreamRestorer, restore, screen_redact  # noqa: E402
 
 DEFAULT_UPSTREAM = os.environ.get("JARVIS_PRIVACY_UPSTREAM", "https://inference.dahl.global/v1")
 # The face sends this placeholder instead of a key; the gateway then uses the first provider's key file (set "key_file" on it).
@@ -559,6 +566,62 @@ def restore_json(obj, m: Mapping):
     return obj
 
 
+def screen_restore_on() -> bool:
+    """D73: put the real values of SCREEN text back into the answer the owner reads and hears. JARVIS_SCREEN_RESTORE=0 turns it off (then /redact
+    answers as before, with plain tags that nothing restores, and the vault stays empty)."""
+    return os.environ.get("JARVIS_SCREEN_RESTORE", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def display_map(m: Mapping, vault: ScreenVault, face: bool):
+    """What the owner's face may be shown: this request's own placeholders plus the screen vault's. None when the vault adds nothing or the caller is not
+    the face. The request's own tags win a clash (they cannot clash: Mapping.base starts them after the vault's numbers)."""
+    if not face or not screen_restore_on():
+        return None
+    vals = vault.display()
+    return Mapping(to_value={**vals, **m.to_value}) if vals else None
+
+
+def hide_screen_values(body, vault: ScreenVault, m: Mapping):
+    """D73: the request body with every real value the screen vault knows replaced by its tag, in every role (the face sends back the answers it showed, the
+    memory summariser sends the whole conversation). A value the OWNER typed himself in this request (a user message) is also this request's own placeholder:
+    the model's tool call may carry its tag and it is restored there like any other tag this request made. A value that only came from the screen is not."""
+    if not isinstance(body, dict) or vault.size() == 0:
+        return body
+    own: set = set()
+    for msg in body.get("messages") or []:
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            vault.hide_tree(msg.get("content"), used=own)
+    if own:
+        shown = vault.display()
+        m.to_value.update({t: shown[t] for t in own if t in shown})
+    return vault.hide_tree(body)
+
+
+def restore_content(msg, dm: Mapping):
+    """The TEXT of a reply message (or of a completion choice) restored from the display map; tool-call arguments and everything else stay as they are."""
+    if not isinstance(msg, dict):
+        return msg
+    out = dict(msg)
+    if isinstance(out.get("content"), str):
+        out["content"] = restore(out["content"], dm)
+    elif isinstance(out.get("content"), list):
+        out["content"] = [({**p, "text": restore(p["text"], dm)} if isinstance(p, dict) and isinstance(p.get("text"), str) else p) for p in out["content"]]
+    if isinstance(out.get("text"), str):                          # the older completions shape
+        out["text"] = restore(out["text"], dm)
+    return out
+
+
+def restore_display(obj, dm: Mapping):
+    """A non-streamed reply with the screen text's real values put back into each choice's message text (D73)."""
+    if not isinstance(obj, dict) or not isinstance(obj.get("choices"), list):
+        return obj
+    out = dict(obj)
+    out["choices"] = [({**ch, **({"message": restore_content(ch["message"], dm)} if isinstance(ch.get("message"), dict) else {}),
+                        **({"text": restore(ch["text"], dm)} if isinstance(ch.get("text"), str) else {})} if isinstance(ch, dict) else ch)
+                      for ch in obj["choices"]]
+    return out
+
+
 HIDDEN_FIELDS = ("reasoning_content", "reasoning", "reasoning_details")
 _THINK_NAMES = ("think", "thinking", "thought", "reasoning")
 _THINK_OPEN = re.compile(r"<(?:think|thinking|thought|reasoning)>", re.I)
@@ -715,12 +778,14 @@ class SseRestorer:
 
     FIELDS = ("content", "reasoning_content", "reasoning")
 
-    def __init__(self, m: Mapping, hide_reasoning: bool = False):
+    def __init__(self, m: Mapping, hide_reasoning: bool = False, display: Mapping | None = None):
+        # `display` (D73): this request's tags plus the screen vault's. It restores the reply's TEXT only; tool-call arguments and the other fields use `m`.
         self.m, self.parts, self.hide, self.strippers = m, {}, hide_reasoning, {}
+        self.dm = display if display is not None else m
 
     def _r(self, key):
         if key not in self.parts:
-            self.parts[key] = StreamRestorer(self.m)
+            self.parts[key] = StreamRestorer(self.dm if key[1] == "content" else self.m)
         return self.parts[key]
 
     def _s(self, i) -> ThinkStripper:
@@ -729,7 +794,7 @@ class SseRestorer:
         return self.strippers[i]
 
     def event(self, data: str):
-        if data.strip() == "[DONE]" or (not self.m.to_value and not self.hide):
+        if data.strip() == "[DONE]" or (not self.m.to_value and not self.dm.to_value and not self.hide):
             return data
         try:
             ev = json.loads(data)
@@ -752,7 +817,7 @@ class SseRestorer:
                     removed = removed or d["content"] != before
                 if "message" in ch:
                     hide_reasoning_json({"choices": [ch]})
-            if self.m.to_value:
+            if self.m.to_value or self.dm.to_value:
                 for f in self.FIELDS:
                     if isinstance(d.get(f), str):
                         d[f] = self._r((i, f)).feed(d[f])
@@ -764,7 +829,7 @@ class SseRestorer:
                 if self.hide:
                     tail = self._s(i).flush()
                     if tail:
-                        d["content"] = (d.get("content") or "") + (self._r((i, "content")).feed(tail) if self.m.to_value else tail)
+                        d["content"] = (d.get("content") or "") + (self._r((i, "content")).feed(tail) if (self.m.to_value or self.dm.to_value) else tail)
                 for key, r in self.parts.items():
                     if key[0] != i:
                         continue
@@ -782,8 +847,9 @@ class SseRestorer:
                     else:
                         d[key[1]] = (d.get(key[1]) or "") + rest
                 ch["delta"] = d
-            if "message" in ch and self.m.to_value:
-                ch["message"] = restore_json(ch["message"], self.m)
+            if "message" in ch and (self.m.to_value or self.dm.to_value):
+                msg = restore_json(ch["message"], self.m) if self.m.to_value else ch["message"]
+                ch["message"] = restore_content(msg, self.dm) if self.dm is not self.m else msg
         if removed and ev.get("choices") and "usage" not in ev and all(
                 not (c.get("delta") or {}).get("tool_calls") and not c.get("finish_reason") and not (c.get("delta") or {}).get("content")
                 and not (c.get("delta") or {}).get("role") for c in ev["choices"]):
@@ -992,10 +1058,12 @@ def _open_upstream(prov: dict, req: "urllib.request.Request", timeout: float, wi
 FIRST_BYTE_S = 30.0          # a streamed answer from a provider that is not the last link must begin within this many seconds
 
 
-def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: float = 60.0, require_deep: bool = False):
+def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: float = 60.0, require_deep: bool = False,
+                 vault: ScreenVault | None = None):
     """require_deep: refuse (503) every model call while the PII model is not loaded. `serve()` and `main()` turn it on
     unless the owner sets JARVIS_PRIVACY_REQUIRE_DEEP=0; it is off here only so a test or a bench can drive the handler
-    with a stand-in detector that has no model."""
+    with a stand-in detector that has no model. vault: the screen text's placeholder map (D73), one per gateway process; a test passes its own."""
+    vault = vault if vault is not None else ScreenVault(ttl_s=float(os.environ.get("JARVIS_SCREEN_VAULT_TTL_S") or ScreenVault.TTL_S))
     providers = upstream if isinstance(upstream, list) else [{"name": "upstream", "base_url": upstream.rstrip("/"), "key": "from_request"}]
     upstream = providers[0]["base_url"]   # the caller's-key provider
     if os.environ.get("JARVIS_PRIVACY_MESSAGE_CACHE", "1") != "0" and not isinstance(red, CachedRedaction):
@@ -1042,6 +1110,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                                                                for n, rows in STATS.get("latency", {}).items() if rows},
                                             "latency_calls": {n: len(rows) for n, rows in STATS.get("latency", {}).items() if rows},
                                             "redaction_cache": red.snapshot() if isinstance(red, CachedRedaction) else None,
+                                            "screen_vault": {"entries": vault.size(), "restore": screen_restore_on()},   # a count; never a value
                                             "cooling_down": [n for n, t in _cooldown.items() if t > time.time()]})
             self._forward(None)
 
@@ -1062,15 +1131,24 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 # addresses are still caught by the patterns and the PII model).
                 want_names = (req.get("names") if isinstance(req, dict) and req.get("names") in (True, "people") else False)
                 m = Mapping()
+                # "restorable": true (D73, the screen-text path) turns the answer into a reversible one: what the owner may see again becomes a tag
+                # kept in the vault of THIS process ([PERSON_1], [NUMBER_2]), secrets become [REDACTED:kind] and are not kept at all. The answer says whether it was.
+                restorable = isinstance(req, dict) and req.get("restorable") is True and screen_restore_on()
+                hidden = 0
                 try:
-                    out = red.redact(str(text), m, True, names=want_names) if want_names else red.redact(str(text), m)
+                    if restorable:
+                        out, kinds, hidden = screen_redact(red, vault, str(text), names=want_names)
+                    else:
+                        out = red.redact(str(text), m, True, names=want_names) if want_names else red.redact(str(text), m)
+                        kinds = m.counts
                 except Exception:                                   # noqa: BLE001 - never echo the text or the error
                     with _lock:
                         STATS["errors"] += 1
                     return self._json(503, {"error": {"message": "the privacy gateway could not check the text"}})
-                return self._json(200, {"text": out, "kinds": m.counts, "deep": getattr(red, "model", None) is not None,
+                return self._json(200, {"text": out, "kinds": kinds, "deep": getattr(red, "model", None) is not None,
                                         "names": want_names or bool(getattr(red, "names", False)),
-                                        "ready": not degraded_reasons(red, require_deep)})
+                                        "ready": not degraded_reasons(red, require_deep),
+                                        **({"restorable": True, "secrets_hidden": hidden} if restorable else {})})
             self._forward(raw)
 
         def _forward(self, raw):
@@ -1112,7 +1190,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
 
         def _forward_inner(self, raw):
             self._tinfo = None
-            m = Mapping()
+            m = Mapping(base=vault.counters())       # D73: this request's tags continue after the screen vault's numbers, so a tag never means two things
             body, stream = None, False
             if raw:
                 try:
@@ -1133,7 +1211,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                             key = "translated" if self._tinfo["status"] == "yes" else "translate_skipped"
                             STATS[key] = STATS.get(key, 0) + 1
                     try:
-                        body = redact_body(body, red, m)
+                        body = redact_body(hide_screen_values(body, vault, m), red, m)   # D73: first a real screen value that came back in the face's history becomes its tag
                     except GatewayRefusal as e:
                         with _lock:
                             STATS["refused"] = STATS.get("refused", 0) + 1
@@ -1282,7 +1360,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     self._t_first = time.time()
                     with _lock:
                         STATS.setdefault("by_provider", {})[prov["name"]] = STATS.setdefault("by_provider", {}).get(prov["name"], 0) + 1
-                    self._answer(resp, stream, m, prov["name"], face)
+                    self._answer(resp, stream, m, prov["name"], face, display_map(m, vault, face))
                     return
                 finally:
                     if sem is not None:
@@ -1291,12 +1369,12 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                 STATS["errors"] += 1
             return self._json(502, {"error": {"message": "no model provider answered: " + "; ".join(tried)}})
 
-        def _answer(self, resp, stream, m, provider, face=False):
+        def _answer(self, resp, stream, m, provider, face=False, dm=None):
             self._provider = provider
             with resp:
                 ctype = resp.headers.get("Content-Type", "")
                 if stream or "text/event-stream" in ctype:
-                    self._relay_stream(resp, m, face)
+                    self._relay_stream(resp, m, face, dm)
                 else:
                     data = resp.read()
                     if (m.to_value or face or (getattr(self, "_tinfo", None) or {}).get("reply", "en") != "en") and "json" in ctype:
@@ -1305,6 +1383,8 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                             if face:
                                 obj = hide_reasoning_json(obj)
                             obj = restore_json(obj, m) if m.to_value else obj
+                            if dm is not None:
+                                obj = restore_display(obj, dm)         # D73: the owner's text gets the screen's real values; tool-call arguments do not
                             ti = getattr(self, "_tinfo", None)
                             if ti and ti.get("reply", "en") != "en" and ti.get("mod") is not None:
                                 obj = _reply_json(obj, ti)
@@ -1319,7 +1399,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
                     self.end_headers()
                     self.wfile.write(data)
 
-        def _relay_stream(self, resp, m, face=False):
+        def _relay_stream(self, resp, m, face=False, dm=None):
             self.send_response(resp.status)
             self.send_header("X-Jarvis-Provider", getattr(self, "_provider", ""))
             self.send_header("Content-Type", "text/event-stream")
@@ -1328,7 +1408,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             self._lang_headers()
             self.end_headers()
             self.close_connection = True
-            sse = SseRestorer(m, hide_reasoning=face)
+            sse = SseRestorer(m, hide_reasoning=face, display=dm)
             ti = getattr(self, "_tinfo", None)
             conv = ti["mod"].SentenceTranslator(ti["reply"]) if ti and ti.get("reply", "en") != "en" and ti.get("mod") is not None else None
             quiet_since = time.time()

@@ -597,7 +597,7 @@ class DesktopPlugin(PluginBase):
         if page and core.screen_text_allowed():                                    # the owner allowed page text to reach the model ...
             rel = await _release(page if isinstance(page, str) else json.dumps(page, ensure_ascii=False))
             if rel.allowed:                                                        # ... after the gateway hid names, places, private details
-                out["page"], out[screen_text.SCREEN_KEY], out["page_note"] = rel.text[:6000], True, rel.note
+                out["page"], out[screen_text.SCREEN_KEY], out["page_note"] = screen_text.cut_text(rel.text, 6000), True, rel.note
             else:
                 out["page_note"] = rel.note
         elif page:
@@ -826,7 +826,7 @@ class DesktopPlugin(PluginBase):
         elif core.screen_text_allowed():
             rel = await _release(shown)                               # secrets out, then the privacy gateway hides names and places
             if rel.allowed:
-                out["text"], out[screen_text.SCREEN_KEY], out["text_note"] = rel.text[:6000], True, rel.note
+                out["text"], out[screen_text.SCREEN_KEY], out["text_note"] = screen_text.cut_text(rel.text, 6000), True, rel.note
             else:
                 out["text_note"] = rel.note                           # withheld: a short neutral note, none of the text
         else:

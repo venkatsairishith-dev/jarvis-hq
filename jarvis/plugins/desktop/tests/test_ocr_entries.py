@@ -107,6 +107,20 @@ def test_read_window_text_goes_through_the_kernel_job_and_returns_scrubbed_text(
     assert list(env.local.iterdir()) == []                                              # the node's local file was read once and deleted
 
 
+def test_the_gateways_tags_reach_the_model_with_the_hint_to_copy_them_and_the_request_is_reversible(env, monkeypatch, gateways):
+    # D73: the gateway keeps the real values (the plugin asks for a reversible redaction); the model is told how to give a tag back to the owner
+    from jarvis.plugins._shared.tests.fakes import C_OCR
+    monkeypatch.setenv("JARVIS_SCREEN_TEXT_TO_MODEL", "1")
+    gw = gateways.make()
+    env.use(Console(env.local, {"ok": True}, [f"Dear {C_OCR}", "PASSWORD = hunter2hunter2"]))
+    r = call("read_window_text", app="notepad")
+    assert not is_err(r), r
+    v = r.value
+    assert "[PERSON_1]" in v["text"] and C_OCR not in json.dumps(v) and "hunter2hunter2" not in json.dumps(v)
+    assert "copy a tag exactly" in v["text_note"] and "say that you hid a secret" in v["text_note"]
+    assert gw.redact_requests[0]["restorable"] is True
+
+
 def test_without_the_owners_permission_the_text_stays_on_the_laptop(env):
     env.use(Console(env.local, {"ok": True}, ["secret looking words"]))
     r = call("read_window_text", app="notepad")

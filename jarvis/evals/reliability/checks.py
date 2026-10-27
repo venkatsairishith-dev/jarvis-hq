@@ -18,7 +18,7 @@ from .records import Baseline, CheckResult, Observation
 
 DEFAULT_WITHIN_S = 8.0
 POLL_S = 0.5
-NOT_POLLED = frozenset({"answer_contains", "answer_nonempty", "ask_form", "approval_pending", "tool_called"})
+NOT_POLLED = frozenset({"answer_contains", "answer_nonempty", "answer_no_placeholders", "ask_form", "approval_pending", "tool_called"})
 
 
 def squash(text: Any) -> str:
@@ -194,6 +194,21 @@ def _answer_contains(c: EvalCtx, s: dict) -> CheckResult:
     return CheckResult("answer_contains", True, text[:80])
 
 
+_TAG_LEFT = re.compile(r"\[[A-Z]+(?:_[A-Z]+)*_\d+\]")
+
+
+def _answer_no_placeholders(c: EvalCtx, s: dict) -> CheckResult:
+    """D73: a gateway tag ("[PERSON_1]", "[NUMBER_2]") in the owner's final message means the privacy gateway's placeholder was not turned back into what the window
+    shows: the reading was right but the owner got a code. Fails with its own cause. A "[REDACTED:kind]" mark is NOT counted: it is the honest way to say a secret was hidden."""
+    text = c.obs.final_text or ""
+    if not text.strip():
+        return CheckResult("answer_no_placeholders", False, "no answer text", "final_answer_missing")
+    left = sorted(set(_TAG_LEFT.findall(text)))
+    if left:
+        return CheckResult("answer_no_placeholders", False, f"the answer still holds {left[:3]}", "placeholder_left")
+    return CheckResult("answer_no_placeholders", True, "no gateway placeholder in the answer")
+
+
 def _answer_nonempty(c: EvalCtx, s: dict) -> CheckResult:
     n = len((c.obs.final_text or "").strip())
     ok = n >= int(s.get("min_chars", 1))
@@ -269,7 +284,7 @@ CHECK_FUNCS: dict[str, Callable[[EvalCtx, dict], CheckResult]] = {
     "file_exists": _file_exists, "file_absent": _file_absent, "file_changed": _file_changed, "file_unchanged": _file_unchanged,
     "dir_exists": _dir_exists, "count_files": _count_files, "window_appeared": _window_appeared, "window_closed": _window_closed,
     "window_text": _window_text, "window_absent": _window_absent, "recycle_bin_has": _recycle_bin_has, "recycle_bin_lacks": _recycle_bin_lacks,
-    "answer_contains": _answer_contains, "answer_nonempty": _answer_nonempty, "ask_form": _ask_form, "approval_pending": _approval_pending,
+    "answer_contains": _answer_contains, "answer_no_placeholders": _answer_no_placeholders, "answer_nonempty": _answer_nonempty, "ask_form": _ask_form, "approval_pending": _approval_pending,
     "tool_called": _tool_called, "panel_open": _panel_open, "process_running": _process_running, "output_made": _output_made, "pptx": _pptx,
 }
 

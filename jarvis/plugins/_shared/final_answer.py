@@ -51,8 +51,17 @@ class Guarded:
 
 
 # ------------------------------------------------------------------------------------------------------------ reading results
+def _cut(text: str, n: int) -> str:
+    """text[:n], never ending inside a half placeholder: the owner's display restores "[PERSON_1]" (D73), and "[PERSO" cannot be restored."""
+    if len(text) <= n:
+        return text
+    head = text[:n]
+    i = head.rfind("[")
+    return head[:i] if i != -1 and "]" not in head[i:] and n - i <= 40 else head
+
+
 def _short(text: Any, n: int = MAX_WHAT) -> str:
-    return re.sub(r"\s+", " ", str(text or "")).strip()[:n].rstrip(" .;,")
+    return _cut(re.sub(r"\s+", " ", str(text or "")).strip(), n).rstrip(" .;,")
 
 
 def _norm_status(status: Any) -> str:
@@ -195,11 +204,11 @@ def guard(model_text: Any, status: str, effects: Iterable[Effect], *, approval_i
     if not fx and status in (COMPLETED, OTHER):
         why = [p for p in problems(model_text, status, fx) if p in ("empty", "leak")]
         if not why:
-            return Guarded(_visible(model_text)[:MAX_TEXT], MODEL)
+            return Guarded(_cut(_visible(model_text), MAX_TEXT), MODEL)
         return Guarded("Sorry, my answer did not come through. Please ask me again.", TEMPLATE, why)
     why = problems(model_text, status, fx)
     if not why:
-        return Guarded(_visible(model_text)[:MAX_TEXT], MODEL)
+        return Guarded(_cut(_visible(model_text), MAX_TEXT), MODEL)
     return Guarded(template(status, fx, approval_id=approval_id, question=question, detailed=detailed), TEMPLATE, why)
 
 
@@ -210,7 +219,7 @@ def answer_for_task(state: str, reply: str = "", error: str = "", *, detailed: b
     if st == "running":
         return "JARVIS is still working on it. It may be waiting for your approval."
     if st == "done":
-        return re.sub(r"\s+", " ", str(reply)).strip()[:MAX_TEXT] if detailed and _visible(reply) and not _LEAK.search(str(reply)) else "Done. JARVIS reports it finished."
+        return _cut(re.sub(r"\s+", " ", str(reply)).strip(), MAX_TEXT) if detailed and _visible(reply) and not _LEAK.search(str(reply)) else "Done. JARVIS reports it finished."
     if st == "failed":
         why = _short(error, 160) if detailed else ""
         return "I could not finish that" + (f": {why}." if why else ".")

@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
+import time
 import urllib.request
 from dataclasses import dataclass, field
 
@@ -43,6 +45,8 @@ PII_LABELS = {"password": "PASSWORD", "username": "USERNAME", "bank account numb
 NAME_ENTITIES = ["PERSON", "LOCATION"]
 PEOPLE_ENTITIES = ["PERSON"]                         # names="people": people only (a public search query may keep a city or a country)
 PLACEHOLDER = re.compile(r"\[([A-Z_]+)_(\d+)\]")
+# a value that is only our own marks ("[PERSON_1]", "[REDACTED:password]"): "password: [REDACTED:password]" is not a new secret to tag (D73)
+_ONLY_MARKS = re.compile(r"(?:\[(?:[A-Z_]+_\d+|REDACTED:[a-z_]+)\][\s.,;:!?)]*)+")
 
 # "my password is X", "pwd: X", "PIN = 1234", "otp 482913", "api key: X" -> only X is private
 _SECRET_AFTER_CUE = (r"(?i)(?:pass(?:word|wd|code|phrase)?|pwd|pin|otp|secret|security code|cvv|api[ _-]?key|access[ _-]?token|token)"
@@ -196,13 +200,14 @@ class Mapping:
     to_tag: dict = field(default_factory=dict)
     to_value: dict = field(default_factory=dict)
     counts: dict = field(default_factory=dict)
+    base: dict = field(default_factory=dict)       # D73: numbers already taken by the screen vault; this request's tags continue after them
 
     def tag(self, entity: str, value: str) -> str:
         if value in self.to_tag:
             return self.to_tag[value]
         n = self.counts.get(entity, 0) + 1
         self.counts[entity] = n
-        t = f"[{entity}_{n}]"
+        t = f"[{entity}_{n + self.base.get(entity, 0)}]"
         self.to_tag[value], self.to_value[t] = t, value
         return t
 
@@ -288,7 +293,7 @@ class Redactor:
         out, pos = [], 0
         for r in spans:
             value = text[r.start:r.end]
-            if PLACEHOLDER.fullmatch(value):
+            if PLACEHOLDER.fullmatch(value) or _ONLY_MARKS.fullmatch(value):
                 continue
             out.append(text[pos:r.start])
             out.append(mapping.tag(r.entity_type, value))
@@ -303,8 +308,13 @@ def restore(text: str, mapping: Mapping) -> str:
     return PLACEHOLDER.sub(lambda m: mapping.to_value.get(m.group(0), m.group(0)), text)
 
 
+# The end of a chunk that could be the start of a placeholder: "[", "[PERS", "[PERSON_", "[PERSON_12" (but not "[link text", "[1]" or a finished tag).
+_PARTIAL_TAG = re.compile(r"\[[A-Z_]*\d*\Z")
+
+
 class StreamRestorer:
-    """Restores placeholders in a streamed reply, where a tag like [PASSWORD_1] can arrive split across chunks."""
+    """Restores placeholders in a streamed reply, where a tag like [PASSWORD_1] can arrive split across chunks. Only the end of the text that could
+    still become a tag is held back (D73: not every "[" up to 40 characters), so ordinary text and brackets are not delayed."""
 
     MAX_TAG = 40
 
@@ -315,9 +325,9 @@ class StreamRestorer:
         if not self.mapping.to_value:
             return chunk
         self.buf += chunk or ""
-        cut = self.buf.rfind("[")
-        if cut != -1 and "]" not in self.buf[cut:] and len(self.buf) - cut <= self.MAX_TAG:
-            ready, self.buf = self.buf[:cut], self.buf[cut:]          # hold a possibly unfinished tag
+        m = _PARTIAL_TAG.search(self.buf)
+        if m is not None and len(self.buf) - m.start() <= self.MAX_TAG:
+            ready, self.buf = self.buf[:m.start()], self.buf[m.start():]          # hold a possibly unfinished tag
         else:
             ready, self.buf = self.buf, ""
         return restore(ready, self.mapping)
@@ -325,3 +335,187 @@ class StreamRestorer:
     def flush(self) -> str:
         out, self.buf = restore(self.buf, self.mapping), ""
         return out
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------
+# D73: reversible pseudonymization of SCREEN text, for the owner's own display and voice only.
+#
+# The online model only ever sees placeholders ("[PERSON_1]", "[NUMBER_2]"). The map placeholder -> real value is kept HERE, in memory, in the
+# privacy gateway (never written, never logged, never in a header); when the model's answer reaches the face (the owner's chat bubble and his voice) the
+# gateway puts the real values back into the answer's TEXT, and into nothing else (not into tool-call arguments, not for any other caller). Because the
+# face keeps the answer it showed and sends it back as history, the same map also hides the real values again in every later request (`hide`), so a real
+# value never reaches a provider. Secrets are never put in the map: they stay "[REDACTED:kind]" and cannot be restored by any path.
+SCREEN_RESTORABLE = frozenset({"PERSON", "LOCATION", "EMAIL_ADDRESS", "PHONE_NUMBER", "IP_ADDRESS", "ADDRESS", "USERNAME", "NUMBER"})
+# Labels the PII model gives to ID-like text. A SHORT digit run or a "XX-12345" reference cannot be a bank account (9 to 18 digits), a card (13 to 19), a
+# passport (letters and digits, no separator) or a licence, so it is an ordinary number: [NUMBER_n] instead of [BANK_ACCOUNT_n], restorable. This is what
+# makes "order number 73912" a hidden "private" value that the model then refuses or guesses (reliability run 2026-10-27).
+SCREEN_ID_LABELS = frozenset({"BANK_ACCOUNT", "PASSPORT", "DRIVING_LICENCE"})
+_SHORT_NUMBER = re.compile(r"(?:\d[\d ,.\-]{0,12}|[A-Za-z]{1,4}[-_/]\d{1,10})\Z")
+
+
+def screen_class(entity: str, value: str):
+    """The placeholder kind a screen value gets and may be restored under, or None: a secret, never stored, never restorable.
+    An unknown kind is a secret (an allow-list, not a block-list): CREDIT_CARD, IBAN_CODE, PASSWORD (cue words, PINs, codes), API_KEY, PRIVATE_KEY, JWT,
+    CRYPTO, AADHAAR, PAN, and the ID labels unless the value is a short number."""
+    if entity in SCREEN_RESTORABLE:
+        return entity
+    if entity in SCREEN_ID_LABELS and _SHORT_NUMBER.match(value or ""):
+        digits = re.sub(r"\D", "", value)
+        if 1 <= len(digits) <= 8:
+            return "NUMBER"
+    return None
+
+
+class ScreenVault:
+    """Placeholders created for screen text, with the real values behind them. One per gateway process, memory only.
+
+    Rules: a tag number is never reused for another value (the counters only go up, even after an entry is forgotten), the same value always has the same
+    tag, nothing longer than MAX_VALUE characters is stored, at most MAX_ENTRIES are kept (the least recently used go first), an entry is forgotten after
+    `ttl_s` seconds without use (made again by a screen read, or met again as a real value in a request), and `clear()` forgets all. Nothing here logs, prints or writes a value."""
+
+    MAX_ENTRIES = 2000
+    MAX_VALUE = 200
+    TTL_S = 24 * 3600.0
+    SKIP_KEYS = frozenset({"model", "role", "type", "tool_call_id", "id", "name", "object", "finish_reason"})
+
+    def __init__(self, ttl_s: float | None = None, max_entries: int | None = None, clock=time.monotonic):
+        self.ttl_s = self.TTL_S if ttl_s is None else float(ttl_s)
+        self.max_entries = max_entries or self.MAX_ENTRIES
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._to_tag: dict = {}                 # value -> tag
+        self._to_value: dict = {}               # tag -> value
+        self._used: dict = {}                   # tag -> time of last use
+        self._counts: dict = {}                 # kind -> highest number ever given
+        self._rx = None                         # compiled `hide` pattern; None = rebuild
+
+    # -- internals (lock held)
+    def _expire(self):
+        if self.ttl_s <= 0 or not self._used:
+            return
+        cutoff = self._clock() - self.ttl_s
+        for t in [t for t, at in self._used.items() if at < cutoff]:
+            self._drop(t)
+
+    def _drop(self, tag: str):
+        value = self._to_value.pop(tag, None)
+        self._used.pop(tag, None)
+        if value is not None:
+            self._to_tag.pop(value, None)
+        self._rx = None
+
+    # -- the map
+    def tag(self, kind: str, value: str):
+        """The tag for `value` (made if new), or None when the value may not be stored (empty, too long, not a restorable kind)."""
+        if kind not in SCREEN_RESTORABLE or not isinstance(value, str) or not value.strip() or len(value) > self.MAX_VALUE:
+            return None
+        with self._lock:
+            self._expire()
+            t = self._to_tag.get(value)
+            if t is None:
+                n = self._counts.get(kind, 0) + 1
+                self._counts[kind] = n
+                t = f"[{kind}_{n}]"
+                self._to_tag[value], self._to_value[t] = t, value
+                self._used[t] = self._clock()
+                self._rx = None
+                while len(self._to_value) > self.max_entries:
+                    self._drop(min((x for x in self._used if x != t), key=self._used.get, default=t))
+            if t not in self._to_value:
+                return None
+            self._used[t] = self._clock()
+            return t
+
+    def counters(self) -> dict:
+        """Numbers already given, per kind: a request's own tags continue after them (Mapping.base), so a tag never means two things."""
+        with self._lock:
+            return dict(self._counts)
+
+    def display(self) -> dict:
+        """tag -> real value, a copy: what a reply to the owner's face may be restored with."""
+        with self._lock:
+            self._expire()
+            return dict(self._to_value)
+
+    def _touch(self, tags):
+        with self._lock:
+            now = self._clock()
+            for t in tags:
+                if t in self._used:
+                    self._used[t] = now
+
+    def size(self) -> int:
+        with self._lock:
+            self._expire()
+            return len(self._to_value)
+
+    def clear(self):
+        with self._lock:
+            self._to_tag.clear(), self._to_value.clear(), self._used.clear()
+            self._rx = None
+
+    # -- the way out: real values back to tags, in everything that goes to a provider
+    def _pattern(self):
+        with self._lock:
+            self._expire()
+            if not self._to_tag:
+                return None
+            if self._rx is None:
+                vals = sorted(self._to_tag, key=len, reverse=True)
+                self._rx = re.compile(r"(?<!\w)(?:" + "|".join(re.escape(v) for v in vals) + r")(?!\w)")
+            return self._rx, dict(self._to_tag)
+
+    def hide(self, text: str, used: set | None = None) -> str:
+        """`text` with every real value this vault knows replaced by its tag (whole words only). `used`, if given, collects the tags that were put in."""
+        if not text or not isinstance(text, str):
+            return text
+        got = self._pattern()
+        if got is None:
+            return text
+        rx, to_tag = got
+        hit = set()
+
+        def sub(m):
+            tag = to_tag.get(m.group(0), m.group(0))
+            hit.add(tag)
+            return tag
+        out = rx.sub(sub, text)
+        if hit:
+            self._touch(hit)                       # an entry stays while a request still carries its value (the face's history); an unused one is forgotten
+            if used is not None:
+                used.update(hit)
+        return out
+
+    def hide_tree(self, obj, _key: str = "", used: set | None = None):
+        """`hide` over every string of a JSON value (the request body); keys and the fixed words of the API stay."""
+        if isinstance(obj, str):
+            return obj if _key in self.SKIP_KEYS else self.hide(obj, used)
+        if isinstance(obj, list):
+            return [self.hide_tree(x, _key, used) for x in obj]
+        if isinstance(obj, dict):
+            return {k: self.hide_tree(v, k if isinstance(k, str) else "", used) for k, v in obj.items()}
+        return obj
+
+
+def neutralise_tags(text: str) -> str:
+    """A tag-shaped text that is really on the screen ("[PERSON_1]" in a chat window) becomes "(PERSON_1)", so it can never be mistaken for one of ours."""
+    return PLACEHOLDER.sub(lambda m: f"({m.group(1)}_{m.group(2)})", text)
+
+
+def screen_redact(red, vault: ScreenVault, text: str, names=True):
+    """(text for the model, {kind: count}, number of secrets hidden). Private values the owner may see again become vault tags; secrets become
+    "[REDACTED:kind]" and are forgotten at once. `red` is any detector with the Redactor.redact signature."""
+    m = Mapping()
+    safe = neutralise_tags(str(text))
+    out = red.redact(safe, m, True, names=names) if names else red.redact(safe, m)
+    repl, hidden = {}, 0
+    for tag, value in m.to_value.items():
+        mm = PLACEHOLDER.fullmatch(tag)
+        entity = mm.group(1) if mm else ""
+        kind = screen_class(entity, value)
+        new = vault.tag(kind, value) if kind else None
+        if new is None:
+            new, hidden = f"[REDACTED:{entity.lower() or 'private'}]", hidden + 1
+        repl[tag] = new
+    out = PLACEHOLDER.sub(lambda mm: repl.get(mm.group(0), mm.group(0)), out) if repl else out
+    return out, dict(m.counts), hidden
