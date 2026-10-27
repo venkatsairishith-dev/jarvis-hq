@@ -48,6 +48,9 @@ PASSED, FAILED, UNTESTED, UNREADABLE, HELD, TAUGHT, UNSAFE, BLOCKED, SKIPPED, NO
     "passed", "failed", "untested", "unreadable", "held_exam", "taught", "unsafe_code", "blocked", "skipped", "not_attempted")
 
 
+RETRY = ("blocked", "not_attempted")          # a problem that was not really tried (the model or the gateway was down, a budget ran out) is tried again when the job is run again
+
+
 class ModelError(RuntimeError):
     """The online model could not be used (down, refused, unreadable, out of budget). The message is safe to show."""
 
@@ -356,6 +359,31 @@ def _load_json(path: Path) -> dict:
         return {}
 
 
+def find_unfinished_job(base: Path | None, folder: str, out: str, language: str, explain: bool, clock: Callable[[], float] = time.time, max_age_s: float = 7 * 86400) -> str:
+    """The job that already works on this folder, with the same output folder, language and explanation choice, and still has problems that were not really tried (Stop, a
+    budget, the model down): saying the request again CONTINUES it instead of writing the same files again as -v2. "" when there is none."""
+    root = base or DATA
+    try:
+        names = sorted(os.listdir(root), reverse=True)
+    except OSError:
+        return ""
+    for name in names:
+        if not name.startswith("ps-"):
+            continue
+        params = _load_json(root / name / "params.json")
+        if (params.get("folder") != folder or params.get("out") != out or params.get("language") != language or bool(params.get("explain")) != bool(explain)
+                or clock() - float(params.get("created") or 0) > max_age_s):
+            continue
+        m = _load_json(root / name / "manifest.json")
+        if m.get("phase") == "done" and not any((p.get("status") or "not_attempted") in RETRY for p in m.get("problems", [])):
+            continue
+        if m and m.get("fatal"):
+            continue
+        if m or not (root / name / "manifest.json").exists():
+            return name
+    return ""
+
+
 def prepare(text: str, utterance: str = "", *, ask: Callable[[dict, float], dict] | None = None, home: Path | None = None, base: Path | None = None,
             clock: Callable[[], float] = time.time) -> Prepared:
     """The owner's request -> a job (parameters on disk) or ONE question. The folder is the one he named (or chose on the form); nothing is read here."""
@@ -396,6 +424,9 @@ def prepare(text: str, utterance: str = "", *, ask: Callable[[dict, float], dict
     if out is None:
         return Prepared("refused", summary=f"I did not start: {why3}.")
     params["out"] = str(out)
+    again = find_unfinished_job(base, params["folder"], params["out"], params["language"], params["explain"], clock)
+    if again:
+        return Prepared("ready", goal=f"{' '.join(str(text).split())[:600]} (problem-set job {again})", job=again, summary="continuing the job that was not finished")
     _save_json(job_dir(job, base) / "params.json", params)
     return Prepared("ready", goal=f"{' '.join(str(text).split())[:600]} (problem-set job {job})", job=job)
 
@@ -762,7 +793,9 @@ class Job:
         self.params = _load_json(self.dir / "params.json")
         self.m = _load_json(self.dir / "manifest.json") or {"job": job, "problems": [], "phase": "new", "tokens": 0, "elapsed": 0.0, "events": []}
         self.t0 = deps.clock()
-        self.spent0 = float(self.m.get("elapsed") or 0.0)
+        self.spent0 = 0.0                                  # the time and model budgets are PER RUN: "continue" after a partial report gets a fresh budget for what is left
+        self.m["runs"] = int(self.m.get("runs") or 0) + 1
+        self.m["tokens_run"] = 0
 
     # ---- plumbing
     def save(self) -> None:
@@ -777,7 +810,11 @@ class Job:
         return self.spent0 + (self.d.clock() - self.t0) > self.budget.time_s
 
     def over_tokens(self) -> bool:
-        return int(self.m.get("tokens") or 0) >= self.budget.tokens
+        return int(self.m.get("tokens_run") or 0) >= self.budget.tokens
+
+    def add_tokens(self, n: int) -> None:
+        self.m["tokens"] = int(self.m.get("tokens") or 0) + n
+        self.m["tokens_run"] = int(self.m.get("tokens_run") or 0) + n
 
     def event(self, text: str) -> None:
         self.m.setdefault("events", []).append(text[:200])
@@ -949,6 +986,8 @@ class Job:
         total = len(self.m["problems"])
         count = 0
         for p in self.m["problems"]:
+            if p.get("status") in RETRY:
+                p["status"], p["why"] = "", ""
             if p.get("status"):
                 continue
             self.check_stop()
@@ -1017,7 +1056,7 @@ class Job:
             msgs = build_messages(prob_sent, "", lang, explain, feedback, prior)
             p["attempts"] = attempt
             text, provider = self.call_model(msgs, max_tokens)
-            self.m["tokens"] = int(self.m.get("tokens") or 0) + _estimate_tokens("".join(m["content"] for m in msgs), text)
+            self.add_tokens(_estimate_tokens("".join(m["content"] for m in msgs), text))
             p["provider"] = str(provider or "gateway")[:40]
             prop = parse_reply(text)
             if prop is None:
@@ -1143,7 +1182,7 @@ class Job:
                   "Plain text with short headings; at most 40 lines.")
         user = "Teach the concept.\n" + untrusted.fence("problem", redacted.text, 3000)
         text, provider = self.call_model([{"role": "system", "content": system}, {"role": "user", "content": user}], self.budget.solve_tokens)
-        self.m["tokens"] = int(self.m.get("tokens") or 0) + _estimate_tokens(system, user, text)
+        self.add_tokens(_estimate_tokens(system, user, text))
         removed = 0
         if samples:
             def check(m: "re.Match[str]") -> str:
@@ -1238,6 +1277,28 @@ def render_text(m: dict, status: str) -> str:
     if m.get("skipped"):
         s += f" {len(m['skipped'])} file(s) or page(s) were not read."
     return s
+
+
+def write_preview(markdown: str, result: dict, out_root: "str | os.PathLike | None" = None, clock: Callable[[], float] = time.time) -> Path:
+    """The summary where the face's Preview panel finds it (jarvis_show): a new folder in the deliverables folder with the table as a note, spec.json (the title) and
+    qa.json written LAST (the panel opens a fresh finished item by itself), the way the document reader leaves its invoice-total card."""
+    if out_root:
+        root = Path(out_root)
+    else:
+        try:
+            from jarvis.plugins.deliverables import tools
+            root = Path(tools.OUT_ROOT)
+        except Exception:  # noqa: BLE001 - the same setting the deliverables plugin reads
+            root = Path(os.environ.get("DELIVERABLES_OUT_DIR", r"D:\jarvis\outputs\deliverables"))
+    folder = root / (time.strftime("%Y%m%d-%H%M%S", time.localtime(clock())) + "-problem-set")
+    folder.mkdir(parents=True, exist_ok=False)
+    note = folder / "problem-set-summary.md"
+    note.write_text(markdown, encoding="utf-8")
+    (folder / "spec.json").write_text(json.dumps({"title": "Problem set: solutions"}), encoding="utf-8")
+    (folder / "qa.json").write_text(json.dumps({"file": str(note), "folder": str(folder), "kind": "document",
+                                                "qa": {"passed": True, "checks": {"written_locally": True}, "warnings": [], "counts": {k: int(v) for k, v in (result.get("counts") or {}).items()}}}),
+                                    encoding="utf-8")
+    return folder
 
 
 def run(job: str, deps: Deps) -> dict:

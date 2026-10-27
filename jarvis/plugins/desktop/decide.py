@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from jarvis.plugins._shared import decider, loopback_http, names as names_store, translate
-from . import composite, simple_tasks
+from . import composite, problemset, simple_tasks
 
 decider.MATCHERS["simple_task"] = simple_tasks.match          # D54b: the shared engine's intent rule asks the catalogue
 
@@ -842,6 +842,17 @@ def composite_rule(request: str, profiles: list[dict]) -> "Plan | None":
 
 
 
+def problemset_rule(request: str, profiles: list[dict]) -> "Plan | None":
+    """D77: a problem-set job is planned by rule, never by the small model: ONE problemset step. The job token (`problem-set job ps-...`) is added to the goal by
+    problemset.prepare, i.e. only after the owner's own explicit request and his form answers; a raw request without it is not started from here."""
+    m = problemset.JOB_RX.search(request or "")
+    if m:
+        return Plan([{"tool": "problemset", "job": m.group(1), "post": "the solutions were written, run on their sample cases and reported"}], "ok", model="rule")
+    if problemset.parse_request(request) is not None:
+        return Plan([], "fallback", problems=["a problem-set request is started through the mission door (it asks which folder first); say it again as 'solve all the problems in <folder>'"], model="rule")
+    return None
+
+
 def deck_rule(request: str, profiles: list[dict]) -> "Plan | None":
     """D64: "make a deck / slides / a presentation about X" is planned by rule, never by the small model: one web_task step (a free web generator in the owner's own
     Chrome). No topic -> one question."""
@@ -1013,6 +1024,9 @@ def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=
     fu = follow_up(request, last)
     if fu is not None:
         return fu
+    ps = problemset_rule(request, profiles)
+    if ps is not None:
+        return ps
     cr = composite_rule(request, profiles)
     if cr is not None:
         return cr
