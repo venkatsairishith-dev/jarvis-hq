@@ -17,7 +17,23 @@ from jarvis_node import runtime, uia  # noqa: E402
 CHILD = os.path.join(HERE, "uia_fake_child.py")
 
 
+def _win_alive(pid):
+    """Windows: os.kill(pid, 0) is CTRL_C_EVENT there (and raises SystemError), so ask the process handle."""
+    import ctypes
+    k32 = ctypes.windll.kernel32
+    h = k32.OpenProcess(0x1000, False, pid)             # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        return bool(k32.GetExitCodeProcess(h, ctypes.byref(code))) and code.value == 259          # STILL_ACTIVE
+    finally:
+        k32.CloseHandle(h)
+
+
 def pid_alive(pid):
+    if sys.platform == "win32":
+        return _win_alive(pid)
     try:
         os.kill(pid, 0)
     except OSError:

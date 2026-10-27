@@ -103,7 +103,8 @@ _reg("deliverables", "make_presentation make_report regenerate", shape=("file",)
 _reg("deliverables", "open_output", shape=("opened",))
 _reg("deliverables", "show_in_folder", shape=("shown",))
 _reg("deliverables", "start_slideshow", shape=("presenting",))
-_reg("desktop", "check_pc list_browser_profiles recent_pc_alerts mission_status find_on_screen read_window_text", kind="read")
+_reg("desktop", "check_pc list_browser_profiles recent_pc_alerts mission_status find_on_screen read_window_text whats_on_screen", kind="read")
+_reg("desktop", "undo_steps")                                                                                   # ok true / false + undone
 _reg("desktop", "open_website play_youtube run_browser_action run_pc_action")           # _brief: state + ok
 _reg("desktop", "run_troubleshooter run_pc_task do_goal quick_command resume_mission")                         # outcome / status
 _reg("desktop", "start_mission", kind="start", shape=("mission",))
