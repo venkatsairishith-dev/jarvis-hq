@@ -39,7 +39,7 @@ CHECKS = frozenset({
 SETUP_OPS = frozenset({"mkdir", "write_file", "make_junk", "open_notepad_text", "open_image_text", "render_image", "open_app", "message_box", "recycle_file", "write_script",
                        # D65 (problem_recovery): the problem is made on purpose
                        "minimize", "start_later", "message_box_later", "slow_form", "close_later", "type_unsaved"})
-FIELDS = frozenset({"work", "sep", "tok", "num", "date", "weekday", "day", "month", "year", "outputs", "screenshots"})
+FIELDS = frozenset({"work", "sep", "tok", "num", "date", "weekday", "day", "month", "year", "outputs", "screenshots", "docs"})
 UNFORMATTED_KEYS = frozenset({"regex", "pattern"})
 
 
@@ -65,6 +65,7 @@ class Goal:
     tags: list[str] = field(default_factory=list)
     note: str = ""
     latency_class: str = ""          # overrides the capability's class for the per-goal latency budget
+    cleanup: list[str] = field(default_factory=list)    # paths removed after the run: each must lie in Documents and carry the run's token (a folder made DIRECTLY in Documents)
 
 
 @dataclass
@@ -162,7 +163,7 @@ def validate(cat: Catalog) -> list[str]:
                     allowed = SETUP_OPS if section == "setup" else CHECKS
                     if name not in allowed:
                         bad.append(f"{where}: {section} uses unknown {'op' if section == 'setup' else 'check'} {name!r}")
-            for f in _fields_in([g.text, g.setup, g.verify, g.forbid]) - FIELDS:
+            for f in _fields_in([g.text, g.setup, g.verify, g.forbid, g.cleanup]) - FIELDS:
                 bad.append(f"{where}: unknown template field {{{f}}}")
             for item in g.forbid:
                 if int(item.get("severity", 0)) not in (1, 2, 3):
@@ -202,10 +203,11 @@ class Context:
     month: str = ""
     year: str = ""
     screenshots: str = ""
+    docs: str = ""
 
     def as_dict(self) -> dict:
         return {"work": self.work, "sep": self.sep, "tok": self.tok, "num": self.num, "date": self.date, "weekday": self.weekday, "outputs": self.outputs,
-                "day": self.day, "month": self.month, "year": self.year, "screenshots": self.screenshots}
+                "day": self.day, "month": self.month, "year": self.year, "screenshots": self.screenshots, "docs": self.docs}
 
 
 def make_context(work_root: str, sep: str, outputs: str, seed: str, now: float | None = None) -> Context:
@@ -216,7 +218,7 @@ def make_context(work_root: str, sep: str, outputs: str, seed: str, now: float |
     num = str(10000 + int(h[6:12], 16) % 90000)
     shots = os.path.join(os.path.expanduser("~"), "Pictures", "Screenshots")
     return Context(f"{work_root.rstrip(sep)}{sep}{tok}", sep, tok, num, time.strftime("%Y-%m-%d", t), time.strftime("%A", t), outputs,
-                   str(t.tm_mday), time.strftime("%B", t), time.strftime("%Y", t), shots)
+                   str(t.tm_mday), time.strftime("%B", t), time.strftime("%Y", t), shots, os.path.join(os.path.expanduser("~"), "Documents"))
 
 
 def _fill(value: Any, ctx: dict, key: str = "") -> Any:
@@ -237,6 +239,7 @@ def render(goal: Goal, ctx: Context) -> Goal:
     g.setup = _fill(g.setup, c)
     g.verify = _fill(g.verify, c)
     g.forbid = _fill(g.forbid, c)
+    g.cleanup = _fill(g.cleanup, c)
     return g
 
 

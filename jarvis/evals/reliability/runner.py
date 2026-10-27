@@ -181,7 +181,7 @@ class Runner:
         base.windows = {(w.hwnd, w.title) for w in wins}
         base.bin = set(self.env.recycle_names())
 
-    def _cleanup(self, ctx: model.Context, pre_hwnds: set[int]) -> int:
+    def _cleanup(self, ctx: model.Context, pre_hwnds: set[int], extras: list[str] | tuple = ()) -> int:
         closed = 0
         try:
             for w in self.env.windows():
@@ -192,6 +192,10 @@ class Runner:
                     closed += 1
             self.sleep(0.5)
             self.env.remove_tree(ctx.work)
+            for extra in extras:
+                # only what this run made: inside Documents and named with the run's token (the kernel makes folders only DIRECTLY in Documents, Desktop ...)
+                if ctx.tok in extra and extra.lower().startswith(ctx.docs.lower() + ctx.sep):
+                    self.env.remove_tree(extra)
             self.env.recycle_purge(ctx.tok)
         except EnvError as e:
             self.log(f"  cleanup problem: {e}")
@@ -220,7 +224,7 @@ class Runner:
             obs = self.driver.run(g.text, g.timeout_s, self.attended)
         except (EnvError, RuntimeError, OSError) as e:
             row.update(outcome=classify.INVALID, cause=f"setup: {type(e).__name__}: {str(e)[:100]}", seconds=0.0, harness=True)
-            self._cleanup(ctx, pre_hwnds)
+            self._cleanup(ctx, pre_hwnds, g.cleanup)
             return row
         ectx = checks.EvalCtx(self.env, obs, base, self.cat.panels, self.outputs, self.ignore, self.clock, self.sleep)
         verify_specs = list(g.verify)
@@ -243,7 +247,7 @@ class Runner:
                 self.driver.cancel_all()
             except Exception:  # noqa: BLE001
                 pass
-            self._cleanup(ctx, pre_hwnds)
+            self._cleanup(ctx, pre_hwnds, g.cleanup)
         if obs.status == "harness_error":
             row["harness"] = True
         row.update(outcome=out.kind, cause=out.cause, severity=out.severity, false_claim=out.false_claim, asked=out.asked or asked,

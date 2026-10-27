@@ -91,7 +91,7 @@ def test_every_goal_renders_with_a_context_and_leaves_no_template_behind():
 
 
 def test_every_path_a_goal_touches_is_inside_the_runs_own_folder():
-    ok_prefix = ("{work}", "{screenshots}", "{outputs}")
+    ok_prefix = ("{work}", "{screenshots}", "{outputs}", "{docs}{sep}docs-{tok}")      # the last: the kernel makes a folder only DIRECTLY in Documents; the runner removes it (cleanup)
     def walk(x, key=""):
         if isinstance(x, dict):
             for k, v in x.items():
