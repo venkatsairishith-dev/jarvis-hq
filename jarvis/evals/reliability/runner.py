@@ -36,7 +36,11 @@ from .records import Baseline, CheckResult
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
 SCHEMA = 1
-DEFAULT_WORK = r"D:\jarvis\data\reliability\work"
+# The kernel's file operations (create a folder, copy, rename, trash) only work inside Documents, Desktop, Downloads, Pictures, Videos, Music, outputs or a
+# project folder. The first default, D:\jarvis\data\reliability\work, is outside all of them, so every file goal answered "the PC executor only makes folders
+# inside ..." and the gate counted that as JARVIS failing (laptop 2026-10-27: sm-folder, sm-copy, sm-rename, sm-empty-file, the Save As goals). The run folder
+# now sits in Documents (removed after each run; the Recycle Bin is purged by the run's token only).
+DEFAULT_WORK = os.path.join(os.path.expanduser("~"), "Documents", "jarvis-reliability-work")
 HARNESS_STREAK = 5            # this many harness failures in a row stop the run: the face or the tool server is down, not JARVIS wrong
 
 

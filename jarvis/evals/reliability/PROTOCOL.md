@@ -41,6 +41,6 @@ with a document read), startup **interactive < 3 s** (launch to first input hand
 Strict reading (`report --strict`): also the 95% lower bound >= 80%, no goal under 50%, no false claim. Use it before telling the owner a number is reached.
 
 ## Safety of the harness itself
-Every path a goal touches is inside the run's own folder (`D:\jarvis\data\reliability\work\<token>`, removed after the run); the Recycle Bin is only ever purged by that run's token
+Every path a goal touches is inside the run's own folder (`<Documents>\jarvis-reliability-work\<token>` (inside an allowed folder of the kernel's file operations; it was D:\jarvis\data\reliability\work before 2026-10-27, which every file goal was refused in), removed after the run); the Recycle Bin is only ever purged by that run's token
 (never emptied: `bin-purge` refuses a needle under 4 characters); cleanup closes only windows that appeared during the run and only programs on `rules.cleanup.closable`; the runner
 never approves a PIN card and cancels what is still running after each goal; class-C goals use made-up recipients (`example.invalid`, `000-000-0000`) and sandbox files.
