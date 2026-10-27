@@ -75,7 +75,7 @@ fi
 
 say "5 the lab services, installed root-owned"
 run install -d -o root -g root -m 0755 "$INSTALL"
-for f in lab_control.py lab_runner.py lab_isolation.py screen_tests.py check_lab_deploy.py; do
+for f in lab_control.py quarantine.py lab_runner.py lab_isolation.py screen_tests.py check_lab_deploy.py; do
   src="$HERE/$f"; [ -f "$src" ] || src="$HERE/../$f"
   [ -f "$src" ] && run install -o root -g root -m 0644 "$src" "$INSTALL/$f" || echo "   missing $f (copy the lab folder next to this script)"
 done
