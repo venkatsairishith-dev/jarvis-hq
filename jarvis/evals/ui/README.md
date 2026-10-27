@@ -8,7 +8,8 @@ cd jarvis/face && pnpm install --frozen-lockfile && pnpm run build:packages     
 cd jarvis/evals/ui
 node render.mjs                                     # every screen x 450x600, 900x700, 1400x900 x light, dark   (about 12 min)
 node render.mjs --only '^ask:' --sizes 360x640      # a part
-node render.mjs --audit --report .work/report.json  # also contrast and the lists of warnings
+node render.mjs --audit --report .work/report.json  # also contrast and a Tab walk (every stop shows a ring and stays on screen)
+python summarize.py .work/report.json               # the warnings grouped by kind and screen
 node render.mjs --label after --format webp --out shots --only '^(chat:mixed|ask:cleanup-ready)$' --sizes 450x600 --themes dark
 ```
 
@@ -21,7 +22,7 @@ Playwright's own browser is used when installed; otherwise the first `chromium-*
 |---|---|---|
 | `chat:mixed` `chat:tools` `chat:waiting` `chat:empty` `chat:offline` | `InteractiveArea.vue` (history, composer, send, voice button), `chat-page-shell`, `TitleBar`, the Pinia stores | the Electron bridge (`harness/electron-vueuse-mock.ts`), the messages (`make_fixtures.py`: English, Telugu, Hindi, very long paths and words, a 40-line tool result, a tool error, a gateway error) |
 | `hud:idle` `acting` `safe` `pin` `offline` `halted` `listening` `speaking` | `HudLayer.vue`, `hud-model.ts` (the status goes through `parseJarvisStatus`, so `pc_line`, "Safe mode" and "Waiting for your approval" are the real strings) | a flat shape where Live2D would be |
-| `ask:*` (21 forms: cleaner with sizes, confirm, choose, settings, code, compare, ...) | `AskPanel.vue` | forms built by the REAL Python backend (`jarvis.bridge.ask`, `ui_patterns`, `cleaner_ui`) on a fake PC |
+| `ask:*` (24 forms: the cleaner with sizes in 5 states, confirm, choose, pick a file, settings, code, compare, data, schedule, save, a job; plus `indic-choose`, `indic-text` and `long-confirm` with Telugu, Hindi and very long words) | `AskPanel.vue` | forms built by the REAL Python backend (`jarvis.bridge.ask`, `ui_patterns`, `cleaner_ui`) on a fake PC |
 | `timeline:small` `long` `many` (59 steps) `empty` `unavailable` | `TimelinePanel.vue` | views built by the real flight recorder |
 | `preview:*` (pptx deck, pdf, png, markdown, code, hostile html) | `PreviewPanel.vue` | the tool results of `jarvis.bridge.output_preview` |
 
@@ -37,12 +38,12 @@ approval is waiting), so there is no PIN screen.
 
 ## What only warns
 
-an ellipsis without a tooltip, a touch target under 32 px, text under WCAG AA contrast (4.5:1, 3:1 for large text; disabled controls exempt;
+an ellipsis without a tooltip, a touch target under 32 px, a Tab stop without a ring or off screen (`--audit`), text under WCAG AA contrast (4.5:1, 3:1 for large text; disabled controls exempt;
 translucent layers are composited over the page colour, so a value near the limit needs a look). The counts are printed; `--report` lists them.
 
 ## Files
 
-`render.mjs` (build, serve, screenshot, check), `harness/` (page, Vite config, bridge stand-in), `make_fixtures.py`, `webp.py`
-(PNG to WebP for the committed shots), `shots/` (before and after pairs of the six most important screens, under 2 MB in all),
+`render.mjs` (build, serve, screenshot, check), `harness/` (page, Vite config, bridge stand-in), `make_fixtures.py`, `summarize.py`, `webp.py`
+(PNG to WebP for the committed shots), `shots/` (`<screen>-<size>-<theme>-before.webp` and `-after.webp`: the six most important screens at 450x600 and 900x700 or 1400x900, about 0.4 MB in all),
 `.work/` (scratch, ignored). The face's own checks (`pnpm run check:hud|timeline|preview`, `scripts/ask-check.mjs`) are unchanged and still
 the place for behaviour; this harness is for how it looks.

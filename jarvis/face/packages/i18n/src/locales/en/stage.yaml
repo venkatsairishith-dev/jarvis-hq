@@ -140,9 +140,9 @@ chat:
   tool-calls:
     running-one: 'Using {name}'
     failed-one: "{name} didn't finish"
-    combo-running: 'Combo ×{count}'
-    combo: '{count}-hit combo'
-    combo-failed: '{count}-hit combo, {failed} missed'
+    combo-running: 'Running {count} steps'
+    combo: '{count} steps'
+    combo-failed: '{count} steps, {failed} failed'
     arguments: Arguments
     result: Result
     copy: Copy raw data

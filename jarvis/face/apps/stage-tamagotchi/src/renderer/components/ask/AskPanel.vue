@@ -208,7 +208,7 @@ onBeforeUnmount(() => {
       <div class="ask-body">
         <div v-if="working" class="ask-working" role="status" aria-live="polite">
           <p class="ask-working-text">
-            <span>{{ form.status || 'Working...' }}</span>
+            <span>{{ form.status || 'Working…' }}</span>
             <span class="ask-mono">{{ progressText(form.progress) }}</span>
           </p>
           <div class="ask-bar" role="progressbar" aria-label="Progress" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="bar === null ? undefined : Math.round(bar * 100)">

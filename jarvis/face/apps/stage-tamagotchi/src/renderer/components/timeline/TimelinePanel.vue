@@ -66,8 +66,10 @@ const unavailable = computed(() => c.view.value && !c.view.value.available ? c.v
 const empty = computed(() => !!c.view.value && c.view.value.available && rows.value.length === 0)
 const subtitle = computed(() => {
   const s = summary.value
+  if (c.view.value && !c.view.value.available)
+    return 'Not available right now'
   if (!s)
-    return 'Looking...'
+    return 'Looking…'
   const bits = [`${plural(s.steps, 'step')} in the last day`]
   if (s.failed)
     bits.push(`${s.failed} failed`)
@@ -330,7 +332,7 @@ onBeforeUnmount(() => {
                   :title="`Undo ${plural(row.task.undoable, 'step')} of this task, newest first`"
                   @click.stop="c.undo({ task: row.task.id })"
                 >
-                  {{ c.undoing.value.has(`task:${row.task.id}`) ? 'Undoing...' : 'Undo this task' }}
+                  {{ c.undoing.value.has(`task:${row.task.id}`) ? 'Undoing…' : 'Undo this task' }}
                 </button>
               </div>
             </div>
@@ -371,7 +373,7 @@ onBeforeUnmount(() => {
                   :title="row.step.undoText"
                   @click.stop="c.undo({ id: row.step.id })"
                 >
-                  {{ c.undoing.value.has(row.step.id) ? '...' : 'Undo' }}
+                  {{ c.undoing.value.has(row.step.id) ? '…' : 'Undo' }}
                 </button>
               </span>
             </div>

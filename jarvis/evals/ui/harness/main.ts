@@ -72,7 +72,7 @@ async function chatScreen() {
       if (name === 'waiting') {
         // a turn is under way and nothing has been written yet: the history shows its three-dot loader
         useChatStore().activeTurns = [{ sessionId: 's1', turnId: 't1' }]
-        useChatStreamStore().updateActiveTurns([{ sessionId: 's1', turnId: 't1', message: { role: 'assistant', content: '', slices: [], tool_results: [] } } as any])
+        useChatStreamStore().updateActiveTurns([{ sessionId: 's1', turnId: 't1', message: { id: 'a-stream', role: 'assistant', content: '', slices: [], tool_results: [] } } as any])
       }
       return () => h(ChatPageShell, null, { default: () => [h(TitleBar, { title: 'JARVIS', icon: 'i-solar:chat-line-bold', clickable: true }), h(InteractiveArea, { class: 'interaction-area block' })] })
     },
