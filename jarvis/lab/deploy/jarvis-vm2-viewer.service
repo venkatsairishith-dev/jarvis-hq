@@ -1,0 +1,21 @@
+# VM2 takeover viewer (D79): noVNC served by websockify on the TAILSCALE address only, in front of the desktop's VNC (127.0.0.1:5901).
+# @TS_IP@ is replaced by provision_vm2_desktop.sh --viewer with this VM's Tailscale address. NOT enabled by the script: the owner sets the VNC password first (vncpasswd) and enables it.
+# The agent user cannot reach this port: provision_vm2_tailscale.sh rejects the agent user's traffic to the tailnet range.
+[Unit]
+Description=JARVIS VM2 takeover viewer (noVNC on the Tailscale address)
+After=network-online.target tailscaled.service jarvis-desktop.service
+Requires=jarvis-desktop.service
+
+[Service]
+User=nobody
+Group=nogroup
+ExecStart=/usr/bin/websockify --web /usr/share/novnc @TS_IP@:6080 127.0.0.1:5901
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

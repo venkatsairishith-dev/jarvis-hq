@@ -144,8 +144,23 @@ def _say(reply):
     return json.dumps(reply, ensure_ascii=False)
 
 
+TAKEOVER_FILE = os.path.expanduser(os.environ.get("JARVIS_TAKEOVER", "~/lab/takeover.json"))     # D79: the wall an agent hit; lab_control passes it to the laptop
+NEED_KINDS = ("captcha", "bot_check", "two_factor", "email_code", "login", "payment", "consent", "other")
+
+
+def _takeover_open():
+    """An agent asked for the owner (need_owner) and the owner has not handed the desktop back since: every desktop tool waits, so the agent cannot click on."""
+    try:
+        with open(TAKEOVER_FILE) as fh:
+            at = float(json.load(fh).get("at") or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+    back = _control().get("returned_at") or 0
+    return at > float(back)
+
+
 def _owner_has_control():
-    return _control().get("mode") == "owner"
+    return _control().get("mode") == "owner" or _takeover_open()
 
 
 def _outcome(tool, r):
@@ -417,6 +432,23 @@ def desktop_open(target: str) -> str:
     subprocess.Popen(cmd, env=_denv(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     time.sleep(4)
     return _say({"status": "opened", "target": target})
+
+
+@tool("lab")
+def need_owner(kind: str, host: str = "") -> str:
+    """Call this the moment the screen shows something ONLY the owner may do: a CAPTCHA or bot check (captcha, bot_check), a login (login), a verification code (two_factor, email_code), a payment page (payment), a cookie or consent box you cannot clear (consent), anything else (other). host: the site's name, e.g. example.com. Never try to solve it, never click around it, never retry. The owner is asked, takes the screen, does that one step and hands it back; your desktop tools wait meanwhile. When they work again, LOOK at the screen first: if the wall is gone carry on from where you were, if it is still there call need_owner again."""
+    kind = kind if kind in NEED_KINDS else "other"
+    host = re.sub(r"[^a-z0-9.-]", "", re.split(r"[/?#:\s]", str(host).strip().lower())[0])[:80]
+    _log("need_owner", f"{kind} {host}")
+    try:
+        os.makedirs(os.path.dirname(TAKEOVER_FILE), exist_ok=True)
+        tmp = TAKEOVER_FILE + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump({"at": time.time(), "kind": kind, "host": host}, fh)           # a closed kind and a plain host: no page text, ever
+        os.replace(tmp, TAKEOVER_FILE)
+    except OSError:
+        return _say({"status": "error", "reason": "could not ask the owner"})
+    return _say({"status": "asked", "note": "The owner has been asked. Do nothing on the screen until your desktop tools work again."})
 
 
 @tool("lab")

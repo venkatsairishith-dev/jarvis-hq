@@ -29,6 +29,9 @@ import time
 from collections import namedtuple
 from http.server import BaseHTTPRequestHandler
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))          # python3 /opt/jarvis-hub/lab_control.py: the quarantine module sits next to this file
+import quarantine as Q  # noqa: E402  (D79: inspection of the agent's downloads, on VM2)
+
 try:
     import grp
     import pwd
@@ -63,6 +66,9 @@ def _agent():
 UID, HOME = _agent()
 ACTIVITY = os.path.join(HOME, "lab", "activity.jsonl")   # written by the JARVIS tool server (jarvis_mcp.py)
 HERMES_LOG = os.path.join(HOME, ".hermes", "logs", "agent.log")
+TAKEOVER = os.path.join(HOME, "lab", "takeover.json")    # D79: written by the agents' tool server (need_owner): "I hit a wall only the owner may pass"
+TAKEOVER_KINDS = ("captcha", "bot_check", "two_factor", "email_code", "login", "payment", "consent", "other")
+HOST_RX = re.compile(r"^[a-z0-9]([a-z0-9.-]{0,78}[a-z0-9])?$")
 
 
 # ---------------------------------------------------------------- processes
@@ -240,6 +246,22 @@ def hermes_steps(lines):
     return out
 
 
+def takeover_request(returned_at=None):
+    """The wall an agent reported (D79), cleaned to a closed kind and a plain host, or None. The agent's words are never passed on: a page can talk an agent
+    into writing anything here, so only {kind, host, at} survive, and a request older than the owner's last hand-back is over."""
+    try:
+        e = json.loads("".join(_tail(TAKEOVER, 4096)) or "{}")
+        at = float(e.get("at") or 0)
+    except (ValueError, TypeError, AttributeError):
+        return None
+    kind = e.get("kind") if e.get("kind") in TAKEOVER_KINDS else "other"
+    host = str(e.get("host") or "").lower()
+    host = host if HOST_RX.match(host) else ""
+    if not at or (returned_at and at <= float(returned_at)):
+        return None
+    return {"kind": kind, "host": host, "at": at}
+
+
 def _session_start(sid):
     m = SESSION_ID.match(sid)
     try:
@@ -290,6 +312,7 @@ def state():
         t["last"] = last_step(t, acts, hsteps)
     recent = sorted(acts + hsteps, key=lambda a: a["ts"])[-14:]
     return {"mode": s.get("mode", "agent"), "since": s.get("since"), "returned_at": s.get("returned_at"),
+            "takeover": takeover_request(s.get("returned_at")),
             "tasks": [{k: v for k, v in t.items() if k != "tree"} for t in running],
             "recent": [{k: r[k] for k in ("time", "agent", "action", "detail")} for r in recent]}
 
@@ -386,6 +409,23 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(jpg)))
             self.end_headers()
             self.wfile.write(jpg)
+            return
+        path = self.path.split("?")[0].rstrip("/")
+        if path == "/control/quarantine" and self.headers.get("X-Jarvis-Hub") == "1":
+            return self._reply(200, {"files": [Q.public(r) for r in Q.listing(Q.QUARANTINE, UID if UID >= 0 else None)], "max_bytes": Q.MAX_BYTES})
+        if path.startswith("/control/quarantine/") and self.headers.get("X-Jarvis-Hub") == "1":
+            rec, data = Q.read_by_id(path.rsplit("/", 1)[1], Q.QUARANTINE, UID if UID >= 0 else None)
+            if rec is None:
+                return self._reply(404, {"error": "no such file in the quarantine"})
+            self.send_response(200)                                                 # bytes only: the hash travels in a header and is checked again by the reader
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Disposition", "attachment")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Jarvis-Sha256", rec["sha256"])
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
             return
         self._route({"/control/state": state})
 

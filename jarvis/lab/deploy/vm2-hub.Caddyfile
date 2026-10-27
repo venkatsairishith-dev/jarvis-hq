@@ -1,0 +1,21 @@
+# VM2 hub route (D79): the lab control service (take control, continue task, the download quarantine) on the TAILSCALE address, for the laptop's JARVIS only.
+# This is the same /control/ route the laptop-side hub had (hub/Caddyfile), moved to VM2. Replace @TS_IP@ with this VM's Tailscale address; the owner installs Caddy
+# (apt, Ubuntu's package) and runs it as the system user `hub` (created by provision_vm2.sh). Put http://@TS_IP@:8088 in jarvis/config/vm2.json as control_url.
+# lab_control.py itself listens on its Unix socket only (root:hub 0660) and demands the X-Jarvis-Hub header; the agent user cannot connect (no socket access, and the
+# tailnet range is rejected for it by provision_vm2_tailscale.sh).
+{
+	admin off
+	auto_https off
+	http_port 8088
+	persist_config off
+}
+
+http://@TS_IP@:8088 {
+	bind @TS_IP@
+	handle /control/* {
+		reverse_proxy unix//run/jarvis-lab/control.sock
+	}
+	handle {
+		respond "not found" 404
+	}
+}

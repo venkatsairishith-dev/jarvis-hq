@@ -407,6 +407,8 @@ def classify(tool: str, step: dict, res: dict) -> tuple[str, str, str]:
                  "confirm_submit": "Ask before a form is submitted", "question": "Ask a question", "do": "Do a step in an app"}
         mode = str(step.get("mode") or "")
         return ("C" if waiting else "B" if mode in ("fill", "download", "confirm_submit") else "A"), words.get(mode, "Do one step of a task"), re.sub(r"[^A-Za-z0-9.\-]", "", str(step.get("site") or ""))[:60]
+    if tool == "vm2_task":                                 # D79: a download or research done on VM2 (the sandbox desktop), never on the PC
+        return "B", "Do a web task on VM2", "VM2"
     if tool == "open_output":
         return "A", "Open a file JARVIS made", ""
     if tool == "stop":
@@ -674,6 +676,23 @@ def record_web_step(ev: dict) -> None:
                     "fallback": "Tried the next way in"}[kind]
             _write(j, _TASK.get(), label=f"{said} on {host}" if host else said, tool="browser_agent", cls="A", target=host, result=_c(ev.get("wall") or "", 40) or "noted",
                    verified="unconfirmed", ms=0, shots=None, undo=None)
+    except Exception:  # noqa: BLE001 - the recorder never breaks an action
+        pass
+
+
+def record_takeover(ev: dict) -> None:
+    """D79: one content-free line per takeover (plugins/_shared/takeover.py): the kind of wall (a closed word), the host CLASS (granted / other, never the host), the target
+    (pc or vm2), how long it took and how it ended. Not the site, not a title, not an address."""
+    try:
+        j = get_journal()
+        if j is None or not isinstance(ev, dict) or ev.get("outcome") == "raised":
+            return
+        kind = str(ev.get("wall") or "other")
+        kind = kind if re.fullmatch(r"[a-z_]{2,20}", kind) else "other"
+        target = "VM2" if ev.get("target") == "vm2" else "your PC"
+        how = {"resolved": "done by the owner", "stop": "the owner stopped", "paused": "paused for the owner", "exhausted": "paused, the wall stayed"}.get(str(ev.get("outcome")), "ended")
+        _write(j, _TASK.get(), label=f"Handed a {kind.replace('_', ' ')} step to the owner on {target}", tool="takeover", cls="A", target=f"{target}, {str(ev.get('host_class') or 'other')[:10]} site",
+               result=how, verified="unconfirmed", ms=int(ev.get("ms") or 0), shots=None, undo=None)
     except Exception:  # noqa: BLE001 - the recorder never breaks an action
         pass
 

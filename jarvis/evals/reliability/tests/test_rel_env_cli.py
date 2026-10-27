@@ -97,10 +97,10 @@ def test_catalogue_entries_become_goals_and_need_a_way_to_verify(tmp_path):
 
 def test_command_line_list_and_validate(capsys):
     assert runner.main(["--validate"]) == 0
-    assert "293 goals in 18 capabilities; sound" in capsys.readouterr().out
+    assert "308 goals in 19 capabilities; sound" in capsys.readouterr().out
     assert runner.main(["--list", "--repeats", "10"]) == 0
     out = capsys.readouterr().out
-    assert "open_type_save_click" in out and "2930 runs" in out and "hours" in out
+    assert "open_type_save_click" in out and "3080 runs" in out and "hours" in out
 
 
 def test_command_line_refuses_an_unknown_capability(capsys, tmp_path):

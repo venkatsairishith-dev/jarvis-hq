@@ -18,9 +18,20 @@ from . import lessons as lessons_mod, taskstate
 RECENT_LESSON_S = 1800.0
 
 
+def _takeover_continue(text: str) -> "str | None":
+    try:
+        from jarvis.plugins._shared import takeover
+        return takeover.voice_continue(text)
+    except Exception:  # noqa: BLE001 - the hook must never break the other voice answers
+        return None
+
+
 def handle(text: str, *, state_path=None, control_path=None, lessons: lessons_mod.Lessons | None = None, stop=None, now: float | None = None,
            ops_running=None) -> dict | None:
     """The reply for the owner's message, or None when it is not about the PC task or the lessons (then the message goes on as any other)."""
+    cont = _takeover_continue(text)                # D79: "done" / "continue" while a takeover waits: ONLY a continue, never an approval
+    if cont:
+        return {"handled": True, "status": "completed", "reply": cont, "planned_by": "rules", "label": "Carrying on"}
     kind, args = taskstate.parse(text)
     if not kind:
         return None
