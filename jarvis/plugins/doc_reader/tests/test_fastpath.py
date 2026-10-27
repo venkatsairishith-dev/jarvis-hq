@@ -301,3 +301,11 @@ def test_the_fast_path_does_not_open_a_socket(fake_lit, home, monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", refuse)
     r = core.read_document(put(home, "n.pdf", digital_pdf(LAYER)), transcribe=Model(), fast_parse=fake_lit("ok"))
     assert r["engines"]["liteparse"] == 1
+
+
+def test_a_telugu_page_is_never_taken_from_the_fast_path():
+    """Laptop, 2026-10-27: LiteParse dropped Telugu syllables silently (no replacement character), so its Telugu text is not trusted."""
+    telugu = "ఇది ఒక పరీక్ష పత్రం. మొత్తం మొత్తం ఐదు వందల రూపాయలు. " * 3
+    hindi = "यह एक परीक्षण दस्तावेज़ है। कुल राशि पाँच सौ रुपये है। " * 3
+    assert not fastpath.is_real_text(telugu)
+    assert fastpath.is_real_text(hindi)
