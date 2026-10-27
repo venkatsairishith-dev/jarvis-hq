@@ -26,6 +26,7 @@ const emit = defineEmits<{
   text: []
   menu: []
   nudge: [direction: 'left' | 'right' | 'up' | 'down']
+  press: []
   dragStart: []
   dragMove: []
   dragEnd: []
@@ -53,6 +54,7 @@ watch(() => props.state, () => {
 })
 
 const gesture = createOrbGesture({
+  onPress: () => emit('press'),
   onClick: () => {},
   onDoubleClick: () => emit('text'),
   onDragStart: () => emit('dragStart'),

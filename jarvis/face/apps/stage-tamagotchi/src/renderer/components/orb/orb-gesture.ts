@@ -7,6 +7,8 @@
  */
 
 export interface OrbGestureOptions {
+  /** The left button went down: a click, a double-click or a drag may follow. */
+  onPress?: () => void
   /** One left click (after the double-click window has passed without a second one). */
   onClick: () => void
   onDoubleClick: () => void
@@ -56,6 +58,7 @@ export function createOrbGesture(options: OrbGestureOptions): OrbGesture {
         return
       pressed = { x, y }
       drag = false
+      options.onPress?.()
     },
     move(x, y) {
       if (!pressed)

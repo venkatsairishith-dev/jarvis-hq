@@ -90,7 +90,7 @@ export const useJarvisLookStore = defineStore('jarvis-look', () => {
     setSnapshot,
     update,
     request,
-    drag: (phase: 'start' | 'move' | 'end') => invokeDrag({ phase }),
+    drag: (phase: 'press' | 'start' | 'move' | 'end') => invokeDrag({ phase }),
     nudge: (direction: 'left' | 'right' | 'up' | 'down') => invokeNudge({ direction }),
     resetPosition: () => invokeReset(),
     setHidden: (value: boolean) => invokeHidden({ hidden: value }),

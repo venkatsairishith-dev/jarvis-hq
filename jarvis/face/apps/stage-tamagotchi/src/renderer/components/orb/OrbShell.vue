@@ -245,6 +245,9 @@ async function closeMenu(refocus = true) {
 }
 
 let lastMove = 0
+function onPress() {
+  void look.drag('press')
+}
 function onDragStart() {
   void look.drag('start')
 }
@@ -314,6 +317,7 @@ const unhideLabel = computed(() => unhideNotice.value ? `${unhideNotice.value.qu
       @text="onText"
       @menu="openMenu"
       @nudge="onNudge"
+      @press="onPress"
       @drag-start="onDragStart"
       @drag-move="onDragMove"
       @drag-end="onDragEnd"
@@ -332,6 +336,7 @@ const unhideLabel = computed(() => unhideNotice.value ? `${unhideNotice.value.qu
       @text="onText"
       @menu="openMenu"
       @nudge="onNudge"
+      @press="onPress"
       @drag-start="onDragStart"
       @drag-move="onDragMove"
       @drag-end="onDragEnd"

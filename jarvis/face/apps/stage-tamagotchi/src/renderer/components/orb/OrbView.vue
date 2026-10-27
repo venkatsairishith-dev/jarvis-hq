@@ -38,6 +38,7 @@ const emit = defineEmits<{
   text: []
   menu: []
   nudge: [direction: 'left' | 'right' | 'up' | 'down']
+  press: []
   dragStart: []
   dragMove: []
   dragEnd: []
@@ -98,6 +99,7 @@ onMounted(() => {
 
 // ---- gestures
 const gesture = createOrbGesture({
+  onPress: () => emit('press'),
   onClick: () => emit('talk'),
   onDoubleClick: () => emit('text'),
   onDragStart: () => emit('dragStart'),

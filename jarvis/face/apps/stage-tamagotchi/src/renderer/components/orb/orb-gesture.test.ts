@@ -6,6 +6,7 @@ function setup() {
   vi.useFakeTimers()
   const calls: string[] = []
   const gesture = createOrbGesture({
+    onPress: () => calls.push('press'),
     onClick: () => calls.push('click'),
     onDoubleClick: () => calls.push('double'),
     onDragStart: () => calls.push('drag-start'),
@@ -24,9 +25,9 @@ describe('orb gestures', () => {
   it('one click is a click, after the double-click window', () => {
     const { gesture, calls } = setup()
     click(gesture)
-    expect(calls).toEqual([])
+    expect(calls).toEqual(['press'])
     vi.advanceTimersByTime(DOUBLE_CLICK_MS + 1)
-    expect(calls).toEqual(['click'])
+    expect(calls).toEqual(['press', 'click'])
     vi.useRealTimers()
   })
 
@@ -36,7 +37,7 @@ describe('orb gestures', () => {
     vi.advanceTimersByTime(100)
     click(gesture)
     vi.advanceTimersByTime(1000)
-    expect(calls).toEqual(['double'])
+    expect(calls).toEqual(['press', 'press', 'double'])
     vi.useRealTimers()
   })
 
@@ -46,7 +47,7 @@ describe('orb gestures', () => {
     vi.advanceTimersByTime(DOUBLE_CLICK_MS + 50)
     click(gesture)
     vi.advanceTimersByTime(DOUBLE_CLICK_MS + 50)
-    expect(calls).toEqual(['click', 'click'])
+    expect(calls).toEqual(['press', 'click', 'press', 'click'])
     vi.useRealTimers()
   })
 
@@ -56,7 +57,7 @@ describe('orb gestures', () => {
     gesture.move(12, 11)
     gesture.up()
     vi.advanceTimersByTime(DOUBLE_CLICK_MS + 1)
-    expect(calls).toEqual(['click'])
+    expect(calls).toEqual(['press', 'click'])
     vi.useRealTimers()
   })
 
@@ -67,7 +68,7 @@ describe('orb gestures', () => {
     gesture.move(80, 30)
     gesture.up()
     vi.advanceTimersByTime(2000)
-    expect(calls).toEqual(['drag-start', 'drag-move', 'drag-move', 'drag-end'])
+    expect(calls).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
     expect(gesture.dragging()).toBe(false)
     vi.useRealTimers()
   })
@@ -80,7 +81,7 @@ describe('orb gestures', () => {
     gesture.move(60, 10)
     gesture.up()
     vi.advanceTimersByTime(2000)
-    expect(calls).toEqual(['drag-start', 'drag-move', 'drag-end'])
+    expect(calls).toEqual(['press', 'press', 'drag-start', 'drag-move', 'drag-end'])
     vi.useRealTimers()
   })
 
@@ -106,12 +107,12 @@ describe('orb gestures', () => {
     a.gesture.down(0, 0, 0)
     a.gesture.move(50, 0)
     a.gesture.cancel()
-    expect(a.calls).toEqual(['drag-start', 'drag-move', 'drag-end'])
+    expect(a.calls).toEqual(['press', 'drag-start', 'drag-move', 'drag-end'])
     const b = setup()
     click(b.gesture)
     b.gesture.cancel()
     vi.advanceTimersByTime(2000)
-    expect(b.calls).toEqual([])
+    expect(b.calls).toEqual(['press'])
     vi.useRealTimers()
   })
 })

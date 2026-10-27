@@ -453,9 +453,11 @@ html[data-jarvis-zone]:not([data-jarvis-card-ready]) .tl,
 html[data-jarvis-zone]:not([data-jarvis-card-ready]) .pv {
   visibility: hidden;
 }
+/* the orb's window has its own size: no resize handles at its edges, no preview launcher, no toasts (errors show as the orb's red state) */
 html[data-jarvis-zone] .pv-launch,
+html[data-jarvis-zone] .resize-handles,
 html[data-jarvis-zone] [data-sonner-toaster] {
-  display: none;
+  display: none !important;
 }
 html[data-jarvis-zone],
 html[data-jarvis-zone] body {
@@ -505,4 +507,56 @@ html[data-jarvis-zone] body {
   .orb-zone[data-state='speaking'] .orb-ring { opacity: 0.9; transform: scale(1.12); }
   .orb-zone[data-state='thinking'] .orb-swirl { transform: rotate(40deg); }
   .orb-forgotten { opacity: 0.6; transform: scale(1.1); }
+}
+
+/*
+ * Windows high contrast (forced colors): the system draws the colours, so the orb is told to use them. The states stay apart by shape:
+ * a ring for listening and speaking, a dashed ring for an error, an arc for work, a thick ring for the owner's turn.
+ */
+@media (forced-colors: active) {
+  .orb-disc {
+    border: 2px solid CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+  .orb-glow,
+  .orb-shine,
+  .orb-swirl {
+    display: none;
+  }
+  .orb-ring,
+  .orb-level,
+  .orb-attention,
+  .orb-forgotten {
+    border-color: Highlight;
+  }
+  .orb-arc-bar,
+  .orb-arc-track {
+    stroke: Highlight;
+  }
+  .orb-pill,
+  .orb-menu,
+  .bar,
+  .orb-badge,
+  .bar-mic {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .bar-dot {
+    background: Highlight;
+    box-shadow: none;
+  }
+  .orb-menu-item:hover,
+  .orb-menu-sizes .orb-menu-item[aria-pressed='true'] {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .orb-disc:focus-visible,
+  .bar-mic:focus-visible,
+  .orb-menu-item:focus-visible,
+  .bar:focus-visible {
+    outline: 3px solid Highlight;
+    box-shadow: none;
+  }
 }
