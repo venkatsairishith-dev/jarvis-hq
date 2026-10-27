@@ -13,6 +13,8 @@ import unicodedata
 import urllib.parse
 from dataclasses import dataclass, field
 
+from . import safe_mode
+
 GREEN, YELLOW_AUTO, YELLOW_APPROVAL, RED, DENY = range(5)
 NAMES = ["GREEN", "YELLOW_AUTO", "YELLOW_APPROVAL", "RED", "DENY"]
 
@@ -381,6 +383,8 @@ def sensitive_target(texts, sites: dict = None) -> str:
 # Files that hold the rules, hooks and settings the agents run under: changing them is console-only (at least RED).
 SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".claude", "hooks.json", "providers.json", "policy.py", "audit.py", "store.py",
                      "sensitive_sites.json", "auto_click.json",
+                     # D71 (2026-10-27): the safe-mode switch (the owner's flag file, the reader that is copied into four packages, the owner's tool).
+                     "safe_mode.json", "safe_mode.py", "safe_mode_ctl.py",
                      # D64 (2026-10-26): the per-site grants of the browser agent and the owner's alias e-mail: console-only, sealed by the kernel.
                      "trusted_sites.json", "identity.json", "sitegrants.py",
                      # Audit M10 (2026-10-18): the files that decide what leaves, what is checked and who may close a task. Names that
@@ -1172,6 +1176,8 @@ def _auto_click_rules() -> list:
 
 def auto_click_ok(target, words: str) -> bool:
     """True when a ui.click on 'process|element' is a button the owner listed for JARVIS to click by itself, and nothing hard is in its words."""
+    if safe_mode.active():                       # D71: in safe mode the owner's list is not used; the click waits for him (only ever stricter)
+        return False
     words = clean_words(words)
     if HARD_CONSEQUENCE.search(words) or mixed_script(words) or "reset" in words:
         return False
@@ -1412,6 +1418,8 @@ def site_host(raw) -> str:
 
 
 def _grant(host: str, ability: str):
+    if safe_mode.active():                       # D71: per-site grants are not used in safe mode: no grant found = the PIN, as for a site never granted
+        return None
     from . import sitegrants
     return sitegrants.find(host, ability) if host else None
 

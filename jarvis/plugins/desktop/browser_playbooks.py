@@ -24,6 +24,8 @@ import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from jarvis import safe_mode
+
 from . import browser_agent as BA
 from . import browser_snapshot as S
 from .browser_agent import Step, StepResult
@@ -149,9 +151,9 @@ class Store:
         return out
 
     def all(self) -> list:
-        """Every playbook, a learned one replacing the shipped one of the same host and name."""
+        """Every playbook, a learned one replacing the shipped one of the same host and name. Safe mode (D71): the shipped ones only (learned repairs stay on disk)."""
         got = {(p.host, p.name): p for p in self._load(self.builtin, "builtin")}
-        for p in self._load(self.learned, "learned"):
+        for p in [] if safe_mode.active() else self._load(self.learned, "learned"):
             got[(p.host, p.name)] = p
         return list(got.values())
 
@@ -166,6 +168,8 @@ class Store:
         return self.learned / f"{pb.host}.{pb.name}.json"
 
     def save_learned(self, pb: Playbook) -> Path:
+        if safe_mode.active():
+            raise PlaybookError("safe mode is on: nothing is learned or repaired")
         pb = scrub_for_save(pb)
         pb.source = "learned"
         self.learned.mkdir(parents=True, exist_ok=True)

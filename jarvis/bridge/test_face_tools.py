@@ -619,3 +619,22 @@ def test_quick_command_is_callable_by_the_face_but_never_offered_to_the_chat_mod
     chat, with_panel = asyncio.run(go())
     assert "desktop__quick_command" in F.PANEL_TOOLS and "desktop__quick_command" not in chat
     assert "desktop__quick_command" in with_panel, "registered (callable by the face's own code) in the chat profile"
+
+
+def test_status_says_safe_mode_in_plain_words_and_only_when_it_is_on(tmp_path, monkeypatch):
+    """D71: the HUD's line reads "Safe mode" while it is on and nothing else is under way; a live task line is kept after it; one boolean, no other text."""
+    import time as _t
+    monkeypatch.delenv("JARVIS_SAFE_MODE", raising=False)
+    mk = lambda **kw: F.FaceTools(client_factory=lambda: FakeClient(), console=CONSOLE, pc_ops_path=tmp_path / "none.json",
+                                  goal_progress_path=tmp_path / "no-goal.json", **kw)
+    off = asyncio.run(mk().status())
+    assert "safe_mode" not in off and "pc_line" not in off
+    monkeypatch.setenv("JARVIS_SAFE_MODE", "1")
+    on = asyncio.run(mk().status())
+    assert on["safe_mode"] is True and on["pc_line"] == "Safe mode"
+    line = tmp_path / "pc_task_state.json"
+    line.write_text(json.dumps({"line": "Opening notepad", "state": "running", "updated": _t.time()}), encoding="utf-8")
+    withheld = asyncio.run(mk(pc_line_path=line).status())            # the real cleaner holds a sentence back when no gateway clears it: the HUD still gets the plain words
+    assert withheld["pc_line"] == "Safe mode"
+    busy = asyncio.run(mk(pc_line_path=line, clean=lambda v: dict(v)).status())
+    assert busy["pc_line"] == "Safe mode - Opening notepad" and F.PC_LINE_OK.match(busy["pc_line"])

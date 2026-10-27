@@ -28,6 +28,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
+from jarvis import safe_mode
+
 from . import decide
 
 ENV_FLAG = "JARVIS_QUICK_PATH"
@@ -38,6 +40,8 @@ _normalisers: list[Callable[[str], str]] = []
 
 
 def enabled(env: dict | None = None) -> bool:
+    if safe_mode.active():                           # D71: safe mode turns every speed shortcut that skips a model off
+        return False
     env = os.environ if env is None else env
     return str(env.get(ENV_FLAG, "")).strip().lower() not in ("0", "false", "no", "off")
 

@@ -12,6 +12,8 @@ import re
 import secrets
 import time
 
+from jarvis import safe_mode
+
 from . import core
 from .browser_agent import Act, Backend, BackendLost, Res
 
@@ -126,6 +128,8 @@ class GrantsClient:
         self._cache = (0.0, {})
 
     def _read(self) -> dict:
+        if safe_mode.active():                       # D71: per-site grants are not used in safe mode; every site needs its card and PIN again
+            return {}
         t, got = self._cache
         if self.clock() - t < self.ttl:
             return got
@@ -151,7 +155,9 @@ class GrantsClient:
         self._cache = (0.0, {})
 
     def request(self, hosts, abilities, days: int = 30, note: str = "") -> dict:
-        """Ask the kernel for the approval card. Returns {approval_id, card, request} or {error}."""
+        """Ask the kernel for the approval card. Returns {approval_id, card, request} or {error}. Safe mode (D71): no card is made."""
+        if safe_mode.active():
+            return {"error": "safe mode is on: JARVIS does not act on websites until the owner turns it off"}
         code, body = self.owner("POST", "site_grant/request", {"hosts": list(hosts), "abilities": list(abilities), "days": days, "note": note})
         if code >= 400:
             return {"error": str(body.get("error") or f"refused (HTTP {code})")[:200]}

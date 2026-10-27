@@ -29,6 +29,8 @@ import threading
 import time
 from pathlib import Path
 
+from jarvis import safe_mode
+
 DATA = Path(os.environ.get("JARVIS_DATA_DIR", r"D:\jarvis\data"))
 FILE = DATA / "plugins" / "lessons.json"
 MAX_ENTRIES = 300
@@ -226,7 +228,10 @@ class Lessons:
         return done
 
     def merge(self, deltas) -> dict:
-        """Merge proposed deltas into the store (deterministic; no rewrite of the store). Returns {"applied", "ignored", "retired"}."""
+        """Merge proposed deltas into the store (deterministic; no rewrite of the store). Returns {"applied", "ignored", "retired"}.
+        Safe mode (D71): nothing is learned while the owner has it on."""
+        if safe_mode.active():
+            return {"applied": 0, "ignored": len(list(deltas or [])), "retired": 0}
         with _LOCK:
             data = self._load()
             done = self._merge(data, deltas)
@@ -235,7 +240,9 @@ class Lessons:
         return done
 
     def learn_from_task(self, trace) -> dict:
-        """reflect + merge for a whole task, as one step under one lock."""
+        """reflect + merge for a whole task, as one step under one lock. Nothing is learned in safe mode (D71)."""
+        if safe_mode.active():
+            return {"applied": 0, "ignored": 0, "retired": 0}
         with _LOCK:
             data = self._load()
             done = self._merge(data, self._reflect(data, trace))
@@ -269,9 +276,10 @@ class Lessons:
         return True
 
     def best_route(self, app, problem: str, available: list[str] | None = None) -> str:
-        """The route that worked most often for this app and problem (it must have worked at least once, and more often than it failed), else ''."""
+        """The route that worked most often for this app and problem (it must have worked at least once, and more often than it failed), else ''.
+        Safe mode (D71): learned lessons are ignored (not deleted), so the ladder keeps its own order."""
         a = clean_app(app)
-        if not a or problem not in PROBLEMS:
+        if not a or problem not in PROBLEMS or safe_mode.active():
             return ""
         e = self._load()["entries"].get(f"{a}|{problem}")
         if not e:

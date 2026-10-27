@@ -50,6 +50,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from jarvis import safe_mode  # noqa: E402  (D71: only READS the flag; the face and the model cannot set or clear it)
+
 DEFAULT_PORT = 48970
 HOST = "127.0.0.1"
 SOURCE = "face"
@@ -331,7 +333,17 @@ class FaceTools:
         out.update(await asyncio.to_thread(read_pc_operations, self.pc_ops_path))
         out.update(await asyncio.to_thread(read_goal_progress, self.goal_progress_path))
         out.update(await asyncio.to_thread(read_pc_line, self.pc_line_path))
-        return self._out(out)
+        res = self._out(out)
+        if safe_mode.active():                                           # D71: the plain words "Safe mode" on the HUD's line (fixed words, so added after the cleaner), and one boolean
+            res["safe_mode"] = True
+            line = res.get("pc_line")
+            if isinstance(line, str) and PC_LINE_OK.match(line):
+                res["pc_line"] = ("Safe mode - " + line)[:140]
+            elif res.get("goal_state", "none") == "none":
+                res["pc_line"] = "Safe mode"
+            else:
+                res.pop("pc_line", None)
+        return res
 
     def _language_gate(self, task: str):
         """D59 lever c, OFF unless JARVIS_LANGUAGE_GATE=1: Telugu / Hindi / Tenglish words are read by the deterministic rules (plugins/_shared/tenglish.py)
