@@ -12,7 +12,7 @@ route would then type the text twice or press the button twice. So a retry happe
 (This is the same rule the coordinator applies with REPEAT_SAFE in plugins/desktop/coordinator.py, stated per step.)
 
 The module knows nothing about Windows, the kernel or models: a Route is a function, a verify is a function. The caller (the desktop
-coordinator, a mission step, the eval harness) lends them. Not yet wired into the coordinator: see D59 for the file and function.
+coordinator, a mission step, the eval harness) lends them. Wired in D65: plugins/desktop/coordinator.py (every step), plugins/desktop/pcagent.py (every action of the control loop) and plugins/desktop/__init__.py (run_pc_action).
 
     result = run_step(Step("save", "save the note", [Route("uia", invoke_save), Route("keyboard", press_ctrl_s)], verify=file_exists))
     result.verified, result.route_used, result.ask     # ask is an ask_form dict when the owner has to decide
@@ -80,6 +80,7 @@ class Step:
     settle_s: float = 2.0                             # after an act, how long the effect may take to show
     poll_s: float = 0.25
     max_attempts: int = 2                             # the first route, and ONE alternative (3 walks the whole chain)
+    keep_order: bool = False                          # D65: use the routes in the order GIVEN (a lesson says the route that worked for this app goes first)
 
 
 @dataclass
@@ -130,7 +131,7 @@ async def _call(fn: Callable[[], Any]) -> Any:
 async def _core(step: Step, clock: Callable[[], float], sleep: Callable[[float], Any], cancelled: Callable[[], bool] | None) -> StepResult:
     t0 = clock()
     res = StepResult(step.id, step.what, FAILED)
-    routes = order_routes(step.routes)
+    routes = list(step.routes) if step.keep_order else order_routes(step.routes)
     if not routes:
         res.reason = "the step has no route"
         res.ask = _question(step, res.reason)

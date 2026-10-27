@@ -45,7 +45,8 @@ TOOLS = {
     "open_file": "find and open a file or folder (args: name, folder)",
     "check_pc": "read-only checks: disk, network, processes, crashes, an app's version or state (args: check, app)",
     "troubleshoot": "find out why an app shows an error, and fix it safely (args: app)",
-    "research": "research a topic on the web with sources, optionally as a report or slides (args: query, deliverable)",
+    "research": "research a topic on the web with sources; no file is built (args: query)",
+    "web_task": "make a slide deck, slides or a presentation on a free web generator in the owner's Chrome, signed in with his existing session (args: query = the topic, text = the number of slides)",
     "answer": "answer from general knowledge, no PC action",
     "clarify": "the request is missing something essential: ask one short question (args: question)",
     "stop": "stop or cancel the current task",
@@ -130,6 +131,7 @@ SYSTEM = (
     "show my open tabs -> [{\"tool\":\"browser\",\"action\":\"tabs\"}]\n"
     "excel crashes when I open it -> [{\"tool\":\"troubleshoot\",\"app\":\"excel\"}]\n"
     "open my tax notes on the desktop -> [{\"tool\":\"open_file\",\"name\":\"tax notes\",\"folder\":\"Desktop\"}]\n"
+    "make a 5 slide deck about solar power for schools -> [{\"tool\":\"web_task\",\"query\":\"solar power for schools\",\"text\":\"5\"}]\n"
     "what is 2+2 -> [{\"tool\":\"answer\"}]\n"
     "open that -> [{\"tool\":\"clarify\",\"question\":\"What should I open?\"}]\n"
     "open notepad, type buy milk and save it as list.txt in Documents -> [{\"tool\":\"open_app\",\"app\":\"notepad\"},{\"tool\":\"type_text\",\"app\":\"notepad\",\"text\":\"buy milk\"},{\"tool\":\"save_as\",\"app\":\"notepad\",\"name\":\"list.txt\",\"folder\":\"Documents\"}]\n"
@@ -161,7 +163,7 @@ _ARGS = {"open_website": {"site": _S, "account": _S}, "play_media": {"query": _S
          "type_text": {"app": _S, "target": _S, "text": _S}, "press_key": {"app": _S, "key": _S},
          "open_file": {"name": _S, "folder": _S}, "check_pc": {"action": {"type": "string", "enum": ACTIONS["check_pc"]}, "app": _S},
          "troubleshoot": {"app": _S}, "open_in_vscode": {"folder": _S}, "type_in_editor": {"app": _S, "target": _S, "text": _S},
-         "save_as": {"app": _S, "name": _S, "folder": _S}, "drive": {"app": _S, "query": _S}, "research": {"query": _S, "deliverable": {"type": "string", "enum": ["none", "report", "presentation"]}},
+         "save_as": {"app": _S, "name": _S, "folder": _S}, "drive": {"app": _S, "query": _S}, "research": {"query": _S, "deliverable": {"type": "string", "enum": ["none"]}}, "web_task": {"query": _S, "text": _S},
          "answer": {}, "clarify": {"question": _S}, "stop": {}}
 # One schema per tool with only that tool's arguments: the grammar cannot emit fields a tool does not use, so plans are
 # shorter (generation is ~10 tokens/s on this GPU) and carry fewer stray values. Behind a switch until measured.
@@ -567,13 +569,21 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
             q = (s.get("query") or s.get("text") or "").strip()
             if not q or _vague(q):                        # "research it": a run on the word "it" is about nothing
                 return Plan(steps, "clarify", question="What should I research?", problems=["no topic"], raw=raw)
-            deliverable = "none"
-            for said in (request, json.dumps(s)):         # the owner's own words decide the file type, then the model's
-                deliverable = "presentation" if re.search(r"(?i)slides?|deck|presentation|ppt", said) else (
-                    "report" if re.search(r"(?i)report|pdf", said) else "none")
-                if deliverable != "none":
-                    break
-            out.update(query=q[:300], deliverable=deliverable)
+            if re.search(r"(?i)slides?|deck|presentation|ppt|power ?point", request):             # the owner's own words decide, not the model's
+                # D64: JARVIS builds no deck itself: it uses a free generator website in the owner's Chrome (web_task)
+                out = {"tool": "web_task", "topic": deck_topic(request, q)[:300], "slides": slides_in(request)}
+            else:
+                out.update(query=q[:300], deliverable="none")          # D64: research reports back in words with sources; no PDF or deck is built here
+                if re.search(r"(?i)\breport|pdf\b", request):
+                    problems.append("JARVIS no longer builds a report file itself; the research summary is the answer")
+        elif tool == "web_task":
+            q = (s.get("query") or s.get("text") or "").strip()
+            if not q or q.isdigit() or _vague(q):
+                q = deck_topic(request, "")
+            if not q or _vague(q):
+                return Plan(steps, "clarify", question="What should the deck be about?", problems=["no topic for the deck"], raw=raw)
+            n = slides_in(request) or (int(s["text"]) if str(s.get("text") or "").strip().isdigit() else 0)
+            out.update(topic=q[:300], slides=max(1, min(int(n or DEFAULT_SLIDES), 20)))
         elif tool == "clarify":
             return Plan(steps, "clarify", question=(s.get("question") or "Could you say a bit more?")[:200], raw=raw)
         steps.append(out)
@@ -588,7 +598,7 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
                                             and (st.get("text") or st.get("target") or "").strip().lower() == named.lower())]
     # "research X, make slides and open them": the research step opens its own file (and the coordinator checks a window
     # showing it appeared); a separate open step could not know the file's name yet
-    made = [st for st in steps if st["tool"] == "research" and st.get("deliverable") != "none"]
+    made = [st for st in steps if st["tool"] == "web_task" or (st["tool"] == "research" and st.get("deliverable") != "none")]
     if made and re.search(r"(?i)\b(open|show)\b", request):
         made[0]["open_after"] = True
         steps = [st for st in steps if not (st["tool"] == "open_file" or (st["tool"] == "open_app" and re.search(
@@ -648,7 +658,8 @@ POST = {"open_website": "a Chrome window of profile {profile} shows the page",
         "open_file": "the file or folder opened",
         "check_pc": "the {check} check returned data",
         "troubleshoot": "the original error is gone after the fix, or the cause is reported as verified or a hypothesis",
-        "research": "a report with checked citations exists (and the requested file passed its checks; if asked, a window showing it opened)",
+        "research": "a summary with checked citations was made (no file is built by JARVIS itself)",
+        "web_task": "a deck file made by a free web generator in the owner's Chrome arrived in quarantine, was read (its slides or pages counted), and was shown in the Preview panel",
         "open_output": "a window showing the file JARVIS made appeared",
         "stop": "the running work stopped",
         "open_in_vscode": "a VS Code window showing the folder {folder} appeared",
@@ -668,6 +679,33 @@ def _clean_app(app: str) -> str:
     """'wordpad please' / 'wordpad app' / 'wordpad.' -> 'wordpad': only the app's name reaches the typing step."""
     return re.sub(r"(?i)\s+(?:app|application|window|please|now)$", "", app.strip()).rstrip(".!?,").strip()
 GO_SITE = re.compile(r"(?i)\b(?:go to|open|visit)\s+(?:my\s+|the\s+)?([A-Za-z0-9.-]+(?:\.[a-z]{2,})?(?:\s(?:maps|account|drive|calendar|music))?)\b")
+DECK_RX = re.compile(r"(?i)\b(?:create|make|write|generate|build|prepare|put together|design|draft)\b.{0,40}\b(?:slides?|slide ?deck|deck|presentation|power ?point|ppt)\b")
+DEFAULT_SLIDES = 5
+NUM_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+             "fifteen": 15, "twenty": 20}
+
+
+def slides_in(request: str) -> int:
+    """The number of slides the owner said ("a 3 slide deck", "five slides", "slides: 8"), or 0."""
+    m = re.search(r"(?i)\b(\d{1,2}|" + "|".join(NUM_WORDS) + r")[\s-]*(?:slides?|slide ?deck|pages?)\b", request or "")
+    if not m:
+        m = re.search(r"(?i)\bslides?\s*(?:count|number)?\s*[:=]?\s*(\d{1,2})\b", request or "")
+    if not m:
+        return 0
+    w = m.group(1).lower()
+    return NUM_WORDS.get(w) or int(w)
+
+
+def deck_topic(request: str, fallback: str) -> str:
+    """What the deck is about, in the owner's words: the part after about / on / regarding / covering / for / of; else the model's own query."""
+    r = " ".join(str(request or "").split())
+    m = re.search(r"(?i)\b(?:about|on|regarding|covering|explaining|comparing|for|of)\s+(?!the same\b|it\b|that\b|this\b)(.+?)"
+                  r"(?:\s*,?\s+(?:and|then)\s+(?:open|show|save|email|send|print)\b.*)?[.!?]?$", r)
+    t = (m.group(1) if m else fallback or "").strip(" .!?,\"'")
+    t = re.sub(r"(?i)\b(?:please|for me|now|thanks)\b\W*$", "", t).strip(" .!?,\"'")
+    return t if len(t) >= 3 and not _vague(t) else (fallback or "")
+
+
 MAKE_DOC = re.compile(r"(?i)\b(create|make|write|generate|build|prepare)\b.{0,30}\b(pdf|report|document|slides?|deck|presentation|ppt)\b")
 WHEN = r"(?:today|tomorrow|tonight|later|now|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|this week|the weekend)\b"
 TOPIC = re.compile(r"(?i)\b(about|on|regarding|covering|of|for|explaining|comparing|research(?:ing)?|summari[sz]e|compare|explain|"
@@ -802,6 +840,21 @@ def composite_rule(request: str, profiles: list[dict]) -> "Plan | None":
         return plan
     return None
 
+
+
+def deck_rule(request: str, profiles: list[dict]) -> "Plan | None":
+    """D64: "make a deck / slides / a presentation about X" is planned by rule, never by the small model: one web_task step (a free web generator in the owner's own
+    Chrome). No topic -> one question."""
+    if not DECK_RX.search(request or ""):
+        return None
+    topic = deck_topic(request, "")
+    if not topic:
+        return Plan([], "clarify", question="What should the deck be about?", problems=["no topic for the deck"], model="rule")
+    plan = validate(json.dumps({"steps": [{"tool": "web_task", "query": topic, "text": str(slides_in(request) or "")}]}), profiles, request)
+    if plan.status in ("ok", "clarify"):
+        plan.model, plan.seconds = "rule", 0.0
+        return plan
+    return None
 
 
 def _says(st: dict) -> str:
@@ -963,6 +1016,9 @@ def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=
     cr = composite_rule(request, profiles)
     if cr is not None:
         return cr
+    dr = deck_rule(request, profiles)
+    if dr is not None:
+        return dr
     if not context and FAST_PATH:
         fp = fast_path(request, profiles)
         if fp is not None:

@@ -1,0 +1,42 @@
+{
+  "name": "make_deck", "host": "pitch.com", "hosts": ["pitch.com", "app.pitch.com"], "version": 1, "source": "builtin",
+  "goal": "Generate a presentation from a topic with Pitch and export it as PDF (PowerPoint export is a paid feature on Pitch)",
+  "start": "https://pitch.com/",
+  "verified_live": false,
+  "needs": ["signin_existing_session", "accept_terms", "download_to_quarantine"],
+  "terms_note": "Pitch's Terms of Use (v1.1.4, 2026-10-19) have no clause on automated access. The Free plan gives 100 AI credits that do not renew and a branded PDF export; PowerPoint export needs a paid plan.",
+  "terms_read": "2026-10-26", "terms_source": "pitch.com/terms-of-use; pitch.com/pricing",
+  "formats": ["pdf"],
+  "params": [{"name": "topic", "required": true}, {"name": "outline", "default": ""}, {"name": "slides", "default": "3"}, {"name": "theme", "default": ""}, {"name": "formats", "default": "pdf"}],
+  "notes": {"drafted": "2026-10-26 from the vendor's pricing and terms pages only, NOT yet seen on the real site: the laptop session confirms every step.",
+            "export_path": "Pitch's export lives under a menu that may be called Share or Export. A click on a button named Share is the owner's PIN in the kernel; the Export item is not."},
+  "phases": [
+    {"name": "open", "steps": [
+      {"id": "open", "do": "goto", "to": "https://app.pitch.com/", "new_tab": true, "expect": {"any": [{"host_is": "app.pitch.com"}, {"host_is": "pitch.com"}]}}
+    ]},
+    {"name": "signin", "note": "only when the site shows its sign-in page",
+     "skip_if": {"any": [{"element": {"role": "button", "name": "New presentation", "any_of": ["Create", "New"]}}, {"element": {"role": "textbox", "name": "Describe your presentation", "any_of": ["Prompt", "Topic"]}}]},
+     "steps": [
+      {"id": "login", "do": "click", "loc": {"role": "link", "name": "Log in", "any_of": ["Sign in", "Log in with Google"]}, "optional": true, "intent": "open the sign-in page"},
+      {"id": "google", "do": "click", "loc": {"role": "button", "name": "Continue with Google", "any_of": ["Log in with Google", "Sign in with Google", "Google"]}, "intent": "sign in with the Google session of this Chrome", "expect": {"any": [{"host_is": "accounts.google.com"}, {"host_is": "app.pitch.com"}]}},
+      {"id": "account", "do": "click", "loc": {"role": "button", "text": "@"}, "optional": true, "intent": "choose the Google account already signed in"},
+      {"id": "consent", "do": "click", "loc": {"role": "button", "name": "Continue", "any_of": ["Next"]}, "optional": true, "intent": "the basic sign-in screen only"}
+    ]},
+    {"name": "create", "steps": [
+      {"id": "new", "do": "click", "loc": {"role": "button", "name": "New presentation", "any_of": ["Create", "Generate with AI", "Create with AI", "New"]}, "intent": "start a new presentation", "expect": {"changed": true}},
+      {"id": "ai", "do": "click", "loc": {"role": "button", "name": "Generate with AI", "any_of": ["Pitch AI", "AI", "Create with AI", "Generate"]}, "optional": true, "intent": "choose AI generation", "expect": {"changed": true}},
+      {"id": "prompt", "do": "fill", "loc": {"role": "textbox", "name": "Describe your presentation", "any_of": ["Prompt", "Topic", "What is your presentation about?", "Describe what you want"]}, "value": "{topic}", "intent": "give the topic"},
+      {"id": "generate", "do": "click", "loc": {"role": "button", "name": "Generate", "any_of": ["Generate presentation", "Create", "Continue"]}, "intent": "generate the slides", "expect": {"changed": true}}
+    ]},
+    {"name": "wait", "steps": [
+      {"id": "ready", "do": "wait", "timeout_s": 240, "intent": "wait until the deck is made",
+       "until": {"text_any": ["Present", "Export", "Share"], "fail_if": ["Something went wrong", "Try again", "out of AI credits"]}}
+    ]},
+    {"name": "export", "steps": [
+      {"id": "export", "do": "click", "loc": {"role": "button", "name": "Export", "any_of": ["Export presentation", "Download"]}, "intent": "open the export choices", "expect": {"changed": true}},
+      {"id": "pdf_pick", "do": "click", "loc": {"role": "menuitem", "name": "PDF", "any_of": ["Export as PDF", "Download PDF"]}, "optional": true, "intent": "choose PDF"},
+      {"id": "pdf_go", "do": "click", "loc": {"role": "button", "name": "Download", "any_of": ["Export", "Download PDF", "Export PDF"]}, "intent": "start the PDF download", "expect": {"noop_ok": true}},
+      {"id": "pdf_file", "do": "download", "value": "pdf", "intent": "collect the PDF into quarantine", "expect": {"download": {"ext": "pdf"}}}
+    ]}
+  ]
+}

@@ -17,6 +17,10 @@ The owner will not edit config/glossary.json ("I will not [do] anything; it will
   talk        list_text / quick_answer     "what names do you know", "forget Priya" (a rule, no model). pending_question: a low-confidence guess is asked
                                            ONCE (ask_form), never again.
 
+  statements    statement_spans(original)    D70: the NAME span of a name statement in the owner's ORIGINAL words, before any translation ("naa bharya peru Priya",
+                                           "నా భార్య ప్రియ", "meri patni ka naam Priya hai"), from config/name_patterns.json (name_spans.py). observe() reads it first; translate.mask
+                                           uses it to keep the name away from the translator; statement_english() turns a pure statement into English without a model.
+
 HARD RULES
   * Names are NEVER learned from tool results, web pages, files, screen text or model output (prompt injection): the only caller is the gateway's face path
     (translate.observe_owner), which sees the owner's typed or spoken message, and the profile registry the node read from his own Chrome. Nothing here takes text
@@ -223,6 +227,37 @@ def never_name(word: str, *, strict: bool = True) -> bool:
     if not w or w in hard:
         return True
     return strict and w in soft
+
+
+def _never_cb(word: str, strict: bool = True) -> bool:
+    return never_name(word, strict=strict)
+
+
+def statement_spans(text: str) -> list:
+    """The name statements in `text` (name_spans.Span list; D70). [] when the pattern module or file is missing. A question, a refusal or a condition gives nothing."""
+    ns = _sibling("name_spans")
+    if ns is None:
+        return []
+    try:
+        return ns.extract(text, never=_never_cb)
+    except Exception:                                                          # noqa: BLE001 - a bad pattern file never breaks a chat
+        return []
+
+
+def statement_protect_spans(text: str) -> list[tuple[int, int, str]]:
+    """[(start, end, restore)] for translate.mask: the NAME of each name statement, known or not."""
+    return [(sp.start, sp.end, sp.name) for sp in statement_spans(text)]
+
+
+def statement_english(text: str):
+    """(English, language) when `text` is nothing but name statements, else None. Rules only."""
+    ns = _sibling("name_spans")
+    if ns is None:
+        return None
+    try:
+        return ns.statement_english(text, never=_never_cb)
+    except Exception:                                                          # noqa: BLE001
+        return None
 
 
 def _manual_terms() -> set[str]:
@@ -593,6 +628,12 @@ class NameIndex:
                 (native if _NATIVE_CH.search(surface) else latin).append(surface)
         self.latin_re = self._compile(latin, native=False)
         self.native_re = self._compile(native, native=True)
+        # D70: a known name written in the owner's script that was never paired ("Priya" learned in Latin letters, now "ప్రియకి కాల్ చేయి") is found by its
+        # transliteration, so the translator never gets it either
+        self.translit: dict[str, str] = {}
+        for surface, (canon, _is, needs_cap) in self.table.items():
+            if not needs_cap and not _NATIVE_CH.search(surface) and " " not in surface and len(surface) >= 3:
+                self.translit.setdefault(variant_key(surface), canon)
 
     @staticmethod
     def _compile(surfaces: list[str], native: bool) -> re.Pattern | None:
@@ -621,6 +662,8 @@ class NameIndex:
                 if needs_cap and not m.group(0)[:1].isupper():
                     continue
                 out.append((m.start(), m.end(), m.group(0) if is_canon and not _NATIVE_CH.search(m.group(0)) else canon))
+        if self.translit and _NATIVE_CH.search(text):
+            out += self._by_translit(text, out)
         out.sort(key=lambda t: (t[0], -(t[1] - t[0])))
         res: list[tuple[int, int, str]] = []
         for s, e, r in out:
@@ -628,11 +671,41 @@ class NameIndex:
                 res.append((s, e, r))
         return res
 
+    def _by_translit(self, text: str, taken: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
+        ns = _sibling("name_spans")
+        if ns is None:
+            return []
+        pat = ns.load()
+        found: list[tuple[int, int, str]] = []
+        for m in _NATIVE_RUN.finditer(text):
+            if any(a <= m.start() < b for a, b, _ in taken):
+                continue
+            tok, end = m.group(0), m.end()
+            if tok in NATIVE_FUNCTION or tok in NATIVE_REL:
+                continue
+            for suf in pat.endings.get("te" if "\u0c00" <= tok[0] <= "\u0c7f" else "hi", []):
+                if tok.endswith(suf) and len(tok) - len(suf) >= 2:
+                    tok, end = tok[: -len(suf)], end - len(suf)
+                    break
+            if tok in NATIVE_FUNCTION or tok in NATIVE_REL or len(tok) < 2:
+                continue
+            tr = ns.transliterate(tok, pat)
+            canon = self.translit.get(variant_key(tr)) if tr else None
+            if canon is None and tr and len(tr) >= 5:
+                for key, c in self.translit.items():
+                    if len(key) >= 5 and key[0] == variant_key(tr)[0] and difflib.SequenceMatcher(None, key, variant_key(tr)).ratio() >= 0.9:
+                        canon = c
+                        break
+            if canon is not None:
+                found.append((m.start(), end, canon))
+        return found
+
     def mentions(self, text: str) -> list[str]:
         """The canonical names a text mentions."""
         seen: list[str] = []
-        for s, e, _ in self.find(text):
-            canon = self.table[norm(text[s:e])][0]
+        for s, e, back in self.find(text):
+            hit = self.table.get(norm(text[s:e]))
+            canon = hit[0] if hit else back                  # a name found by transliteration is not in the table
             if canon not in seen:
                 seen.append(canon)
         return seen
@@ -847,8 +920,14 @@ def _observe(original: str, english: str | None, store: NameStore | None, manual
     key = hashlib.sha256((original + "\0" + english).encode("utf-8")).hexdigest()[:16]
 
     sentences = [s.strip() for s in _SENT_SPLIT.split(english) if s.strip()]
-    found: list[dict] = []                                        # {name, kind, relation, source, conf, tier}
+    found: list[dict] = []                                        # {name, kind, relation, source, conf, tier, alias}
+    ns = _sibling("name_spans")
+    # D70: the name statements of the ORIGINAL words (Telugu script, Tenglish, Devanagari, Hinglish), before and independent of what the translator made of them
+    for sp in statement_spans(original):
+        _add(found, sp.name, sp.kind, sp.relation, "stated", sp.conf, man, strict=sp.kind == "self", alias=sp.native)
     for sent in (x.strip() for x in _SENT_SPLIT.split(original) if x.strip()):
+        if ns is not None and not ns.is_statement(sent):
+            continue                                              # a question, a refusal, a condition: "maa amma peru emiti?" teaches nothing
         for m in _ROM_SELF.finditer(sent):
             _add(found, m.group("n"), "self", "", "stated", 0.9, man, strict=True)
         for m in _ROM_REL.finditer(sent):
@@ -856,21 +935,23 @@ def _observe(original: str, english: str | None, store: NameStore | None, manual
             _add(found, m.group("n"), kind, rel, "stated", 0.85, man, strict=False)
     for sent in sentences:
         sent = _LEAD.sub("", sent).strip()
-        for m in _SELF_MY_NAME.finditer(sent):
-            _add(found, m.group("n"), "self", "", "stated", 0.95, man, strict=True)
-        m = _SELF_I_AM.match(sent)
-        if m:
-            _add(found, m.group("n"), "self", "", "stated", 0.8, man, strict=True)
-        m = _SELF_THIS_IS.match(sent)
-        if m:
-            _add(found, m.group("n"), "self", "", "stated", 0.6, man, strict=True)
-        for rx in (_REL_MY, _REL_IS_MY):
-            for m in rx.finditer(sent):
-                rel, kind = REL[m.group("r").lower()]
-                prefix = re.search(r"(?i)\b(younger|elder|older|little|big|eldest|youngest)\s+" + re.escape(m.group("r")), sent)
-                if prefix and kind == "family":
-                    rel = f"{prefix.group(1).lower()} {rel}"
-                _add(found, m.group("n"), kind, rel, "stated", 0.9, man, strict=False)
+        stated = ns is None or ns.is_statement(sent)
+        if stated:
+            for m in _SELF_MY_NAME.finditer(sent):
+                _add(found, m.group("n"), "self", "", "stated", 0.95, man, strict=True)
+            m = _SELF_I_AM.match(sent)
+            if m:
+                _add(found, m.group("n"), "self", "", "stated", 0.8, man, strict=True)
+            m = _SELF_THIS_IS.match(sent)
+            if m:
+                _add(found, m.group("n"), "self", "", "stated", 0.6, man, strict=True)
+            for rx in (_REL_MY, _REL_IS_MY):
+                for m in rx.finditer(sent):
+                    rel, kind = REL[m.group("r").lower()]
+                    prefix = re.search(r"(?i)\b(younger|elder|older|little|big|eldest|youngest)\s+" + re.escape(m.group("r")), sent)
+                    if prefix and kind == "family":
+                        rel = f"{prefix.group(1).lower()} {rel}"
+                    _add(found, m.group("n"), kind, rel, "stated", 0.9, man, strict=False)
         for rx in (_CAND_POSS, _CAND_VERB):
             for m in rx.finditer(sent):
                 _add(found, m.group("n"), "other", "", "repeated", 0.5, man, strict=True)
@@ -907,7 +988,7 @@ def _observe(original: str, english: str | None, store: NameStore | None, manual
                 for form in (norm(name), variant_key(name)):
                     if form in tombs:
                         tombs.remove(form)                       # the owner's own sentence is newer than "forget"
-            native = _native_alias_for(name, original, relation=f["relation"])
+            native = f.get("alias") or _native_alias_for(name, original, relation=f["relation"])
             latin = _latin_variant_for(name, original, english)
             aliases = [a for a in (native, latin) if a]
             if f["source"] == "repeated" and existing is None:
@@ -983,10 +1064,10 @@ def _observe(original: str, english: str | None, store: NameStore | None, manual
     return obs
 
 
-def _add(found: list[dict], raw: str, kind: str, relation: str, source: str, conf: float, manual: set[str], *, strict: bool) -> None:
+def _add(found: list[dict], raw: str, kind: str, relation: str, source: str, conf: float, manual: set[str], *, strict: bool, alias: str = "") -> None:
     name = _clean_name(raw, strict=strict)
-    if name and norm(name) not in manual and not any(f["name"] == name and f["kind"] == kind for f in found):
-        found.append({"name": name, "kind": kind, "relation": relation, "source": source, "conf": conf})
+    if name and norm(name) not in manual and not any(variant_key(f["name"]) == variant_key(name) and f["kind"] == kind for f in found):
+        found.append({"name": name, "kind": kind, "relation": relation, "source": source, "conf": conf, "alias": alias})
 
 
 # ---- the desktop plugin's Chrome profile registry ------------------------------------------------------------------

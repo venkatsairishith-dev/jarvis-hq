@@ -1,0 +1,6 @@
+{
+  "_note": "Console-only (D64, 2026-10-26). The alias e-mail JARVIS may use to create an account on a site where the owner gave the one-time 'signup' grant, and the display name it may type. Use a plus-address or an alias, never the owner's main address. email_pattern wins over email_alias: {site} becomes the first label of the site's host, so every site gets its own alias (me+gamma@example.com). The generated password for a site is kept by the NODE in D:\\jarvis-secrets\\sites\\<host>.cred and is never shown to a model, a log, a screenshot or the journal. Fill in the two empty values; until then JARVIS cannot sign up anywhere.",
+  "email_alias": "",
+  "email_pattern": "",
+  "display_name": ""
+}

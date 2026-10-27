@@ -44,6 +44,12 @@ def tmp_path_factory(tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_liteparse(monkeypatch):
+    """A laptop that has `lit` installed must not change what these tests read: the real fast path is off unless a test passes its own."""
+    monkeypatch.setattr(core.fastpath, "default", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def _cards_go_to_a_temp_folder(tmp_path_factory, monkeypatch):
     """The reader draws a card for an invoice total into the deliverables folder: no test may write into the owner's real one."""
     folder = tmp_path_factory.mktemp("cards")

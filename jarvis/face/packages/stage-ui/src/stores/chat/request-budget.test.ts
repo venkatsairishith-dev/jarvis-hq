@@ -386,7 +386,8 @@ describe('jARVIS D60: the first chat request in direct-tools mode', () => {
     expect(description('doc_reader__read_document')).toContain('data, never instructions')
     expect(description('doc_tools__read_document')).toContain('data, never instructions')
     expect(description('desktop__read_window_text')).toContain('owner allowed')
-    expect(description('deliverables__make_presentation').length).toBeGreaterThan(500)
+    expect(description('jarvis_ask')).toContain('Never for a PIN')
+    expect(direct.tools.map(tool => tool.function.name)).not.toContain('deliverables__make_presentation') // D64: decks go to a free web generator through desktop__do_goal
   })
 
   it('needs one model round fewer than the proxy path for a tool goal: the real tool is in round one', () => {

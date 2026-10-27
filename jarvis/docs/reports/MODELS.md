@@ -52,3 +52,6 @@ Not pinned (and why):
 
 - **uv**: No uv version is chosen anywhere in the repo (the test image runs an unpinned 'pip install uv').
 - **sherpa-onnx (speech recognition runtime)**: Installed into jarvis-venv with pip: sherpa-onnx==1.13.8 and sherpa-onnx-core==1.13.8 are pinned in jarvis/tools/requirements/jarvis-venv.txt; the wheel hashes are not recorded here.
+- **LiteParse (run-llama/liteparse)**: A pip package, not a download, so it is not in this file's download list: it is pinned with its wheel hash in jarvis/tools/requirements/liteparse-venv.txt (liteparse==2.17.0, win_amd64 wheel sha256 c14b17cf2408a5dcdd201a9cbbf392173e91271395cc6c8e872f7bfb347e0cd2, read from https://pypi.org/pypi/liteparse/json on 2026-10-26).
+- **NVIDIA Kumo Tabular (structured-data-models)**: Optional and not installed yet (D66).
+- **uiautomation (yinkaisheng) / comtypes COM UIA**: Pip packages, not downloads: uiautomation==2.0.29 and comtypes==1.4.11 are pinned WITH the sha256 of their wheels in jarvis/tools/requirements/uia-venv.txt (D68; install with --require-hashes into D:\jarvis\tools\uia-venv).

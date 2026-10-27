@@ -27,3 +27,6 @@ D:*
 .idea/
 .DS_Store
 Thumbs.db
+
+# turbo build cache
+.turbo/

@@ -17,6 +17,8 @@ def test_capture_makes_the_local_only_folder_before_the_screenshot_is_saved(tmp_
     seen = {}
 
     def fake_powershell(script, env, timeout):
+        if "JARVIS_PNG" not in env:                               # the prepare step (tests in test_vision_prepare.py)
+            return subprocess.CompletedProcess([], 0, json.dumps({"changed": False}) + "\n", "")
         png = env["JARVIS_PNG"]
         seen["dir_existed"] = os.path.isdir(os.path.dirname(png))
         if not seen["dir_existed"]:                               # what the real Bitmap.Save does

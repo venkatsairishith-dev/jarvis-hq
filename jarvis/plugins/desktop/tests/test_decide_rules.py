@@ -134,10 +134,11 @@ def test_a_negated_account_is_never_used_even_from_the_model():  # A-076
 
 
 def test_the_owners_document_word_beats_the_models():  # A-083
+    # D64: the owner's words still beat the model's. A report is answered in words (no PDF is built here); slides go to a free web generator.
     p = v("make a report about electric buses", {"tool": "research", "query": "electric buses", "deliverable": "presentation"})
-    assert p.steps[0]["deliverable"] == "report"
+    assert p.steps[0]["tool"] == "research" and p.steps[0]["deliverable"] == "none"
     p = v("make slides about tides", {"tool": "research", "query": "tides", "deliverable": "report"})
-    assert p.steps[0]["deliverable"] == "presentation"
+    assert p.steps[0]["tool"] == "web_task" and p.steps[0]["topic"] == "tides"
 
 
 def test_writing_a_report_on_a_topic_is_not_typing_into_an_app():  # A-084

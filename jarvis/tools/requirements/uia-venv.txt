@@ -1,0 +1,12 @@
+# uia-venv (laptop: D:\jarvis\tools\uia-venv). Holds ONLY the persistent UI Automation worker's library (D68, 2026-10-26): the node starts
+# jarvis_node/uia_worker.py with this venv's python. Nothing else runs in it. Without it the worker stays off and the node uses its PowerShell scripts.
+# Install (Windows, once; the owner or the laptop session runs it, JARVIS does not install packages by itself):
+#   py -3.11 -m venv D:\jarvis\tools\uia-venv
+#   D:\jarvis\tools\uia-venv\Scripts\python.exe -m pip install --require-hashes --no-deps -r jarvis\tools\requirements\uia-venv.txt
+# Both wheels are pure Python. The sha256 values are those of the files pypi.org served on 2026-10-26 (computed from the downloaded wheels):
+#   uiautomation-2.0.29-py3-none-any.whl  Apache-2.0, depends on comtypes>=1.2.1 only, ships a native UIAutomationClient_VC140 DLL the worker never loads
+#   comtypes-1.4.11-py3-none-any.whl      MIT (wheel classifier), uploaded 2025-05-14, Requires-Python >=3.8; the version already measured on the laptop in agent-venv (transitive)
+# Facts read from https://pypi.org/pypi/<name>/<version>/json on 2026-10-26 (upload dates, sha256, Requires-Dist).
+# Why pinned this tight: uiautomation's last release is 2.0.29 (2025-08-05) and its API moves between versions; comtypes is the layer that does the COM work.
+uiautomation==2.0.29 --hash=sha256:5dd51c9e77e70470142a13d903be67f256c445e7cf20b47ada0ece2bdaff9f32
+comtypes==1.4.11 --hash=sha256:1760d5059ca7ca1d61b574c998378d879c271a86c41f88926619ea97497592bb

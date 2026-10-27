@@ -1,5 +1,5 @@
-"""Benchmark: Windows-MCP (CursorTouch, MIT, 0.8.7, isolated venv) vs JARVIS's own UIA layer on the same Notepad tasks
-(2026-10-16). Windows. Telemetry off; only its read/click/type tools are enabled (no PowerShell, registry, files).
+"""Benchmark: Windows-MCP (CursorTouch, MIT, isolated venv; measured on 0.8.7, pin moved to 0.8.8 on 2026-10-26, D67: re-run to re-measure) vs
+JARVIS's own UIA layer on the same Notepad tasks (2026-10-16). Windows. Telemetry off (ANONYMIZED_TELEMETRY=false; it is ON by default upstream); only its read/click/type tools are enabled (no PowerShell, registry, files).
     D:\\jarvis\\tools\\browser-venv\\Scripts\\python.exe jarvis\\evals\\pc_control\\compare_windows_mcp.py [--list]
 Measures per task: success (checked by reading Notepad's text through Win32) and seconds, over N repeats.
 """

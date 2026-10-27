@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from jarvis.plugins._shared import loopback_http, screen_text, specialists
+from jarvis.plugins._shared import final_answer, loopback_http, screen_text, specialists
 from jarvis.plugins.main_agent import planner
 
 from . import composite, coordinator as coord, decide
@@ -134,7 +134,7 @@ def _obj(props: dict, required: list | None = None) -> dict:
 _S = {"type": "string"}
 EXECUTORS: dict[str, Executor] = {e.id: e for e in (
     Executor("pc", "ui_decide", "", "Operate this PC: open or focus an app or a website in Chrome, play music or video, type, press keys, "
-             "check disk or network, troubleshoot an app. A local model chooses the exact action."),
+             "check disk or network, troubleshoot an app, make a slide deck on a free web generator in the owner's Chrome. A local model chooses the exact action."),
     Executor("screen_read", "screen_read", "desktop:read_window_text", "Read the text of one open window (accessibility, OCR, local vision). "
              "Say which app in the goal.", _obj({"app": _S}, ["app"])),
     Executor("screen_locate", "screen_locate", "desktop:find_on_screen", "Find where a label or text is inside one window (does not click). "
@@ -692,6 +692,13 @@ class GoalRunner:
         else:
             summary = f"{head} I could not finish: step {bad['n']} ({bad['executor']}): {bad['result']}"
         steps = [{k: v for k, v in s.items() if k not in ("done_text", "check")} for s in steps]
+        try:                                                    # D59 lever b, wired (D65): the sentence must agree with what the steps VERIFIED, or the one built from them replaces it
+            st, fx = final_answer.effects_from_goal_result({"status": status, "steps": steps})
+            guarded = final_answer.guard(summary, st, fx, approval_id=str((bad or {}).get("approval_id") or (rec or {}).get("approval_id") or ""), question=str((bad or {}).get("result") or ""))
+            if guarded.source == final_answer.TEMPLATE:
+                summary = guarded.text
+        except Exception:  # noqa: BLE001 - a safety net, never a reason to lose the sentence
+            pass
         out = {"status": status, "planned_by": planned_by, "summary": summary[:1500], "steps": steps}
         aid = bad.get("approval_id") if bad else None
         if aid or (rec or {}).get("approval_id") and status == "waiting_for_permission":

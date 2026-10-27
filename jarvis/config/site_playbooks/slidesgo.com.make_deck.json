@@ -1,0 +1,38 @@
+{
+  "name": "make_deck", "host": "slidesgo.com", "hosts": ["slidesgo.com"], "version": 1, "source": "builtin",
+  "goal": "Generate a presentation from a topic with Slidesgo's AI Presentation Maker and download it as PPTX",
+  "start": "https://slidesgo.com/ai/presentation-maker",
+  "verified_live": false,
+  "needs": ["signin_existing_session", "accept_terms", "download_to_quarantine"],
+  "terms_note": "Slidesgo's terms bar robots, programs or tools that access or control the site 'contrary to the ordinary use'. Up to 3 free AI presentations a month; an account is required; the download is PPTX.",
+  "terms_read": "2026-10-26", "terms_source": "slidesgo.com/ai/presentation-maker; slidesgo.com/terms-conditions",
+  "formats": ["pptx"],
+  "params": [{"name": "topic", "required": true}, {"name": "outline", "default": ""}, {"name": "slides", "default": "3"}, {"name": "theme", "default": ""}, {"name": "formats", "default": "pptx"}],
+  "notes": {"drafted": "2026-10-26 from the vendor's AI Presentation Maker page, NOT yet seen after sign-in: the laptop session confirms every step."},
+  "phases": [
+    {"name": "open", "steps": [
+      {"id": "open", "do": "goto", "to": "https://slidesgo.com/ai/presentation-maker", "new_tab": true, "expect": {"host_is": "slidesgo.com"}}
+    ]},
+    {"name": "signin", "note": "only when the page asks to log in",
+     "skip_if": {"element": {"role": "textbox", "name": "Describe your presentation", "any_of": ["Topic", "Prompt", "Tell us about your presentation"]}},
+     "steps": [
+      {"id": "try", "do": "click", "loc": {"role": "button", "name": "Try now", "any_of": ["Start for free", "Get started", "Log in", "Sign in"]}, "optional": true, "intent": "open the AI maker or its sign-in"},
+      {"id": "google", "do": "click", "loc": {"role": "button", "name": "Continue with Google", "any_of": ["Sign in with Google", "Log in with Google", "Google"]}, "optional": true, "intent": "sign in with the Google session of this Chrome", "expect": {"any": [{"host_is": "accounts.google.com"}, {"host_is": "slidesgo.com"}]}},
+      {"id": "account", "do": "click", "loc": {"role": "button", "text": "@"}, "optional": true, "intent": "choose the Google account already signed in"},
+      {"id": "consent", "do": "click", "loc": {"role": "button", "name": "Continue", "any_of": ["Next"]}, "optional": true, "intent": "the basic sign-in screen only"}
+    ]},
+    {"name": "create", "steps": [
+      {"id": "prompt", "do": "fill", "loc": {"role": "textbox", "name": "Describe your presentation", "any_of": ["Topic", "Prompt", "Tell us about your presentation", "What is your presentation about?"]}, "value": "{topic}", "intent": "give the topic"},
+      {"id": "theme", "do": "click", "loc": {"role": "button", "name": "{theme}"}, "optional": true, "intent": "pick the theme the owner named"},
+      {"id": "generate", "do": "click", "loc": {"role": "button", "name": "Generate", "any_of": ["Generate presentation", "Create presentation", "Continue"]}, "intent": "generate the slides", "expect": {"changed": true}}
+    ]},
+    {"name": "wait", "steps": [
+      {"id": "ready", "do": "wait", "timeout_s": 240, "intent": "wait until the presentation is made",
+       "until": {"text_any": ["Download now", "Download", "Your presentation is ready"], "fail_if": ["Something went wrong", "limit", "Upgrade to continue"]}}
+    ]},
+    {"name": "export", "steps": [
+      {"id": "download", "do": "click", "loc": {"role": "button", "name": "Download now", "any_of": ["Download", "Download PPTX"]}, "intent": "start the PPTX download", "expect": {"noop_ok": true}},
+      {"id": "pptx_file", "do": "download", "value": "pptx", "intent": "collect the PowerPoint file into quarantine", "expect": {"download": {"ext": "pptx"}}}
+    ]}
+  ]
+}

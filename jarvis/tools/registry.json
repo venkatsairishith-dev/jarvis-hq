@@ -2045,9 +2045,10 @@
   "category": "browser",
   "upstream_url": "https://playwright.dev",
   "licence": "Apache-2.0",
-  "pinned_version": "1.63.0",
+  "pinned_version": "1.64.1 (read on PyPI and github.com/microsoft/playwright-python/releases.atom 2026-10-26; released 2026-10-22; was 1.63.0; not yet installed or measured on the laptop, D67)",
   "pin_location": [
    "jarvis/tools/requirements/agent-venv.txt",
+   "jarvis/node/requirements-browser.txt:2",
    "jarvis/scripts/test-container/Containerfile:9"
   ],
   "integration": "pip",
@@ -2149,7 +2150,7 @@
   "category": "computer",
   "upstream_url": "https://github.com/CursorTouch/Windows-MCP",
   "licence": "MIT",
-  "pinned_version": "0.8.7 (isolated venv)",
+  "pinned_version": "0.8.8 (isolated venv; PyPI windows-mcp 0.8.8 released 2026-10-10, read 2026-10-26; needs Python >=3.14; the benchmark numbers in PC_CONTROL_BENCHMARK.md were measured on 0.8.7). Telemetry is ON by default (README: ANONYMIZED_TELEMETRY); the benchmark venv must run with ANONYMIZED_TELEMETRY=false (compare_windows_mcp.py sets it)",
   "pin_location": [
    "jarvis/evals/pc_control/compare_windows_mcp.py:1"
   ],
@@ -2481,28 +2482,41 @@
  {
   "name": "uiautomation (yinkaisheng) / comtypes COM UIA",
   "category": "computer",
-  "upstream_url": "unknown",
-  "licence": "uiautomation Apache-2.0; comtypes MIT-style",
-  "pinned_version": "none (comtypes 1.4.11 transitive in agent-venv.txt)",
+  "upstream_url": "https://github.com/yinkaisheng/Python-UIAutomation-for-Windows",
+  "licence": "Apache-2.0 AND MIT",
+  "pinned_version": "uiautomation 2.0.29 (PyPI 2025-08-05) + comtypes 1.4.11, both with sha256 hashes; not installed yet (D68, 2026-10-26)",
   "pin_location": [
-   "jarvis/tools/requirements/agent-venv.txt"
+   "jarvis/tools/requirements/uia-venv.txt"
   ],
-  "integration": "planned-only",
+  "integration": "pip, in its own venv on D: (D:\\jarvis\\tools\\uia-venv), run as the node's persistent UI Automation worker",
   "machine": "laptop",
-  "jarvis_files": [],
-  "features_used": [],
+  "jarvis_files": [
+   "jarvis/node/jarvis_node/uia_worker.py",
+   "jarvis/node/jarvis_node/uia_lib_uiautomation.py",
+   "jarvis/node/jarvis_node/uia.py",
+   "jarvis/node/jarvis_node/winbackend.py",
+   "jarvis/node/jarvis_node/windowpick.py",
+   "jarvis/node/jarvis_node/ui.py",
+   "jarvis/node/jarvis_node/diag.py"
+  ],
+  "features_used": [
+   "COM bootstrap, Invoke / Value / Text pattern wrappers and the clipboard, behind one adapter (uia_lib_uiautomation.py); window list, window text and tree, find control, click, type, paste, focus and window state served by ONE long-lived process instead of a PowerShell start per call (D68). pywinauto was weighed and not chosen (docs/03_DECISIONS.md D68); the adapter is the only file that names a library"
+  ],
   "unused_features": [
    {
-    "feature": "Persistent UIA worker to save 235-343 ms PowerShell start per call",
-    "evidence": "jarvis/docs/research/03-computer-control.md:418"
+    "feature": "its bitmap / screen-capture functions (a native UIAutomationClient_VC140 DLL ships in the wheel and is never loaded by the worker), SendKeys, the mouse functions, its Logger",
+    "evidence": "jarvis/docs/03_DECISIONS.md D68"
    }
   ],
   "size_class": "small",
-  "packaging_recommendation": "lockfile-pinned (pip) when adopted",
-  "packaging_reason": "Not adopted.",
+  "packaging_recommendation": "pinned (jarvis/tools/requirements/uia-venv.txt)",
+  "packaging_reason": "uiautomation is Apache-2.0, comtypes is MIT. Pinned with hashes in its own venv; not a download, so only explained in jarvis.lock.json not_locked.",
   "evidence": [
-   "jarvis/docs/research/03-computer-control.md:173"
-  ]
+   "jarvis/docs/research/03-computer-control.md:173",
+   "jarvis/scout/findings/2026-10-26.md:17",
+   "https://pypi.org/project/uiautomation/ (read 2026-10-26)"
+  ],
+  "licence_spdx": "Apache-2.0 AND MIT"
  },
  {
   "name": "WSL lab Agent PC tools (TigerVNC/Xvnc, xdotool, cua-driver, Firefox, Dashy)",
@@ -2656,5 +2670,70 @@
    "jarvis/evals/quality95/results/lightonocr-20261025-174505.json",
    "jarvis/tools/jarvis.lock.json"
   ]
+ },
+ {
+  "name": "NVIDIA Kumo Tabular (structured-data-models)",
+  "category": "model",
+  "upstream_url": "https://github.com/NVIDIA/structured-data-models",
+  "licence": "code Apache-2.0; weights OpenMDW-1.1 (read 2026-10-26 on nvidia.github.io/structured-data-models/api/models.html)",
+  "pinned_version": "NOT PINNED: not installed anywhere yet. Pin the pip version and the Hugging Face revision + sha256 when the laptop installs it.",
+  "pin_location": [],
+  "integration": "optional pip package in its own venv on D: + downloaded weights (size small ~28M by default)",
+  "machine": "laptop (CPU; a GPU is not required by the code but the repo examples use CUDA, CPU speed unmeasured)",
+  "jarvis_files": [
+   "jarvis/tools/tabular_predict.py",
+   "jarvis/tools/test_tabular_predict.py"
+  ],
+  "features_used": [
+   "in-context prediction from labelled rows + query rows (classification and regression), size 'small'"
+  ],
+  "unused_features": [
+   {
+    "feature": "sizes medium and large (up to ~215M); fit/predict/clear caching; TabICLv2 (BSD-3-Clause) as an alternative",
+    "evidence": "nvidia.github.io/structured-data-models/api/models.html"
+   }
+  ],
+  "size_class": "small (28M parameters; download size not stated on the pages read)",
+  "packaging_recommendation": "lockfile-pinned download",
+  "packaging_reason": "Optional. Used only for a table whose held-out check (tabular_predict.py check) shows it beating the plain baseline; otherwise the baseline answers. NVIDIA's ranking is its own test; independent reproduction pending in the coverage read on 2026-10-26.",
+  "evidence": [
+   "jarvis/docs/REEL_INTAKE_2026-10-26.md",
+   "jarvis/docs/03_DECISIONS.md (D66)"
+  ]
+ },
+ {
+  "name": "LiteParse (run-llama/liteparse)",
+  "category": "document",
+  "upstream_url": "https://github.com/run-llama/liteparse",
+  "licence": "Apache-2.0",
+  "pinned_version": "2.17.0 (PyPI liteparse, released 2026-10-22, read 2026-10-26); wheel liteparse-2.17.0-cp310-abi3-win_amd64.whl sha256 c14b17cf2408a5dcdd201a9cbbf392173e91271395cc6c8e872f7bfb347e0cd2 from https://pypi.org/pypi/liteparse/json; NOT installed or run anywhere yet",
+  "pin_location": [
+   "jarvis/tools/requirements/liteparse-venv.txt"
+  ],
+  "integration": "optional pip package in its own venv on D: (D:\\jarvis\\tools\\liteparse-venv), called as the `lit` command-line tool with a timeout and an output cap; never imported",
+  "machine": "laptop (CPU, no model; Rust core with PDFium)",
+  "jarvis_files": [
+   "jarvis/plugins/doc_reader/fastpath.py",
+   "jarvis/plugins/doc_reader/core.py",
+   "jarvis/plugins/doc_reader/tests/test_fastpath.py"
+  ],
+  "features_used": [
+   "lit parse - --format text --no-ocr --target-pages N on a digital PDF's text layer (PDF on standard input)"
+  ],
+  "unused_features": [
+   {
+    "feature": "bundled Tesseract OCR (default engine; Hindi/Telugu data not stated on the page), --ocr-server-url HTTP OCR servers, markdown/json output, tables, bounding boxes, lit is-complex, screenshots",
+    "evidence": "github.com/run-llama/liteparse (README read 2026-10-26)"
+   }
+  ],
+  "size_class": "small (Windows wheel 12.1 MB, no runtime dependencies listed on PyPI)",
+  "packaging_recommendation": "pinned pip package with hash (jarvis/tools/requirements/liteparse-venv.txt)",
+  "packaging_reason": "Optional fast path before the OCR model for PDFs with a real text layer; absent or failing means the OCR path answers as before. The telemetry behaviour is not stated on the README page: block its network access in the firewall and check on the laptop.",
+  "evidence": [
+   "jarvis/scout/findings/2026-10-26.md (item 2)",
+   "jarvis/docs/REEL_INTAKE_2026-10-26.md",
+   "jarvis/docs/03_DECISIONS.md (D67)"
+  ],
+  "licence_spdx": "Apache-2.0"
  }
 ]

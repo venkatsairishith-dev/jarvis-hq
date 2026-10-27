@@ -454,7 +454,7 @@ class UiObservations(unittest.TestCase):
             raise RuntimeError("ui-action-failed:pattern")                    # WINDOW_STATE throws when the state differs
         winbackend._run = wrong_state
         r = self.act("minimize", "notepad|")
-        self.assertEqual(r, {"ok": False, "error": "RuntimeError"})
+        self.assertEqual(r, {"ok": False, "error": "RuntimeError", "reason": "pattern"})      # D65: the fixed reason code of our own script rides along
         self.assertNotIn("window_state", r)
 
     def test_only_short_fixed_keys_are_passed_on(self):

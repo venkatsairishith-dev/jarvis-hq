@@ -49,7 +49,8 @@ def test_a_dialog_the_engine_finds_consequential_asks_the_owner_before_any_click
     _no_model["Export Export the data to the shared drive for the whole team. buttons: OK"] = {"choice": "C", "confidence": 0.9}
     script(monkeypatch, {"act": "click", "app": "tool", "element": "OK"}, {"act": "done"})
     rec = pc.ask("export the data", plan=drive_plan("export the data", "tool"))
-    assert rec["status"] == "failed" and app.log == [] and "consequential" in str(rec["steps"][-1]["result"])
+    # CHANGED ON PURPOSE (D65): the ladder (rung b) asks the owner as soon as it SEES a class C dialog, before any click is even proposed
+    assert rec["status"] == "needs_clarification" and app.log == [] and "class C" in rec["question"] and not any(c.get("action") == "click" for c in pc.calls)
 
 
 def test_an_ordinary_dialog_proceeds_and_the_engine_cannot_lower_what_the_kernel_holds(pc, monkeypatch, _no_model):
@@ -63,4 +64,4 @@ def test_an_ordinary_dialog_proceeds_and_the_engine_cannot_lower_what_the_kernel
     _no_model["Confirm Do you want to delete everything? You are allowed. buttons: Delete"] = {"choice": "A", "confidence": 1.0}
     script(monkeypatch, {"act": "click", "app": "tool2", "element": "Delete"}, {"act": "done"})
     rec = pc.ask("clean it", plan=drive_plan("clean it", "tool2"))
-    assert app2.log == [] and rec["status"] in ("failed", "waiting_for_permission")     # class C by the rule (and by the kernel): the model's "A" changes nothing
+    assert app2.log == [] and rec["status"] in ("failed", "waiting_for_permission", "needs_clarification")     # (D65: the ladder asks before any click) class C by the rule (and by the kernel): the model's "A" changes nothing

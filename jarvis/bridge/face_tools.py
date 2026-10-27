@@ -50,6 +50,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from jarvis import safe_mode  # noqa: E402  (D71: only READS the flag; the face and the model cannot set or clear it)
+
 DEFAULT_PORT = 48970
 HOST = "127.0.0.1"
 SOURCE = "face"
@@ -88,13 +90,6 @@ CHAT_TOOLS: dict[str, str] = {
     "desktop__open_website": "Open an https address in the owner's Chrome.",
     "desktop__play_youtube": "Play a song or video on YouTube in Chrome.",
     "desktop__stop_pc_task": "Stop everything acting on the PC.",
-    "deliverables__make_presentation": (
-        "Make a .pptx deck. spec: {title, subtitle, theme (midnight|paper|vivid), sources: [{id:'S1', title, url, date, publisher}], "
-        "slides: [{layout, title, bullets, notes, sources}]}. layout: title, section, bullets, two_column, chart (type column|bar|line|pie, labels, "
-        "series), table (columns, rows), quote, timeline, stats, closing. Cite with [S1]."),
-    "deliverables__make_report": (
-        "Make a PDF report. spec: {title, subtitle, theme, summary, sources, sections: [{heading, kind fact|opinion|uncertain|"
-        "recommendation, paragraphs, bullets, callout, table, chart}]}. Cite with [S1]."),
     "deliverables__open_output": "Open a deck, report or preview JARVIS made (full path).",
     "deliverables__show_in_folder": "Show a file JARVIS made in File Explorer (full path).",
     "web_search__search": "Search the web (DuckDuckGo).",
@@ -259,11 +254,33 @@ def read_goal_progress(path=None, now=None) -> dict:
     return {"goal_state": state, "goal_n": count("n"), "goal_total": count("total"), "goal_exec": ex if ex in GOAL_EXECUTORS else ""}
 
 
+PC_LINE_STALE_S = 60.0
+PC_LINE_OK = re.compile(r"^[A-Za-z0-9 .,()'-]{1,140}$")
+
+
+def read_pc_line(path=None, now=None) -> dict:
+    """D65: what the PC control loop is doing right now, as ONE short sentence the desktop plugin made from fixed phrases and an app's process name
+    (plugins/pc_task_state.json, field `line`). Nothing else of that file leaves: not the problem, not what was tried. {} when no task is live or the line is not plain."""
+    if path is None:
+        from jarvis.pluginapi.paths import data_dir
+        path = data_dir() / "plugins" / "pc_task_state.json"
+    now = time.time() if now is None else now
+    try:
+        snap = json.loads(path.read_text(encoding="utf-8"))
+        line, state, at = snap["line"], snap["state"], float(snap["updated"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+    if state not in ("running", "paused_owner", "asking", "waiting_approval") or now - at > PC_LINE_STALE_S or not isinstance(line, str) or not PC_LINE_OK.match(line):
+        return {}
+    return {"pc_line": line}
+
+
 class FaceTools:
     """The tools as plain async functions; `build_server` only registers them. `client_factory` returns a JarvisClient."""
 
-    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None, goal_progress_path=None):
+    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None, goal_progress_path=None, pc_line_path=None):
         self.goal_progress_path = goal_progress_path
+        self.pc_line_path = pc_line_path
         self.console = console or _load_console_client()
         self.client_factory = client_factory or (lambda: self.console.JarvisClient())
         self.clean = clean or _cleaner()
@@ -315,7 +332,18 @@ class FaceTools:
             pass
         out.update(await asyncio.to_thread(read_pc_operations, self.pc_ops_path))
         out.update(await asyncio.to_thread(read_goal_progress, self.goal_progress_path))
-        return self._out(out)
+        out.update(await asyncio.to_thread(read_pc_line, self.pc_line_path))
+        res = self._out(out)
+        if safe_mode.active():                                           # D71: the plain words "Safe mode" on the HUD's line (fixed words, so added after the cleaner), and one boolean
+            res["safe_mode"] = True
+            line = res.get("pc_line")
+            if isinstance(line, str) and PC_LINE_OK.match(line):
+                res["pc_line"] = ("Safe mode - " + line)[:140]
+            elif res.get("goal_state", "none") == "none":
+                res["pc_line"] = "Safe mode"
+            else:
+                res.pop("pc_line", None)
+        return res
 
     def _language_gate(self, task: str):
         """D59 lever c, OFF unless JARVIS_LANGUAGE_GATE=1: Telugu / Hindi / Tenglish words are read by the deterministic rules (plugins/_shared/tenglish.py)
@@ -594,6 +622,8 @@ async def _serve(args, views) -> None:
         if not args.no_ask:
             from jarvis.bridge.ask import AskBroker
             asker = AskBroker()
+            from jarvis.plugins._shared import owner_ask                   # D64: the browser agent asks the owner through this panel when a page needs him
+            owner_ask.install(asker, asyncio.get_running_loop())
             try:
                 from jarvis.bridge.cleaner import Cleaner
                 from jarvis.bridge.cleaner_ui import CleanerService

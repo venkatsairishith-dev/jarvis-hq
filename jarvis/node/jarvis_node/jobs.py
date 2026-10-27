@@ -307,7 +307,11 @@ def ui_action(p: dict, backend=None, lister=None) -> dict:
     except savefile.SafeError as e:                         # a refusal worded by savefile.py itself (never screen text): reported as it is
         return {"ok": False, "error": e.public, **{k: v for k, v in e.extra.items() if isinstance(v, (str, bool)) and len(str(v)) <= 80}}
     except Exception as e:      # the kind of failure only: its text could contain screen content
-        return {"ok": False, "error": type(e).__name__}
+        out = {"ok": False, "error": type(e).__name__}
+        code = str(e)[len("ui-action-failed:"):] if isinstance(e, RuntimeError) and str(e).startswith("ui-action-failed:") else ""
+        if code and len(code) <= 60 and code.replace(" ", "").isalpha():          # D65: the FIXED reason code of our own scripts ("no element", "no window", "target is not the foreground window"), never screen text
+            out["reason"] = code
+        return out
     # What the node itself checked before it said ok (audit PC-D11): a backend that read the result back (the typed text,
     # the foreground window, the window state) returns it; a click, a key press or a scroll has nothing to read, so the
     # plugin must call those "reported ok, not observed". Only short fixed keys are passed on, never screen content.
@@ -336,17 +340,29 @@ def window_id(w: dict) -> str | None:
     return "w" + hmac.new(_WINDOW_ID_KEY, f"{hwnd}:{pid}".encode(), hashlib.sha256).hexdigest()[:16]
 
 
-def ui_windows(p: dict, lister=None) -> dict:
+def ui_windows(p: dict, lister=None, input_state=None) -> dict:
     """The visible top-level windows right now (titles scrubbed): what is actually on screen. Each described window has
     its id; `ids` lists the ids of all windows (not only the first 40 described), complete only when every window had one."""
     if lister is None:
         from .windows import list_windows as lister
     ws = lister()
     ids = [window_id(w) for w in ws]
-    return {"ok": True, "count": len(ws), "id_epoch": WINDOW_ID_EPOCH,
-            "ids": [i for i in ids if i][:MAX_WINDOW_IDS], "ids_complete": all(ids) and len(ids) <= MAX_WINDOW_IDS,
-            "windows": [dict({k: w[k] for k in ("title", "process", "foreground", "minimized", "w", "h")}, id=ids[n])
-                        for n, w in enumerate(ws[:40])]}
+    out = {"ok": True, "count": len(ws), "id_epoch": WINDOW_ID_EPOCH,
+           "ids": [i for i in ids if i][:MAX_WINDOW_IDS], "ids_complete": all(ids) and len(ids) <= MAX_WINDOW_IDS,
+           "windows": [dict({k: w[k] for k in ("title", "process", "foreground", "minimized", "w", "h")}, id=ids[n],
+                            **{k: bool(w[k]) for k in ("hung", "cloaked") if k in w})        # D65: "(Not Responding)" and "on another virtual desktop"
+                       for n, w in enumerate(ws[:40])]}
+    try:                                                                     # D65: has the OWNER touched the keyboard or mouse (the plugin compares it with its own last action)
+        if input_state is None:
+            from .windows import input_state
+        st = input_state() or {}
+    except Exception:  # noqa: BLE001 - a missing reading is "not known", never a failed listing
+        st = {}
+    if isinstance(st.get("idle_ms"), int):
+        out["idle_ms"] = st["idle_ms"]
+    if isinstance(st.get("cursor"), (list, tuple)) and len(st["cursor"]) == 2:
+        out["cursor"] = [int(st["cursor"][0]), int(st["cursor"][1])]
+    return out
 
 
 SENSITIVE_PROC = sensitive.FLOOR          # the node's floor; the check itself is sensitive.why (the kernel's list as well)

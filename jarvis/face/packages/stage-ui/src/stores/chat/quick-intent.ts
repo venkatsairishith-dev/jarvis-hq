@@ -48,13 +48,21 @@ export function guessTask(text: string | undefined | null): TaskGuess | null {
 const CLOCK = /^(?:what(?:'s|\s+is)\s+(?:the\s+)?(?:current\s+|today'?s\s+)?(?:time|date)|what\s+time\s+is\s+it|what\s+day\s+is\s+it|tell\s+me\s+the\s+(?:time|date))\b/i
 
 /**
+ * D65: the owner talks to JARVIS about the PC task that is under way ("what are you doing", "why did you stop", "what went wrong"), steers it ("try another way", "skip this
+ * step", "stop") or asks what it has learned. WHOLE phrases only. The Python hook (jarvis/plugins/desktop/taskvoice.py, behind the same hidden quick_command tool) decides:
+ * it answers `handled: false` at once when no task is live, and the message then goes to the chat model as any other. Only the owner's own session reaches this code.
+ */
+const TASK_TALK = /^(?:what(?:'s| is| are)? you(?:'re| are)? doing(?: right now| now)?|what are you up to|what are you working on|why did you stop(?:ped)?|why are you waiting|what went wrong|what(?:'s| is) wrong|what happened|what(?:'s| is) the problem|try (?:it )?(?:another|a different) way|try something else|skip (?:this|that|the) step|stop|stop (?:it|that|now|the task)|what have you learn(?:ed|t)(?: about [\w. -]{1,40})?|what did you learn(?: about [\w. -]{1,40})?|forget (?:that|it|this|everything about [\w. -]{1,40}))[\s.!?]*$/i
+
+/**
  * Whether the rules-first router is worth asking: the message starts like a PC command, or asks the clock. Everything else goes straight to the chat model,
  * so an ordinary chat turn does not wait for one more local call.
  */
 export function mightBeQuickCommand(text: string, guess: TaskGuess | null = guessTask(text)): boolean {
   if (guess?.kind === 'pc')
     return true
-  return CLOCK.test(String(text ?? '').replace(/\s+/g, ' ').trim().replace(FILLER, ''))
+  const body = String(text ?? '').replace(/\s+/g, ' ').trim().replace(FILLER, '')
+  return CLOCK.test(body) || TASK_TALK.test(body)
 }
 
 export interface QuickResult {

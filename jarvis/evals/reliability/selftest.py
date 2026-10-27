@@ -80,6 +80,23 @@ def run(env: LocalEnv, driver: Any, args: Any, sleep: Callable[[float], None] = 
         env.close_window(new[0])
         return "box shown, read and closed"
 
+    def problem_setups() -> str:
+        """D65 (problem_recovery goals): a window that hangs for a few seconds and then answers, a minimised window, a message box that comes later."""
+        before = {w.hwnd for w in env.windows()}
+        marker = f"{work}{env.sep}slow-{tok}.marker"
+        env.slow_form("Selftest slow " + tok, marker, 3)
+        env.message_box_later("Selftest later " + tok, "late " + tok, 2)
+        sleep(2)
+        slow = [w for w in env.windows() if w.hwnd not in before and tok in w.title and "slow" in w.title]
+        assert slow, "the slow window did not appear"
+        env.minimize_window("Selftest slow " + tok)
+        sleep(5)
+        later = [w for w in env.windows() if w.hwnd not in before and "later" in w.title and tok in w.title]
+        assert later, "the message box that should come later did not appear after 5 s"
+        for w in slow + later:
+            env.close_window(w)
+        return "slow window shown and minimised, late message box appeared"
+
     def picture() -> str:
         before = {w.hwnd for w in env.windows()}
         path = f"{work}{env.sep}pic-{tok}.png"
@@ -115,6 +132,7 @@ def run(env: LocalEnv, driver: Any, args: Any, sleep: Callable[[float], None] = 
     step("recycle bin round trip (token only)", bin_roundtrip, True)
     step("message box read by UI Automation", msgbox, True)
     step("picture rendered and opened", picture, True)
+    step("problem setups (slow window, minimise, late message box)", problem_setups, True)
     step("tool server (127.0.0.1:48970) answers", tool_server)
     if getattr(driver, "name", "") == "face":
         step("face chat: type, read the answer back", face)

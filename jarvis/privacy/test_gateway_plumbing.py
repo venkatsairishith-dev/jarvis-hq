@@ -403,6 +403,15 @@ class LocalModelIsTheLastResort(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual((seen["first"], seen["local"]), (0, 1))
 
+    def test_safe_mode_switches_the_local_model_preference_off(self):
+        """D71: with safe mode on the preferred local model is not put first; the chain keeps its configured order (online first here). Nothing else changes."""
+        os.environ["JARVIS_SAFE_MODE"] = "1"
+        self.addCleanup(lambda: os.environ.pop("JARVIS_SAFE_MODE", None))
+        base, seen, names = self.start(first_code=200, prefer=True)
+        code, out = post(base, "/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(code, 200)
+        self.assertEqual((seen["first"], seen["local"]), (1, 0))
+
     def test_a_reasoning_caller_can_ask_for_the_online_chain_first(self):
         base, seen, names = self.start(first_code=200, prefer=True)
         req = urllib.request.Request(base + "/v1/chat/completions", data=json.dumps({"model": "x", "messages": [{"role": "user", "content": "hi"}]}).encode(),

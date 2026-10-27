@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><title>Create - Decks</title></head>
+<body data-needs-session data-timeline="2:text:#status=Generating slide 1 of 3;4:text:#status=Generating slide 2 of 3;6:text:#status=Generating slide 3 of 3;7:show:#done;7:hide:#status">
+<div id="tour" role="dialog" aria-label="Welcome" data-blocks>
+  <p>Welcome to Decks! Take a quick tour?</p>
+  <button data-on-click="hide:#tour">Skip tour</button>
+  <button data-on-click="hide:#tour">Start tour</button>
+</div>
+<header><h1>Create a presentation</h1><button data-icon-only data-on-click="goto:/settings" id="gear">gear</button></header>
+<section id="form">
+  <label for="topic">What is your presentation about?</label>
+  <input id="topic" type="text" name="topic" placeholder="Topic">
+  <label for="theme">Theme</label>
+  <select id="theme" name="theme"><option>Midnight</option><option>Paper</option><option>Vivid</option></select>
+  <label for="count">Number of slides</label>
+  <select id="count" name="count"><option>3</option><option>5</option><option>10</option></select>
+  <button id="gen" data-disabled-until-text="#topic=a" data-on-click="timeline:start;hide:#form;show:#status">Generate</button>
+</section>
+<p id="status" data-hidden>Starting...</p>
+<section id="done" data-hidden>
+  <h2>Your deck is ready</h2>
+  <label for="s1">Slide 1 title</label><input id="s1" type="text" value="Introduction">
+  <label for="s2">Slide 2 title</label><input id="s2" type="text" value="Main points">
+  <label for="s3">Slide 3 title</label><input id="s3" type="text" value="Summary">
+  <button data-on-click="show:#export">Export</button>
+  <button data-on-click="goto:/pricing">Remove watermark</button>
+  <button data-on-click="show:#share">Share</button>
+</section>
+<div id="export" role="dialog" aria-label="Export" data-hidden data-blocks data-esc-closes>
+  <h2>Export your deck</h2>
+  <label for="fmt">Format</label><select id="fmt"><option>PowerPoint</option><option>PDF</option></select>
+  <button data-on-click="download:/exports/deck.pptx">Download PowerPoint</button>
+  <button data-on-click="download:/exports/deck.pdf">Download PDF</button>
+  <button data-on-click="hide:#export">Close</button>
+</div>
+<div id="share" role="dialog" aria-label="Share" data-hidden data-blocks>
+  <p>Anyone with the link can view.</p>
+  <button data-on-click="hide:#share">Cancel</button>
+  <button data-on-click="hide:#share">Publish</button>
+</div>
+</body></html>

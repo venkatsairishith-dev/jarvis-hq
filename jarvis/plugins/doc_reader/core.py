@@ -14,6 +14,8 @@ This file holds the logic and the safety rules; it is tested without a model (th
   * PDF pages are drawn with pypdfium2 (Apache-2.0 / BSD-3, already in the agent venv; PDFium runs no script), at most 10 pages by default,
     never more than 30, the longer side 1540 px (about 140 dpi on a letter page, 300 dpi at most on a small one) so a page and its answer
     fit the model's 4096-token window;
+  * a PDF page that has a real text layer is read from it first with LiteParse (`fastpath.py`, optional, local, a timeout and an output cap,
+    class A); scans, photos and any page where it is absent or fails go to the model as before (D67). Both kinds of text are cleaned the same way;
   * what the model wrote has its reasoning removed, invisible and instruction-shaped text defused (`_shared/untrusted`), and secrets,
     card numbers and real IBANs replaced (`_shared/screen_text.scrub_text`, the cleaner used for screen text). The result says which kinds
     were removed, never the values.
@@ -38,6 +40,7 @@ from typing import Any, Callable
 from jarvis.plugins._shared import loopback_http
 from jarvis.plugins._shared.screen_text import scrub_text
 from jarvis.plugins._shared.untrusted import clean_untrusted
+from jarvis.plugins.doc_reader import fastpath
 from jarvis.plugins.doc_tools.core import BLOCKED_DIR_NAMES
 
 MODEL = "docreader"                                        # llama-swap alias (jarvis/local_models/llama-swap.yaml)
@@ -203,8 +206,9 @@ def _fit(img):
     return img
 
 
-def render_pdf(data: bytes, max_pages: int) -> tuple[list[bytes], int]:
-    """(PNG bytes of the first `max_pages` pages, the PDF's page count)."""
+def render_pdf(data: bytes, max_pages: int, only: "set[int] | None" = None) -> tuple[list[bytes], int]:
+    """(PNG bytes of the first `max_pages` pages, the PDF's page count). With `only` (0-based page numbers) just those pages are drawn;
+    the list then holds one picture per page of `only`, in page order."""
     try:
         import pypdfium2 as pdfium
     except ImportError:
@@ -219,6 +223,8 @@ def render_pdf(data: bytes, max_pages: int) -> tuple[list[bytes], int]:
         if total < 1:
             raise DocReaderError("That PDF has no pages.")
         for i in range(min(total, max_pages)):
+            if only is not None and i not in only:
+                continue
             page = doc[i]
             try:
                 w, h = page.get_size()
@@ -235,6 +241,25 @@ def render_pdf(data: bytes, max_pages: int) -> tuple[list[bytes], int]:
     finally:
         doc.close()
     return out, total
+
+
+def pdf_page_count(data: bytes) -> int:
+    """The PDF's page count, with the same plain refusals as render_pdf."""
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        raise DocReaderError("The PDF page renderer (pypdfium2) is not installed.") from None
+    try:
+        doc = pdfium.PdfDocument(data)
+    except Exception:  # noqa: BLE001
+        raise DocReaderError("That PDF could not be opened (it may be damaged or password protected).") from None
+    try:
+        total = len(doc)
+    finally:
+        doc.close()
+    if total < 1:
+        raise DocReaderError("That PDF has no pages.")
+    return total
 
 
 def render_image(data: bytes, ext: str, max_pages: int) -> tuple[list[bytes], int]:
@@ -341,32 +366,56 @@ def removed_sentence(hits: list[str]) -> str:
 Transcribe = Callable[[bytes], "str | tuple[str, str]"]
 
 
+_AUTO = object()
+
+
 def read_document(path_str: Any, max_pages: Any = None, *, transcribe: Transcribe | None = None, clock: Callable[[], float] = time.monotonic,
-                  budget_s: float = TOTAL_BUDGET_S) -> dict[str, Any]:
+                  budget_s: float = TOTAL_BUDGET_S, fast_parse: Any = _AUTO) -> dict[str, Any]:
     """Read the file the owner named. `transcribe(png_bytes)` is the model call (an answer string, or (answer, finish_reason)); the default
-    asks the local llama-server. Returns {pages, pages_total, chars, text, page_texts, took_s, removed, notes}; the text is already cleaned."""
+    asks the local llama-server. `fast_parse(pdf_bytes, page)` is the digital-PDF fast path (LiteParse, see fastpath.py): the default is the
+    real adapter when it is installed, None switches it off. A page whose text layer is real is read from it; only the other pages are drawn
+    and sent to the model. Returns {pages, pages_total, chars, text, page_texts, took_s, removed, notes, engines}; the text is already cleaned."""
     t0 = clock()
     limit = clamp_pages(DEFAULT_PAGES if max_pages is None else max_pages)
     path = check_path(path_str)
     data = read_regular(path)
     kind = sniff(data, path.suffix)
-    images, total = render_pdf(data, limit) if kind == "pdf" else render_image(data, path.suffix, limit)
+    fast = (fastpath.default() if fast_parse is _AUTO else fast_parse) if kind == "pdf" else None
+    fast_raw: dict[int, str] = {}
+    if fast is not None:
+        total = pdf_page_count(data)
+        count = min(total, limit)
+        fast_raw = fastpath.read_pages(fast, data, range(1, count + 1), clock=clock)
+        todo = [i for i in range(1, count + 1) if i not in fast_raw]
+        images = render_pdf(data, limit, only={i - 1 for i in todo})[0] if todo else []
+        pngs = dict(zip(todo, images))
+    else:
+        images, total = render_pdf(data, limit) if kind == "pdf" else render_image(data, path.suffix, limit)
+        pngs = dict(enumerate(images, 1))
+        count = len(images)
     ask = transcribe or transcribe_http
     notes: list[str] = []
     page_texts: list[str] = []
     hits_all: list[str] = []
-    for i, png in enumerate(images, 1):
+    engines = {"liteparse": 0, "ocr": 0}
+    for i in range(1, count + 1):
         if i > 1 and clock() - t0 > budget_s:
             notes.append(f"Stopped after page {i - 1}: the time limit for one read was reached.")
             break
-        try:
-            got = ask(png)
-        except DocReaderError:
-            if i == 1:
-                raise
-            notes.append(f"Stopped after page {i - 1}: the document reader stopped answering.")
-            break
-        raw, finish = (got, "") if isinstance(got, str) else (str(got[0]), str(got[1]))
+        finish = ""
+        if i in fast_raw:
+            raw = fast_raw[i]
+            engines["liteparse"] += 1
+        else:
+            try:
+                got = ask(pngs[i])
+            except DocReaderError:
+                if i == 1:
+                    raise
+                notes.append(f"Stopped after page {i - 1}: the document reader stopped answering.")
+                break
+            raw, finish = (got, "") if isinstance(got, str) else (str(got[0]), str(got[1]))
+            engines["ocr"] += 1
         text, hits = clean_page(raw)
         hits_all += [h for h in hits if h not in hits_all]
         if finish == "length":
@@ -375,10 +424,12 @@ def read_document(path_str: Any, max_pages: Any = None, *, transcribe: Transcrib
     read = len(page_texts)
     if total > read and not any(n.startswith("Stopped") for n in notes):
         notes.append(f"Read the first {read} of {total} pages; ask for more pages (at most {MAX_PAGES}) to read further.")
+    if engines["liteparse"]:
+        notes.append(f"{engines['liteparse']} of {read} pages were read from the PDF's own text layer (no OCR); {engines['ocr']} by the OCR model.")
     marked = [f"--- page {i} of {total} ---\n{t}" for i, t in enumerate(page_texts, 1)]
     text = "\n\n".join(marked)
     out: dict[str, Any] = {"pages": read, "pages_total": total, "chars": len(text), "text": text, "page_texts": page_texts,
-                           "took_s": round(clock() - t0, 1), "removed": hits_all, "notes": notes}
+                           "took_s": round(clock() - t0, 1), "removed": hits_all, "notes": notes, "engines": engines}
     sentence = removed_sentence(hits_all)
     if sentence:
         out["notes"] = [sentence] + notes

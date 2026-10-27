@@ -58,13 +58,17 @@ def snapshot(process: str = "", max_elements: int = 60, max_depth: int = 4, valu
         raise ValueError("bad process name")
     script = (PS.replace("__PROC__", process).replace("__MAX__", str(int(max_elements))).replace("__DEPTH__", str(int(max_depth)))
               .replace("__VALUES__", "$true" if values else "$false"))
-    env = dict(os.environ)
+    env, pick = dict(os.environ), {}
     if process:                                                       # a read: the window in front, else the newest, and never a guess for a change (windowpick.py)
         from . import windowpick
-        env.update(windowpick.pick_env(process, mutating=False))
-    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, encoding="utf-8", timeout=60, env=env,
-                       creationflags=0x08000000 if os.name == "nt" else 0)  # CREATE_NO_WINDOW: no flashing console
-    snap = json.loads(r.stdout)
+        pick = windowpick.pick_env(process, mutating=False)
+        env.update(pick)
+    from . import uia                                                 # D68: the persistent UI Automation worker first (same fields); None = PowerShell as before
+    snap = uia.snapshot(process, max_elements, max_depth, values, pick) if uia.enabled() else None
+    if snap is None:
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, encoding="utf-8", timeout=60, env=env,
+                           creationflags=0x08000000 if os.name == "nt" else 0)  # CREATE_NO_WINDOW: no flashing console
+        snap = json.loads(r.stdout)
     from jarvis_kernel.scrub import scrub  # same scrubber as the gateway and the vault
     def clean(s):
         return scrub(s or "")[0] if s else s

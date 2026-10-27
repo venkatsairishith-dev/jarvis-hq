@@ -57,6 +57,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import redactor as redactor_module  # noqa: E402
+import safe_mode  # noqa: E402  (D71: a copy of jarvis/safe_mode.py, so the gateway still starts as a plain script)
 from redactor import Mapping, Redactor, StreamRestorer, restore  # noqa: E402
 
 DEFAULT_UPSTREAM = os.environ.get("JARVIS_PRIVACY_UPSTREAM", "https://inference.dahl.global/v1")
@@ -1184,7 +1185,7 @@ def make_handler(red: Redactor, upstream: str | list, timeout: float, cooldown: 
             online_first = (self.headers.get("X-Jarvis-Route") or "").strip().lower() == "online"
             if online_first:
                 self._trace["route"] = "online"                # the goal planner's call (D51), told apart from the chat's rounds in the timing log
-            chain = chain if online_first else sorted(chain, key=lambda p: not (p.get("prefer_first") and is_local_provider(p) and est <= int(p.get("prefer_max_tokens") or 3000)
+            chain = chain if (online_first or safe_mode.active()) else sorted(chain, key=lambda p: not (p.get("prefer_first") and is_local_provider(p) and est <= int(p.get("prefer_max_tokens") or 3000)
                                                        and n_tools <= int(p.get("prefer_max_tools") or 3)))
             pin_name, pin_model = read_pin()
             if pin_name and raw is not None and self._path() in ("/chat/completions", "/completions"):

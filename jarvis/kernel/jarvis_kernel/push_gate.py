@@ -39,8 +39,9 @@ PROTECTED = re.compile(
     r"(^|/)(tests?|__tests__|spec|fixtures?|testdata)(/|$)|(^|/)test_[^/]*\.py$|_test\.py$|\.(spec|test)\.[jt]sx?$"
     r"|(^|/)conftest\.py$|threshold|baseline|(^|/)\.github(/|$)|(^|/)\.claude(/|$)|(^|/)claude\.md$|(^|/)agents\.md$"
     r"|(^|/)\.mcp\.json$|(^|/)hooks\.json$|(^|/)settings(\.local)?\.json$|(^|/)\.gitattributes$|(^|/)\.gitmodules$"
-    r"|(^|/)(policy|audit|store|push_gate|gitleaks_gate|llm_proxy|projectfix|cdp_relay|adminctl)\.py$"
-    r"|(^|/)(sensitive_sites|admin_verbs|providers|auto_click|specialists|simple_tasks)\.json$|(^|/)\.env|secret|credential|\.pem$|\.key$|(^|/)id_(rsa|ed25519)",
+    r"|(^|/)(policy|audit|store|push_gate|gitleaks_gate|llm_proxy|projectfix|cdp_relay|adminctl|sitegrants|safe_mode|safe_mode_ctl)\.py$"
+    r"|(^|/)(sensitive_sites|admin_verbs|providers|auto_click|specialists|simple_tasks|trusted_sites|identity|safe_mode)\.json$|(^|/)\.env|secret|credential|\.pem$|\.key$|(^|/)id_(rsa|ed25519)"
+    r"|(^|/)config/(site_playbooks/|ppt_sites\.json|cookie_banners\.json)",
     re.I)
 Git = Callable[..., str]
 

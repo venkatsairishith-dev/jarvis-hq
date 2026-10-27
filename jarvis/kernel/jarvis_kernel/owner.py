@@ -388,6 +388,59 @@ class Owner:
             raise OwnerError("unknown, used or expired approval", 404)
         return {"denied": str(aid)[:40]}
 
+    # ---------- D64: the one-time per-site grants of the browser agent (sitegrants.py) ----------
+    # request: makes the approval card (the card text names the site, the exact abilities and the expiry). The owner confirms it with the PIN
+    # in the console like any other approval. apply: with that approved approval id it writes the sealed entries; nothing else ever does.
+    def _grant_request_from(self, body):
+        from . import sitegrants
+        try:
+            return sitegrants.clean_request(body.get("hosts") or body.get("host"), body.get("abilities"), body.get("days"), body.get("note"))
+        except sitegrants.GrantError as e:
+            raise OwnerError(str(e)[:200], 400)
+
+    def site_grant_request(self, body: dict):
+        from . import sitegrants
+        from .store import Killed
+        req = self._grant_request_from(body)
+        a = sitegrants.make_action(req)
+        try:
+            d, aid = self.k.request(a)
+        except Killed:
+            raise OwnerError("the kill switch is on", 503) from None
+        if d.denied or not aid:
+            raise OwnerError("refused by policy: " + d.reason[:160], 403)
+        self.k.audit.append("owner_site_grant_requested", {"hosts": req["hosts"], "abilities": req["abilities"], "days": req["days"], "approval": aid})
+        return {"status": "needs_approval", "approval_id": aid, "request": req, "card": a.card,
+                "how": "approve it in the JARVIS console with your PIN, then ask JARVIS to continue"}
+
+    def site_grant_apply(self, body: dict):
+        from . import sitegrants
+        from .store import Killed
+        aid = str(body.get("approval_id") or "")[:40]
+        req = self._grant_request_from(body)
+        try:
+            d = self.k.authorize(sitegrants.make_action(req), aid)          # consumes the approval: once, for exactly this card
+        except Killed:
+            raise OwnerError("the kill switch is on", 503) from None
+        if not d.allowed:
+            self.k.audit.append("owner_site_grant_refused", {"approval": aid, "reason": d.reason[:80]})
+            raise OwnerError("the owner has not approved this grant with the PIN: " + d.reason[:100], 403)
+        try:
+            made = sitegrants.add(req, aid, now=self.clock())
+        except sitegrants.GrantError as e:
+            raise OwnerError(str(e)[:200], 500)
+        self.k.audit.append("owner_site_grant_created", {"hosts": req["hosts"], "abilities": req["abilities"], "days": req["days"], "approval": aid})
+        return {"granted": [{"host": e["host"], "allowed": e["allowed"], "expires": e["expires"]} for e in made]}
+
+    def site_grant_revoke(self, body: dict):
+        from . import sitegrants
+        try:
+            n = sitegrants.revoke(body.get("host"))
+        except sitegrants.GrantError as e:
+            raise OwnerError(str(e)[:200], 400)
+        self.k.audit.append("owner_site_grant_revoked", {"host": str(body.get("host"))[:80], "removed": n})
+        return {"removed": n}
+
     # ---------- tasks and the stop switches ----------
     def task_control(self, tid: str, op: str):
         from .tasks import TaskError
@@ -699,6 +752,9 @@ class Owner:
         elif op == "browser" and body.get("action") in BROWSER_OPS:
             kind, params = "browser_ext", {"profile": s("profile", 32).lower() or "default", "op": body["action"], "url": s("url", 2000),
                                            "target": s("target", 300), "text": s("text", 500)}
+            for k in ("host", "via", "ref", "ctx", "task", "ext"):        # D64: the browser agent's optional fields (jobs._browser_ok checks them)
+                if body.get(k):
+                    params[k] = s(k, 600 if k == "ctx" else 80)
         elif op == "diag" and body.get("check") in DIAG_OPS:
             kind, params = "diag", {"op": body["check"], "target": target}
         elif op == "repair" and body.get("action") in REPAIR_OPS:
@@ -1013,6 +1069,9 @@ class Owner:
                     return (200, t) if t else (404, {"error": "no such task"})
                 if name.startswith("job/"):
                     return 200, self.job(name[4:])
+                if name == "site_grants":
+                    from . import sitegrants
+                    return 200, {"sites": sitegrants.active(self.clock())}
             if method == "POST":
                 if name == "command":
                     return 202, self.command(body.get("text"), str(body.get("source") or "console"))
@@ -1026,6 +1085,12 @@ class Owner:
                     return 200, self.task_control(str(body.get("id", "")), str(body.get("op", "")))
                 if name == "pc":
                     return 202, self.pc(body)
+                if name == "site_grant/request":
+                    return 202, self.site_grant_request(body)
+                if name == "site_grant/apply":
+                    return 200, self.site_grant_apply(body)
+                if name == "site_grant/revoke":
+                    return 200, self.site_grant_revoke(body)
                 if name == "job/cancel":
                     return 200, self.cancel_job(body.get("id"))
                 if name == "stop_all":
