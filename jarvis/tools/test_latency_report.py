@@ -92,3 +92,29 @@ def test_save_and_compare_roundtrip(tmp_path, capsys):
 
 def test_health_is_optional_and_a_down_gateway_is_not_an_error():
     assert L.read_health("http://127.0.0.1:9/health", timeout=0.3) is None
+
+
+def gateway_row(t, redact_ms, first_ms, total_ms, after="user", req_bytes=8600, hits=0, misses=1):
+    return {"t": t, "src": "gateway", "provider": "dahl", "after": after, "redact_ms": redact_ms, "queue_ms": 0,
+            "first_ms": first_ms, "total_ms": total_ms, "req_bytes": req_bytes, "cache_hits": hits, "cache_misses": misses}
+
+
+def test_synthetic_before_after_fixture_for_d80_shows_the_compare_report_still_works_and_does_not_mask_what_did_not_change():
+    """D80: this is NOT a real laptop run (none was available here). It is a SYNTHETIC fixture built from the owner's own
+    reported shape (D60: redact_ms 351 -> 275 ms with the message cache's hits; GLM's hidden thinking keeps total_ms large),
+    only to prove --compare still renders correctly against the report shape this change kept (same fields, same keys) and
+    is honest when something (model rounds, total_ms) is UNCHANGED, because none of this session's changes touch the model
+    or the round count for an ordinary tool-using turn."""
+    before = [gateway_row(i, redact_ms=351, first_ms=1200, total_ms=8000, hits=0, misses=1) for i in range(1, 11)]
+    # D80's widened redaction cache: more of the SAME repeated text (padded differently each time, as a resent system
+    # prompt plus a changing time line can be) now hits, so redact_ms drops; first_ms/total_ms are provider-side and
+    # UNCHANGED here on purpose (D60's recorded numbers stand; nothing in this session touched the model or its rounds)
+    after = [gateway_row(i, redact_ms=275, first_ms=1200, total_ms=8000, hits=3, misses=1) for i in range(1, 11)]
+    before_turn, after_turn = one_turn(1, 1), one_turn(1, 1)                          # unchanged: no round-count fix was made here (D80 item 5)
+    rep_before = L.build_report(before + before_turn)
+    rep_after = L.build_report(after + after_turn)
+    out = L.compare(rep_before, rep_after)
+    assert "redact_ms" in out and "275" in out and "351" in out
+    assert "-76 ms" in out, "the report must show the actual drop, not a rounder or rosier number"
+    assert "model rounds per turn (p50)          2 -> 2" in out, "an unrelated phase must read as unchanged, not improved"
+    assert "done" in out and "10.5 s -> 10.5 s" in out, "total_ms/done are provider-side; this session's changes do not move them"
