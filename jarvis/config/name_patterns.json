@@ -81,22 +81,22 @@
 
   "relations": {
     "wife": {"kind": "family", "te": ["భార్య", "భార్యా"], "te_lat": ["bharya", "bhaarya", "bhaaryaa", "barya", "wife"], "hi": ["पत्नी", "बीवी"], "hi_lat": ["patni", "biwi", "bivi", "wife"]},
-    "husband": {"kind": "family", "te": ["భర్త", "మొగుడు"], "te_lat": ["bhartha", "bharta", "mogudu", "husband"], "hi": ["पति"], "hi_lat": ["pati", "husband"]},
+    "husband": {"kind": "family", "te": ["భర్త", "మొగుడు", "మొగుడి"], "te_lat": ["bhartha", "bharta", "mogudu", "husband"], "hi": ["पति"], "hi_lat": ["pati", "husband"]},
     "mother": {"kind": "family", "te": ["అమ్మ", "తల్లి"], "te_lat": ["amma", "thalli", "talli", "mother", "mom"], "hi": ["माँ", "मां", "माता", "मम्मी"], "hi_lat": ["maa", "mata", "mummy", "mom", "mother"]},
     "father": {"kind": "family", "te": ["నాన్న", "తండ్రి"], "te_lat": ["nanna", "thandri", "tandri", "father", "dad"], "hi": ["पिता", "पापा"], "hi_lat": ["pita", "papa", "pitaji", "father", "dad"]},
-    "brother": {"kind": "family", "te": ["అన్న", "అన్నయ్య", "తమ్ముడు"], "te_lat": ["brother", "anna", "annayya", "thammudu", "tammudu"], "hi": ["भाई"], "hi_lat": ["bhai", "bhaiya", "bhaiyya", "brother"]},
-    "sister": {"kind": "family", "te": ["అక్క", "చెల్లి", "చెల్లెలు"], "te_lat": ["sister", "akka", "chelli", "chelleli", "chellelu"], "hi": ["बहन", "दीदी"], "hi_lat": ["behen", "behan", "bahan", "sister", "didi"]},
-    "son": {"kind": "family", "te": ["కొడుకు"], "te_lat": ["koduku", "kodukku", "son"], "hi": ["बेटा"], "hi_lat": ["beta", "son"]},
+    "brother": {"kind": "family", "te": ["అన్న", "అన్నయ్య", "తమ్ముడు", "తమ్ముడి"], "te_lat": ["brother", "anna", "annayya", "thammudu", "tammudu"], "hi": ["भाई"], "hi_lat": ["bhai", "bhaiya", "bhaiyya", "brother"]},
+    "sister": {"kind": "family", "te": ["అక్క", "చెల్లి", "చెల్లెలు", "చెల్లెలి", "అక్కయ్య"], "te_lat": ["sister", "akka", "chelli", "chelleli", "chellelu"], "hi": ["बहन", "दीदी"], "hi_lat": ["behen", "behan", "bahan", "sister", "didi"]},
+    "son": {"kind": "family", "te": ["కొడుకు", "కొడుకి"], "te_lat": ["koduku", "kodukku", "son"], "hi": ["बेटा"], "hi_lat": ["beta", "son"]},
     "daughter": {"kind": "family", "te": ["కూతురు", "కుమార్తె"], "te_lat": ["kuthuru", "kooturu", "kuturu", "daughter"], "hi": ["बेटी"], "hi_lat": ["beti", "daughter"]},
     "grandmother": {"kind": "family", "te": ["అమ్మమ్మ", "నానమ్మ"], "te_lat": ["ammamma", "nanamma"], "hi": ["दादी", "नानी"], "hi_lat": ["dadi", "nani"]},
     "grandfather": {"kind": "family", "te": ["తాతయ్య", "తాత"], "te_lat": ["thatha", "tatha", "thathayya"], "hi": ["दादा", "नाना"], "hi_lat": ["dada", "nana"]},
     "uncle": {"kind": "family", "te": ["మామయ్య", "బాబాయ్"], "te_lat": ["mavayya", "babai", "uncle"], "hi": ["चाचा", "मामा"], "hi_lat": ["chacha", "mama", "uncle"]},
     "aunt": {"kind": "family", "te": ["అత్త", "పిన్ని"], "te_lat": ["atta", "pinni", "aunty", "aunt"], "hi": ["चाची", "मौसी"], "hi_lat": ["chachi", "mausi", "massi", "aunty", "aunt"]},
-    "friend": {"kind": "friend", "te": ["స్నేహితుడు", "స్నేహితురాలు", "మిత్రుడు", "ఫ్రెండ్"], "te_lat": ["friend", "snehithudu", "snehitudu", "mitrudu"], "hi": ["दोस्त", "मित्र", "फ्रेंड"], "hi_lat": ["dost", "mitra", "friend"]},
+    "friend": {"kind": "friend", "te": ["స్నేహితుడు", "స్నేహితురాలు", "మిత్రుడు", "ఫ్రెండ్", "స్నేహితుడి", "స్నేహితురాలి", "మిత్రుడి"], "te_lat": ["friend", "snehithudu", "snehitudu", "mitrudu"], "hi": ["दोस्त", "मित्र", "फ्रेंड"], "hi_lat": ["dost", "mitra", "friend"]},
     "boss": {"kind": "other", "te": ["బాస్", "మేనేజర్"], "te_lat": ["boss", "manager"], "hi": ["बॉस"], "hi_lat": ["boss", "manager"]},
     "colleague": {"kind": "other", "te": ["సహోద్యోగి"], "te_lat": ["colleague", "coworker"], "hi": ["सहकर्मी"], "hi_lat": ["colleague", "coworker"]},
     "teacher": {"kind": "other", "te": ["టీచర్", "గురువు"], "te_lat": ["teacher", "guruvu"], "hi": ["शिक्षक", "टीचर", "गुरु"], "hi_lat": ["teacher", "guru"]},
-    "doctor": {"kind": "other", "te": ["డాక్టర్", "వైద్యుడు"], "te_lat": ["doctor"], "hi": ["डॉक्टर"], "hi_lat": ["doctor"]},
+    "doctor": {"kind": "other", "te": ["డాక్టర్", "వైద్యుడు", "వైద్యుడి"], "te_lat": ["doctor"], "hi": ["डॉक्टर"], "hi_lat": ["doctor"]},
     "neighbour": {"kind": "other", "te": ["పొరుగువాడు"], "te_lat": ["neighbour", "neighbor"], "hi": ["पड़ोसी"], "hi_lat": ["padosi"]}
   },
 

@@ -388,3 +388,15 @@ def test_the_new_modules_open_no_connection_and_name_no_address():
         assert not re.findall(r"https?://", src), name
         for lib in ("requests", "httpx", "aiohttp", "urllib.request", "socket", "openai", "anthropic"):
             assert not re.search(rf"^\s*(?:import|from)\s+{re.escape(lib)}\b", src, re.M), f"{name} imports {lib}"
+
+
+def test_laptop_2026_10_27_telugu_possessive_relation_words_and_a_token_with_a_digit():
+    """Real IndicTrans2 on the laptop: "నా తమ్ముడి పేరు రవి" (my brother's name is Ravi) was not read as a statement, so the learner took the translator's output and
+    stored a bogus name; and "mere dost ka naam JVX0Q hai" was learned as "Jvx" (the digit ended the name). Now the first is Ravi (brother) and the second learns nothing."""
+    got = S.extract("నా తమ్ముడి పేరు రవి")
+    assert [(x.name, x.relation) for x in got] == [("Ravi", "brother")]
+    got = S.extract("నా స్నేహితుడి పేరు కిరణ్")
+    assert [(x.name, x.relation) for x in got] == [("Kiran", "friend")]
+    assert S.extract("mere dost ka naam JVX0Q hai") == []
+    assert [x.name for x in S.extract("mere dost ka naam Kiran hai")] == ["Kiran"]
+    assert S.extract("నా తమ్ముడి పేరు ఏమిటి?") == []                      # a question learns nothing

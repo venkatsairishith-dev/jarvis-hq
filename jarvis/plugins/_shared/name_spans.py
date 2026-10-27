@@ -130,7 +130,8 @@ class Patterns:
             "PLACE": "(?P<plc>" + self._alt([w for w in self.place_of[script]], latin) + ")",
         }
         if latin:
-            slots["NAME"] = r"(?P<n>[A-Za-z][A-Za-z'’\-]{1,24}(?:[ \t]+[A-Z][A-Za-z'’\-]{1,24})?)"
+            # (?![A-Za-z0-9]): a token like JVX0Q is not a name that happens to start with JVX (it was learned as "Jvx"; laptop 2026-10-27)
+            slots["NAME"] = r"(?P<n>[A-Za-z][A-Za-z'’\-]{1,24}(?:[ \t]+[A-Z][A-Za-z'’\-]{1,24})?)(?![A-Za-z0-9])"
         else:
             slots["NAME"] = rf"(?P<n>[{_RANGE[script]}‌‍]{{2,30}})"
         pat = str(tpl["pattern"])
