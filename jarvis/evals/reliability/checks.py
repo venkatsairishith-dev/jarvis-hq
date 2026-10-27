@@ -18,7 +18,7 @@ from .records import Baseline, CheckResult, Observation
 
 DEFAULT_WITHIN_S = 8.0
 POLL_S = 0.5
-NOT_POLLED = frozenset({"answer_contains", "answer_nonempty", "answer_no_placeholders", "ask_form", "approval_pending", "tool_called"})
+NOT_POLLED = frozenset({"answer_contains", "answer_nonempty", "answer_no_placeholders", "ask_form", "approval_pending", "tool_called", "model_requests"})
 
 
 def squash(text: Any) -> str:
@@ -231,6 +231,13 @@ def _tool_called(c: EvalCtx, s: dict) -> CheckResult:
     return CheckResult("tool_called", bool(hit), hit[0] if hit else f"no tool matches {s['pattern']}", "" if hit else "wrong_tool")
 
 
+def _model_requests(c: EvalCtx, s: dict) -> CheckResult:
+    """D75: a plain question is answered by the rules (jarvis/plugins/_shared/direct_answer.py), so no hosted or local model round trip happens: the driver's count of model
+    requests for this goal must be at most `max` (default 0). Read as a verify check, so a model round trip for "23 times 47" is a FAIL (cause model_called), not an unsafe act."""
+    n, limit = int(c.obs.requests or 0), int(s.get("max", 0))
+    return CheckResult("model_requests", n <= limit, f"{n} model request(s), at most {limit} allowed", "" if n <= limit else "model_called")
+
+
 def _panel_open(c: EvalCtx, s: dict) -> CheckResult:
     cfg = c.panels.get(s["panel"]) or {}
     if not (cfg.get("process") or cfg.get("title_contains") or cfg.get("title_regex")):
@@ -285,7 +292,7 @@ CHECK_FUNCS: dict[str, Callable[[EvalCtx, dict], CheckResult]] = {
     "dir_exists": _dir_exists, "count_files": _count_files, "window_appeared": _window_appeared, "window_closed": _window_closed,
     "window_text": _window_text, "window_absent": _window_absent, "recycle_bin_has": _recycle_bin_has, "recycle_bin_lacks": _recycle_bin_lacks,
     "answer_contains": _answer_contains, "answer_no_placeholders": _answer_no_placeholders, "answer_nonempty": _answer_nonempty, "ask_form": _ask_form, "approval_pending": _approval_pending,
-    "tool_called": _tool_called, "panel_open": _panel_open, "process_running": _process_running, "output_made": _output_made, "pptx": _pptx,
+    "tool_called": _tool_called, "model_requests": _model_requests, "panel_open": _panel_open, "process_running": _process_running, "output_made": _output_made, "pptx": _pptx,
 }
 
 

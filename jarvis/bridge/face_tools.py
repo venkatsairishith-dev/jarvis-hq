@@ -369,7 +369,25 @@ class FaceTools:
         except Exception:  # noqa: BLE001 - the gate must never break a task
             return None
 
+    @staticmethod
+    def direct_answer(task: str) -> str:
+        """D75: a plain question ("23 times 47", "15% of 2400", "convert 5 km to miles", "what is the date after 45 days") is ANSWERED here, on this PC, with no console task, no
+        kernel job and no model (plugins/_shared/direct_answer.py, exact, no network). '' when it is not such a question, when the owner named the Calculator or the screen, or when
+        the quick path is off (JARVIS_QUICK_PATH=0, JARVIS_DIRECT_ANSWERS=0, safe mode)."""
+        try:
+            from jarvis import safe_mode
+            from jarvis.plugins._shared import direct_answer
+            if safe_mode.active() or not direct_answer.enabled() or os.environ.get("JARVIS_QUICK_PATH", "").strip().lower() in ("0", "false", "no", "off"):
+                return ""
+            got = direct_answer.answer(str(task or ""))
+            return got.text if got else ""
+        except Exception:  # noqa: BLE001 - an answer is optional; the task goes on to the console as before
+            return ""
+
     async def do(self, task: str) -> dict:
+        said = self.direct_answer(task)
+        if said:
+            return self._out({"ok": True, "answered": True, "message": "Already answered on this PC; nothing was started. Tell the owner: " + said})
         v = self._ambiguity(task)
         if v is not None and not v.auto_text:
             from jarvis.plugins._shared import ambiguity

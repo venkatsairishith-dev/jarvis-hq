@@ -139,6 +139,28 @@ describe('when the router is worth asking', () => {
     'Notepad leda Wordpad teruvu',
     'kuch bajao',
     'purani files delete karo',
+    // D75: plain questions the hook answers itself (maths, units, dates, money; Tenglish / Hinglish operator words too)
+    '23 times 47',
+    'what is 2+3',
+    'What is 15% of 2400?',
+    'Hey JARVIS, what\'s 1200 divided by 7',
+    'square root of 144',
+    'convert 5 km to miles',
+    'how many cm in 2 inches',
+    '100 celsius to fahrenheit',
+    'what is the date after 45 days',
+    'days until 25 December',
+    'how many days to christmas',
+    'EMI of 5 lakh at 9% for 5 years',
+    'add 18% gst to 2500',
+    'split 1250 among 4',
+    'two lakh fifty thousand plus one lakh',
+    '23 guna 47 entha',
+    '1200 ko 7 se bhaag karo',
+    '100 taggindi 40',
+    'what day is it tomorrow',
+    'is 2028 a leap year',
+    'calculate 12 times 7 in calculator',
   ])('asks for %s', (text) => {
     expect(mightBeQuickCommand(text)).toBe(true)
   })
@@ -153,6 +175,11 @@ describe('when the router is worth asking', () => {
     'I will not stop the music',
     'why did the roman empire stop expanding',
     'forget the milk',
+    // D75: a number in an ordinary sentence is not a maths question
+    'I have 3 apples',
+    'my favourite number is 7',
+    'tell me about the year of the dragon',
+    'what is the meaning of life',
     '',
   ])('goes straight to the chat model for %s', (text) => {
     expect(mightBeQuickCommand(text)).toBe(false)
