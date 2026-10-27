@@ -1969,12 +1969,14 @@
   },
   {
    "id": "calculate",
-   "name": "Calculate in Calculator",
+   "name": "Calculate in the Calculator app (only when the owner names the app or the screen)",
    "group": "daily",
    "class": "A",
    "phrases": [
-    "(?:calculate|compute|work out|what(?:'s| is)) {text:text} (?:in|on|using|with) (?:the )?calculator",
-    "open calculator and (?:calculate|compute|work out) {text:text}"
+    "(?:calculate|compute|work out|what(?:'s| is)) {text:text} (?:in|on|using|with) (?:the )?(?:windows )?calc(?:ulator)?(?: app)?",
+    "open (?:the )?calculator and (?:calculate|compute|work out|do|solve|add|type|enter) {text:text}",
+    "(?:use|using) (?:the )?calculator (?:to )?(?:calculate|compute|work out|do|solve) {text:text}",
+    "(?:show me|show|display|calculate|compute|work out|do) {text:text} on (?:the |my )?(?:screen|display)"
    ],
    "examples": [
     {
@@ -1988,6 +1990,18 @@
      "args": {
       "text": "15 plus 27"
      }
+    },
+    {
+     "say": "open calculator and do 2+3",
+     "args": {
+      "text": "2+3"
+     }
+    },
+    {
+     "say": "show me 23 times 47 on screen",
+     "args": {
+      "text": "23 times 47"
+     }
     }
    ],
    "how": {
@@ -1995,7 +2009,8 @@
     "app": "calculator"
    },
    "verify": "the answer is checked against what the Calculator window shows",
-   "needs_laptop": true
+   "needs_laptop": true,
+   "note": "D75: a plain question (\"23 times 47\", \"what is 15% of 2400\") is ANSWERED by plugins/_shared/direct_answer.py in the rules-first quick path, with no window; this entry runs only when the owner names the Calculator or the screen"
   },
   {
    "id": "convert_units",

@@ -174,7 +174,8 @@
    "timeout": "latency report (evals/reliability/latency.py): thinking off, prompt cache, no second request, parallel independent steps",
    "over_limit": "responsiveness: D56 (face exempt from throttling); measure with probes before/after",
    "no_tool_call": "tool routing in the face persona (D52 request diet); language gate for Telugu/Hindi",
-   "panel_not_configured": "laptop: fill panels.* in goals.json after looking at the panel"
+   "panel_not_configured": "laptop: fill panels.* in goals.json after looking at the panel",
+   "model_called": "quick path (D75): jarvis/plugins/desktop/quick.py asks plugins/_shared/direct_answer.py first; the face must ask desktop__quick_command before any chat model (quick-intent.ts mightBeQuickCommand: a number next to a maths or unit word, or a date question); JARVIS_DIRECT_ANSWERS must not be 0"
   }
  },
  "capabilities": {
@@ -4154,6 +4155,2107 @@
     }
    ],
    "note": "A starter set. The simple_tasks catalogue was not on this branch: `--catalogue-file` adds its entries as goals (catalogue.py documents the shape)."
+  },
+  "direct_answers": {
+   "name": "Questions are answered, not turned into tasks (direct answers)",
+   "latency_class": "quick_answer",
+   "needs_driver": "face",
+   "note": "D75 (owner, 2026-10-27: 'it should do complex tasks, not simple ones like open calculator and do 2+3: can't we just do that by talking to JARVIS?'). A plain question (arithmetic, percentages, units, the date and the clock, tip / GST / EMI, English / Tenglish / Hinglish) must be ANSWERED: the final answer contains the right number, NO app window was started (forbid: a Calculator window, a PC-task tool), and no model round trip was made (verify model_requests max 0: the face asks the rules-first quick hook before any chat model). The expected numbers are re-derived independently with Fraction / Decimal in tests/test_rel_direct_answers.py. The last ten goals (tag explicit_app) are the opposite: the owner NAMES the Calculator or the screen, so the app must still open. Needs the face driver: it is the only one that counts model requests and shows the owner what the quick path replied.",
+   "goals": [
+    {
+     "id": "da-mul",
+     "text": "What is 23 times 47?",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0,?8,?1(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-add",
+     "text": "what is 2+3",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])5(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-div-exact",
+     "text": "What is 1200 divided by 8?",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?5,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-div-repeating",
+     "text": "what is 1200 divided by 7?",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?7,?1\\.42860*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-sqrt",
+     "text": "square root of 144",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?2(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-power",
+     "text": "what is 2 to the power 10",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0,?2,?4(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-brackets",
+     "text": "What is (3 + 4) * 5?",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])3,?5(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-chain",
+     "text": "what is 100 plus 25 minus 40",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])8,?5(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-decimal",
+     "text": "what is 0.1 + 0.2",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])0\\.30*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-big-multiply",
+     "text": "what is 12345 times 6789",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])8,?3,?8,?1,?0,?2,?0,?5(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-words",
+     "text": "what is twenty three times forty seven",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0,?8,?1(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-factorial",
+     "text": "factorial of 6",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])7,?2,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-negative",
+     "text": "what is 15 minus 40",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])-2,?5(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-lakh",
+     "text": "what is 5 lakh plus 2 lakh",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])7,?0,?0,?0,?0,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-indian-grouping",
+     "text": "what is 1,00,000 plus 50,000",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?5,?0,?0,?0,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-percent",
+     "text": "What is 15% of 2400?",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])3,?6,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-percent-decimal",
+     "text": "what is 12.5 percent of 80",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-percent-change",
+     "text": "percentage change from 80 to 100",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])2,?5(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-discount",
+     "text": "price after 30% discount on 1999",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?3,?9,?9\\.30*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-gst",
+     "text": "add 18% gst to 2500",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])2,?9,?5,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-tip",
+     "text": "What's a 15% tip on a bill of 840?",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?2,?6(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-split",
+     "text": "split 1250 among 4",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])3,?1,?2\\.50*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-emi-5-lakh",
+     "text": "EMI of 5 lakh at 9% for 5 years",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0,?3,?7,?9\\.180*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-emi-10-lakh",
+     "text": "what is the EMI for 10 lakh at 8.5% for 20 years",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])8,?6,?7,?8\\.230*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-simple-interest",
+     "text": "simple interest on 10000 at 8% for 3 years",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])2,?4,?0,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-km-miles",
+     "text": "convert 5 km to miles",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])3\\.10690*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-c-to-f",
+     "text": "100 celsius in fahrenheit",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])2,?1,?2(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-f-to-c",
+     "text": "what is 98.6 F in celsius",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])3,?7(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-kg-pounds",
+     "text": "how many pounds in 10 kg",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])2,?2\\.04620*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-gb-mb",
+     "text": "2 GB in MB",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])2,?0,?4,?8(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-minutes-hours",
+     "text": "how many hours in 540 minutes",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])9(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-seconds-day",
+     "text": "how many seconds in a day",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])8,?6,?4,?0,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-mph-kmph",
+     "text": "60 mph in kmph",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])9,?6\\.560640*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-inches-cm",
+     "text": "how many cm in 5 inches",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?2\\.70*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-weekday-1947",
+     "text": "what day of the week was 15 August 1947",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "all": [
+        "Friday"
+       ]
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-days-between",
+     "text": "how many days between 1 January 2026 and 15 March 2026",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])7,?3(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-leap-year",
+     "text": "is 2028 a leap year",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "all": [
+        "Yes",
+        "2028 is a leap year"
+       ]
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-february-days",
+     "text": "how many days are in February 2028",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])2,?9(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-today-weekday",
+     "text": "what day is it today",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "all": [
+        "{weekday}"
+       ]
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-today-date",
+     "text": "what is today's date",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "all": [
+        "{day} {month} {year}"
+       ]
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-date-plus-45",
+     "text": "what is the date after 45 days",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "all": [
+        "{plus45}"
+       ]
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-days-to-christmas",
+     "text": "how many days until 25 December",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "any": [
+        "{xmas_days} days",
+        "{xmas_days} day ",
+        "today"
+       ]
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-time-now",
+     "text": "what time is it",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "\\b(?:1[0-2]|[1-9]):[0-5]\\d (?:AM|PM)\\b"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-te-multiply",
+     "text": "23 guna 47 entha",
+     "kind": "act",
+     "lang": "te-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0,?8,?1(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-te-add",
+     "text": "45 ni 55 tho kalupu",
+     "kind": "act",
+     "lang": "te-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-te-subtract",
+     "text": "100 taggindi 40 entha",
+     "kind": "act",
+     "lang": "te-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])6,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-te-divide",
+     "text": "1200 ni 7 tho bhaginchu",
+     "kind": "act",
+     "lang": "te-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?7,?1\\.42860*(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-te-percent",
+     "text": "2400 lo 15 percent entha",
+     "kind": "act",
+     "lang": "te-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])3,?6,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-hi-multiply",
+     "text": "23 gunaa 47 kitna hota hai",
+     "kind": "act",
+     "lang": "hi-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0,?8,?1(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-hi-divide",
+     "text": "1200 ko 8 se bhaag karo",
+     "kind": "act",
+     "lang": "hi-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?5,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-hi-add",
+     "text": "50 aur 70 jodo",
+     "kind": "act",
+     "lang": "hi-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?2,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-hi-subtract",
+     "text": "100 mein se 30 ghatao",
+     "kind": "act",
+     "lang": "hi-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])7,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-hi-percent",
+     "text": "2400 ka 15 percent kitna",
+     "kind": "act",
+     "lang": "hi-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])3,?6,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-hi-lakh",
+     "text": "2 lakh aur 3 lakh jodo",
+     "kind": "act",
+     "lang": "hi-rom",
+     "verify": [
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])5,?0,?0,?0,?0,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      },
+      {
+       "check": "model_requests",
+       "max": 0
+      }
+     ],
+     "forbid": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator",
+       "severity": 3,
+       "label": "opened the Calculator app for a question it could simply answer"
+      },
+      {
+       "check": "tool_called",
+       "pattern": "do_goal|jarvis_do|run_pc|run_task|simple_task|drive|calculator",
+       "severity": 3,
+       "label": "started a PC task (or an app) for a plain question"
+      }
+     ],
+     "tags": [
+      "direct"
+     ],
+     "latency_class": "quick_answer",
+     "timeout_s": 60
+    },
+    {
+     "id": "da-app-open",
+     "text": "Open Calculator.",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    },
+    {
+     "id": "da-app-open-and-work-out",
+     "text": "Open Calculator and work out 15 plus 27.",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      },
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])4,?2(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    },
+    {
+     "id": "da-app-in-calculator",
+     "text": "Calculate 12 times 7 in Calculator.",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      },
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])8,?4(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    },
+    {
+     "id": "da-app-open-and-do",
+     "text": "Open Calculator and do 2+3.",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      },
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])5(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    },
+    {
+     "id": "da-app-use-the-app",
+     "text": "Use the Calculator app to work out 9 times 9.",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      },
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])8,?1(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    },
+    {
+     "id": "da-app-show-on-screen",
+     "text": "Show me 23 times 47 on screen.",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      },
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0,?8,?1(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    },
+    {
+     "id": "da-app-calc-division",
+     "text": "What is 144 divided by 12 in the calculator?",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      },
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?2(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    },
+    {
+     "id": "da-app-launch",
+     "text": "Launch the calculator and add 250 and 750.",
+     "kind": "act",
+     "lang": "en",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      },
+      {
+       "check": "answer_contains",
+       "regex": "(?<![\\d.,])1,?0,?0,?0(?:\\.0+)?(?!\\d|,\\d|\\.\\d)"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    },
+    {
+     "id": "da-app-te",
+     "text": "Calculator teruvu.",
+     "kind": "act",
+     "lang": "te-rom",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    },
+    {
+     "id": "da-app-hi",
+     "text": "Calculator kholo.",
+     "kind": "act",
+     "lang": "hi-rom",
+     "verify": [
+      {
+       "check": "window_appeared",
+       "title_contains": "Calculator"
+      }
+     ],
+     "tags": [
+      "explicit_app"
+     ],
+     "latency_class": "pc_action"
+    }
+   ]
   },
   "solve_on_screen": {
    "name": "Solving a problem shown on the screen",

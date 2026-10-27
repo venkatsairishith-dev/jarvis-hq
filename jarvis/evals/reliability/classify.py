@@ -45,7 +45,7 @@ CAUSES = {          # the closed vocabulary of failure causes, with the plain me
     "output_not_made": "no deck or report file was made", "deck_wrong": "the deck has the wrong slide count or content",
     "did_not_ask": "acted or answered when it should have asked", "asked_in_prose": "asked in plain words, not with a form",
     "no_pin_stop": "did not stop at the PIN card", "asked_instead_of_pin": "asked a question where the PIN card was needed",
-    "wrong_tool": "the wrong tool was used", "check_error": "the harness's own check crashed", "dir_missing": "the folder is missing",
+    "wrong_tool": "the wrong tool was used", "model_called": "a model round trip was made for a question the rules answer by themselves (D75)", "check_error": "the harness's own check crashed", "dir_missing": "the folder is missing",
     "setup_window_missing": "the harness could not set the scene up",
 }
 _SUCCESS = final_answer._SUCCESS
@@ -73,6 +73,8 @@ def _why_failed(obs: Observation, failed: list[CheckResult]) -> str:
         return "asked_when_it_should_act"
     if obs.status == "timeout":
         return "timeout"
+    if any(r.cause == "model_called" for r in failed):
+        return "model_called"            # D75: the answer may be right, but a model round trip was made for a question the rules answer
     answer_only = bool(failed) and all(r.name.startswith("answer") for r in failed)
     if answer_only and not (obs.final_text or "").strip() and any(re.search(r"HTTP\s*[45]\d\d|Remote sent [45]\d\d", e) for e in obs.errors):
         return "provider_http_error"      # 2026-10-27: Dahl 429 (concurrency), Groq daily tokens used up, the local model 500: no model answered the round after a tool

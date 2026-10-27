@@ -64,6 +64,16 @@ const ASK_VERB = /^(?:delete|remove|erase|trash|send|e-?mail|forward|share|move|
 const INDIC_VERB = /\b(?:kholo|khol\s+do|band\s+karo|hatao|hata\s+do|bhejo|bhej\s+do|banao|bajao|chalao|dikhao|dhundo|dhoondo|teruvu|teruvandi|muyyi|teesey|teeseyyi|pampu|pampandi|cheyyi|cheyandi|chupinchu|vetuku|mail\s+karo|(?:delete|save|open|close|rename|move|copy|send|play|share|search|create|make)\s+(?:karo|kar\s+do|cheyyi|cheyandi|chey))\b/i
 
 /**
+ * D75 (the owner: "it should do complex tasks ... can't we just do that by talking to JARVIS?"): a plain question the Python hook answers by itself, at once, with no app and no
+ * model (jarvis/plugins/_shared/direct_answer.py): arithmetic ("23 times 47"), percentages, units, the date and the clock, tip / GST / EMI. The face only has to ASK the hook, so
+ * a message that holds a number (or a number word) next to a maths or unit word, or that starts like a date question, is sent to it. The hook answers `handled: false` at once when it
+ * is not maths ("call 555-1234", "I have 3 apples"), so a wrong guess here costs one fast local call. The rules themselves are in Python, in one place.
+ */
+const NUMBERISH = /\d|\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|lakhs?|crores?|million|half|quarter|double|twice|triple|thrice)\b/i
+const MATH_WORD = /[+*/^×÷%=!]|\d\s*-\s*\d|\b(?:plus|minus|times|multipl\w+|divid\w+|over|into|per\s?cent|power|squared|cubed|roots?|factorial|mod|average|sum|total|emi|gst|vat|tip|discount|interest|split|convert|how\s+many|how\s+much|lakhs?|crores?|guna+|bhaa?g|jodo?|taggindi|tagginchu|ghatao|kalupu|days?|weeks?|months?|years?|hours?|minutes?|celsius|fahrenheit|km|kg|miles?|inch(?:es)?|feet|foot|pounds?|lit(?:re|er)s?|[kmgt]b|mph|kmph)\b/i
+const DATE_Q = /^(?:what(?:'s|\s+is)?\s+(?:the\s+)?(?:date|day|month|year)\b|which\s+day\b|today'?s\s+date|(?:tomorrow|yesterday)'?s\s+date|(?:the\s+)?day\s+(?:after|before)\s+(?:tomorrow|yesterday)|days?\s+(?:until|till|since|between|left)|weeks?\s+(?:until|till)|how\s+many\s+days|is\s+\d{4}\s+a\s+leap\s+year)/i
+
+/**
  * Whether the rules-first router is worth asking: the message starts like a PC command, starts with a verb the ambiguity rules must see (D74), or asks the clock. Everything
  * else goes straight to the chat model, so an ordinary chat turn does not wait for one more local call.
  */
@@ -71,7 +81,7 @@ export function mightBeQuickCommand(text: string, guess: TaskGuess | null = gues
   if (guess?.kind === 'pc')
     return true
   const body = String(text ?? '').replace(/\s+/g, ' ').trim().replace(FILLER, '')
-  return CLOCK.test(body) || TASK_TALK.test(body) || ASK_VERB.test(body) || INDIC_VERB.test(body)
+  return CLOCK.test(body) || TASK_TALK.test(body) || ASK_VERB.test(body) || INDIC_VERB.test(body) || (body.length <= 200 && ((NUMBERISH.test(body) && MATH_WORD.test(body)) || DATE_Q.test(body)))
 }
 
 export interface QuickResult {

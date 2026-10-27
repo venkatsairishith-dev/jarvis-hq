@@ -1703,6 +1703,11 @@ class DesktopPlugin(PluginBase):
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def do_goal(self, goal: str = "", answers: dict | None = None, **_):
+        # D75: a plain question ("23 times 47", "15% of 2400", "what is the date after 45 days", "convert 5 km to miles") is ANSWERED, with no app, no plan and no kernel job.
+        # The Calculator opens only when the owner names the app or the screen: direct_answer then says "not mine" and the goal goes on as before.
+        said = quick_mod.direct(goal)
+        if said is not None:
+            return Ok({**quick_mod.result_for(said, None), "seconds": 0.0})
         # D74: ASK, DO NOT GUESS. Plain rules (config/ambiguity.json) run before any plan or action: "notepad or wordpad", "the file from yesterday", "delete that", "close the
         # window", a missing recipient. A request that must be asked about becomes ONE question; the owner's answer is put into the ORIGINAL goal, which then goes on.
         out = await gate_mod.gate_request(goal, lambda need: DesktopPlugin._gate_fetch(self, need), DesktopPlugin._gate_ask(self), answers)
@@ -1831,6 +1836,10 @@ class DesktopPlugin(PluginBase):
         said = await asyncio.to_thread(names_mod.quick_answer, text)           # D62: "what names do you know", "forget Priya": a rule; the names never reach a model
         if said is not None:
             return Ok({"handled": True, "status": "completed", "reply": said, "planned_by": "rules", "label": "One moment", "approval_id": None,
+                       "seconds": round(time.monotonic() - started, 2)})
+        asked = quick_mod.direct(text)                                          # D75: maths, conversions, the date and the time are answered before anything else (before the ambiguity rules: a sum is never a question to ask back)
+        if asked is not None:
+            return Ok({"handled": True, "status": "completed", "reply": asked.reply, "planned_by": quick_mod.PLANNED_BY, "label": asked.ack, "approval_id": None,
                        "seconds": round(time.monotonic() - started, 2)})
         # D74: the face asks this first for every command-looking message, BEFORE any chat model: a request that must be asked about ("open notepad or wordpad",
         # "delete that", "close the window") is turned into the question here, whatever the chat model would have done with it. Without the owner's panel (this plugin

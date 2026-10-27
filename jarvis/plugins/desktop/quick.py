@@ -18,7 +18,12 @@ Interfaces left open on purpose:
   * `RULES` / `LOCAL_ANSWERS`: plain tables. A command that has no tool yet (a screenshot has a kernel job but no desktop-plugin step) is NOT
     guessed; add its row when the tool exists.
 
-Switch: JARVIS_QUICK_PATH=0 (or off/false/no) turns the router off for one run; default on.
+D75 (2026-10-27): a plain QUESTION is answered here too, before any tool, app or model: arithmetic and percentages ("23 times 47", "15% of 2400"), unit and temperature
+conversions, the date and the time, tip / split / discount / GST / EMI, number formatting, in English or Tenglish / Hinglish operator words. The rules are in
+plugins/_shared/direct_answer.py (exact fractions, no eval, no network); this file only asks it first. When the owner NAMES the Calculator or the screen ("in Calculator",
+"open calculator", "show me on screen") direct_answer returns None and the catalogue's `calculate` entry opens the app as before.
+
+Switch: JARVIS_QUICK_PATH=0 (or off/false/no) turns the router off for one run; default on. JARVIS_DIRECT_ANSWERS=0 turns only the direct answers off.
 """
 from __future__ import annotations
 
@@ -29,6 +34,8 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
 from jarvis import safe_mode
+
+from jarvis.plugins._shared import direct_answer
 
 from . import decide
 
@@ -143,6 +150,19 @@ def _compound(r: str, request: str, profiles: list[dict]) -> "decide.Plan | None
     return _validated(steps, request, profiles) if steps else None
 
 
+# ------------------------------------------------------------------------------------------------------------------- direct answers (D75)
+def direct(request: str, now: datetime.datetime | None = None, env: dict | None = None, normalised: bool = False) -> "Quick | None":
+    """The answer to a plain maths / conversion / date question as a Quick("answer"), or None. Pure: no model, no tool, no network, no window."""
+    if not enabled(env) or not direct_answer.enabled(env):
+        return None
+    text = " ".join(str(request or "").split())[:1000]
+    text = text if normalised else _normalise(text)
+    got = direct_answer.answer(text, now)
+    if got is None:
+        return None
+    return Quick("answer", text, reply=got.text, ack="One moment")
+
+
 # ------------------------------------------------------------------------------------------------------------------- the entry point
 def _site(step: dict) -> str:
     """The page's short name: the site word the plan carries, else the host of its address without www and the ending."""
@@ -176,6 +196,9 @@ def match(request: str, profiles: list[dict] | None = None, now: datetime.dateti
     if not enabled(env):
         return None
     text = _normalise(" ".join(str(request or "").split())[:1000])
+    asked = direct(text, now, env, normalised=True)                         # D75: a question is answered, not run
+    if asked is not None:
+        return asked
     r = _clean(text)
     if not r or len(r) > 160:
         return None
