@@ -130,6 +130,15 @@ describe('when the router is worth asking', () => {
     'stop',
     'what have you learned about Excel',
     'forget that',
+    // D74: messages the ambiguity rules must see before any chat model does
+    'delete the old file',
+    'Send it to him.',
+    'Make a pdf.',
+    'Email the report.',
+    'Close the window.',
+    'Notepad leda Wordpad teruvu',
+    'kuch bajao',
+    'purani files delete karo',
   ])('asks for %s', (text) => {
     expect(mightBeQuickCommand(text)).toBe(true)
   })

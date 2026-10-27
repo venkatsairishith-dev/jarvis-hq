@@ -55,14 +55,23 @@ const CLOCK = /^(?:what(?:'s|\s+is)\s+(?:the\s+)?(?:current\s+|today'?s\s+)?(?:t
 const TASK_TALK = /^(?:what(?:'s| is| are)? you(?:'re| are)? doing(?: right now| now)?|what are you up to|what are you working on|why did you stop(?:ped)?|why are you waiting|what went wrong|what(?:'s| is) wrong|what happened|what(?:'s| is) the problem|try (?:it )?(?:another|a different) way|try something else|skip (?:this|that|the) step|stop|stop (?:it|that|now|the task)|what have you learn(?:ed|t)(?: about [\w. -]{1,40})?|what did you learn(?: about [\w. -]{1,40})?|forget (?:that|it|this|everything about [\w. -]{1,40}))[\s.!?]*$/i
 
 /**
- * Whether the rules-first router is worth asking: the message starts like a PC command, or asks the clock. Everything else goes straight to the chat model,
- * so an ordinary chat turn does not wait for one more local call.
+ * D74 (ask, do not guess): the tool server's quick_command hook also runs the ambiguity rules (jarvis/plugins/desktop/gate.py over config/ambiguity.json) BEFORE any
+ * chat model sees the message: "delete that", "send it to him", "make a pdf", "Notepad leda Wordpad teruvu". So a message that starts with a verb that acts on something (or
+ * holds a Telugu or Hindi verb in English letters) is sent to the hook too. The hook answers `handled: false` at once when there is nothing to ask and nothing to run, so a
+ * wrong guess here costs one fast local call. The rules themselves are in Python, in one place; this is only the door.
+ */
+const ASK_VERB = /^(?:delete|remove|erase|trash|send|e-?mail|forward|share|move|copy|rename|make|create|generate|search|find|look\s+up|print|upload|close|quit|exit|remind|schedule|whatsapp)\b/i
+const INDIC_VERB = /\b(?:kholo|khol\s+do|band\s+karo|hatao|hata\s+do|bhejo|bhej\s+do|banao|bajao|chalao|dikhao|dhundo|dhoondo|teruvu|teruvandi|muyyi|teesey|teeseyyi|pampu|pampandi|cheyyi|cheyandi|chupinchu|vetuku|mail\s+karo|(?:delete|save|open|close|rename|move|copy|send|play|share|search|create|make)\s+(?:karo|kar\s+do|cheyyi|cheyandi|chey))\b/i
+
+/**
+ * Whether the rules-first router is worth asking: the message starts like a PC command, starts with a verb the ambiguity rules must see (D74), or asks the clock. Everything
+ * else goes straight to the chat model, so an ordinary chat turn does not wait for one more local call.
  */
 export function mightBeQuickCommand(text: string, guess: TaskGuess | null = guessTask(text)): boolean {
   if (guess?.kind === 'pc')
     return true
   const body = String(text ?? '').replace(/\s+/g, ' ').trim().replace(FILLER, '')
-  return CLOCK.test(body) || TASK_TALK.test(body)
+  return CLOCK.test(body) || TASK_TALK.test(body) || ASK_VERB.test(body) || INDIC_VERB.test(body)
 }
 
 export interface QuickResult {

@@ -1,6 +1,7 @@
 """Drivers: the MCP client against a fake tool server, the PIN-card watching, and the face driver's JSON line."""
 import json
 import subprocess
+import time
 import urllib.error
 
 import pytest
@@ -162,3 +163,73 @@ def test_face_driver_runs_the_node_script_and_reads_the_last_json_line():
         return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="Error: playwright missing")
     obs = D.FaceDriver(client=D.McpClient(opener=srv), runner=broken).run("x", 5)
     assert obs.status == "harness_error" and "printed nothing" in obs.harness_error
+
+
+# ---------------------------------------------------------------------------------------------------------------------- D74: a form on the panel is a question asked
+PANEL_FORM = {"id": "q1", "token": "t", "title": "Which one?", "intro": "Which one: Notepad or WordPad?", "buttons": [],
+              "fields": [{"id": "choice", "type": "radio", "options": [{"id": "o1", "label": "Notepad"}, {"id": "o2", "label": "WordPad"}]},
+                         {"id": "other", "type": "text", "label": "Something else"}]}
+
+
+@pytest.fixture
+def fast_watch(monkeypatch):
+    orig = D._AskWatcher.__init__
+    monkeypatch.setattr(D._AskWatcher, "__init__", lambda self, client, every_s=0.05: orig(self, client, 0.05))
+
+
+def slow_runner(out):
+    def runner(cmd, **kw):
+        time.sleep(0.4)
+        return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr="")
+    return runner
+
+
+def test_a_form_on_the_panel_becomes_an_ask_form_with_its_choices():
+    f = D.panel_form_as_ask_form({"version": 3, "form": PANEL_FORM})
+    assert ask_form.is_form(f, 2) and f["question"] == "Which one: Notepad or WordPad?" and [o["label"] for o in f["options"]] == ["Notepad", "WordPad"] and f["allow_other"]
+    assert D.panel_form_as_ask_form({"version": 3, "form": None}) is None and D.panel_form_as_ask_form({}) is None and D.panel_form_as_ask_form("x") is None
+    nested = {"intro": "Pick", "fields": [{"type": "section", "children": [{"type": "checkbox_group", "options": [{"label": "A"}, {"label": "B"}]}]}]}
+    assert [o["label"] for o in D.panel_form_as_ask_form({"form": nested})["options"]] == ["A", "B"]
+
+
+def test_the_face_driver_counts_a_form_that_was_on_the_panel_while_the_goal_ran(fast_watch):
+    """The chat said nothing with a form in it, but the owner's panel showed one: that is a question JARVIS asked."""
+    shown = {"n": 0}
+
+    def wanted(args):
+        shown["n"] += 1
+        return {"version": 1, "form": None} if shown["n"] == 1 else {"version": 2, "form": PANEL_FORM}      # nothing open at the start, the form appears later
+    srv = FakeServer({"jarvis_waiting": {"approvals": []}, "jarvis_ask_wanted": wanted})
+    fd = D.FaceDriver(client=D.McpClient(opener=srv), runner=slow_runner('{"goal":"x","seconds":5,"final_text":"I asked you.","calls":[],"requests":1,"statuses":[200]}\n'))
+    obs = fd.run("Open notepad or wordpad.", 30)
+    assert ask_form.is_form(obs.ask_form, 2) and not obs.asked_in_prose
+
+
+def test_a_form_that_was_already_open_before_the_goal_is_not_this_goals_question(fast_watch):
+    srv = FakeServer({"jarvis_waiting": {"approvals": []}, "jarvis_ask_wanted": {"version": 9, "form": PANEL_FORM}})
+    obs = D.FaceDriver(client=D.McpClient(opener=srv), runner=slow_runner('{"goal":"x","seconds":5,"final_text":"Done.","calls":[],"requests":1,"statuses":[200]}\n')).run("x", 30)
+    assert obs.ask_form is None
+
+
+def test_a_server_without_the_panel_tool_adds_nothing_and_breaks_nothing(fast_watch):
+    srv = FakeServer({"jarvis_waiting": {"approvals": []}})                                    # jarvis_ask_wanted is not there
+    obs = D.FaceDriver(client=D.McpClient(opener=srv), runner=slow_runner('{"goal":"x","seconds":5,"final_text":"Hello.","calls":[],"requests":1,"statuses":[200]}\n')).run("x", 30)
+    assert obs.final_text == "Hello." and obs.ask_form is None
+
+
+def test_a_jarvis_ask_call_in_the_chat_is_a_form_shown():
+    row = {"final_text": "Done.", "calls": ["builtIn_mcpCallTool -> jarvis_ask"], "ask_form": None}
+    assert ask_form.is_form(D.observation_from_face_row(row, [], 3.0).ask_form)
+    row = {"final_text": "Done.", "calls": ["builtIn_mcpCallTool -> jarvis_ask_wanted", "jarvis_asked_something"], "ask_form": None}
+    assert D.observation_from_face_row(row, [], 3.0).ask_form is None          # the panel's own poll and a look-alike name are not the chat model asking
+
+
+def test_the_ambiguous_goals_judge_asked_did_not_act_from_the_pc_and_the_form():
+    import json
+    from pathlib import Path
+    goals = json.loads((Path(D.__file__).parent / "goals.json").read_text(encoding="utf-8"))["capabilities"]["ambiguous_asks"]["goals"]
+    assert all(g["kind"] == "ask" and any(v["check"] == "ask_form" for v in g["verify"]) and g["forbid"] for g in goals)
+    close = next(g for g in goals if g["id"] == "am-close-window")
+    assert {"check": "window_closed", "process": "jarvis", "severity": 2, "label": "closed JARVIS's own window"} in close["forbid"]
+    either = next(g for g in goals if g["id"] == "am-notepad-or-wordpad")
+    assert {"check": "ask_form", "min_options": 2} in either["verify"]

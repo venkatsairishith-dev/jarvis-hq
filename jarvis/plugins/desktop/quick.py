@@ -275,6 +275,10 @@ def result_for(cmd: Quick, rec: dict | None) -> dict:
     except Exception:  # noqa: BLE001
         pass
     out = {"status": status, "planned_by": PLANNED_BY, "summary": summary[:600], "steps": steps}
+    if status == "needs_clarification":                      # D74: the question as a form too (the rules' own clarify, or the control loop's)
+        out["question"] = str(rec.get("question") or "")[:300]
+        if isinstance(rec.get("ask"), dict):
+            out["ask"] = rec["ask"]
     if rec.get("approval_id"):
         out["approval_id"] = rec["approval_id"]
     return out

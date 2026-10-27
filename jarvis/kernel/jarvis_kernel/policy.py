@@ -151,6 +151,63 @@ def load_sensitive_sites(path=None) -> dict:
 SENSITIVE_SITES = load_sensitive_sites()
 
 
+# ---- JARVIS's own windows (D74, 2026-10-27) ------------------------------------------------------------------------------------------
+# Found on the real laptop (Phase 7): the goal "Close the window" closed JARVIS's own chat window, because the chat is the window in front when the owner speaks.
+# JARVIS never closes its own face / avatar / chat / console window by itself: a close (the ui op, or a close chord) aimed at one is DENY, unless the owner's own
+# words name JARVIS, and then it is the owner's PIN. The list lives in jarvis/config/own_windows.json, which can only ADD to this built-in floor (a missing or
+# broken file removes nothing). The node has the same check (jarvis_node/ownwin.py) and looks at the window titles too (a browser tab of the console).
+OWN_WINDOWS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "own_windows.json")
+_OWN_FLOOR = {
+    "processes": ("jarvis", "jarvisface", "jarvis-face", "jarvis_face", "jarvis.face", "electron"),
+    "browser_processes": ("chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "arc"),
+    "title_regex": (r"^jarvis(?:\s*[-–|:]\s*|\s+(?:console|dashboard|editor|chat)\b|$)",),
+}
+
+
+def load_own_windows(path=None) -> dict:
+    """The built-in floor plus whatever config/own_windows.json adds ({"processes": [...], "browser_processes": [...], "title_regex": [...]})."""
+    out = {"processes": {str(x).lower() for x in _OWN_FLOOR["processes"]}, "browser_processes": {str(x).lower() for x in _OWN_FLOOR["browser_processes"]},
+           "title_regex": list(_OWN_FLOOR["title_regex"])}
+    try:
+        with open(path or OWN_WINDOWS_FILE, encoding="utf-8-sig") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        data = {}
+    data = data if isinstance(data, dict) else {}
+    for key in ("processes", "browser_processes"):
+        if isinstance(data.get(key), list):
+            out[key] |= {re.sub(r"\.exe$", "", str(x).strip().lower()) for x in data[key] if isinstance(x, str) and x.strip()}
+    if isinstance(data.get("title_regex"), list):
+        for rx in data["title_regex"]:
+            try:
+                if isinstance(rx, str) and rx.strip():
+                    re.compile(rx)
+                    out["title_regex"].append(rx)
+            except re.error:
+                continue
+    out["title_rx"] = [re.compile(rx, re.I) for rx in out["title_regex"]]
+    return out
+
+
+OWN_WINDOWS = load_own_windows()
+
+
+def own_window(process, title="", cfg: dict = None) -> str:
+    """Why this process (and window title) is one of JARVIS's own windows ("" when it is not): the face's process, or a browser window whose title is the console's."""
+    cfg = cfg or OWN_WINDOWS
+    proc = re.sub(r"\.exe$", "", fold_text(process).strip())
+    if proc and proc in cfg["processes"]:
+        return "JARVIS's own window (the face, the avatar or the chat)"
+    if title and (not proc or proc in cfg["browser_processes"] or proc in cfg["processes"]):
+        t = fold_text(title).strip()
+        if any(rx.search(t) for rx in cfg["title_rx"]):
+            return "JARVIS's own console window"
+    return ""
+
+
+OWN_CLOSE_KEYS = {"alt+f4", "ctrl+w", "ctrl+shift+w", "ctrl+q", "ctrl+shift+q"}
+
+
 # ---- One canonical reading of a host name and of a URL (review M7, 2026-10-18) -------------------------------------------
 # Chrome reads "https://chase。com/" (U+3002), "ch​ase.com" (zero-width space), "ch­ase.com" (soft hyphen), fullwidth
 # letters, a trailing dot and a percent-encoded host as chase.com. The policy used to read them as other hosts and let them
@@ -383,6 +440,8 @@ def sensitive_target(texts, sites: dict = None) -> str:
 # Files that hold the rules, hooks and settings the agents run under: changing them is console-only (at least RED).
 SAFETY_COMPONENTS = {"claude.md", "settings.json", "settings.local.json", ".claude", "hooks.json", "providers.json", "policy.py", "audit.py", "store.py",
                      "sensitive_sites.json", "auto_click.json",
+                     # D74 (2026-10-27): the rules that decide when a request must be asked about (not guessed) and which windows are JARVIS's own: console-only.
+                     "ambiguity.json", "own_windows.json",
                      # D71 (2026-10-27): the safe-mode switch (the owner's flag file, the reader that is copied into four packages, the owner's tool).
                      "safe_mode.json", "safe_mode.py", "safe_mode_ctl.py",
                      # D64 (2026-10-26): the per-site grants of the browser agent and the owner's alias e-mail: console-only, sealed by the kernel.
@@ -1567,6 +1626,13 @@ def decide(a: Action, suggested=None, protected=None) -> Decision:
         if site:
             level, reason = DENY, (f"automating {site} is against its terms: JARVIS may open it for the owner, but asks those "
                                    "models only through their APIs")
+    if tool == "ui" and level < DENY and (op == "close" or (op == "key" and _name((a.params or {}).get("text", "")) in OWN_CLOSE_KEYS)):
+        own = own_window(str(a.target).partition("|")[0])               # D74: JARVIS never closes its own windows by itself
+        if own:
+            if re.search(r"(?<![a-z0-9])jarvis(?![a-z0-9])", clean_words(a.goal or "")):
+                level, reason = max(level, YELLOW_APPROVAL), f"{own}: the owner's words name JARVIS, so only the owner approves closing it"
+            else:
+                level, reason = DENY, f"{own}: JARVIS does not close its own windows; the owner closes it himself (or names it and approves)"
     if tool == "pc" and _name(a.lane) == "public" and level < DENY:
         if op == "list_folder":
             level, reason = DENY, "a lab agent may not read the owner's folders (the names would reach a public-lane model)"
