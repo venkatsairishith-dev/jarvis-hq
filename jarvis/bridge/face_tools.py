@@ -29,6 +29,12 @@ trimmed schemas (about 8 KB instead of 53 KB), and registers nothing else except
 Every string in a result is cleaned for a model (jarvis/plugins/_shared/screen_text.clean_result) before it leaves, because the
 face hands results to its chat model.
 
+tools/list is cached in THIS process (D80): the face re-asks for it on every reconnect (D57's backoff schedule, a cold start, a dropped
+loopback connection), and the compacting work (compact_schema's recursion plus one model_copy per tool) is the same every time the tool set has
+not changed. The cache key is a revision counter bumped only by add_tool, so it can never go stale while this server runs; it does not help a
+genuinely cold run of this process itself (a fresh python face_tools.py pays the real first compacting pass once, which is cheap: see the timing
+test below) and it is not the gateway's redaction cache (D60) or a fix for a model's own prompt-processing time, which this cache cannot touch.
+
 Network: it listens on 127.0.0.1 only. Requests must name 127.0.0.1:48970 or localhost:48970 as Host and carry no Origin, so a web
 page in a browser cannot call it (DNS rebinding and cross-site requests are refused with 403/421).
 
@@ -141,19 +147,31 @@ def _face_server_class():
         allowed: frozenset | None = None         # set: only these tools are registered (the others cannot be called either)
         unlisted: frozenset = frozenset()        # registered and callable, left out of tools/list
         short: dict[str, str] | None = None      # set: the compact listing (descriptions from here, trimmed schemas, no annotations)
+        _tool_rev: int = 0                       # D80: bumped by every add_tool; the only way this class's tool registry can change
+        _list_cache: tuple | None = None         # (the key below at build time, the finished list) - skips the compacting work on a repeat call
 
         def add_tool(self, fn, name=None, *args, **kwargs):
             if self.allowed is not None and (name or getattr(fn, "__name__", "")) not in self.allowed:
                 return
             super().add_tool(fn, name, *args, **kwargs)
+            self._tool_rev += 1
+
+        def _list_key(self):
+            # content-hash in spirit, cheap in practice: the registry can only change through add_tool (which bumps _tool_rev), so this
+            # tuple fully determines the compacted list below; recomputing it is a few small comparisons, not a schema walk.
+            return (self._tool_rev, self.unlisted, None if self.short is None else tuple(sorted(self.short.items())))
 
         async def list_tools(self):
+            key = self._list_key()
+            if self._list_cache is not None and self._list_cache[0] == key:
+                return self._list_cache[1]
             tools = [t for t in await super().list_tools() if t.name not in self.unlisted]
-            if self.short is None:
-                return tools
-            return [t.model_copy(update={"description": self.short.get(t.name) or (t.description or "")[:240],
-                                         "input_schema": compact_schema(t.input_schema), "annotations": None, "output_schema": None,
-                                         "meta": None, "title": None, "icons": None}) for t in tools]
+            out = tools if self.short is None else [
+                t.model_copy(update={"description": self.short.get(t.name) or (t.description or "")[:240],
+                                     "input_schema": compact_schema(t.input_schema), "annotations": None, "output_schema": None,
+                                     "meta": None, "title": None, "icons": None}) for t in tools]
+            self._list_cache = (key, out)
+            return out
 
     return FaceMCPServer
 
