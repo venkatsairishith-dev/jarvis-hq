@@ -73,6 +73,8 @@ DEFAULTS: dict[str, Any] = {
     "service": {"base_url": "http://127.0.0.1:48960/v1"},
     "llm": {"kind": "translate", "base_url": "http://127.0.0.1:8080/v1", "max_tokens": 400},
     "tts_verified": {"te": False, "hi": False},
+    "protect_names": True,                 # D70: a name the owner STATES ("naa bharya peru Priya") is cut out of the original before the translator and put back after
+    "name_rules": True,                    # D70: a sentence that is nothing but such a statement is turned into English by a template, no model
 }
 
 
@@ -371,10 +373,11 @@ def observe_owner(original: str, english: str | None = None) -> list[str]:
         return []
 
 
-def mask(text: str, glossary: Iterable[str] | None = None, names: Any = None) -> Masked:
+def mask(text: str, glossary: Iterable[str] | None = None, names: Any = None, statements: bool = False) -> Masked:
     """Replace everything that must survive translation with tokens like JVX3Q. Idempotent on text without such items. `names` is a learned-names index
     (names.NameIndex): a learned name is kept as written, a known alias of it goes back as ONE canonical English spelling; the glossary is masked first, so
-    a manual term always wins."""
+    a manual term always wins. `statements` (D70): also cut out the NAME of a name statement in the text ("naa bharya peru Priya", "నా భార్య ప్రియ", "meri patni
+    ka naam Priya hai"), known or not, so the translator never sees it (it renders a name as a common word: "my darling")."""
     glossary = list(glossary if glossary is not None else load_glossary())
     prefix = "JVX"
     while prefix in text.upper() and len(prefix) < 8:
@@ -397,6 +400,15 @@ def mask(text: str, glossary: Iterable[str] | None = None, names: Any = None) ->
         out = terms.sub(lambda m: put("name", m.group(0)), out)
     if names is not None and not getattr(names, "empty", True):
         spans = names.find(out)
+        if spans:
+            pieces, last = [], 0
+            for a, b, restore in spans:
+                pieces += [out[last:a], put("name", restore)]
+                last = b
+            out = "".join(pieces) + out[last:]
+    if statements and os.environ.get("JARVIS_LEARNED_NAMES", "1") != "0":
+        nm = _names_module()
+        spans = nm.statement_protect_spans(out) if nm is not None else []
         if spans:
             pieces, last = [], 0
             for a, b, restore in spans:
@@ -729,7 +741,22 @@ class Translator:
     # ---- detection
     def detect(self, text: str) -> Detection:
         ident = next((b for b in self.backends if self._up(b) and type(b).identify is not Backend.identify), None) if self.cfg.get("identify_with_model") else None
-        return detect(text, ident)
+        d = detect(text, ident)
+        if d.lang == "en" and len(text) <= 400:                    # D70: "naa bharya peru Priya" has no word the detector knows: the statement pattern says it is Tenglish
+            hit = self._name_rule(text)
+            if hit is not None:
+                return Detection(hit[1], 0.95, "name-rule", False, d.word_hits, d.scripts)
+        return d
+
+    def _name_rule(self, text: str) -> tuple[str, str] | None:
+        """(English, language) when `text` is nothing but name statements (D70), else None. Pure rules (config/name_patterns.json), no model."""
+        if not self.cfg.get("name_rules", True) or os.environ.get("JARVIS_LEARNED_NAMES", "1") == "0":
+            return None
+        nm = _names_module()
+        try:
+            return nm.statement_english(text) if nm is not None else None
+        except Exception:                                          # noqa: BLE001 - the language layer never breaks for a pattern file
+            return None
 
     # ---- the work
     def _run(self, b: Backend, text: str, src: str, tgt: str, romanized: bool, budget: float) -> str:
@@ -744,7 +771,7 @@ class Translator:
 
     def _convert(self, text: str, src: str, tgt: str, romanized: bool, started: float) -> tuple[str, Backend, list[dict], list[int], str]:
         """Mask, translate with the first backend that works, unmask. Returns (output, backend, preserved, lost ids, reason of the last failure)."""
-        masked = mask(text, self.glossary(), self.learned())
+        masked = mask(text, self.glossary(), self.learned(), statements=(src != "en" and bool(self.cfg.get("protect_names", True))))
         reason = "no translator installed" if not self.backends else "no backend supports this language"
         total_budget = float(self.cfg.get("budget_s", 3.0))
         for b in self.backends:
@@ -827,6 +854,10 @@ class Translator:
         if det.lang == "en":
             self.stats["english"] += 1
             return Result(original, "en", 1.0, [], original, False)
+        rule = self._name_rule(original) if len(original) <= 400 else None
+        if rule is not None:
+            self.stats["name_rules"] = self.stats.get("name_rules", 0) + 1
+            return Result(rule[0], rule[1], 0.95, [], original, True, "name-rules", "", round(time.monotonic() - t0, 3))
         if det.lang == "xx":
             return self._skip(original, "xx", "this language is not translated by the local models", t0)
         key = ("to_en", det.lang, original)

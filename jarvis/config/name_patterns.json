@@ -1,0 +1,213 @@
+{
+  "_note": "D70: the CLOSED set of 'this is somebody's name' sentences, as DATA. plugins/_shared/name_spans.py compiles it. It is read from the ORIGINAL text before translation, so a name is learned and protected in Telugu script, romanized Telugu (Tenglish), Devanagari and romanized Hindi (Hinglish). To teach JARVIS a new way of saying it, add a word to a list or a template here; no code changes. Latin-letter words are matched without regard to case; a Latin NAME must start with a capital letter unless the template says lower_ok (then the name word 'peru'/'naam' must be in the sentence). Native-script words are matched as written. Written by Claude, NOT checked by a native speaker (D70).",
+  "version": 1,
+
+  "scripts": {
+    "te": "Telugu script", "te_lat": "romanized Telugu (Tenglish)", "hi": "Devanagari", "hi_lat": "romanized Hindi (Hinglish)"
+  },
+
+  "possessive": {
+    "te": ["నా", "మా", "మన"],
+    "te_lat": ["naa", "na", "maa", "ma", "mana", "naadhi"],
+    "hi": ["मेरा", "मेरी", "मेरे", "हमारा", "हमारी", "हमारे"],
+    "hi_lat": ["mera", "meraa", "meri", "mere", "hamara", "hamari", "hamare"]
+  },
+  "self_possessive": {
+    "te": ["నా"],
+    "te_lat": ["naa", "na", "naadhi"],
+    "hi": ["मेरा", "मेरी"],
+    "hi_lat": ["mera", "meraa", "meri"]
+  },
+  "name_word": {
+    "te": ["పేరు"],
+    "te_lat": ["peru", "pEru", "pera", "perru", "peruu"],
+    "hi": ["नाम"],
+    "hi_lat": ["naam", "nam", "naama"]
+  },
+  "link": {
+    "te": ["యొక్క"],
+    "te_lat": [],
+    "hi": ["का", "की", "के"],
+    "hi_lat": ["ka", "ki", "ke"]
+  },
+  "copula": {
+    "te": ["ఉంది", "అండి"],
+    "te_lat": ["undi", "andi"],
+    "hi": ["है", "हैं", "था", "थी", "हूँ", "हूं"],
+    "hi_lat": ["hai", "hain", "hi", "tha", "thi", "he"]
+  },
+  "relation_suffix": {
+    "te": ["ని", "ను", "కి", "కు"],
+    "te_lat": ["ni", "nu", "ki", "ku"],
+    "hi": [],
+    "hi_lat": []
+  },
+  "ani": { "te": ["అని"], "te_lat": ["ani"], "hi": [], "hi_lat": [] },
+  "call_verb": {
+    "te": ["పిలుస్తారు", "పిలుస్తాను", "పిలుస్తాము", "పిలిచారు", "పిలుచుకుంటారు"],
+    "te_lat": ["pilustaru", "pilustharu", "pilustaaru", "pilusthaaru", "pilichaaru", "pilichindi", "piluchukuntaru", "pilustanu", "pilustamu"],
+    "hi": [], "hi_lat": []
+  },
+  "nannu": { "te": ["నన్ను"], "te_lat": ["nannu", "nannuu"], "hi": [], "hi_lat": [] },
+  "mujhe": {
+    "te": [], "te_lat": [],
+    "hi": ["मुझे"], "hi_lat": ["mujhe", "mujhko"]
+  },
+  "hindi_call_verb": {
+    "te": [], "te_lat": [],
+    "hi": ["कहते", "बुलाते", "बुलाती", "कहती"], "hi_lat": ["kehte", "kahte", "bulate", "bulaate", "bulati", "kehti"]
+  },
+  "subject": {
+    "te": ["నేను", "మేము", "మేమంతా"],
+    "te_lat": ["nenu", "memu", "meemu"],
+    "hi": ["मैं", "हम"],
+    "hi_lat": ["main", "mein", "hum", "ham"]
+  },
+  "i_am_subject": {
+    "te": [], "te_lat": ["nenu"],
+    "hi": [], "hi_lat": ["main"]
+  },
+  "i_am_verb": { "te": [], "te_lat": [], "hi": [], "hi_lat": ["hoon", "hun", "hu"] },
+  "locative": {
+    "te": ["లో"], "te_lat": ["lo"],
+    "hi": ["में"], "hi_lat": ["mein", "me"]
+  },
+  "live_verb": {
+    "te": ["ఉంటాను", "ఉంటాము", "ఉన్నాను", "ఉన్నాము", "ఉంటారు"],
+    "te_lat": ["untanu", "untaanu", "untamu", "untaamu", "unnanu", "unnamu", "untaru"],
+    "hi": ["रहता", "रहती", "रहते"],
+    "hi_lat": ["rehta", "rehti", "rehte", "rahta", "rahti", "rahte"]
+  },
+
+  "relations": {
+    "wife": {"kind": "family", "te": ["భార్య", "భార్యా"], "te_lat": ["bharya", "bhaarya", "bhaaryaa", "barya", "wife"], "hi": ["पत्नी", "बीवी"], "hi_lat": ["patni", "biwi", "bivi", "wife"]},
+    "husband": {"kind": "family", "te": ["భర్త", "మొగుడు"], "te_lat": ["bhartha", "bharta", "mogudu", "husband"], "hi": ["पति"], "hi_lat": ["pati", "husband"]},
+    "mother": {"kind": "family", "te": ["అమ్మ", "తల్లి"], "te_lat": ["amma", "thalli", "talli", "mother", "mom"], "hi": ["माँ", "मां", "माता", "मम्मी"], "hi_lat": ["maa", "mata", "mummy", "mom", "mother"]},
+    "father": {"kind": "family", "te": ["నాన్న", "తండ్రి"], "te_lat": ["nanna", "thandri", "tandri", "father", "dad"], "hi": ["पिता", "पापा"], "hi_lat": ["pita", "papa", "pitaji", "father", "dad"]},
+    "brother": {"kind": "family", "te": ["అన్న", "అన్నయ్య", "తమ్ముడు"], "te_lat": ["brother", "anna", "annayya", "thammudu", "tammudu"], "hi": ["भाई"], "hi_lat": ["bhai", "bhaiya", "bhaiyya", "brother"]},
+    "sister": {"kind": "family", "te": ["అక్క", "చెల్లి", "చెల్లెలు"], "te_lat": ["sister", "akka", "chelli", "chelleli", "chellelu"], "hi": ["बहन", "दीदी"], "hi_lat": ["behen", "behan", "bahan", "sister", "didi"]},
+    "son": {"kind": "family", "te": ["కొడుకు"], "te_lat": ["koduku", "kodukku", "son"], "hi": ["बेटा"], "hi_lat": ["beta", "son"]},
+    "daughter": {"kind": "family", "te": ["కూతురు", "కుమార్తె"], "te_lat": ["kuthuru", "kooturu", "kuturu", "daughter"], "hi": ["बेटी"], "hi_lat": ["beti", "daughter"]},
+    "grandmother": {"kind": "family", "te": ["అమ్మమ్మ", "నానమ్మ"], "te_lat": ["ammamma", "nanamma"], "hi": ["दादी", "नानी"], "hi_lat": ["dadi", "nani"]},
+    "grandfather": {"kind": "family", "te": ["తాతయ్య", "తాత"], "te_lat": ["thatha", "tatha", "thathayya"], "hi": ["दादा", "नाना"], "hi_lat": ["dada", "nana"]},
+    "uncle": {"kind": "family", "te": ["మామయ్య", "బాబాయ్"], "te_lat": ["mavayya", "babai", "uncle"], "hi": ["चाचा", "मामा"], "hi_lat": ["chacha", "mama", "uncle"]},
+    "aunt": {"kind": "family", "te": ["అత్త", "పిన్ని"], "te_lat": ["atta", "pinni", "aunty", "aunt"], "hi": ["चाची", "मौसी"], "hi_lat": ["chachi", "mausi", "massi", "aunty", "aunt"]},
+    "friend": {"kind": "friend", "te": ["స్నేహితుడు", "స్నేహితురాలు", "మిత్రుడు", "ఫ్రెండ్"], "te_lat": ["friend", "snehithudu", "snehitudu", "mitrudu"], "hi": ["दोस्त", "मित्र", "फ्रेंड"], "hi_lat": ["dost", "mitra", "friend"]},
+    "boss": {"kind": "other", "te": ["బాస్", "మేనేజర్"], "te_lat": ["boss", "manager"], "hi": ["बॉस"], "hi_lat": ["boss", "manager"]},
+    "colleague": {"kind": "other", "te": ["సహోద్యోగి"], "te_lat": ["colleague", "coworker"], "hi": ["सहकर्मी"], "hi_lat": ["colleague", "coworker"]},
+    "teacher": {"kind": "other", "te": ["టీచర్", "గురువు"], "te_lat": ["teacher", "guruvu"], "hi": ["शिक्षक", "टीचर", "गुरु"], "hi_lat": ["teacher", "guru"]},
+    "doctor": {"kind": "other", "te": ["డాక్టర్", "వైద్యుడు"], "te_lat": ["doctor"], "hi": ["डॉक्टर"], "hi_lat": ["doctor"]},
+    "neighbour": {"kind": "other", "te": ["పొరుగువాడు"], "te_lat": ["neighbour", "neighbor"], "hi": ["पड़ोसी"], "hi_lat": ["padosi"]}
+  },
+
+  "place_words": {
+    "hometown": {"te": ["ఊరు", "వూరు", "స్వస్థలం"], "te_lat": ["ooru", "uru", "swasthalam", "native", "hometown"], "hi": ["शहर", "गांव", "गाँव", "वतन"], "hi_lat": ["shehar", "sheher", "gaon", "gaanv", "watan", "hometown", "native"]}
+  },
+
+  "markers": {
+    "_note": "A sentence with one of these words (or a question mark) is NOT a statement: it is a question, a refusal, a condition or a request, and nothing is learned from it or protected in it. Words are whole words.",
+    "question": {
+      "te": ["ఏమిటి", "ఏంటి", "ఎవరు", "ఎక్కడ", "ఎలా", "చెప్పు", "చెప్పండి", "తెలుసా", "గుర్తుందా", "ఎంత"],
+      "te_lat": ["emiti", "enti", "emi", "evaru", "ekkada", "ela", "entha", "telusa", "teliyada", "cheppu", "cheppandi", "gurthunda", "gurtunda", "gurthundaa", "emo"],
+      "hi": ["क्या", "कौन", "कहाँ", "कहां", "कब", "कैसे", "कितना", "बताओ", "बताइए", "बताना", "याद"],
+      "hi_lat": ["kya", "kaun", "kahan", "kab", "kaise", "kitna", "batao", "bataiye", "bataao", "btao", "yaad"],
+      "en": ["what", "who", "which", "where", "when", "why", "how", "tell", "remember"]
+    },
+    "negation": {
+      "te": ["కాదు", "లేదు", "వద్దు", "తెలియదు", "కాదండి"],
+      "te_lat": ["kadu", "kaadu", "ledu", "ledhu", "lenu", "vaddu", "teliyadu", "kaadandi", "kadandi"],
+      "hi": ["नहीं", "मत", "नही"],
+      "hi_lat": ["nahi", "nahin", "nhi", "mat"],
+      "en": ["not", "never", "isn't", "wasn't", "don't", "doesn't", "didn't", "aren't", "cannot", "can't", "won't"]
+    },
+    "condition": {
+      "te": ["అంటే", "అయితే", "ఒకవేళ"],
+      "te_lat": ["ante", "aite", "ayithe", "okavela", "ayite"],
+      "hi": ["अगर", "यदि", "जब"],
+      "hi_lat": ["agar", "yadi", "jab"],
+      "en": ["if", "maybe", "perhaps", "might", "suppose", "imagine"]
+    },
+    "question_start_en": ["is", "are", "do", "does", "did", "can", "could", "would", "will", "what", "who", "which", "where", "when", "why", "how"]
+  },
+
+  "lead_words": ["hi", "hello", "hey", "ok", "okay", "so", "and", "also", "well", "oh", "jarvis", "sare", "avunu", "mari", "అవును", "సరే", "మరి", "జార్విస్", "हाँ", "हां", "सुनो", "अच्छा", "जार्विस", "suno", "acha", "achha", "haan", "sunna"],
+
+  "stop_words": {
+    "_note": "Never the name itself, whatever the position: pronouns, glue words, common nouns and states that can sit where a name sits. Added to names.never_name (every Tenglish and Hindi verb of the language layer).",
+    "latin": ["peru", "pera", "naam", "nam", "ka", "ki", "ke", "ko", "ni", "nu", "naa", "maa", "mana", "mera", "meri", "mere", "nenu", "memu", "main", "hum", "ham", "hai", "hain", "hoon", "undi", "andi", "ani", "ante", "kooda", "bhi", "sick", "busy", "fine", "home", "office", "ready", "tired", "hungry", "happy", "bimar", "theek", "thik", "baagunnaru", "bagunnaru", "baagundi", "bagundi", "bagunna", "baaga", "bagaa", "baagaa", "ilaa", "ela", "alaa", "aunty", "uncle", "sir", "madam", "garu", "gaaru", "ji", "jee"],
+    "native": ["పేరు", "నా", "మా", "మన", "ఉంది", "ఉన్నారు", "ఉన్నాడు", "ఉన్నాను", "బాగున్నారు", "బాగుంది", "బాగున్నాడు", "బాగా", "బాగున్నాను", "ఇల్లు", "ఇంట్లో", "ఇంటికి", "ఆఫీస్", "ఆఫీసు", "ఆఫీసులో", "ఇక్కడ", "అక్కడ", "ఎక్కడ", "ఎవరు", "ఏమిటి", "ఏంటి", "గారు", "అండి", "బిజీ", "అలసట", "ఆరోగ్యం",
+               "नाम", "मेरा", "मेरी", "मेरे", "है", "हैं", "था", "थी", "हूँ", "हूं", "बीमार", "ठीक", "अच्छा", "अच्छी", "अच्छे", "घर", "ऑफिस", "दफ्तर", "यहाँ", "वहाँ", "कहाँ", "कौन", "क्या", "जी", "व्यस्त", "थका", "थकी", "खुश", "तैयार"]
+  },
+
+  "lower_name_reject_endings": ["chu", "andi", "ndi", "ndhi", "ali", "aali", "indi", "inchu", "tanu", "taanu", "tamu", "stanu", "kar", "karo", "karna", "hoon", "ledu", "lenu"],
+
+  "case_endings": {
+    "_note": "Telugu endings are written onto the name (ప్రియకి); Hindi ones are separate words. Only the safe ones are stripped: కమల must stay కమల and భాను must stay భాను.",
+    "te": ["నుండి", "కోసం", "గారికి", "గారిని", "గారు", "గారి", "కి", "కు", "తో", "లో"],
+    "hi": ["जी"]
+  },
+
+  "templates": [
+    {"id": "rel_name_word", "kind": "relation", "scripts": ["te", "te_lat", "hi", "hi_lat"], "anchor": "free", "conf": 0.9, "lower_ok": true,
+     "pattern": "{POSS}\\s+{REL}(?:\\s?{RELSUF})?(?:\\s+{LINK})?\\s+{NW}\\s+{NAME}(?:\\s+{COP})?",
+     "en": "My {rel}'s name is {name}."},
+    {"id": "rel_bare", "kind": "relation", "scripts": ["te", "te_lat", "hi", "hi_lat"], "anchor": "sentence", "conf": 0.85, "lower_ok": false,
+     "pattern": "{POSS}\\s+{REL}\\s+{NAME}(?:\\s+{COP})?",
+     "en": "My {rel} is {name}."},
+    {"id": "rel_reversed", "kind": "relation", "scripts": ["te", "te_lat", "hi", "hi_lat"], "anchor": "sentence", "conf": 0.85, "lower_ok": false,
+     "pattern": "{NAME}\\s+{POSS}\\s+{REL}(?:\\s+{COP})?",
+     "en": "{name} is my {rel}."},
+    {"id": "rel_called", "kind": "relation", "scripts": ["te", "te_lat"], "anchor": "free", "conf": 0.85, "lower_ok": false,
+     "pattern": "{POSS}\\s+{REL}(?:\\s?{RELSUF})?\\s+{NAME}\\s+{ANI}\\s+{CALL}",
+     "en": "I call my {rel} {name}."},
+    {"id": "self_name_word", "kind": "self", "scripts": ["te", "te_lat", "hi", "hi_lat"], "anchor": "free", "conf": 0.9, "lower_ok": true,
+     "pattern": "{SPOSS}\\s+{NW}\\s+{NAME}(?:\\s+{COP})?",
+     "en": "My name is {name}."},
+    {"id": "self_called_te", "kind": "self", "scripts": ["te", "te_lat"], "anchor": "free", "conf": 0.85, "lower_ok": false,
+     "pattern": "{NANNU}\\s+{NAME}\\s+{ANI}\\s+{CALL}",
+     "en": "People call me {name}."},
+    {"id": "self_called_hi", "kind": "self", "scripts": ["hi", "hi_lat"], "anchor": "free", "conf": 0.85, "lower_ok": false,
+     "pattern": "{MUJHE}\\s+{NAME}\\s+{HCALL}(?:\\s+{COP})?",
+     "en": "People call me {name}."},
+    {"id": "self_i_am_te", "kind": "self", "scripts": ["te_lat"], "anchor": "sentence", "conf": 0.75, "lower_ok": false, "latin_name_only": true,
+     "pattern": "{IAM}\\s+{NAME}",
+     "en": "I am {name}."},
+    {"id": "self_i_am_hi", "kind": "self", "scripts": ["hi_lat"], "anchor": "sentence", "conf": 0.75, "lower_ok": false, "latin_name_only": true,
+     "pattern": "{IAM}\\s+{NAME}\\s+{IAMV}",
+     "en": "I am {name}."},
+    {"id": "place_name_word", "kind": "place", "scripts": ["te", "te_lat", "hi", "hi_lat"], "anchor": "free", "conf": 0.8, "lower_ok": true,
+     "pattern": "{POSS}\\s+{PLACE}(?:\\s+{LINK})?\\s+{NW}\\s+{NAME}(?:\\s+{LOC})?(?:\\s+{COP})?",
+     "en": "My {rel} is {name}."},
+    {"id": "place_bare", "kind": "place", "scripts": ["te", "te_lat", "hi", "hi_lat"], "anchor": "sentence", "conf": 0.8, "lower_ok": false,
+     "pattern": "{POSS}\\s+{PLACE}(?:\\s+{LINK})?\\s+{NAME}(?:\\s+{LOC})?(?:\\s+{COP})?",
+     "en": "My {rel} is {name}."},
+    {"id": "place_live", "kind": "place", "scripts": ["te", "te_lat", "hi", "hi_lat"], "anchor": "free", "conf": 0.6, "lower_ok": false,
+     "pattern": "(?:{SUBJ}\\s+)?{NAME}\\s+{LOC}\\s+{LIVE}",
+     "en": "I live in {name}.", "relation": "lives in"}
+  ],
+
+  "translit": {
+    "_note": "A small deterministic Telugu / Devanagari to Latin table for a NAME the owner wrote in his own script (ప్రియ -> Priya, लक्ष्मी -> Lakshmi, సతీష్ -> Satish): the canonical English spelling to store, and what the translator gets back. Short vowels only (ా -> a, ీ -> i), no tone marks. It is a guess at the spelling the owner would accept: the native spelling is kept as an alias, and the laptop session checks real names (D70). Devanagari drops the final inherent a (राज -> Raj); Telugu keeps it (సీత -> Sita).",
+    "te": {
+      "drop_final_a": false,
+      "virama": "్",
+      "vowels": {"అ": "a", "ఆ": "a", "ఇ": "i", "ఈ": "i", "ఉ": "u", "ఊ": "u", "ఋ": "ru", "ఎ": "e", "ఏ": "e", "ఐ": "ai", "ఒ": "o", "ఓ": "o", "ఔ": "au"},
+      "signs": {"ా": "a", "ి": "i", "ీ": "i", "ు": "u", "ూ": "u", "ృ": "ru", "ె": "e", "ే": "e", "ై": "ai", "ొ": "o", "ో": "o", "ౌ": "au"},
+      "marks": {"ం": "m", "ః": "h", "ఁ": "n"},
+      "consonants": {"క": "k", "ఖ": "kh", "గ": "g", "ఘ": "gh", "ఙ": "ng", "చ": "ch", "ఛ": "chh", "జ": "j", "ఝ": "jh", "ఞ": "ny", "ట": "t", "ఠ": "th", "డ": "d", "ఢ": "dh", "ణ": "n",
+                     "త": "t", "థ": "th", "ద": "d", "ధ": "dh", "న": "n", "ప": "p", "ఫ": "ph", "బ": "b", "భ": "bh", "మ": "m", "య": "y", "ర": "r", "ల": "l", "వ": "v", "శ": "sh",
+                     "ష": "sh", "స": "s", "హ": "h", "ళ": "l", "ఱ": "r"}
+    },
+    "hi": {
+      "drop_final_a": true,
+      "virama": "्",
+      "vowels": {"अ": "a", "आ": "a", "इ": "i", "ई": "i", "उ": "u", "ऊ": "u", "ऋ": "ri", "ए": "e", "ऐ": "ai", "ओ": "o", "औ": "au", "ऑ": "o"},
+      "signs": {"ा": "a", "ि": "i", "ी": "i", "ु": "u", "ू": "u", "ृ": "ri", "े": "e", "ै": "ai", "ो": "o", "ौ": "au", "ॉ": "o"},
+      "marks": {"ं": "n", "ँ": "n", "ः": "h"},
+      "ignore": ["़"],
+      "consonants": {"क": "k", "ख": "kh", "ग": "g", "घ": "gh", "ङ": "ng", "च": "ch", "छ": "chh", "ज": "j", "झ": "jh", "ञ": "ny", "ट": "t", "ठ": "th", "ड": "d", "ढ": "dh", "ण": "n",
+                     "त": "t", "थ": "th", "द": "d", "ध": "dh", "न": "n", "प": "p", "फ": "ph", "ब": "b", "भ": "bh", "म": "m", "य": "y", "र": "r", "ल": "l", "व": "v", "श": "sh",
+                     "ष": "sh", "स": "s", "ह": "h", "ळ": "l", "ड़": "d", "ढ़": "dh", "फ़": "f", "ज़": "z"}
+    }
+  }
+}

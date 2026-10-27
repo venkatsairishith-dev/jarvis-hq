@@ -115,3 +115,22 @@ def test_the_gateway_still_answers_when_the_names_file_is_broken(layer):
     layer.path.write_text("{ nope", encoding="utf-8")
     code, _, _ = run(body(user("my wife is Priya")), FACE)
     assert code == 200 and layer.path.read_text(encoding="utf-8") == "{ nope"
+
+
+def test_tenglish_and_devanagari_statements_teach_a_name_through_the_face_path_and_reach_the_provider_as_english(layer):
+    """D70: the statement is read from the ORIGINAL words (the fake translator here knows none of these words, like the real one that said "my darling")."""
+    for text, relation in [("naa bharya peru Priya", "wife"), ("మా అమ్మ పేరు లక్ష్మి", "mother"), ("मेरा भाई रवि है", "brother"), ("mera dost Kiran hai", "friend")]:
+        plumbing.Recorder.seen.clear()
+        code, headers, _ = run(body(user(text)), FACE)
+        assert code == 200
+        sent = json.dumps(sent_messages(), ensure_ascii=False)
+        assert "naa bharya" not in sent and "మా అమ్మ" not in sent and "मेरा" not in sent                      # the provider gets English only
+        assert any(e["relation"] == relation for e in layer.entries()), (text, layer.entries())
+    assert {e["canonical"] for e in layer.entries()} == {"Priya", "Lakshmi", "Ravi", "Kiran"}
+    assert "లక్ష్మి" in layer.find("Lakshmi")["aliases"] and "रवि" in layer.find("Ravi")["aliases"]
+
+
+def test_a_question_or_a_refusal_in_the_faces_message_teaches_nothing(layer):
+    run(body(user("maa amma peru emiti?")), FACE)
+    run(body(user("naa bharya peru Priya kadu")), FACE)
+    assert layer.entries() == []
