@@ -22,9 +22,9 @@ mobile-tools:
   menu-unread: Menu, {count} unread notifications
 chat:
   provider-configuration:
-    title: Chat provider isn't configured
-    description: Choose and validate a provider in Settings before sending a message.
-    action: Open provider settings
+    title: JARVIS can't answer yet
+    description: Pick a chat provider in Settings, then try again.
+    action: Open settings
   voice-message:
     recording: Recording
     starting: Starting microphone
@@ -167,6 +167,8 @@ chat:
   error-details:
     show: Show details
     hide: Hide details
+  journal:
+    save: Save to your PC
   images:
     empty: Share a thought or a picture.
     use-vision: Use the vision model for chat images
@@ -189,7 +191,7 @@ chat:
   message:
     character-name:
       airi: JARVIS
-      core-system: Core System
+      core-system: Something went wrong
       you: You
   reply:
     cancel: Cancel reply

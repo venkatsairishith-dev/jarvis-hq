@@ -44,7 +44,7 @@ useFullscreenCarry<ChatDraftHandover>('chat', {
         @click="sessionsDrawerOpen = true"
       >
         <div :class="['i-solar:chat-line-bold', 'text-neutral-400 dark:text-neutral-500']" />
-        <span :class="['whitespace-nowrap text-sm']">{{ activeCard?.name || 'AIRI' }}</span>
+        <span :class="['whitespace-nowrap text-sm']">{{ activeCard?.name || 'JARVIS' }}</span>
       </button>
       <div :class="['flex-1']" />
       <ChatSpeechMuteButton />

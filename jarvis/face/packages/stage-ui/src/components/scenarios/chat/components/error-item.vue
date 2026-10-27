@@ -42,7 +42,7 @@ const summary = computed(() => {
   const text = payloadStart >= 0 ? firstLine.slice(0, payloadStart) : firstLine
   return text.length > 160 ? `${text.slice(0, 157)}…` : text
 })
-const hasDetails = computed(() => props.message.content.length > 240 || props.message.content.split(/\r?\n/u).length > 4)
+const hasDetails = computed(() => props.message.content.length > 240 || props.message.content.split(/\r?\n/u).length > 1)
 
 const boxClasses = computed(() => {
   if (props.surface === 'opaque')
@@ -89,14 +89,14 @@ const copyText = computed(() => getChatHistoryItemCopyText(props.message as Chat
         >
           <div :class="[variant === 'mobile' ? 'px-2 py-2' : 'px-3 py-3']">
             <div :class="['flex items-start justify-between gap-3']">
-              <span :class="['min-w-0 text-xs text-neutral-500 font-medium dark:text-neutral-400']">{{ label }}</span>
+              <span :class="['min-w-0 text-xs text-neutral-600 font-medium dark:text-neutral-300']">{{ label }}</span>
               <span aria-hidden="true" :class="['i-solar:danger-triangle-bold-duotone size-4 shrink-0 text-violet-500']" />
             </div>
             <div v-if="showPlaceholder" :class="['i-eos-icons:three-dots-loading']" />
             <MarkdownRenderer
               v-else-if="!hasDetails"
               :content="message.content"
-              class="break-words text-violet-500 dark:text-violet-300"
+              class="break-words text-violet-700 dark:text-violet-200"
             />
             <template v-else>
               <p :class="['mt-1 mb-0 break-words text-sm text-neutral-800 font-medium leading-relaxed dark:text-neutral-100']">
