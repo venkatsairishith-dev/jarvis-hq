@@ -1,0 +1,4 @@
+# render.mjs links the face's node_modules here so the harness resolves its packages (a symlink, not a directory: "node_modules/" would not match)
+node_modules
+ui/node_modules
+ui/.work
