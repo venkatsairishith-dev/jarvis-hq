@@ -41,7 +41,7 @@ AGENT = {"open_website": "browser", "play_media": "browser", "browser": "browser
          "type_text": "desktop", "press_key": "desktop", "open_file": "desktop", "check_pc": "desktop",
          "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator",
          "open_in_vscode": "desktop", "type_in_editor": "desktop", "save_as": "desktop", "drive": "desktop", "simple_task": "desktop",      # D54
-         "web_task": "desktop"}                                                                                           # D64: a deck on a free web generator
+         "web_task": "desktop", "task_step": "desktop"}                                                                   # D64: a deck on a free web generator; D76: a milestone of an open-ended task
 TRANSIENT = re.compile(r"(?i)timeout|timed out|connection failed|not answering|temporarily|busy")
 # Steps that change nothing when run twice (open, focus, read, check). Typing, keys, clicks, playing, repairs and
 # research are not: a failure reported as a timeout may come after they already acted, so they are never re-run blindly.
@@ -51,7 +51,7 @@ REPEAT_SAFE_BROWSER = {"read", "find", "tabs", "whoami"}
 
 def repeat_safe(step: dict) -> bool:
     t = step.get("tool")
-    return t in REPEAT_SAFE or (t == "browser" and step.get("action") in REPEAT_SAFE_BROWSER)
+    return t in REPEAT_SAFE or (t == "browser" and step.get("action") in REPEAT_SAFE_BROWSER) or (t == "task_step" and bool(step.get("repeat_safe")))     # D76: a milestone that only reads, searches, opens or downloads into quarantine
 
 
 class Busy(Exception):
@@ -1488,6 +1488,9 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
         if step.get("open_after") and not r.get("opened_verified"):
             return True, facts, "the deck was made, but no window showing it was seen" + (f" ({r.get('open_note')})" if r.get("open_note") else "")
         return True, facts, ""
+    if t == "task_step":                                   # D76: a milestone of an open-ended task; it passes only on what its executor VERIFIED by effect
+        from . import taskrun
+        return taskrun.verify_step(step, r)
     if t == "drive":                                       # D54: an observe - decide - act loop; it passes on what was VERIFIED, never on the model's "done"
         facts = "; ".join(str(x) for x in r.get("facts") or [])
         loose = "; ".join(str(x) for x in r.get("unverified") or [])
