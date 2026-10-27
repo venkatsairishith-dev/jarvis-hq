@@ -24,7 +24,7 @@ export const BAR_SIZE: Record<LookSize, { width: number, height: number }> = {
 }
 /** The "what I am doing" pill (D72) under the orb, and the small right-click menu, as the window must make room for them. */
 export const ORB_PILL = { width: 264, height: 34, gap: 4 } as const
-export const ORB_MENU = { width: 216, height: 232 } as const
+export const ORB_MENU = { width: 232, height: 348 } as const
 /** The card beside the orb (ask form, timeline, preview): the width the panels already use, and at most this tall. */
 export const ORB_CARD = { width: 460, height: 600, gap: 8 } as const
 /** The space kept between a snapped orb and the screen edge. */
@@ -53,7 +53,6 @@ export function zoneSize(look: Look, size: LookSize): { width: number, height: n
 export interface LookSettings {
   look: Look
   size: LookSize
-  alwaysOnTop: boolean
   /** Electron accelerator of the global hide / show shortcut. */
   hideShortcut: string
   /** Electron accelerator of the global "reset position" shortcut. */
@@ -72,13 +71,31 @@ export const DEFAULT_FORGOTTEN_HOURS = 12
 export const DEFAULT_LOOK_SETTINGS: LookSettings = {
   look: 'orb',
   size: 'M',
-  alwaysOnTop: true,
   hideShortcut: DEFAULT_HIDE_SHORTCUT,
   resetShortcut: DEFAULT_RESET_SHORTCUT,
   showTrayWhileHidden: false,
   startHidden: false,
   speakWhileHidden: false,
   forgottenHours: DEFAULT_FORGOTTEN_HOURS,
+}
+
+/** What the renderer wants next to the orb: the pill, a card of some size, the menu. The main process makes the window big enough. */
+export interface OrbLayoutRequest {
+  pill: boolean
+  card: { width: number, height: number } | null
+  menu: boolean
+}
+
+/** Where everything is inside the window, as the main process worked it out. All rectangles are relative to the window; `null` for the avatar look. */
+export interface OrbLayoutSnapshot {
+  look: Look
+  size: LookSize
+  window: Rect | null
+  zone: Rect | null
+  pill: Rect | null
+  card: Rect | null
+  cardSide: Anchor | null
+  menu: Rect | null
 }
 
 /** What the main process tells the renderer about the hidden mode. Counts only: no content of anything that waits. */

@@ -34,6 +34,7 @@ import { createGlobalAppConfig } from './configs/global'
 import { createIOTraceHubConfig } from './configs/io-trace-hub'
 import { createIOTraceRecordingConfig } from './configs/io-trace-recording'
 import { installNetworkLock, lockGlobalFetch } from './jarvis/network-lock'
+import { setupLookService } from './jarvis/look-service'
 import { applyChromiumLock, lockNodeSockets } from './jarvis/socket-lock'
 import { applyStorageLock } from './jarvis/storage-lock'
 import { emitAppBeforeQuit, emitAppWindowAllClosed } from './libs/bootkit/lifecycle'
@@ -263,6 +264,9 @@ app.whenReady().then(async () => {
   installNetworkLock(session.defaultSession, message => networkLog.warn(message))
   app.on('session-created', created => installNetworkLock(created, message => networkLog.warn(message)))
 
+  // D78: the window gate goes in front of every window before the first one is made, so a hidden JARVIS can never spawn a widget.
+  const look = setupLookService()
+
   setupSherpawModelAssetsProtocol(getRendererRoot)
   setupSherpawModelAssets(createContext(ipcMain).context)
   setupPermissionHandlers(session.defaultSession, hasSelectedScreenCaptureSource)
@@ -472,6 +476,7 @@ app.whenReady().then(async () => {
     dependsOn: { editorWindow, settingsWindow, workspaceWindow, chatWindow, widgetsManager, noticeWindow, beatSync, autoUpdater, serverChannel, godotStageManager, mcpManager, i18n, onboardingWindowManager, inlayWindow, appleSpeechTranscription, appleVision, ioTraceRecording, globalShortcut, spotlightWindow, devtoolsWindow: devtoolsMarkdownStressWindow },
     build: async ({ dependsOn }) => setupMainWindow({
       ...dependsOn,
+      look,
       onWindowCreated: (window) => {
         userFacingMainWindow = window
       },
@@ -511,7 +516,7 @@ app.whenReady().then(async () => {
 
   const tray = injeca.provide('app:tray', {
     dependsOn: { mainWindow, settingsWindow, captionWindow, widgetsWindow: widgetsManager, serverChannel, beatSyncBgWindow: beatSync, aboutWindow, inlayWindow, i18n, appConfig },
-    build: async ({ dependsOn }) => setupTray(dependsOn),
+    build: async ({ dependsOn }) => setupTray({ ...dependsOn, look }),
   })
 
   // Desktop grounding overlay — gated by AIRI_DESKTOP_OVERLAY=1

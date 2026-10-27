@@ -78,6 +78,8 @@ export interface HiddenMode {
   settingsChanged: () => void
   /** Called once at start-up with the answer of `resolveStartHidden`. */
   startHidden: (since: number) => void
+  /** The tray was created (maybe after the hide began): put its visibility right for the current state. */
+  syncTray: () => void
 }
 
 /** How long after a start-hidden the windows that the start-up itself shows are not counted as waiting requests. */
@@ -150,6 +152,7 @@ export function createHiddenMode(deps: HiddenModeDeps): HiddenMode {
       const since = deps.gate.state().hiddenSince ?? now()
       persistNow(since)
     },
+    syncTray: () => deps.setTrayVisible(deps.gate.isHidden() ? trayShouldShow() : true),
     startHidden: (since) => {
       // keep the old time, so the forgotten-hidden guard counts from the real hide; the windows the start-up shows are not "waiting"
       deps.gate.hide(deps.getWindows(), { since, quietUntil: now() + START_QUIET_MS })
