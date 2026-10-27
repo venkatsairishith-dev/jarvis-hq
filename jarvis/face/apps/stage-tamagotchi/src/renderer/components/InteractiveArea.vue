@@ -473,7 +473,7 @@ defineExpose({
             >
               <img :src="entry.url || ''" class="h-full w-full object-cover">
               <div :class="['absolute inset-0 flex items-end p-1', 'bg-gradient-to-t from-black/60 to-transparent']">
-                <span class="truncate text-[8px] text-white font-medium">{{ entry.title }}</span>
+                <span class="truncate text-[11px] text-white font-medium">{{ entry.title }}</span>
               </div>
 
               <!-- Save Button (Top Right, Hover Only) -->

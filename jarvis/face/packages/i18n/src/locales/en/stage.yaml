@@ -250,7 +250,7 @@ startup:
     audio: audio settings
     route: page
     model: character model
-message: Say something...
+message: Say something…
 theme:
   title: Theme
   system: System

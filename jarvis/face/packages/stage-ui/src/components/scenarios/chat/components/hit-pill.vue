@@ -54,7 +54,7 @@ const HIT_CLASS = ['size-4.5 flex items-center justify-center rounded-full', 'bg
         :aria-expanded="$slots.default ? open : undefined"
         :class="[
           'max-w-full inline-flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 text-xs',
-          $slots.default ? 'pr-0.5' : 'pr-2',
+          $slots.default ? 'pr-0.5 min-h-8' : 'pr-2',
           'outline-none transition-colors duration-200',
           'text-primary-700 dark:text-primary-100',
           'focus-visible:ring-2 focus-visible:ring-primary-400/60',

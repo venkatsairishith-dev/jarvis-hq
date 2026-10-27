@@ -69,7 +69,7 @@ function markBroken(key: string) {
           >{{ card.initial }}</span>
           <span :class="['min-w-0 flex flex-col']">
             <span :class="['truncate text-xs', 'text-neutral-800 dark:text-neutral-100']">{{ card.title }}</span>
-            <span :class="['truncate text-[10px]', 'text-neutral-400 dark:text-neutral-500']">{{ card.site }}</span>
+            <span :class="['truncate text-[11px]', 'text-neutral-600 dark:text-neutral-400']">{{ card.site }}</span>
             <span v-if="card.snippet" :class="['mt-0.5 line-clamp-2 text-[11px]', 'text-neutral-500 dark:text-neutral-400']">{{ card.snippet }}</span>
           </span>
         </a>

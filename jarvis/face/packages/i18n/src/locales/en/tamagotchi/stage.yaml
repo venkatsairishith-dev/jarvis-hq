@@ -1,10 +1,10 @@
 operations:
-  load-models: Load Models
+  load-models: Load models
   load-models-status:
     loading: Loading
     ready: Ready
 'resource-island':
-  loading: Preparing resources...
+  loading: Preparing resources…
   ready: Resources ready
   preparing: Preparing model files
   failed: Model download failed
@@ -27,11 +27,11 @@ docs:
     enable: Auto hide
     disable: Always show
   'open-settings': Open settings
-  'open-chat': Open Chat
-  'hide-chat': Hide Chat
+  'open-chat': Open chat
+  'hide-chat': Hide chat
   'refresh': Refresh
   'center-main-window': Move to screen center
-  'open-hearing-controls': Open hearing Controls
+  'open-hearing-controls': Open hearing controls
   'enable-microphone': Turn on microphone
   'disable-microphone': Turn off microphone
   'drag-to-move-window': Drag to move window
@@ -42,7 +42,7 @@ docs:
   'switch-to-system-mode': Follow the system theme
   'pin-on-top': Pin on top
   'unpin-from-top': Unpin from top
-  'switch-profile': Switch Profile
+  'switch-profile': Switch profile
   'close': Close
   'expand': Expand
   'collapse': Collapse
@@ -131,7 +131,7 @@ about:
       nightly: Nightly
       canary: Canary
     status:
-      downloading: Downloading update...
+      downloading: Downloading update…
       error-prefix: Error
       latest: Up to date (v{version}).
       downloaded:
@@ -142,7 +142,7 @@ about:
       download-short: Download
       confirm-download: Confirm Download
       check-for-updates: Check for updates
-      checking: Checking...
+      checking: Checking…
       latest-version: Latest version
       disabled-dev: Updates disabled in Dev
       managed-by-store: Updates managed by your app store or package manager

@@ -36,7 +36,7 @@ const { t } = useI18n()
         bg="hover:neutral-200 hover:dark:neutral-800"
         transition="all duration-200 ease-in-out motion-reduce:transition-none"
         flex select-none items-center gap-2 rounded-md px-1.5 py-0.5
-        class="min-h-8 [-webkit-app-region:no-drag] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-500"
+        class="[-webkit-app-region:no-drag] min-h-8 focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-1 focus-visible:outline"
         :class="clickable ? 'cursor-pointer' : ''"
         @click="clickable && emit('titleClick')"
       >
