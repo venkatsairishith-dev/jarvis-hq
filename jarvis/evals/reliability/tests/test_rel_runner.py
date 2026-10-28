@@ -175,17 +175,35 @@ def test_a_stopped_session_leaves_a_readable_file(tmp_path):
     assert list((tmp_path / "res").glob("*.bad-*.json"))
 
 
-def test_cleanup_closes_only_what_the_run_opened_and_only_listed_programs(tmp_path):
+def test_cleanup_closes_everything_the_run_opened_not_only_listed_programs(tmp_path):
+    """Owner, 2026-10-28: 'it is opening all apps and windows for tests but not closing them after.' Before this fix, only a window matching the short
+    hand-written `cleanup.closable` list (Notepad, Calculator) was closed, so Chrome, VS Code or anything else a goal opened was left behind. Now every
+    NEW window (not open before the run) is closed, whatever program it is; a window the owner already had open stays exactly as it was."""
     g = goal("c1", "open-stuff", "Open stuff.", verify=[{"check": "answer_nonempty"}])
     env = FakeEnv()
     mine = env.add_window("Notepad", "owners-own.txt - Notepad")                       # the owner's window, open before the run
-    drv = ScriptedDriver(lambda t: (env.add_window("Notepad", "new.txt - Notepad"), env.add_window("chrome", "Some page - Chrome"), Observation(final_text="ok"))[2])
+    drv = ScriptedDriver(lambda t: (env.add_window("Notepad", "new.txt - Notepad"), env.add_window("chrome", "Some page - Chrome"),
+                                     env.add_window("Code", "main.py - Visual Studio Code"), Observation(final_text="ok"))[3])
+    drv.name = "scripted"
+    r = runner.Runner(catalogue({"c1": [g]}), env, drv, work_root=str(tmp_path / "w"), outputs="", results_path=tmp_path / "r.json", repeats=1, sleep=lambda s: None, log=lambda s: None)
+    r.run()
+    assert {w.title for w in env.windows()} == {"owners-own.txt - Notepad"}            # every NEW window closed, whatever program it was
+    assert {w.title for w in env.closed} == {"new.txt - Notepad", "Some page - Chrome", "main.py - Visual Studio Code"} and mine in env.windows()
+
+
+def test_cleanup_never_closes_a_password_manager_wallet_or_bank_window(tmp_path):
+    """Even a window THIS RUN opened is left alone if it looks like a password manager, wallet or bank: the same floor the rest of JARVIS already
+    refuses to read or act on (jarvis_node.sensitive). This is a safety ADDITION on top of the fix above, never a reason to close less than before."""
+    g = goal("c1", "open-stuff", "Open stuff.", verify=[{"check": "answer_nonempty"}])
+    env = FakeEnv()
+    drv = ScriptedDriver(lambda t: (env.add_window("chrome", "ICICI Bank - Login - Chrome"), env.add_window("KeePass", "Database - KeePass"),
+                                     env.add_window("Notepad", "ordinary.txt - Notepad"), Observation(final_text="ok"))[3])
     drv.name = "scripted"
     r = runner.Runner(catalogue({"c1": [g]}), env, drv, work_root=str(tmp_path / "w"), outputs="", results_path=tmp_path / "r.json", repeats=1, sleep=lambda s: None, log=lambda s: None)
     r.run()
     left = {w.title for w in env.windows()}
-    assert left == {"owners-own.txt - Notepad", "Some page - Chrome"}                  # the new Notepad closed; the owner's Notepad and Chrome untouched
-    assert [w.title for w in env.closed] == ["new.txt - Notepad"] and mine in env.windows()
+    assert "ICICI Bank - Login - Chrome" in left and "Database - KeePass" in left      # never auto-closed, even though both are new this run
+    assert "ordinary.txt - Notepad" not in left                                        # an ordinary new window still gets closed as usual
 
 
 def test_setup_windows_are_closed_too_and_the_bin_item_is_purged(tmp_path):
