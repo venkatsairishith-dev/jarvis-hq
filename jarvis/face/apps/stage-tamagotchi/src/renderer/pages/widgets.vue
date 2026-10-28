@@ -308,7 +308,7 @@ function handleIframeRequestResult(result: WidgetsIframeRequestResultPayload) {
       </div>
     </div>
   </div>
-  <div class="[-webkit-app-region:drag] pointer-events-none absolute left-1/2 top-2 h-[14px] w-[36px] rounded-[10px] bg-[rgba(125,125,125,0.28)] backdrop-blur-[6px] -translate-x-1/2">
+  <div class="[-webkit-app-region:drag] absolute left-1/2 top-2 h-[14px] w-[36px] rounded-[10px] bg-[rgba(125,125,125,0.28)] backdrop-blur-[6px] -translate-x-1/2">
     <div class="absolute left-1/2 top-1/2 h-[3px] w-4 rounded-full bg-[rgba(255,255,255,0.85)] -translate-x-1/2 -translate-y-1/2" />
   </div>
 </template>
