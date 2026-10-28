@@ -205,6 +205,42 @@
   box-shadow: 0 0 0 6px var(--orb-focus-outer);
 }
 
+/*
+ * The Siri-style flow (D90): three soft colour blobs drifting inside the disc, clipped to its circle by the disc's own
+ * overflow:hidden. Continuous, not state-gated -- the orb always looks alive, faster and brighter while
+ * listening/thinking/speaking. Transform and opacity only, per the rule at the top of this file.
+ */
+.orb-blob {
+  position: absolute;
+  inset: -25%;
+  opacity: 0.5;
+  will-change: transform;
+}
+.orb-blob-1 {
+  background: radial-gradient(circle, color-mix(in srgb, oklch(from var(--orb-accent) l c calc(h + 35)) 70%, transparent) 0%, transparent 70%);
+  animation: orb-flow-1 7s ease-in-out infinite;
+}
+.orb-blob-2 {
+  background: radial-gradient(circle, color-mix(in srgb, oklch(from var(--orb-accent) l c calc(h - 45)) 65%, transparent) 0%, transparent 68%);
+  animation: orb-flow-2 9s ease-in-out infinite;
+  animation-delay: -2.4s;
+}
+.orb-blob-3 {
+  opacity: 0.35;
+  background: radial-gradient(circle, color-mix(in srgb, white 45%, var(--orb-accent)) 0%, transparent 62%);
+  animation: orb-flow-3 11s ease-in-out infinite;
+  animation-delay: -5s;
+}
+.orb-zone[data-state='listening'] .orb-blob,
+.orb-zone[data-state='thinking'] .orb-blob,
+.orb-zone[data-state='speaking'] .orb-blob {
+  opacity: 0.75;
+  animation-duration: 2.8s;
+}
+.orb-zone[data-state='speaking'] .orb-blob-3 {
+  opacity: 0.55;
+}
+
 .orb-swirl {
   position: absolute;
   inset: 0;
@@ -508,6 +544,19 @@ html[data-jarvis-zone] body {
   0%, 100% { opacity: 0.55; transform: scale(0.9); }
   50% { opacity: 1; transform: scale(1.15); }
 }
+@keyframes orb-flow-1 {
+  0%, 100% { transform: translate(-6%, -4%) scale(0.92); opacity: 0.8; }
+  33% { transform: translate(6%, 6%) scale(1.1); opacity: 1; }
+  66% { transform: translate(-3%, 7%) scale(0.98); opacity: 0.9; }
+}
+@keyframes orb-flow-2 {
+  0%, 100% { transform: translate(6%, -5%) scale(1.05); opacity: 0.75; }
+  50% { transform: translate(-7%, 5%) scale(0.86); opacity: 1; }
+}
+@keyframes orb-flow-3 {
+  0%, 100% { transform: translate(0%, 6%) rotate(0deg) scale(0.9); opacity: 0.6; }
+  50% { transform: translate(3%, -6%) rotate(10deg) scale(1.12); opacity: 1; }
+}
 @keyframes orb-pill-in {
   0% { opacity: 0; transform: translateY(4px); }
   100% { opacity: 1; transform: translateY(0); }
@@ -547,7 +596,8 @@ html[data-jarvis-zone] body {
   }
   .orb-glow,
   .orb-shine,
-  .orb-swirl {
+  .orb-swirl,
+  .orb-blob {
     display: none;
   }
   .orb-ring,
