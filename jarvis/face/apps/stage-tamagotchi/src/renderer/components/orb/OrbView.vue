@@ -201,6 +201,9 @@ defineExpose({ focus: () => disc.value?.focus() })
       @keyup="onKeyActivate"
       @click.prevent
     >
+      <span class="orb-blob orb-blob-1" aria-hidden="true" />
+      <span class="orb-blob orb-blob-2" aria-hidden="true" />
+      <span class="orb-blob orb-blob-3" aria-hidden="true" />
       <span class="orb-swirl" aria-hidden="true" />
       <span class="orb-shine" aria-hidden="true" />
     </button>

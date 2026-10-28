@@ -311,19 +311,40 @@ describe('createChatOrchestratorRuntime', () => {
     await harness.runtime.ingest('reply', { model: 'test', chatProvider: provider, stickers: [{ id: 'heart', description: 'A heart' }] })
     const saved = harness.sessionMessages['session-1'].findLast(message => message.role === 'assistant')
     expect(saved?.role).toBe('assistant')
-    expect(saved?.content).toBe('')
-    expect(saved?.role === 'assistant' && saved.slices.filter(slice => slice.type === 'text')).toEqual([])
     expect(literals).toEqual([])
     if (kind === 'tool') {
+      // Live finding, 2026-10-28: a turn that ends with a tool call and no words of its own used to store and show
+      // nothing but the tool chip. `toolOnlyFallbackText` now writes one honest, non-claiming line for it -- the
+      // whitespace-only text-delta itself still never becomes its own blank slice.
       expect(saved?.role === 'assistant' && saved.slices.some(slice => slice.type === 'tool-call')).toBe(true)
       expect(saved?.role === 'assistant' && saved.tool_results).toEqual([{ type: 'tool-call-result', id: 'call-weather', result: 'sunny' }])
+      const textSlices = saved?.role === 'assistant' ? saved.slices.filter(slice => slice.type === 'text') : []
+      expect(textSlices).toEqual([{ type: 'text', text: 'I used weather, but didn\'t write anything back. Ask me again if you still need an answer.' }])
+      expect(saved?.role === 'assistant' && saved.content).toContain('didn\'t write anything back')
     }
     else if (kind === 'sticker') {
+      expect(saved?.content).toBe('')
       expect(saved?.role === 'assistant' && saved.slices).toEqual([{ type: 'sticker', stickerId: 'heart' }])
     }
     else {
+      expect(saved?.content).toBe('')
+      expect(saved?.role === 'assistant' && saved.slices.filter(slice => slice.type === 'text')).toEqual([])
       expect(saved?.role === 'assistant' && saved.generationTranscript).toEqual(generatedTurn)
     }
+  })
+
+  it('does not write a fallback line for a silent notice that only ran a tool', async () => {
+    const harness = createHarness()
+    harness.stream.mockImplementationOnce(async (_model, _provider, _context, options) => {
+      await options?.onStreamEvent?.({ type: 'tool-call', toolCallId: 'call-log', toolCallType: 'function', toolName: 'logEvent', args: '{}' })
+      await options?.onStreamEvent?.({ type: 'tool-result', toolCallId: 'call-log', result: 'ok' })
+      await options?.onStreamEvent?.({ type: 'finish' })
+    })
+    await harness.runtime.ingest('reply', { model: 'test', chatProvider: provider, notice: 'background' })
+    const saved = harness.sessionMessages['session-1']?.findLast(message => message.role === 'assistant')
+    // A notice may deliberately stay quiet; a bare tool-call still counts as "a reply" so it is not dropped, but no
+    // fallback sentence is forced onto it.
+    expect(saved?.role === 'assistant' && saved.slices.filter(slice => slice.type === 'text')).toEqual([])
   })
 
   // ROOT CAUSE:

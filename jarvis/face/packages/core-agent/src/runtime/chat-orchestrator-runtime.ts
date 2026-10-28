@@ -109,6 +109,52 @@ function hasAssistantOutput(message: StreamingAssistantMessage) {
 }
 
 /**
+ * The same raw-tool-name-to-words rule as `toolDisplayName` in stage-ui's tool-call-group.ts, kept small and local here
+ * rather than imported: stage-ui depends on core-agent, not the other way round, so importing it would be a backwards
+ * dependency for one short string transform.
+ */
+function humanizeToolName(toolName: string): string {
+  const words = toolName
+    .replace(/^builtIn_/, '')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .toLowerCase()
+  return words || toolName
+}
+
+function listify(items: string[]): string {
+  if (items.length <= 1)
+    return items[0] ?? ''
+  if (items.length === 2)
+    return `${items[0]} and ${items[1]}`
+  return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`
+}
+
+/**
+ * Live finding, 2026-10-28 (owner's laptop, screen_text/solve_on_screen re-measured after JARVIS_SCREEN_TEXT_TO_MODEL was
+ * turned on): the model read the screen correctly in every failing run, then ended its turn right after the tool call
+ * with NO words of its own -- 15 to 18 of ~20 to 24 failing runs. The owner saw only the tool chip (e.g. "Desktop read
+ * window text"), nothing else: no answer, no "I didn't find anything", no error. `hasVisibleReply` already counts a
+ * bare tool-call slice as "a reply" (so the turn is not silently dropped), but nothing ever gave the owner a sentence
+ * for it. This never claims an answer was found -- it only says tools ran and nothing was written back, so the owner
+ * at minimum knows the turn finished and can ask again, instead of staring at an empty bubble or a 45-minute silence.
+ */
+function toolOnlyFallbackText(slices: readonly ChatSlices[]): string | undefined {
+  const hasOwnWords = slices.some(slice => slice.type === 'text' && Boolean(slice.text.trim()))
+  if (hasOwnWords)
+    return undefined
+  const toolNames = [...new Set(
+    slices
+      .filter((slice): slice is ChatSlicesToolCall => slice.type === 'tool-call')
+      .map(slice => humanizeToolName(slice.toolCall.toolName)),
+  )]
+  if (toolNames.length === 0)
+    return undefined
+  return `I used ${listify(toolNames)}, but didn't write anything back. Ask me again if you still need an answer.`
+}
+
+/**
  * Attachments belong to one user message. Media capture and storage stay outside chat orchestration.
  *
  * `data` holds base64 bytes. `url` holds a reference that the application stores in the message as it is,
@@ -1206,6 +1252,18 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       }
       catch (error) {
         console.error('Assistant response observer failed:', error)
+      }
+
+      // When the turn ends with nothing of its own right after a tool call, write a plain, honest line instead of
+      // leaving the owner looking at an empty bubble (see `toolOnlyFallbackText`). Skipped for a `notice`, which may
+      // deliberately stay quiet -- forcing a sentence onto it would defeat that.
+      if (!options.notice) {
+        const fallback = toolOnlyFallbackText(buildingMessage.slices)
+        if (fallback) {
+          buildingMessage.slices.push({ type: 'text', text: fallback })
+          buildingMessage.content += fallback
+          fullText += fallback
+        }
       }
 
       // A notice lets the conversation stay quiet. Only rendered text, stickers, cards, and tool calls count as a reply.
