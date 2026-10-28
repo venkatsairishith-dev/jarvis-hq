@@ -1606,6 +1606,30 @@ def _h_datetime(ctx: Ctx) -> Answer | None:
         rel = "from today" if sign > 0 else "ago"
         tail = " (the last day of that month, since it has fewer days)" if clamped else ""
         return Answer(f"{label} {rel} ({_fmt_date(today)}) is {_fmt_date(d)}{tail}.", "date", d.isoformat())
+    # a date n days / weeks / months / years AFTER or BEFORE a date the owner named: "what is the date 45 days after 1 january 2027" (laptop 2026-10-28: this went to the model)
+    m = re.fullmatch(rf"(?:{_WHAT}(?:the )?(?:date|day)(?: of the week)? |(?:what|which) (?:date|day) (?:is|was|will it be|would it be) |{_WHAT})?(?P<n>{_NUM}) (?P<u>day|week|month|year)s? (?P<rel>after|before|from|past|prior to) (?P<d>{_DATE_ANY})", s)
+    if m:
+        n = Fraction(m.group("n"))
+        unit = m.group("u")
+        if n.denominator != 1 or n > 100000:
+            raise Refuse
+        text = m.group("d")
+        anchor = _parse_date(text, today, mode="exact" if not re.search(r"today|tomorrow|yesterday|christmas|new year|valentine|halloween|republic", text) else "until")
+        sign = -1 if m.group("rel") in ("before", "prior to") else 1
+        k = int(n) * sign
+        clamped = False
+        if unit == "day":
+            d = anchor + dt.timedelta(days=k)
+        elif unit == "week":
+            d = anchor + dt.timedelta(weeks=k)
+        elif unit == "month":
+            d, clamped = _add_months(anchor, k)
+        else:
+            d, clamped = _add_months(anchor, k * 12)
+        label = f"{abs(k)} {unit}{'s' if abs(k) != 1 else ''}"
+        rel = "before" if sign < 0 else "after"
+        tail = " (the last day of that month, since it has fewer days)" if clamped else ""
+        return Answer(f"{label} {rel} {_fmt_date(anchor)} is {_fmt_date(d)}{tail}.", "date", d.isoformat())
     # days until / since / between
     m = re.fullmatch(rf"(?:how many )?(days?|weeks?) (?:are |is )?(?:there |left |remaining )?(?:until|till|to|before|left until|left till|left for|remaining until|for|left to) ({_DATE_ANY})|(?:how many )?(days?|weeks?) (?:are )?left (?:for|until|till|to) ({_DATE_ANY})|how many (days?|weeks?) (?:until|till|to|before|are left until|are left till) ({_DATE_ANY})|countdown to ({_DATE_ANY})", s)
     if m:
