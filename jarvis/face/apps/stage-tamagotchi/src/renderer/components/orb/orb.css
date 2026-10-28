@@ -186,11 +186,15 @@
   box-shadow: 0 0 calc(var(--orb-disc) * 0.3) color-mix(in srgb, var(--orb-accent) 55%, transparent), inset 0 -6px 14px rgb(0 0 0 / 0.28);
   cursor: pointer;
   color: inherit;
-  transition: background 0.4s ease, box-shadow 0.4s ease;
+  transition: background 0.4s ease, box-shadow 0.4s ease, transform 0.12s ease-out;
 }
 .orb-disc:hover {
   filter: none;
   box-shadow: 0 0 calc(var(--orb-disc) * 0.4) color-mix(in srgb, var(--orb-accent) 75%, transparent), inset 0 -6px 14px rgb(0 0 0 / 0.28);
+  transform: scale(1.03);
+}
+.orb-disc:active {
+  transform: scale(0.94);
 }
 .orb-disc:focus-visible,
 .bar-mic:focus-visible,
@@ -273,6 +277,8 @@
   line-height: 1.5;
   text-align: center;
   overflow-wrap: anywhere;
+  /* plays once when the pill is inserted (a state change that already shows nothing -> something); a text-only update does not remount it, so this never replays mid-status */
+  animation: orb-pill-in 160ms ease-out both;
 }
 
 /* ---- the minimal bar ---- */
@@ -330,8 +336,15 @@
   color: var(--orb-text);
   cursor: pointer;
 }
+.bar-mic {
+  transition: background 0.2s ease, transform 0.12s ease-out;
+}
 .bar-mic:hover {
   background: color-mix(in srgb, var(--orb-accent) 45%, transparent);
+  transform: scale(1.06);
+}
+.bar-mic:active {
+  transform: scale(0.92);
 }
 .bar[data-state='listening'] .bar-mic {
   background: color-mix(in srgb, var(--orb-accent) 60%, transparent);
@@ -363,6 +376,9 @@
   color: var(--orb-text);
   font-size: 13px;
   line-height: 1.5;
+  /* plays once on open; v-if removes the menu on close, so this never replays on close */
+  animation: orb-menu-in 140ms ease-out both;
+  transform-origin: top left;
 }
 .orb-menu-head {
   padding: 4px 10px 2px;
@@ -390,9 +406,11 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease-out;
 }
 .orb-menu-item:hover {
   background: var(--orb-hover);
+  transform: translateX(2px);
 }
 .orb-menu-item[aria-checked='true']::before,
 .orb-menu-item[aria-pressed='true']::before {
@@ -489,6 +507,14 @@ html[data-jarvis-zone] body {
 @keyframes orb-dot-fast {
   0%, 100% { opacity: 0.55; transform: scale(0.9); }
   50% { opacity: 1; transform: scale(1.15); }
+}
+@keyframes orb-pill-in {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes orb-menu-in {
+  0% { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 /*
