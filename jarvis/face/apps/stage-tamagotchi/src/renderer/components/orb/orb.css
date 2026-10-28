@@ -191,7 +191,7 @@
 .orb-disc:hover {
   filter: none;
   box-shadow: 0 0 calc(var(--orb-disc) * 0.4) color-mix(in srgb, var(--orb-accent) 75%, transparent), inset 0 -6px 14px rgb(0 0 0 / 0.28);
-  transform: scale(1.03);
+  transform: scale(1.05);
 }
 .orb-disc:active {
   transform: scale(0.94);
@@ -210,35 +210,40 @@
  * overflow:hidden. Continuous, not state-gated -- the orb always looks alive, faster and brighter while
  * listening/thinking/speaking. Transform and opacity only, per the rule at the top of this file.
  */
+/*
+ * Laptop retune 2026-10-28 on the real screen (Electron 43 / Chromium 150, relative colour works): the first version moved but changed only about 1-2 of 255 per pixel
+ * between frames and sat within 45 degrees of the accent hue, so the disc looked like a still cyan ball. Now the blobs sit at +105 (pink) and +40 (indigo) degrees with more
+ * chroma and coverage, cycles are 5.5 / 7 / 8.5 s (2.8 s while listening, thinking or speaking), and the brightness is a variable the keyframes read: calm at idle
+ * (--flow-a/-b 0.5/0.8), full while the orb is working (0.85/1), because the keyframes' own opacity overrides any plain `opacity` rule on the blob.
+ */
 .orb-blob {
   position: absolute;
   inset: -25%;
-  opacity: 0.5;
+  --flow-a: 0.5;
+  --flow-b: 0.8;
+  opacity: var(--flow-a);
   will-change: transform;
 }
 .orb-blob-1 {
-  background: radial-gradient(circle, color-mix(in srgb, oklch(from var(--orb-accent) l c calc(h + 35)) 70%, transparent) 0%, transparent 70%);
-  animation: orb-flow-1 7s ease-in-out infinite;
+  background: radial-gradient(circle, color-mix(in srgb, oklch(from var(--orb-accent) calc(l + 0.12) calc(c * 1.5) calc(h + 105)) 92%, transparent) 0%, transparent 70%);
+  animation: orb-flow-1 5.5s ease-in-out infinite;
 }
 .orb-blob-2 {
-  background: radial-gradient(circle, color-mix(in srgb, oklch(from var(--orb-accent) l c calc(h - 45)) 65%, transparent) 0%, transparent 68%);
-  animation: orb-flow-2 9s ease-in-out infinite;
+  background: radial-gradient(circle, color-mix(in srgb, oklch(from var(--orb-accent) calc(l - 0.02) calc(c * 1.5) calc(h + 40)) 80%, transparent) 0%, transparent 58%);
+  animation: orb-flow-2 7s ease-in-out infinite;
   animation-delay: -2.4s;
 }
 .orb-blob-3 {
-  opacity: 0.35;
-  background: radial-gradient(circle, color-mix(in srgb, white 45%, var(--orb-accent)) 0%, transparent 62%);
-  animation: orb-flow-3 11s ease-in-out infinite;
+  background: radial-gradient(circle, color-mix(in srgb, white 55%, var(--orb-accent)) 0%, transparent 52%);
+  animation: orb-flow-3 8.5s ease-in-out infinite;
   animation-delay: -5s;
 }
 .orb-zone[data-state='listening'] .orb-blob,
 .orb-zone[data-state='thinking'] .orb-blob,
 .orb-zone[data-state='speaking'] .orb-blob {
-  opacity: 0.75;
+  --flow-a: 0.85;
+  --flow-b: 1;
   animation-duration: 2.8s;
-}
-.orb-zone[data-state='speaking'] .orb-blob-3 {
-  opacity: 0.55;
 }
 
 .orb-swirl {
@@ -545,17 +550,17 @@ html[data-jarvis-zone] body {
   50% { opacity: 1; transform: scale(1.15); }
 }
 @keyframes orb-flow-1 {
-  0%, 100% { transform: translate(-6%, -4%) scale(0.92); opacity: 0.8; }
-  33% { transform: translate(6%, 6%) scale(1.1); opacity: 1; }
-  66% { transform: translate(-3%, 7%) scale(0.98); opacity: 0.9; }
+  0%, 100% { transform: translate(-6%, -4%) scale(0.92); opacity: var(--flow-a); }
+  33% { transform: translate(6%, 6%) scale(1.1); opacity: var(--flow-b); }
+  66% { transform: translate(-3%, 7%) scale(0.98); opacity: var(--flow-a); }
 }
 @keyframes orb-flow-2 {
-  0%, 100% { transform: translate(6%, -5%) scale(1.05); opacity: 0.75; }
-  50% { transform: translate(-7%, 5%) scale(0.86); opacity: 1; }
+  0%, 100% { transform: translate(6%, -5%) scale(1.05); opacity: var(--flow-a); }
+  50% { transform: translate(-7%, 5%) scale(0.86); opacity: var(--flow-b); }
 }
 @keyframes orb-flow-3 {
-  0%, 100% { transform: translate(0%, 6%) rotate(0deg) scale(0.9); opacity: 0.6; }
-  50% { transform: translate(3%, -6%) rotate(10deg) scale(1.12); opacity: 1; }
+  0%, 100% { transform: translate(0%, 6%) rotate(0deg) scale(0.9); opacity: var(--flow-a); }
+  50% { transform: translate(3%, -6%) rotate(10deg) scale(1.12); opacity: var(--flow-b); }
 }
 @keyframes orb-pill-in {
   0% { opacity: 0; transform: translateY(4px); }
