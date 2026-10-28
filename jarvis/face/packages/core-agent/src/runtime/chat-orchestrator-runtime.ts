@@ -139,6 +139,14 @@ function listify(items: string[]): string {
  * bare tool-call slice as "a reply" (so the turn is not silently dropped), but nothing ever gave the owner a sentence
  * for it. This never claims an answer was found -- it only says tools ran and nothing was written back, so the owner
  * at minimum knows the turn finished and can ask again, instead of staring at an empty bubble or a 45-minute silence.
+ *
+ * Deliberately narrow: a reply with NO tool call either (just empty, or only whitespace/reasoning that never became
+ * visible speech) is left untouched by this function and stays silently dropped -- that is the existing, tested
+ * behaviour from upstream (PR #2911, "does not store a blank speech reply"), and by the time a reply reaches here
+ * there is no way to tell "the model said nothing worth showing" apart from "the model's output was cut to nothing
+ * by a provider issue" (the D80 finding below): both produce the same empty `slices`. Widening this function to
+ * cover both broke the PR #2911 tests outright, so that case needs a fix at the provider/gateway layer instead
+ * (see D92 in the decision log) -- not a forced sentence here.
  */
 function toolOnlyFallbackText(slices: readonly ChatSlices[]): string | undefined {
   const hasOwnWords = slices.some(slice => slice.type === 'text' && Boolean(slice.text.trim()))
