@@ -251,7 +251,7 @@ function stopSTTTest() {
 
           <div v-if="!isWebSpeechAPIAvailable" class="border border-amber-200 rounded-lg bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
             <div class="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-              <div i-solar:warning-circle-line-duotone class="text-lg" />
+              <div i-solar:danger-circle-line-duotone class="text-lg" />
               <span class="text-sm font-medium">Web Speech API is not available in this browser</span>
             </div>
           </div>
@@ -273,7 +273,7 @@ function stopSTTTest() {
             <!-- Warning if no device selected -->
             <div v-if="!selectedAudioInput" class="border border-amber-200 rounded-lg bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
               <div class="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                <div i-solar:warning-circle-line-duotone class="text-lg" />
+                <div i-solar:danger-circle-line-duotone class="text-lg" />
                 <span class="text-sm font-medium">Please select an audio input device to test</span>
               </div>
             </div>
@@ -285,7 +285,7 @@ function stopSTTTest() {
                 @click="isTestingSTT ? stopSTTTest() : startSTTTest()"
               >
                 <div v-if="isTranscribing" class="mr-2 animate-spin">
-                  <div i-solar:spinner-line-duotone text-lg />
+                  <div i-svg-spinners:ring-resize text-lg />
                 </div>
                 <div v-else-if="isTestingSTT" class="mr-2">
                   <div i-solar:stop-circle-line-duotone text-lg />
@@ -301,7 +301,7 @@ function stopSTTTest() {
 
             <div v-if="testStatusMessage" class="border border-primary-200 rounded-lg bg-primary-50 p-3 dark:border-primary-800 dark:bg-primary-900/20">
               <div class="flex items-center gap-2 text-primary-700 dark:text-primary-400">
-                <div v-if="isTranscribing" class="animate-spin text-sm" i-solar:spinner-line-duotone />
+                <div v-if="isTranscribing" class="animate-spin text-sm" i-svg-spinners:ring-resize />
                 <div v-else class="text-sm" i-solar:info-circle-line-duotone />
                 <span class="text-sm font-medium">{{ testStatusMessage }}</span>
               </div>

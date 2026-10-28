@@ -37,7 +37,7 @@ const audioUrl = useObjectUrl(recording)
         v-if="segment.status === 'transcribing'"
         :class="['flex items-center gap-1', 'text-primary-500 dark:text-primary-400']"
       >
-        <span class="animate-spin" i-solar:spinner-line-duotone />
+        <span class="animate-spin" i-svg-spinners:ring-resize />
         {{ t('settings.pages.modules.hearing.sections.section.playground.transcribing') }}
       </span>
     </div>

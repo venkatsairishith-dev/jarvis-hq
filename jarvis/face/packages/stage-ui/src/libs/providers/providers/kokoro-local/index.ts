@@ -79,7 +79,7 @@ export const providerKokoroLocal = defineProvider({
   description: 'Local text-to-speech using Kokoro-82M.',
   descriptionLocalize: ({ t }) => t('settings.pages.providers.provider.kokoro-local.description'),
   tasks: ['text-to-speech'],
-  icon: 'i-lobe-icons:speaker',
+  icon: 'i-lobe-icons:agentvoice',
   requiresCredentials: false,
   createProviderConfig: () => {
     const capabilities = getWebGpuState()

@@ -232,7 +232,7 @@ function formatRelativeTime(timestamp: number | null) {
                 'dark:bg-neutral-800',
               ]"
             >
-              <div :class="['text-2xl', 'text-amber-500', 'dark:text-amber-400', 'i-solar:warning-circle-line-duotone']" />
+              <div :class="['text-2xl', 'text-amber-500', 'dark:text-amber-400', 'i-solar:danger-circle-line-duotone']" />
               <div :class="['flex', 'flex-col']">
                 <span :class="['font-medium']">
                   {{ t('settings.pages.modules.consciousness.sections.section.provider-model-selection.no_providers_configured_title') }}
@@ -261,7 +261,7 @@ function formatRelativeTime(timestamp: number | null) {
 
         <div v-if="isLoadingActiveProviderModels" :class="['flex', 'items-center', 'justify-center', 'py-4']">
           <div :class="['mr-2', 'animate-spin']">
-            <div :class="['text-xl', 'i-solar:spinner-line-duotone']" />
+            <div :class="['text-xl', 'i-svg-spinners:ring-resize']" />
           </div>
           <span>{{ t('settings.pages.modules.consciousness.sections.section.provider-model-selection.loading') }}</span>
         </div>

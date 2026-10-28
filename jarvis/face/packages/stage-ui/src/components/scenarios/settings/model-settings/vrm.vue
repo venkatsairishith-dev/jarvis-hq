@@ -90,7 +90,7 @@ const envOptions = computed(() => [
 </script>
 
 <template>
-  <Container :title="t('settings.vrm.fps.title')" icon="i-solar:speedometer-bold-duotone">
+  <Container :title="t('settings.vrm.fps.title')" icon="i-solar:speedometer-middle-bold-duotone">
     <p :class="['text-xs', 'text-neutral-500 dark:text-neutral-400']">
       {{ t('settings.vrm.fps.description') }}
     </p>
