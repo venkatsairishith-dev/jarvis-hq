@@ -109,7 +109,13 @@ const readState = () => withTimeout(main.evaluate(() => {
   }
 }).catch(() => null), 10000, null)
 
-// 3. the goal, typed into the chat box
+// 3. the goal, typed into the chat box. In the orb look the island's "Open chat" button does not exist: a double-click on the orb opens (or folds) the
+// floating chat, so when the message box is not visible the orb is double-clicked once and the box is waited for.
+const boxShown = () => withTimeout(chat.evaluate(() => { const t = document.querySelector('textarea'); const r = t && t.getBoundingClientRect(); return !!r && r.width > 0 && r.height > 0 }).catch(() => false), 5000, false)
+if (!(await boxShown())) {
+  await withTimeout(main.locator('.orb-disc').first().dblclick({ timeout: 5000 }).catch(() => {}), 8000, null)
+  for (let i = 0; i < 10 && !(await boxShown()); i++) await sleep(500)
+}
 await chat.fill('textarea', goal)
 const start = Date.now()
 await chat.keyboard.press('Enter')
