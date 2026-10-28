@@ -51,6 +51,8 @@ export async function setupMainWindowElectronInvokes(params: {
   mcpManager: McpManager
   i18n: I18n
   onboardingWindowManager: OnboardingWindowManager
+  /** D78: true while the orb or the bar is shown (see the onboarding service). */
+  keepMainWindowInPlace?: () => boolean
   ioTraceRecording: IOTraceRecordingService
   inlayWindow: () => Promise<BrowserWindow>
   globalShortcut: GlobalShortcutService
@@ -73,7 +75,7 @@ export async function setupMainWindowElectronInvokes(params: {
   createAutoUpdaterService({ context, window: params.window, service: params.autoUpdater })
   createMcpServersService({ context, manager: params.mcpManager })
   createGodotStageService({ context, manager: params.godotStageManager, window: params.window })
-  createOnboardingService({ context, onboardingWindowManager: params.onboardingWindowManager, mainWindow: params.window })
+  createOnboardingService({ context, onboardingWindowManager: params.onboardingWindowManager, mainWindow: params.window, keepMainWindowInPlace: params.keepMainWindowInPlace })
   createAuthService({ context, window: params.window })
   const stopIOTraceRecording = registerIOTraceRecording(context, params.ioTraceRecording)
   params.window.once('closed', stopIOTraceRecording)

@@ -1025,6 +1025,11 @@ export const useChatStore = defineStore('chat', () => {
         await emitLocalReply(quick.reply, traced)
         return
       }
+      if (quick?.silent) {
+        // D78: "hide yourself" / "show yourself": done, and nothing is said
+        await traced?.onStreamEvent?.({ type: 'finish' })
+        return
+      }
     }
     await streamWithStageAdapters(model, chatProvider, context, traced)
   }

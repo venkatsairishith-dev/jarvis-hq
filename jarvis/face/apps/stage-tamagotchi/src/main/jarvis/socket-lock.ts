@@ -3,6 +3,7 @@ import net from 'node:net'
 import { env } from 'node:process'
 
 import { BUILT_IN_ALLOW_HOSTS, isAllowedHost, parseAllowHosts } from './network-lock'
+import { isViewerTarget, loadViewerTarget } from './vm2-viewer'
 
 /**
  * The lower half of the face's network lock (network-lock.ts is the upper half, for requests that Chromium and `fetch` make).
@@ -76,7 +77,7 @@ export function lockNodeSockets(log: (message: string) => void = () => {}): void
     const connect = socketProto.connect
     socketProto.connect = function lockedConnect(this: net.Socket, ...args: unknown[]) {
       const target = connectTarget(args)
-      if (target.kind === 'tcp' && !isAllowedHost(target.host)) {
+      if (target.kind === 'tcp' && !isAllowedHost(target.host) && !isViewerTarget(target.host, target.port)) {
         log(`blocked a main-process connection to ${target.host}`)
         const error = new Error(`JARVIS network lock: ${target.host} is not on the allowlist`)
         queueMicrotask(() => this.destroy(error))
@@ -107,7 +108,8 @@ export function lockNodeSockets(log: (message: string) => void = () => {}): void
  */
 export function chromiumLockSwitches(allowHosts: string[] = parseAllowHosts(env.JARVIS_FACE_ALLOW_HOSTS)): Array<[string, string]> {
   // JARVIS: the weather card's hosts are resolved too; without them "Failed to fetch" was all the owner saw (2026-10-26).
-  const exclude = ['localhost', '*.localhost', '127.0.0.1', ...BUILT_IN_ALLOW_HOSTS, ...allowHosts].map(host => `EXCLUDE ${host}`)
+  const viewer = loadViewerTarget()      // D79: VM2's viewer name must resolve too (a Tailscale address needs no lookup; a MagicDNS name does)
+  const exclude = ['localhost', '*.localhost', '127.0.0.1', ...BUILT_IN_ALLOW_HOSTS, ...allowHosts, ...(viewer ? [viewer.host] : [])].map(host => `EXCLUDE ${host}`)
   return [
     ['host-resolver-rules', ['MAP * ~NOTFOUND', ...exclude].join(', ')],
     ['force-webrtc-ip-handling-policy', 'disable_non_proxied_udp'],

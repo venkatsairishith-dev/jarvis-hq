@@ -1,0 +1,22 @@
+{
+  "_note": "Console-only (kernel SAFETY_COMPONENTS and the push gate list this file). VM2 plugs in HERE and nowhere else. Fill viewer_url and control_url with the VM2 Tailscale address (100.x.y.z or name.tailnet.ts.net) and set enabled to true once the viewer and the hub route are up (docs/03_DECISIONS.md D79, jarvis/lab/deploy/VM2_DESKTOP.md). NEVER put a password, token or key in any address: the viewer asks for its own password, which only you know. An address with a user name, a password, a token or a non-Tailscale host is dropped.",
+  "enabled": false,
+  "viewer_url": "",
+  "view_only_param": "view_only",
+  "control_url": "",
+  "probe_timeout_s": 3,
+  "probe_ttl_s": 60,
+  "takeover_minutes": 30,
+  "max_reasks": 3,
+  "look_wait_s": 20,
+  "grant_days": 14,
+  "quarantine_max_bytes": 52428800,
+  "poll_s": 4,
+  "task_wait_minutes": 40,
+  "routing": {
+    "default": "pc",
+    "trusted_download_hosts": [],
+    "known_sites": [],
+    "research_unknown_sites": true
+  }
+}

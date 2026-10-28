@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
 import HudSettingsField from '../../../components/hud/HudSettingsField.vue'
+import LookSettingsFields from '../../../components/orb/LookSettingsFields.vue'
 import SpeedSettingsFields from '../../../components/SpeedSettingsFields.vue'
 
 import { electron, electronAppIconGet, electronAppIconSet } from '../../../../shared/eventa'
@@ -42,6 +43,7 @@ async function updateHidden(hidden: boolean) {
 <template>
   <SettingsGeneralFields>
     <template #additional-fields>
+      <LookSettingsFields />
       <HudSettingsField />
       <SpeedSettingsFields />
       <FieldCheckbox

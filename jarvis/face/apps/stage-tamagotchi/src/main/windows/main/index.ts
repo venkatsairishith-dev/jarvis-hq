@@ -2,6 +2,7 @@ import type { Rectangle } from 'electron'
 import type { InferOutput } from 'valibot'
 
 import type { FullscreenMode, FullscreenOpenRequest, FullscreenSurfaceId } from '../../../shared/eventa'
+import type { LookService } from '../../jarvis/look-service'
 import type { I18n } from '../../libs/i18n'
 import type { ServerChannel } from '../../services/airi/channel-server'
 import type { GodotStageManager } from '../../services/airi/godot-stage'
@@ -39,8 +40,8 @@ import { createConfig } from '../../libs/electron/persistence'
 import { createWindowContext } from '../../libs/electron/window-context'
 import { setupSettingsPageInvokes } from '../settings/rpc/index.electron'
 import { protectPrivilegedWindowNavigation, setWindowAlwaysOnTop, transparentWindowConfig } from '../shared'
-import { deferStartup, STARTUP_STAGGER } from '../shared/startup-stagger'
 import { centerWindowOnDisplay, computeCenteredWindowBounds, usableSavedBounds } from '../shared/display'
+import { deferStartup, STARTUP_STAGGER } from '../shared/startup-stagger'
 import { hideOnClose } from './hide-on-close'
 import { setupMainWindowElectronInvokes } from './rpc/index.electron'
 
@@ -75,6 +76,8 @@ export async function setupMainWindow(params: {
   inlayWindow: () => Promise<BrowserWindow>
   devtoolsWindow: DevtoolsWindowManager
   spotlightWindow: SpotlightWindowManager
+  /** D78: the look (orb, avatar or minimal bar), its place on the screen and the hidden mode. */
+  look: LookService
   /**
    * Receives the function that shows a surface in fullscreen mode, for the settings entry points of the app. It
    * returns `false` unless the mode is `single-window`, so the caller opens settings elsewhere.
@@ -111,12 +114,25 @@ export async function setupMainWindow(params: {
   // JARVIS: a saved rectangle that is outside every display (or as large as one) is dropped: the owner would see no avatar (see usableSavedBounds).
   const savedBounds = usableSavedBounds(mainWindowConfig, screen.getAllDisplays().map(d => d.workArea))
 
+  // D78: the orb and the minimal bar live in a small window that the look controller sizes and places (inside the work area, per display);
+  // the avatar keeps its own window, saved bounds and rules exactly as before.
+  const look = params.look
+  const lookNow = look.controller.settings().look
+  const zoneWindow = lookNow !== 'avatar'
+  const zoneBounds = zoneWindow ? look.controller.initialBounds() : undefined
+  // the avatar's own place now, read from the config each time (the owner may have moved it since the start)
+  const avatarBounds = () => usableSavedBounds(getConfig().windows?.find(w => w.title === 'JARVIS' && w.tag === 'main'), screen.getAllDisplays().map(d => d.workArea)) ?? computeCenteredWindowBounds({
+    displayWorkArea: screen.getPrimaryDisplay().workArea,
+    windowBounds: { x: 0, y: 0, width: 450, height: 600 },
+  })
+
   const window = new BrowserWindow({
     title: 'JARVIS',
-    width: savedBounds?.width ?? 450.0,
-    height: savedBounds?.height ?? 600.0,
-    x: savedBounds?.x,
-    y: savedBounds?.y,
+    width: zoneBounds?.width ?? savedBounds?.width ?? 450.0,
+    height: zoneBounds?.height ?? savedBounds?.height ?? 600.0,
+    x: zoneBounds?.x ?? savedBounds?.x,
+    y: zoneBounds?.y ?? savedBounds?.y,
+    resizable: !zoneWindow,
     show: false,
     icon,
     webPreferences: {
@@ -134,6 +150,7 @@ export async function setupMainWindow(params: {
   if (params.onWindowCreated) {
     params.onWindowCreated(window)
   }
+  look.attachMainWindow(window, { avatarBounds })
 
   hideOnClose(window)
 
@@ -154,6 +171,11 @@ export async function setupMainWindow(params: {
    * returns to move to the center instead.
    */
   function centerWindow(): Rectangle {
+    // D78: "put it back" for the orb is the default corner; for the avatar it is the centre, as before
+    if (look.controller.settings().look !== 'avatar') {
+      look.controller.resetPosition()
+      return window.getBounds()
+    }
     if (!boundsBeforeFullscreen)
       return centerWindowOnDisplay(window)
     boundsBeforeFullscreen = computeCenteredWindowBounds({
@@ -165,6 +187,9 @@ export async function setupMainWindow(params: {
 
   function handleNewBounds(newBounds: Rectangle) {
     if (boundsBeforeFullscreen)
+      return
+    // D78: the orb's window is not the avatar's window; the avatar's saved bounds stay as the owner left them
+    if (look.controller.settings().look !== 'avatar')
       return
     // never write a position that no display shows (it would come back at the next start)
     if (!usableSavedBounds(newBounds, screen.getAllDisplays().map(d => d.workArea)))
@@ -231,7 +256,8 @@ export async function setupMainWindow(params: {
   }
   applyPin()
 
-  window.on('ready-to-show', () => window!.show())
+  // D78: the orb appears without taking the keyboard focus from what the owner is doing
+  window.on('ready-to-show', () => (zoneWindow ? window!.showInactive() : window!.show()))
   protectPrivilegedWindowNavigation(window)
 
   await setupMainWindowElectronInvokes({
@@ -252,11 +278,13 @@ export async function setupMainWindow(params: {
     globalShortcut: params.globalShortcut,
     setPinned,
     center: centerWindow,
+    keepMainWindowInPlace: () => look.controller.settings().look !== 'avatar',
   })
 
   await load(window, withHashRoute(baseUrl(getRendererRoot()), '/', {
     // The main window page hosts the fullscreen mode, so it routes the fullscreen surfaces under its own page.
-    query: { 'synced-leader': 'true', 'fullscreen-host': 'main-window' },
+    // D78: `jarvis-look` tells the page which look it starts with, so an orb does not even load the avatar's script (Live2D core).
+    query: { 'synced-leader': 'true', 'fullscreen-host': 'main-window', 'jarvis-look': lookNow },
   }))
 
   // The inlay loads once and stays shown, so the first speech does not wait for a window and a page load.

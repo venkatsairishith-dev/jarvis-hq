@@ -32,6 +32,13 @@ import time
 ABILITIES = ("signin_existing_session", "signup", "accept_terms", "download_to_quarantine")
 DEFAULT_DAYS = 30
 MAX_DAYS = 90
+# D79 (2026-10-27): a grant can be for the browser on VM2 (`target: vm2`). The PC form is unchanged. A VM2 grant covers VM2 only and a PC grant covers the PC only; the
+# VM2 profile holds sessions the owner logged in to himself through the takeover viewer, and a page that talks an agent into using them is the risk, so the grant is
+# shorter (default 14 days, at most 30), has no signup (no node types a generated password there) and its card says so.
+TARGETS = ("pc", "vm2")
+VM2_ABILITIES = ("signin_existing_session", "accept_terms", "download_to_quarantine")
+VM2_DEFAULT_DAYS = 14
+VM2_MAX_DAYS = 30
 MAX_HOSTS = 4
 FILE = os.environ.get("JARVIS_TRUSTED_SITES") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "trusted_sites.json")
 HOST_RX = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$")
@@ -90,17 +97,26 @@ def clean_abilities(raw) -> list:
     return [a for a in ABILITIES if a in got]
 
 
-def clean_days(raw) -> int:
+def clean_days(raw, target="pc") -> int:
+    top, dflt = (VM2_MAX_DAYS, VM2_DEFAULT_DAYS) if target == "vm2" else (MAX_DAYS, DEFAULT_DAYS)
     try:
-        n = int(raw if raw not in (None, "") else DEFAULT_DAYS)
+        n = int(raw if raw not in (None, "") else dflt)
     except (TypeError, ValueError):
         raise GrantError("days must be a number") from None
-    if not 1 <= n <= MAX_DAYS:
-        raise GrantError(f"days must be from 1 to {MAX_DAYS}")
+    if not 1 <= n <= top:
+        raise GrantError(f"days must be from 1 to {top}")
     return n
 
 
-def clean_request(hosts, abilities, days=None, note="") -> dict:
+def clean_target(raw) -> str:
+    t = str(raw or "pc").strip().lower()
+    if t not in TARGETS:
+        raise GrantError("target must be pc or vm2")
+    return t
+
+
+def clean_request(hosts, abilities, days=None, note="", target="pc") -> dict:
+    target = clean_target(target)
     hs = hosts if isinstance(hosts, (list, tuple)) else [hosts]
     out = []
     for h in hs:
@@ -109,16 +125,23 @@ def clean_request(hosts, abilities, days=None, note="") -> dict:
             out.append(n)
     if not out or len(out) > MAX_HOSTS:
         raise GrantError(f"name from 1 to {MAX_HOSTS} hosts")
-    return {"hosts": out, "abilities": clean_abilities(abilities), "days": clean_days(days), "note": " ".join(str(note or "").split())[:300]}
+    abil = clean_abilities(abilities)
+    if target == "vm2" and [a for a in abil if a not in VM2_ABILITIES]:
+        raise GrantError("on VM2 a grant can only cover: " + ", ".join(VM2_ABILITIES))
+    req = {"hosts": out, "abilities": abil, "days": clean_days(days, target), "note": " ".join(str(note or "").split())[:300]}
+    if target == "vm2":
+        req["target"] = "vm2"                          # absent for the PC, so every PC request, digest and seal is byte-for-byte what it was
+    return req
 
 
 def make_action(req: dict):
     """The policy Action an approval card stands for. Its digest is what the approval is bound to; the entries keep it."""
     from .policy import Action
     card = card_text(req)
-    return Action("sitegrant", "grant", ", ".join(req["hosts"]),
-                  {"hosts": list(req["hosts"]), "abilities": list(req["abilities"]), "days": int(req["days"]), "note": req.get("note", "")},
-                  "private", False, owner_direct=True, card=card)
+    params = {"hosts": list(req["hosts"]), "abilities": list(req["abilities"]), "days": int(req["days"]), "note": req.get("note", "")}
+    if req.get("target") == "vm2":
+        params["target"] = "vm2"
+    return Action("sitegrant", "grant", ", ".join(req["hosts"]), params, "private", False, owner_direct=True, card=card)
 
 
 WHAT = {"signin_existing_session": "sign in with the Chrome session you already have there (Continue with Google or Microsoft), never typing a password",
@@ -130,6 +153,17 @@ WHAT = {"signin_existing_session": "sign in with the Chrome session you already 
 def card_text(req: dict, now: float = None) -> dict:
     now = NOW() if now is None else now
     until = time.strftime("%Y-%m-%d", time.localtime(now + req["days"] * DAY))
+    vm2 = req.get("target") == "vm2"
+    if vm2:
+        return {"what": ("Let JARVIS act on VM2 (the sandbox desktop), without asking for your PIN each time, ONLY on " + ", ".join(req["hosts"]) + " (https, exactly this host) until "
+                         + until + " (" + str(req["days"]) + " days). It may: " + "; ".join(WHAT[a] for a in req["abilities"]) + ". It uses the sessions YOU logged in to on VM2 "
+                         "through the takeover viewer; JARVIS never types or reads a password there."),
+                "warning": f"This session lives on VM2. A page that talks an agent into acting could use it. That is why this grant expires in {req['days']} days and is for VM2 only. "
+                           "Page text on VM2 is read by the lab's public-lane models: grant only sites you accept that for.",
+                "never_covered": "payments, upgrade or purchase prompts, permission screens that give the site your mail, Drive or contacts, any other site, and CAPTCHA, 2FA codes or bot checks (you do those yourself, through the takeover viewer)",
+                "sites": list(req["hosts"]), "abilities": list(req["abilities"]), "expires": until, "target": "vm2",
+                **({"site_terms_note": req["note"]} if req.get("note") else {}),
+                "approve": "Approve with your PIN in the JARVIS console. You can remove the grant at any time."}
     return {"what": ("Let JARVIS act on its own, without asking for your PIN each time, ONLY on " + ", ".join(req["hosts"]) + " (https, exactly this host) until "
                      + until + " (" + str(req["days"]) + " days). It may: " + "; ".join(WHAT[a] for a in req["abilities"]) + "."),
             "never_covered": "payments, upgrade or purchase prompts, permission screens that give the site your mail, Drive or contacts, any other site, and CAPTCHA, 2FA codes or bot checks (you do those yourself)",
@@ -149,7 +183,7 @@ def _key():
 
 
 def seal_of(entry: dict, key: bytes) -> str:
-    body = {k: entry[k] for k in ("host", "allowed", "granted_at", "expires", "granted_by_pin", "approval", "digest", "request") if k in entry}
+    body = {k: entry[k] for k in ("host", "allowed", "granted_at", "expires", "granted_by_pin", "approval", "digest", "request", "target") if k in entry}
     blob = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hmac.new(key, blob.encode("utf-8"), hashlib.sha256).hexdigest()
 
@@ -164,9 +198,12 @@ def valid_entry(entry, key: bytes = None) -> bool:
         host = normalize_host(entry["host"])
         if host != entry["host"] or host not in req["hosts"] or entry["granted_by_pin"] is not True:
             return False
-        if list(entry["allowed"]) != clean_abilities(req["abilities"]) or int(entry["expires"]) != int(entry["granted_at"]) + clean_days(req["days"]) * DAY:
+        target = clean_target(req.get("target", "pc"))
+        if entry.get("target", "pc") != target:
             return False
-        if entry["digest"] != make_action(clean_request(req["hosts"], req["abilities"], req["days"], req.get("note", ""))).digest():
+        if list(entry["allowed"]) != clean_abilities(req["abilities"]) or int(entry["expires"]) != int(entry["granted_at"]) + clean_days(req["days"], target) * DAY:
+            return False
+        if entry["digest"] != make_action(clean_request(req["hosts"], req["abilities"], req["days"], req.get("note", ""), target)).digest():
             return False
         return hmac.compare_digest(str(entry.get("seal", "")), seal_of(entry, key))
     except (KeyError, TypeError, ValueError, GrantError):
@@ -204,21 +241,22 @@ def invalidate() -> None:
         _cache.update(path=None, mtime=None, entries=[])
 
 
-def find(host, ability: str, now: float = None, path: str = None):
-    """The valid, unexpired grant for exactly this host and ability, or None. `host` must already be a plain host (no scheme)."""
-    if ability not in ABILITIES or not isinstance(host, str):
+def find(host, ability: str, now: float = None, path: str = None, target: str = "pc"):
+    """The valid, unexpired grant for exactly this host and ability ON THIS TARGET (the PC unless asked for vm2), or None. `host` must already be a plain host (no scheme).
+    A grant made for VM2 never answers a PC question, and the other way round."""
+    if ability not in ABILITIES or not isinstance(host, str) or target not in TARGETS:
         return None
     h = host.strip().lower()
     now = NOW() if now is None else now
     for e in _entries(path):
-        if e["host"] == h and ability in e["allowed"] and float(e["expires"]) > now:
+        if e["host"] == h and ability in e["allowed"] and float(e["expires"]) > now and e.get("target", "pc") == target:
             return e
     return None
 
 
 def active(now: float = None, path: str = None) -> list:
     now = NOW() if now is None else now
-    return [{"host": e["host"], "allowed": list(e["allowed"]), "expires": int(e["expires"]), "granted_at": int(e["granted_at"])}
+    return [{"host": e["host"], "allowed": list(e["allowed"]), "expires": int(e["expires"]), "granted_at": int(e["granted_at"]), "target": e.get("target", "pc")}
             for e in _entries(path) if float(e["expires"]) > now]
 
 
@@ -254,11 +292,12 @@ def add(req: dict, approval_id: str, key: bytes = None, now: float = None, path:
         raise GrantError("no seal key: grants cannot be created here")
     now = int(NOW() if now is None else now)
     digest = make_action(req).digest()
-    keep = [e for e in read_entries(path) if e.get("host") not in req["hosts"] and valid_entry(e, key)]       # a new grant replaces the old one for that host
+    tgt = req.get("target", "pc")
+    keep = [e for e in read_entries(path) if not (e.get("host") in req["hosts"] and e.get("target", "pc") == tgt) and valid_entry(e, key)]       # a new grant replaces the old one for that host and target
     made = []
     for h in req["hosts"]:
         e = {"host": h, "allowed": list(req["abilities"]), "granted_at": now, "expires": now + req["days"] * DAY, "granted_by_pin": True,
-             "approval": str(approval_id), "digest": digest, "request": dict(req)}
+             "approval": str(approval_id), "digest": digest, "request": dict(req), **({"target": "vm2"} if tgt == "vm2" else {})}
         e["seal"] = seal_of(e, key)
         made.append(e)
     write_entries(keep + made, path)

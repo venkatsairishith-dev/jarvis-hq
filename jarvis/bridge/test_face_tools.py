@@ -94,6 +94,32 @@ def test_results_are_cleaned_before_a_model_sees_them():
     assert asyncio.run(t.do("x")) == {"cleaned": True} and seen
 
 
+def test_two_tool_calls_are_not_serialised_against_each_other(monkeypatch):
+    """D80 item 5: real analysis, not a forced fix. If the model is told it may call two independent read-only tools in the
+    same round (e.g. get_weather and desktop__whats_on_screen), whether that round actually takes one slow tool's time or
+    two depends on whether THIS server (the MCP tool host) can run two `call_tool`s concurrently, since the face's own
+    orchestrator decides the round shape and is reserved (apps/stage-tamagotchi/src). This proves the host side is not the
+    blocker: nothing here (no lock, no shared queue) makes a second call_tool wait for an unrelated first one to finish."""
+    delay = 0.2
+
+    class SlowClient(FakeClient):
+        async def status(self):
+            await asyncio.sleep(delay)
+            return await super().status()
+
+        async def approvals(self):
+            await asyncio.sleep(delay)
+            return await super().approvals()
+    server = F.build_server(tools(SlowClient()))
+
+    async def go():
+        t0 = time.time()
+        await asyncio.gather(server.call_tool("jarvis_ready", {}), server.call_tool("jarvis_waiting", {}))
+        return time.time() - t0
+    elapsed = asyncio.run(go())
+    assert elapsed < delay * 1.8, f"two independent calls took {elapsed:.2f}s; each alone takes {delay}s, so they were serialised"
+
+
 def test_no_tool_can_approve_or_change_policy():
     server = F.build_server(tools(FakeClient()))
     names = sorted(t.name for t in asyncio.run(server.list_tools()))
@@ -553,6 +579,52 @@ def test_compact_schema_drops_noise_but_keeps_names_and_meaning():
     assert len(out["properties"]["long"]["description"]) <= F.MAX_PARAM_DESCRIPTION
     assert out["required"] == ["title"] and "title" not in {k for k in out if k != "properties"} and "additionalProperties" not in out
     assert raw["properties"]["profile"]["default"] is None, "the input is not changed"
+
+
+def test_tools_list_is_cached_across_repeat_calls_and_correct_either_way():
+    """D80: a face that reconnects (D57's backoff) asks tools/list again on the SAME server process; the second call must not
+    redo the compacting work, and must return the identical content (not a stale or half-built list)."""
+    server = F.build_server(tools(FakeClient()), profile="chat")
+    first = asyncio.run(server.list_tools())
+    calls = []
+    real_compact = F.compact_schema
+    F.compact_schema = lambda node: calls.append(1) or real_compact(node)
+    try:
+        second = asyncio.run(server.list_tools())
+    finally:
+        F.compact_schema = real_compact
+    assert not calls, "a repeat call must not walk the schemas again"
+    assert _serialized(second) == _serialized(first)
+    assert server._list_cache[0][0] == server._tool_rev
+
+
+def test_tools_list_cache_is_invalidated_when_the_registered_tools_change():
+    """The cache must never serve a stale list: a tool added after the first tools/list call (profile "full": nothing is
+    filtered by `allowed`) bumps the revision, so the next call sees it; a tool offered to a profile that filters by
+    `allowed` (chat) and so is never registered must never appear, cached or not."""
+    server = F.build_server(tools(FakeClient()), profile="full")
+    before = {t.name for t in asyncio.run(server.list_tools())}
+    rev_before = server._tool_rev
+
+    @server.tool(name="extra_probe", description="a tool added after the first tools/list call")
+    async def extra_probe() -> dict:
+        return {"ok": True}
+    assert server._tool_rev == rev_before + 1, "add_tool must bump the revision so the cache cannot go stale"
+    after = {t.name for t in asyncio.run(server.list_tools())}
+    assert after == before | {"extra_probe"}
+    # unlisted / short changing is the other half of the cache key: flip them by hand and the next call must notice at once
+    server.unlisted = server.unlisted | {"extra_probe"}
+    assert "extra_probe" not in {t.name for t in asyncio.run(server.list_tools())}
+
+    chat = F.build_server(tools(FakeClient()), profile="chat")
+    asyncio.run(chat.list_tools())
+    rev_before_chat = chat._tool_rev
+
+    @chat.tool(name="not_offered", description="not in CHAT_TOOLS or PANEL_TOOLS")
+    async def not_offered() -> dict:
+        return {"ok": True}
+    assert chat._tool_rev == rev_before_chat, "filtered out by `allowed`: never registered, so the revision does not move"
+    assert "not_offered" not in {t.name for t in asyncio.run(chat.list_tools())}
 
 
 def test_the_goal_tool_gets_the_face_side_readers_and_they_are_not_listed(tmp_path, monkeypatch):

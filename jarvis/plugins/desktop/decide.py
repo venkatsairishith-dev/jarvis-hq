@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from jarvis.plugins._shared import decider, loopback_http, names as names_store, translate
-from . import composite, simple_tasks
+from . import composite, problemset, simple_tasks
 
 decider.MATCHERS["simple_task"] = simple_tasks.match          # D54b: the shared engine's intent rule asks the catalogue
 
@@ -47,6 +47,7 @@ TOOLS = {
     "troubleshoot": "find out why an app shows an error, and fix it safely (args: app)",
     "research": "research a topic on the web with sources; no file is built (args: query)",
     "web_task": "make a slide deck, slides or a presentation on a free web generator in the owner's Chrome, signed in with his existing session (args: query = the topic, text = the number of slides)",
+    "vm2_task": "a download or research of an unknown site on VM2, the sandbox desktop, when the owner says so (args: query = his request in his own words)",
     "answer": "answer from general knowledge, no PC action",
     "clarify": "the request is missing something essential: ask one short question (args: question)",
     "stop": "stop or cancel the current task",
@@ -163,7 +164,7 @@ _ARGS = {"open_website": {"site": _S, "account": _S}, "play_media": {"query": _S
          "type_text": {"app": _S, "target": _S, "text": _S}, "press_key": {"app": _S, "key": _S},
          "open_file": {"name": _S, "folder": _S}, "check_pc": {"action": {"type": "string", "enum": ACTIONS["check_pc"]}, "app": _S},
          "troubleshoot": {"app": _S}, "open_in_vscode": {"folder": _S}, "type_in_editor": {"app": _S, "target": _S, "text": _S},
-         "save_as": {"app": _S, "name": _S, "folder": _S}, "drive": {"app": _S, "query": _S}, "research": {"query": _S, "deliverable": {"type": "string", "enum": ["none"]}}, "web_task": {"query": _S, "text": _S},
+         "save_as": {"app": _S, "name": _S, "folder": _S}, "drive": {"app": _S, "query": _S}, "research": {"query": _S, "deliverable": {"type": "string", "enum": ["none"]}}, "web_task": {"query": _S, "text": _S}, "vm2_task": {"query": _S},
          "answer": {}, "clarify": {"question": _S}, "stop": {}}
 # One schema per tool with only that tool's arguments: the grammar cannot emit fields a tool does not use, so plans are
 # shorter (generation is ~10 tokens/s on this GPU) and carry fewer stray values. Behind a switch until measured.
@@ -584,6 +585,8 @@ def validate(raw: str, profiles: list[dict], request: str = "") -> Plan:
                 return Plan(steps, "clarify", question="What should the deck be about?", problems=["no topic for the deck"], raw=raw)
             n = slides_in(request) or (int(s["text"]) if str(s.get("text") or "").strip().isdigit() else 0)
             out.update(topic=q[:300], slides=max(1, min(int(n or DEFAULT_SLIDES), 20)))
+        elif tool == "vm2_task":                        # D79: planned by rule (vm2_rule), carried in the owner's own words
+            out.update(query=" ".join(str(s.get("query") or request).split())[:500])
         elif tool == "clarify":
             return Plan(steps, "clarify", question=(s.get("question") or "Could you say a bit more?")[:200], raw=raw)
         steps.append(out)
@@ -842,6 +845,20 @@ def composite_rule(request: str, profiles: list[dict]) -> "Plan | None":
 
 
 
+def problemset_rule(request: str, profiles: list[dict]) -> "Plan | None":
+    """D77: a problem-set job is planned by rule, never by the small model: ONE problemset step. The job token (`problem-set job ps-...`) is added to the goal by
+    problemset.prepare, i.e. only after the owner's own explicit request and his form answers; a raw request without it is not started from here."""
+    m = problemset.JOB_RX.search(request or "")
+    if m:
+        tool = problemset.job_tool(m.group(1))
+        post = ("the solutions were typed into the page's editor, run with the page's own Run button on its sample cases and reported (Submit is never clicked)"
+                if tool == "webjudge" else "the solutions were written, run on their sample cases and reported")
+        return Plan([{"tool": tool, "job": m.group(1), "post": post}], "ok", model="rule")
+    if problemset.parse_request(request) is not None:
+        return Plan([], "fallback", problems=["a problem-set request is started through the mission door (it asks which folder first); say it again as 'solve all the problems in <folder>'"], model="rule")
+    return None
+
+
 def deck_rule(request: str, profiles: list[dict]) -> "Plan | None":
     """D64: "make a deck / slides / a presentation about X" is planned by rule, never by the small model: one web_task step (a free web generator in the owner's own
     Chrome). No topic -> one question."""
@@ -851,6 +868,23 @@ def deck_rule(request: str, profiles: list[dict]) -> "Plan | None":
     if not topic:
         return Plan([], "clarify", question="What should the deck be about?", problems=["no topic for the deck"], model="rule")
     plan = validate(json.dumps({"steps": [{"tool": "web_task", "query": topic, "text": str(slides_in(request) or "")}]}), profiles, request)
+    if plan.status in ("ok", "clarify"):
+        plan.model, plan.seconds = "rule", 0.0
+        return plan
+    return None
+
+
+def vm2_rule(request: str, profiles: list[dict]) -> "Plan | None":
+    """D79: a download of an unknown file, a program/archive/macro file, a research of an unknown site, or the owner's own "on VM2" / "in the sandbox" is planned by rule as ONE
+    vm2_task step (plugins/_shared/vm2_routing.py decides from the owner's words and config/vm2.json). Whether VM2 is up is the step's business: it never falls back to the PC."""
+    try:
+        from jarvis.plugins._shared import vm2, vm2_routing
+        route = vm2_routing.classify(request, vm2.load_config().routing)
+    except Exception:  # noqa: BLE001 - routing must never break planning
+        return None
+    if route.target != "vm2":
+        return None
+    plan = validate(json.dumps({"steps": [{"tool": "vm2_task", "query": request}]}), profiles, request)
     if plan.status in ("ok", "clarify"):
         plan.model, plan.seconds = "rule", 0.0
         return plan
@@ -1013,12 +1047,18 @@ def decide(request: str, profiles: list[dict], model: str = DEFAULT_MODEL, post=
     fu = follow_up(request, last)
     if fu is not None:
         return fu
+    ps = problemset_rule(request, profiles)
+    if ps is not None:
+        return ps
     cr = composite_rule(request, profiles)
     if cr is not None:
         return cr
     dr = deck_rule(request, profiles)
     if dr is not None:
         return dr
+    vr = vm2_rule(request, profiles)
+    if vr is not None:
+        return vr
     if not context and FAST_PATH:
         fp = fast_path(request, profiles)
         if fp is not None:

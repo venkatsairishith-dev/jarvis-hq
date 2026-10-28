@@ -26,6 +26,7 @@ The face asks; JARVIS decides. It has no authority of its own:
 | Network, inbound | Every server the app starts listens on 127.0.0.1 only, whatever its settings say (AIRI let its channel server listen on every interface). | `socket-lock.ts` |
 | Remote debugging | Never in an installed app. | `src/main/app/debugger.ts` |
 | Accounts and cloud | None. AIRI's account, inbox and feature-flag clients point at `127.0.0.1:1`, where nothing listens. | `packages/stage-shared/src/jarvis.ts` |
+| Showing and hiding itself (D78) | Presentation only. "Hidden" means JARVIS is not displayed: every window is hidden with `BrowserWindow.hide()`, the taskbar buttons go, the tray icon goes unless the owner keeps it, and one gate in the main process refuses and queues every way a window, notification, dialog or DevTools could appear. It is NOT a way to be unseen by screen sharing, recording or monitoring software: there is no content protection or capture-exclusion flag, no hiding from the task list or process list, no renamed process, no window-class trick, and nothing detects such software (an explicit non-goal, D78). A hide never approves anything: the kernel keeps a PIN approval pending, and voice cannot approve (`buttonBlockedForVoice` is unchanged). | `src/main/jarvis/window-gate.ts`, `window-gate-electron.ts`, `hidden-mode.ts` |
 | Updates | None from AIRI. The updater is off and the release feed is removed. The owner builds the installer from this repository. | `electron-builder.config.ts` |
 
 ## 3. Telemetry: none

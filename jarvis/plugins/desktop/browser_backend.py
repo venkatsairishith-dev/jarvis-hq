@@ -140,7 +140,7 @@ class GrantsClient:
         out: dict = {}
         if code == 200:
             for s in body.get("sites") or []:
-                if isinstance(s, dict) and s.get("host") and float(s.get("expires", 0)) > self.clock():
+                if isinstance(s, dict) and s.get("host") and s.get("target", "pc") == "pc" and float(s.get("expires", 0)) > self.clock():       # D79: a VM2 grant is not a PC grant
                     out[str(s["host"])] = set(s.get("allowed") or [])
         self._cache = (self.clock(), out)
         return out

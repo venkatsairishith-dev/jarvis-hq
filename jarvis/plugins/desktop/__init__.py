@@ -21,7 +21,7 @@ from jarvis.pluginapi import Err, PluginBase, Ok, SdkError, lifecycle, jarvis_pl
 from jarvis.plugins._shared import decider, screen_text, translate
 from jarvis.plugins._shared import names as names_mod
 
-from . import composite, coordinator as coord, core, decide, drive as drive_mod, gate as gate_mod, goal as goal_mod, journal_client as jc, lessons as lessons_mod, pcagent, pcport, quick as quick_mod, simple_tasks, taskstate, taskvoice, undoer
+from . import composite, coordinator as coord, core, decide, drive as drive_mod, gate as gate_mod, goal as goal_mod, journal_client as jc, lessons as lessons_mod, pcagent, pcport, problemset as problemset_mod, quick as quick_mod, simple_tasks, taskstate, taskvoice, undoer
 
 PROFILE_HELP = "Chrome profile alias: 'default' or a name such as 'VenkatAMV'; see list_browser_profiles."
 
@@ -362,6 +362,11 @@ class DesktopPlugin(PluginBase):
             missions.E.agents = self._agents(loop, abort=missions.cancel_requested)
             # the whole decision (ok, clarify, fallback): a question for the owner reaches the owner (audit PC-D5)
             missions.E.plan_fn = lambda goal, ctx: decide.decide(goal, core.profiles(), context=ctx)
+            # D76: the open-ended task path: the online model plans milestones (text only, through the gateway); the rules plan when it is down
+            from . import taskrun
+            missions.E.task_plan_fn = lambda goal, ctx: taskrun.mission_plan(goal, ctx, ask_online=goal_mod.ask_online if goal_mod.flag_on() else None)
+            from . import takeover_wiring
+            missions.E.on_takeover_resume = takeover_wiring.on_mission_resume                 # D79: a mission paused for the owner at a screen: the screen goes back first
             missions.E.on_cancel = lambda: [setattr(p, "stopped", True) or (p.current_job and p.cancel(p.current_job))
                                             for p in list(getattr(self, "_active_pcs", []))]
             DBOS.launch()
@@ -380,7 +385,7 @@ class DesktopPlugin(PluginBase):
             "and stops on a loop or its budget. Use mission_status to follow it and stop_mission to stop it.")),
         input_schema={"type": "object", "properties": {"goal": {"type": "string", "description": "The goal, in the owner's words"}},
                       "required": ["goal"]},
-        timeout=30, llm_result_fields=["mission", "status", "error"],
+        timeout=170, llm_result_fields=["mission", "status", "error", "ask"],       # (D77: a problem-set request may show ONE form and wait up to 120 s)
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def start_mission(self, goal: str = "", **_):
@@ -388,6 +393,10 @@ class DesktopPlugin(PluginBase):
             return Err(SdkError(f"missions are unavailable right now ({getattr(self, '_missions_note', '')}); "
                                 "run_pc_task can still do it as one task"))
         from . import missions
+        door = await DesktopPlugin._problemset_door(self, goal)           # D77: "solve all the problems in <folder>": ask which folder if needed, then a mission with a job record
+        if door is not None:
+            return Ok({"mission": door.get("mission"), "status": door["status"], "error": door.get("summary") if door["status"] != "started" else None,
+                       "ask": door.get("ask")})
         mid = await asyncio.to_thread(missions.start, goal)
         return Ok({"mission": mid, "status": "started"})
 
@@ -1334,9 +1343,13 @@ class DesktopPlugin(PluginBase):
                 h = drive_mod.Hands(observe=drive_observe, act=act, propose=lambda task, obs, hist: drive_mod.propose_local(task, obs, hist), classify=classify)
                 out = drive_mod.Driver(h).run(goal, task=step.get("query") or goal, app=step.get("app", ""))
             else:                                                       # D65: the human-like loop with the problem ladder (pcagent.py)
+                from jarvis.plugins._shared import owner_ask
+                from . import takeover_wiring
                 agent = pcagent.PcAgent(pcport.PcPort(pc),
                                         lambda task, obs, hist: drive_mod.propose_local(task, obs, hist), classify=classify, lessons=lessons_mod.default(),
-                                        state=taskstate.TaskState(), goal=goal, stop=(op.stop_flag.is_set if op is not None else None), task_id=getattr(op, "id", "") or "")
+                                        state=taskstate.TaskState(), goal=goal, stop=(op.stop_flag.is_set if op is not None else None), task_id=getattr(op, "id", "") or "",
+                                        takeover=takeover_wiring.pc_hook(takeover_wiring.broker(ask=owner_ask.ask, state=taskstate.TaskState(), journal=jc.record_takeover,
+                                                                                                stop=(op.stop_flag.is_set if op is not None else None))))      # D79: UAC, an unreadable dialog
                 out = agent.run(goal, task=step.get("query") or goal, app=step.get("app", ""))
             if out.get("status") == "waiting_for_permission":
                 out["state"] = "waiting_for_permission"
@@ -1462,18 +1475,128 @@ class DesktopPlugin(PluginBase):
             from . import web_runner
             op = coord.current_op()
             stopped = lambda: bool(abort and abort()) or (op is not None and op.stop_flag.is_set())      # noqa: E731
+            from . import takeover_wiring
+            tk = takeover_wiring.broker(ask=owner_ask.ask, state=taskstate.TaskState(), journal=jc.record_takeover, stop=stopped,
+                                        front=lambda: pc({"op": "ui", "action": "focus", "target": "chrome"}, 20),
+                                        typing=lambda: (pc({"op": "windows"}, 20).get("idle_ms") or 10 ** 9) < takeover_wiring.TYPING_MS)       # D79: a wall is handed to him with one card
             res = web_runner.run_deck(step, pc_run=pc_raw, stop=stopped, ask=owner_ask.ask, profile=alias(step.get("profile", "Default")), journal=jc.record_web_step,
-                                     touch=(op.touch if op is not None else None))
+                                     touch=(op.touch if op is not None else None), takeover=tk, resume=step.get("_takeover"))
             if res.get("ok") and step.get("open_after") and res.get("file"):          # "... and open it": the verified copy, through the deliverables plugin's own open
                 o = open_output({"path": res["file"]})
                 res.update(opened=o.get("opened"), opened_verified=bool(o.get("opened_verified")), open_note=o.get("open_note") or o.get("error"))
             return res
+
+        def task_step(step):
+            """D76: one milestone of an open-ended task (taskrun.py): web, PC loop, documents, outputs, a question to the owner. Verified by its effect before the next one."""
+            from . import taskglue
+            return taskglue.run_task_step(step, taskglue.Ctx(pc_raw=pc_raw, pc=pc, agents=agents, call=call, plugins=self.plugins, alias=alias, abort=abort))
+
+        def vm2_task(step):
+            """D79: a download or research that belongs on VM2 (the sandbox desktop): the lab agent does it there, a wall is handed to the owner on VM2's own screen, and a
+            downloaded file comes back to the PC quarantine only if he approves that file. Never done on the PC instead (plugins/_shared/vm2_task.py)."""
+            from jarvis.plugins._shared import owner_ask, vm2 as vm2_mod, vm2_task as vt
+            from . import takeover_wiring
+            op = coord.current_op()
+            stopped = lambda: bool(abort and abort()) or (op is not None and op.stop_flag.is_set())      # noqa: E731
+            cfg = vm2_mod.load_config()
+            port = vm2_mod.Vm2Port(cfg)
+            tk = takeover_wiring.broker(ask=owner_ask.ask, state=taskstate.TaskState(), journal=jc.record_takeover, stop=stopped, config=cfg, port=port)
+            return vt.run(step.get("query", ""), cfg=cfg, port=port, kernel=core.owner, ask=owner_ask.ask, takeover=tk, stop=stopped,
+                          trusted_hosts=takeover_wiring.pc_granted_hosts(core.owner), resume=step.get("_takeover"), touch=(op.touch if op is not None else None))
 
         def stop(step):
             for p in list(active):
                 p.stopped = True
             self._stop_pc_tasks()                # flags only: this step runs inside a task and must not wait for itself
             return {"ok": True, "stopped_jobs": len(active)}
+
+        def problemset_agent(step):
+            """D77: the owner's problem statements (a folder he named, or one on screen), read, solved by the online model through the privacy gateway (plan online,
+            execute local), run on their sample cases in the restricted runner and saved one file per problem. The job (problemset.py) keeps its own record: Stop, a
+            crash and "continue" never redo a problem that is done. Every PC action it takes (VS Code) is a kernel job as usual."""
+            from jarvis.plugins._shared import code_runner, owner_ask
+            ps = problemset_mod
+            op = coord.current_op()
+            stopped = lambda: bool(abort and abort()) or (op is not None and op.stop_flag.is_set())      # noqa: E731
+            cfg = dict(ps.T.load_config())
+            cfg.setdefault("work_dir", str(ps.DATA / "run"))        # the temp folders of the runs live under JARVIS's own data folder (D: on the laptop), not on C:
+            chosen = code_runner.choose_runner(cfg)             # VM2 is preferred only when config says so AND the host lends a connection (none here yet: the line says so)
+
+            def say(what, n, total):
+                if op is not None:
+                    op.touch("problem set")
+                core.set_activity("working", "Problem set: " + ("done" if what == "done" else (f"{n} of {total}" if total else "reading the files")))      # content-free: no names
+
+            def ask_model(messages, max_tokens):
+                try:
+                    return goal_mod.ask_online(messages, timeout=float((cfg.get("budget") or {}).get("model_call_s") or 150), max_tokens=max_tokens)
+                except goal_mod.GoalError as e:
+                    raise ps.ModelError(str(e)) from None
+
+            def read_screen():
+                try:
+                    return call_on_loop(self._goal_read_window(None, "code"), loop, 120, abort=stopped)
+                except Exception as e:  # noqa: BLE001
+                    return {"ok": False, "error": f"the window could not be read ({type(e).__name__})"}
+
+            def type_in_vscode(code, name, folder):
+                for fn, st in ((open_in_vscode, {"folder": folder}), (type_in_editor, {"app": "vs code", "target": "", "text": code, "new_file": True}),
+                               (save_as, {"app": "vs code", "name": name, "folder": folder, "digest": composite.text_digest(code)})):
+                    r = fn(st)
+                    if not (isinstance(r, dict) and r.get("ok")):
+                        return r if isinstance(r, dict) else {"ok": False, "error": "VS Code did not take the step"}
+                return {"ok": True}
+
+            def open_vs(folder):
+                from pathlib import Path as _P
+                spec, why = ps._vscode_folder(_P(folder))
+                return open_in_vscode({"folder": spec}) if spec else {"ok": False, "error": f"VS Code opens only known folders ({why})"}
+
+            deps = ps.Deps(ask_model=ask_model, release=goal_mod.release_owner_text, runner=chosen.runner, runner_note=chosen.why, read_file=ps.default_read,
+                           ask_owner=owner_ask.ask if owner_ask.available() else None, stop=stopped, progress=say, read_screen=read_screen,
+                           type_in_vscode=type_in_vscode, open_vscode=open_vs, show_summary=lambda md, res: ps.write_preview(md, res), cfg=cfg)
+            return ps.run(str(step.get("job") or ""), deps)
+
+        def webjudge_agent(step):
+            """D77, the web judge: the owner's practice problems on a web page or a set of pages in his own Chrome. The D64 browser engine reads each problem and its sample tests,
+            the code is typed into the page's editor, the page's own Run button is clicked, the verdict is read from the page and Next goes on to the following problem; at the end of
+            the set it stops. The browser is wrapped by webjudge.SubmitGuard: Submit, Finish and anything that grades is NEVER clicked, practice or not. The live-test guard runs
+            before every problem. Every browser action is a kernel job as usual."""
+            from jarvis.plugins._shared import code_runner, owner_ask
+            from . import browser_agent as BA, ppt_flow, webjudge as wj
+            from .browser_backend import GrantsClient, KernelBackend
+            from .browser_planner import LocalPlanner
+            ps = problemset_mod
+            op = coord.current_op()
+            stopped = lambda: bool(abort and abort()) or (op is not None and op.stop_flag.is_set())      # noqa: E731
+            cfg = dict(ps.T.load_config())
+            cfg.setdefault("work_dir", str(ps.DATA / "run"))
+            chosen = code_runner.choose_runner(cfg)
+            budget = ps.budget_from(cfg)
+            profile = alias(step.get("profile", "Default"))
+
+            def say(what, n, total):
+                if op is not None:
+                    op.touch("problem set")
+                core.set_activity("working", "Problem set (web): " + ("done" if what == "done" else (f"problem {n}" if n else "reading the page")))      # content-free: no names
+
+            def ask_model(messages, max_tokens):
+                try:
+                    return goal_mod.ask_online(messages, timeout=float(budget.model_call_s), max_tokens=max_tokens)
+                except goal_mod.GoalError as e:
+                    raise ps.ModelError(str(e)) from None
+
+            def make_agent(hosts):
+                backend = KernelBackend(pc_raw, profile, take_local=core.take_local)
+                guard = wj.SubmitGuard(backend)
+                agent = BA.Agent(guard, goal="solve the owner's practice problems on the page (never Submit)", hosts=hosts, planner=LocalPlanner(), ask=owner_ask.ask,
+                                 journal=jc.record_web_step, stop=stopped, budget=BA.Budget(max_seconds=float(budget.time_s), max_actions=600),
+                                 banners=ppt_flow.load_banners(), grants=GrantsClient(owner=core.owner))
+                return agent, guard
+
+            deps = ps.Deps(ask_model=ask_model, release=goal_mod.release_owner_text, runner=chosen.runner, runner_note=chosen.why, ask_owner=owner_ask.ask if owner_ask.available() else None,
+                           stop=stopped, progress=say, show_summary=lambda md, res: ps.write_preview(md, res), cfg=cfg)
+            return wj.run_web(str(step.get("job") or ""), deps, wj.WebHands(make_agent))
 
         agents = {
             "open_website": lambda s: pc({"op": "browser", "action": "open", "profile": alias(s["profile"]), "url": s["url"]}, 90),
@@ -1486,7 +1609,8 @@ class DesktopPlugin(PluginBase):
             "window": window, "type_text": type_text, "press_key": press_key, "open_file": open_file, "check_pc": check,
             "troubleshoot": troubleshoot, "research": research, "open_output": open_output, "stop": stop,
             "open_in_vscode": open_in_vscode, "type_in_editor": type_in_editor, "save_as": save_as, "drive": drive, "simple_task": simple_task,
-            "web_task": web_task,
+            "web_task": web_task, "task_step": task_step, "vm2_task": vm2_task,
+            "problemset": problemset_agent, "webjudge": webjudge_agent,
         }
         wrapped = AgentSet({k: jc.wrap_agent(k, _with_approval(fn)) for k, fn in agents.items()})       # D61: one journal line per step run
 
@@ -1539,6 +1663,9 @@ class DesktopPlugin(PluginBase):
                                                     source="pc_task")
         if tr_info and tr_info.get("clarify"):
             return Ok(translate.clarification_result(tr_info["clarify"]))
+        door = await DesktopPlugin._problemset_door(self, request)      # D77: a problem set is a mission (it takes minutes and keeps a record), not one PC task
+        if door is not None:
+            return Ok(door)
         rec = await DesktopPlugin._run_task(self, request)         # (not self._run_task: tests and hosts lend a stand-in `self`)
         res = DesktopPlugin._task_result(rec)
         if tr_info and isinstance(getattr(res, "value", None), dict):
@@ -1703,6 +1830,11 @@ class DesktopPlugin(PluginBase):
     )
     @screen_text.cleaned                  # every string in the result is cleaned by default (screen_text.clean_result)
     async def do_goal(self, goal: str = "", answers: dict | None = None, **_):
+        # D75: a plain question ("23 times 47", "15% of 2400", "what is the date after 45 days", "convert 5 km to miles") is ANSWERED, with no app, no plan and no kernel job.
+        # The Calculator opens only when the owner names the app or the screen: direct_answer then says "not mine" and the goal goes on as before.
+        said = quick_mod.direct(goal)
+        if said is not None:
+            return Ok({**quick_mod.result_for(said, None), "seconds": 0.0})
         # D74: ASK, DO NOT GUESS. Plain rules (config/ambiguity.json) run before any plan or action: "notepad or wordpad", "the file from yesterday", "delete that", "close the
         # window", a missing recipient. A request that must be asked about becomes ONE question; the owner's answer is put into the ORIGINAL goal, which then goes on.
         out = await gate_mod.gate_request(goal, lambda need: DesktopPlugin._gate_fetch(self, need), DesktopPlugin._gate_ask(self), answers)
@@ -1720,6 +1852,28 @@ class DesktopPlugin(PluginBase):
         if out.asked:
             res["asked"] = out.asked
         return Ok(res)
+
+    async def _problemset_door(self, goal: str) -> dict | None:
+        """D77: the owner SPECIFICALLY asked to solve the problem statements in a folder (or the one on screen). Nothing here reads a file: it resolves the folder he named
+        (ONE jarvis_ask form when it is missing or too broad), writes the job's parameters, and starts a durable mission whose one step is the `problemset` agent. Returns the
+        goal-shaped answer, or None when this is not such a request."""
+        from jarvis.plugins._shared import owner_ask
+        ps = problemset_mod
+        if ps.parse_request(goal) is None:
+            return None
+        spoken = core.OWNER_UTTERANCE.get() or goal
+        prep = await asyncio.to_thread(ps.prepare, goal, spoken, ask=owner_ask.ask if owner_ask.available() else None)
+        if prep.status == "ready":
+            if not await self._missions_ready():
+                return {"status": "failed", "planned_by": "problem_set", "steps": [], "summary": f"Missions are unavailable right now ({getattr(self, '_missions_note', '')}), so I did not start the problem set."}
+            from . import missions
+            mid = await asyncio.to_thread(missions.start, prep.goal)
+            return {"status": "started", "planned_by": "problem_set", "mission": mid, "steps": [],
+                    "summary": "Started. I read the problem statements in that folder, write one solution file per problem, run each on its sample cases and tell you what passed. "
+                               "Ask me for the mission status any time, or say stop."}
+        if prep.status == "needs_answer":
+            return {"status": "needs_clarification", "planned_by": "problem_set", "steps": [], "question": prep.question, "ask": prep.form, "summary": prep.summary}
+        return {"status": "cancelled" if prep.status == "cancelled" else "failed", "planned_by": "problem_set", "steps": [], "summary": prep.summary or "I did nothing."}
 
     async def _goal_core(self, goal: str) -> dict:
         """The goal as it always ran (translate, the rules-first router, the online plan with local executors); the decider's own 'ask' ends in the same form (D74)."""
@@ -1741,6 +1895,9 @@ class DesktopPlugin(PluginBase):
                 return again.result
             if again.resolved:
                 goal = " and ".join(again.texts)[:1000]
+        door = await DesktopPlugin._problemset_door(self, goal)         # D77: "solve all the problems in <folder>" is a mission with a job record, not an online plan
+        if door is not None:
+            return door
         started = time.monotonic()
         progress = _goal_progress_writer()
         jtok = jc.enter_task(core.OWNER_UTTERANCE.get() or goal)       # D61: the goal is one task in the journal; its steps group under the owner's own words
@@ -1748,8 +1905,14 @@ class DesktopPlugin(PluginBase):
             # D60: one plain command ("open notepad", "pause", "open notepad and write hello") needs no online plan: the rules plan it, the
             # coordinator and the kernel run it exactly as before. Anything else is planned online and run by the local models as before.
             quick = quick_mod.match(goal, core.profiles())
+            task_route = None
+            if quick is None:
+                from . import taskroute
+                task_route = taskroute.route(goal) if taskroute.enabled() else None
             if quick is not None:
                 res = await quick_mod.run(quick, self._goal_pc, progress)
+            elif task_route is not None and task_route["task"] and await self._missions_ready():
+                res = await DesktopPlugin._task_goal(self, goal)          # D76: an open-ended task: a mission of milestones, each verified by its effect
             else:
                 hands = goal_mod.Hands(run_pc=self._goal_pc, call=self._goal_call, readers=dict(self.goal_readers or {}), on_progress=progress,
                                        read_window=getattr(self, "_goal_read_window", None), pick_editor=getattr(self, "_goal_pick_editor", None))      # a host without them never takes the solve path
@@ -1767,6 +1930,42 @@ class DesktopPlugin(PluginBase):
         finally:
             jc.exit_task(jtok)
             core.set_goal_progress("idle")
+
+    async def _task_goal(self, goal: str) -> dict:
+        """D76: run the goal as a mission of kind "task" and wait for it (up to TASK_WAIT_S); a mission that is still working is left running and named, so 'how is it going' and
+        'stop' reach it. The answer is built from what the milestones verified (taskrun.final_text)."""
+        from . import missions
+        mid = await asyncio.to_thread(missions.start, goal, "task")
+        deadline = time.monotonic() + self.TASK_WAIT_S
+        rec = None
+        while time.monotonic() < deadline:
+            rec = await asyncio.to_thread(missions.load, mid)
+            if rec and rec.get("status") not in ("queued", "running"):
+                break
+            await asyncio.sleep(1.0)
+        else:
+            return {"status": "running", "planned_by": "task_mission", "mission": mid, "steps": [],
+                    "summary": "I am still working on it in the background. Ask me how the mission is going, or say stop."}
+        status = {"completed": "completed", "waiting_for_permission": "waiting_for_permission", "needs_clarification": "needs_clarification", "needs_owner": "needs_clarification",
+                  "cancelled": "cancelled"}.get(rec.get("status"), "failed")
+        try:
+            st = taskstate.TaskState()
+            st.d = dict(taskstate.read() or {"v": 1})
+            st.end("done" if status == "completed" else "stopped" if status == "cancelled" else "failed", "done" if status == "completed" else "")
+        except Exception:  # noqa: BLE001
+            pass
+        steps = [{k: s.get(k) for k in ("n", "tool", "passed", "checked", "uncertainty")} for s in rec.get("steps", [])]
+        out = {"status": status, "planned_by": "task_mission", "mission": mid, "summary": screen_text.clean_message(rec.get("explain") or "", 1400), "steps": steps}
+        shown = next((s.get("result", {}).get("shown") for s in reversed(rec.get("steps", [])) if s.get("passed") and (s.get("result") or {}).get("shown")), None)
+        if shown:
+            out["file"] = shown
+        if rec.get("approval_id"):
+            out["approval_id"] = rec["approval_id"]
+        if rec.get("question") or rec.get("error") and rec.get("status") == "needs_owner":
+            out["question"] = rec.get("question") or rec.get("error")
+        return out
+
+    TASK_WAIT_S = 780.0
 
     # ---- D74: the ambiguity gate's two hands (what the request cannot say by itself, and the owner's panel)
     async def _gate_fetch(self, need: set):
@@ -1831,6 +2030,10 @@ class DesktopPlugin(PluginBase):
         said = await asyncio.to_thread(names_mod.quick_answer, text)           # D62: "what names do you know", "forget Priya": a rule; the names never reach a model
         if said is not None:
             return Ok({"handled": True, "status": "completed", "reply": said, "planned_by": "rules", "label": "One moment", "approval_id": None,
+                       "seconds": round(time.monotonic() - started, 2)})
+        asked = quick_mod.direct(text)                                          # D75: maths, conversions, the date and the time are answered before anything else (before the ambiguity rules: a sum is never a question to ask back)
+        if asked is not None:
+            return Ok({"handled": True, "status": "completed", "reply": asked.reply, "planned_by": quick_mod.PLANNED_BY, "label": asked.ack, "approval_id": None,
                        "seconds": round(time.monotonic() - started, 2)})
         # D74: the face asks this first for every command-looking message, BEFORE any chat model: a request that must be asked about ("open notepad or wordpad",
         # "delete that", "close the window") is turned into the question here, whatever the chat model would have done with it. Without the owner's panel (this plugin

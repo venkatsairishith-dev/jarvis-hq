@@ -394,7 +394,7 @@ class Owner:
     def _grant_request_from(self, body):
         from . import sitegrants
         try:
-            return sitegrants.clean_request(body.get("hosts") or body.get("host"), body.get("abilities"), body.get("days"), body.get("note"))
+            return sitegrants.clean_request(body.get("hosts") or body.get("host"), body.get("abilities"), body.get("days"), body.get("note"), body.get("target") or "pc")
         except sitegrants.GrantError as e:
             raise OwnerError(str(e)[:200], 400)
 
@@ -430,7 +430,7 @@ class Owner:
         except sitegrants.GrantError as e:
             raise OwnerError(str(e)[:200], 500)
         self.k.audit.append("owner_site_grant_created", {"hosts": req["hosts"], "abilities": req["abilities"], "days": req["days"], "approval": aid})
-        return {"granted": [{"host": e["host"], "allowed": e["allowed"], "expires": e["expires"]} for e in made]}
+        return {"granted": [{"host": e["host"], "allowed": e["allowed"], "expires": e["expires"], "target": e.get("target", "pc")} for e in made]}
 
     def site_grant_revoke(self, body: dict):
         from . import sitegrants
@@ -711,7 +711,7 @@ class Owner:
         with what it actually observed. Ordinary actions run at once (owner_direct); one that needs the owner's approval
         comes back as {"status": "needs_approval", "approval_id"}: approve it with the PIN, then send the same request again
         with that approval_id (it is bound to exactly this action and used once)."""
-        from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, UNDO_OPS, FILE_OPS, SETTING_OPS, CLIPBOARD_OPS, FILE_TEXT_MAX, action_for
+        from .jobs import JobError, PC_OPS, UI_OPS, BROWSER_OPS, DIAG_OPS, REPAIR_OPS, UNDO_OPS, FILE_OPS, SETTING_OPS, CLIPBOARD_OPS, FILE_TEXT_MAX, CODE_TEXT_MAX, action_for
         from .store import Killed
         holder, dup = self._pc_holder(body.get("holder"))
         if dup is not None:                                           # the same request delivered twice: the job it made, no second one
@@ -751,7 +751,7 @@ class Owner:
                 params["goal"] = s("goal", 1000)
         elif op == "browser" and body.get("action") in BROWSER_OPS:
             kind, params = "browser_ext", {"profile": s("profile", 32).lower() or "default", "op": body["action"], "url": s("url", 2000),
-                                           "target": s("target", 300), "text": s("text", 500)}
+                                           "target": s("target", 300), "text": s("text", CODE_TEXT_MAX if body["action"] == "type" else 500)}
             for k in ("host", "via", "ref", "ctx", "task", "ext"):        # D64: the browser agent's optional fields (jobs._browser_ok checks them)
                 if body.get(k):
                     params[k] = s(k, 600 if k == "ctx" else 80)

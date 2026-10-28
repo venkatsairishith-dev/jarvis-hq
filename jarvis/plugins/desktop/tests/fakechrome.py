@@ -239,6 +239,8 @@ class World:
         self.alerts: list = []
         self.click_log: list = []         # every label clicked, across pages
         self.new_tab_blocked = False
+        self.judge_runs: list = []        # (url, the editor's text, the verdict) for every Run on a fake judge page (D77)
+        self.graded: list = []            # urls where a Submit-like control was activated: must stay EMPTY in every web-judge test
 
     # ---- loading pages ------------------------------------------------------------------------------------------------
     def open(self, url: str, new_tab: bool = False, push: bool = True):
@@ -522,9 +524,36 @@ class World:
                 tab.dialog = arg
             elif cmd == "timeline":
                 tab.timeline_started = tab.tick
+            elif cmd == "judge":             # D77: a fake judge: run the editor's text on the page's tests (data-tests='[[input, expected], ...]') with a real interpreter
+                ed_sel, _, res_sel = arg.partition(",")
+                ed, res = self.find_in(tab, ed_sel), self.find_in(tab, res_sel)
+                main = next((n for n in tab.root.walk() if "data-tests" in n.attrs), None)
+                code = str(tab.values.get(ed.nid, "")) if ed is not None else ""
+                verdict = self.judge_eval(code, json.loads(main.attrs["data-tests"]) if main is not None else [])
+                self.judge_runs.append((tab.url, code, verdict))
+                if res is not None:
+                    tab.texts[res.nid] = verdict
+                    res.children = [verdict]
+            elif cmd == "grade":             # D77: Submit / Finish on a fake judge: the grade is final
+                self.graded.append(tab.url)
             elif cmd == "signin":
                 host = (urllib.parse.urlsplit(tab.url).hostname or "").lower()
                 self.web.signed_in.add(arg)
+
+    def judge_eval(self, code: str, tests: list) -> str:
+        if not code.strip():
+            return "No code to run"
+        from jarvis.plugins._shared import code_runner as cr
+        runs = cr.LocalRunner().execute("python", code, [t[0] for t in tests], cr.Limits(cpu_s=2, wall_s=4, mem_mb=256))
+        passed = 0
+        for i, (t, r) in enumerate(zip(tests, runs), 1):
+            if r.status != cr.OK:
+                return f"Runtime error on sample test {i}"
+            if cr.same_output(r.stdout, t[1]):
+                passed += 1
+            else:
+                return f"Wrong answer on sample test {i}: expected {t[1].strip()}, got {r.stdout.strip()[:40]} ({passed}/{len(tests)} sample tests passed)"
+        return f"Passed {passed}/{len(tests)} sample tests"
 
     def advance(self, tab: Tab) -> None:
         tab.tick += 1

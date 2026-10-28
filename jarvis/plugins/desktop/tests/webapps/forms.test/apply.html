@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><title>Application form</title></head>
+<body>
+
+<main>
+<h1>Application form</h1>
+<form>
+<label for="n">Name</label><input id="n" type="text" name="name">
+<label for="e">Email</label><input id="e" type="text" name="email">
+<label for="c">City</label><input id="c" type="text" name="city">
+<label for="m">Message</label><textarea id="m" name="message"></textarea>
+<label><input id="t" type="checkbox" aria-label="I agree to the terms"> I agree to the terms</label>
+<button type="button" data-on-click="text:#status=Application submitted">Submit application</button>
+</form>
+<p id="status">Not submitted</p>
+</main>
+</body></html>

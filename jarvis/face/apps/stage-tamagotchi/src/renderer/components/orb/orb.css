@@ -1,0 +1,562 @@
+/*
+ * The orb and the minimal bar (D78). Local only: system and bundled fonts, no images, no filters, no external anything, no WebGL.
+ *
+ * Rules the file keeps:
+ * - every animation moves transform and opacity only, on a few small shapes: the compositor draws them, no script runs per frame;
+ * - the idle breathing is a 2 Hz timer, not an animation, so a window that is only waiting for the owner redraws twice a second;
+ * - prefers-reduced-motion stops all of it, and every state still differs by shape and colour (see the end of the file);
+ * - the colour follows the theme hue token (--chromatic-hue), like the rest of the face;
+ * - text sits on its own glass, so it reads on any desktop; Telugu and Hindi use the D72 font stack with line height 1.5.
+ */
+
+.orb-root {
+  --orb-hue: var(--chromatic-hue, 220);
+  --orb-main: oklch(0.76 0.13 var(--orb-hue));
+  --orb-main-deep: oklch(0.5 0.16 var(--orb-hue));
+  --orb-listen: oklch(0.84 0.14 165);
+  --orb-think: oklch(0.8 0.1 var(--orb-hue));
+  --orb-speak: oklch(0.92 0.06 var(--orb-hue));
+  --orb-amber: oklch(0.82 0.16 75);
+  --orb-red: oklch(0.68 0.17 25);
+  --orb-accent: var(--orb-main);
+  --orb-glass: rgb(10 17 29 / 0.94);
+  --orb-glass-edge: rgb(150 195 235 / 0.3);
+  --orb-text: #e9f3fb;
+  --orb-dim: #b4c7d6;
+  --orb-hover: rgb(150 195 235 / 0.16);
+  --orb-focus: #fff;
+  --orb-focus-outer: rgb(0 0 0 / 0.65);
+  --orb-font: var(--jarvis-font, 'DM Sans Variable', 'DM Sans', 'Noto Sans Telugu', 'Noto Sans Devanagari', 'Nirmala UI', system-ui, sans-serif);
+  --orb-scale: 1;
+
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  user-select: none;
+  color: var(--orb-text);
+  font-family: var(--orb-font);
+}
+
+:root:not(.dark) .orb-root {
+  --orb-main: oklch(0.6 0.15 var(--orb-hue));
+  --orb-main-deep: oklch(0.42 0.16 var(--orb-hue));
+  --orb-listen: oklch(0.6 0.14 165);
+  --orb-think: oklch(0.58 0.12 var(--orb-hue));
+  --orb-speak: oklch(0.5 0.12 var(--orb-hue));
+  --orb-amber: oklch(0.7 0.17 70);
+  --orb-red: oklch(0.58 0.2 25);
+  --orb-glass: rgb(255 255 255 / 0.95);
+  --orb-glass-edge: rgb(20 40 70 / 0.22);
+  --orb-text: #14202c;
+  --orb-dim: #44586a;
+  --orb-hover: rgb(20 40 70 / 0.08);
+  --orb-focus: #0b3d91;
+  --orb-focus-outer: rgb(255 255 255 / 0.9);
+}
+
+.orb-zone[data-state='listening'],
+.bar[data-state='listening'] { --orb-accent: var(--orb-listen); }
+.orb-zone[data-state='thinking'],
+.bar[data-state='thinking'] { --orb-accent: var(--orb-think); }
+.orb-zone[data-state='speaking'],
+.bar[data-state='speaking'] { --orb-accent: var(--orb-speak); }
+.orb-zone[data-state='working'],
+.bar[data-state='working'] { --orb-accent: var(--orb-amber); }
+.orb-zone[data-state='needs-you'],
+.bar[data-state='needs-you'] { --orb-accent: var(--orb-amber); }
+.orb-zone[data-state='error'],
+.bar[data-state='error'] { --orb-accent: var(--orb-red); }
+
+.orb-root *,
+.orb-root *::before,
+.orb-root *::after {
+  box-sizing: border-box;
+}
+
+.orb-hit {
+  pointer-events: auto;
+}
+
+/* ---- the orb ---- */
+
+.orb-zone {
+  position: absolute;
+  width: var(--orb-zone);
+  height: var(--orb-zone);
+  display: grid;
+  place-items: center;
+}
+.orb-s-S { --orb-zone: 96px; --orb-disc: 64px; }
+.orb-s-M { --orb-zone: 128px; --orb-disc: 88px; }
+.orb-s-L { --orb-zone: 176px; --orb-disc: 120px; }
+
+.orb-zone > * {
+  grid-area: 1 / 1;
+}
+
+.orb-glow {
+  width: var(--orb-zone);
+  height: var(--orb-zone);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--orb-accent) 55%, transparent) 0%, color-mix(in srgb, var(--orb-accent) 18%, transparent) 46%, transparent 70%);
+  /* the idle breathing is set by a 2 Hz timer (OrbView): --orb-breath goes 0 to 1; without it the glow rests in the middle */
+  opacity: calc(0.5 + 0.35 * var(--orb-breath, 0.5));
+  transform: scale(calc(0.96 + 0.11 * var(--orb-breath, 0.5)));
+}
+
+.orb-ring,
+.orb-level,
+.orb-attention {
+  width: calc(var(--orb-disc) + 14px);
+  height: calc(var(--orb-disc) + 14px);
+  border-radius: 50%;
+  border: 2px solid var(--orb-accent);
+  opacity: 0;
+}
+
+.orb-level {
+  transform: scale(var(--orb-scale));
+  transition: transform 70ms linear;
+}
+.orb-zone[data-state='listening'] .orb-level,
+.orb-zone[data-state='speaking'] .orb-level {
+  opacity: 0.55;
+}
+.orb-zone[data-state='listening'] .orb-ring {
+  opacity: 0.8;
+  animation: orb-pulse 1.4s ease-out infinite;
+}
+.orb-zone[data-state='speaking'] .orb-ring {
+  opacity: 0.6;
+  border-width: 3px;
+  animation: orb-pulse 1.1s ease-out infinite;
+}
+.orb-zone[data-state='needs-you'] .orb-attention {
+  opacity: 1;
+  border-width: 4px;
+  animation: orb-attention 1.8s ease-in-out infinite;
+}
+.orb-zone[data-state='error'] .orb-ring {
+  opacity: 0.85;
+  border-style: dashed;
+}
+
+/* the thin progress arc of a task */
+.orb-arc {
+  width: calc(var(--orb-disc) + 22px);
+  height: calc(var(--orb-disc) + 22px);
+  overflow: visible;
+  opacity: 0;
+  transform: rotate(-90deg);
+}
+.orb-zone[data-state='working'] .orb-arc {
+  opacity: 1;
+}
+.orb-arc-track,
+.orb-arc-bar {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.orb-arc-track {
+  stroke: color-mix(in srgb, var(--orb-amber) 28%, transparent);
+}
+.orb-arc-bar {
+  stroke: var(--orb-amber);
+  transition: stroke-dashoffset 0.6s ease;
+}
+.orb-zone[data-state='working'] .orb-arc[data-indeterminate='true'] {
+  animation: orb-arc-spin 2.6s linear infinite;
+}
+
+/* the disc */
+.orb-disc {
+  position: relative;
+  width: var(--orb-disc);
+  height: var(--orb-disc);
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--orb-accent) 55%, white);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, color-mix(in srgb, white 70%, var(--orb-accent)) 0%, var(--orb-accent) 38%, color-mix(in srgb, var(--orb-accent) 55%, black) 100%);
+  box-shadow: 0 0 calc(var(--orb-disc) * 0.3) color-mix(in srgb, var(--orb-accent) 55%, transparent), inset 0 -6px 14px rgb(0 0 0 / 0.28);
+  cursor: pointer;
+  color: inherit;
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+.orb-disc:hover {
+  filter: none;
+  box-shadow: 0 0 calc(var(--orb-disc) * 0.4) color-mix(in srgb, var(--orb-accent) 75%, transparent), inset 0 -6px 14px rgb(0 0 0 / 0.28);
+}
+.orb-disc:focus-visible,
+.bar-mic:focus-visible,
+.orb-menu-item:focus-visible,
+.bar:focus-visible {
+  outline: 2px solid var(--orb-focus);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--orb-focus-outer);
+}
+
+.orb-swirl {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0;
+  background: conic-gradient(from 0deg, transparent 0 40%, color-mix(in srgb, white 75%, var(--orb-accent)) 62%, transparent 82%);
+}
+.orb-zone[data-state='thinking'] .orb-swirl {
+  opacity: 0.85;
+  animation: orb-spin 5.5s linear infinite;
+}
+.orb-shine {
+  position: absolute;
+  top: 12%;
+  left: 20%;
+  width: 34%;
+  height: 22%;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.4);
+  transform: rotate(-24deg);
+}
+
+.orb-zone[data-state='error'] .orb-disc {
+  background: radial-gradient(circle at 34% 28%, color-mix(in srgb, white 55%, var(--orb-red)) 0%, var(--orb-red) 40%, color-mix(in srgb, var(--orb-red) 55%, black) 100%);
+}
+.orb-zone[data-state='error'] .orb-glow {
+  opacity: 0.4;
+  transform: scale(1);
+}
+
+/* the one quiet pulse after a long hide, and the count of what waited */
+.orb-forgotten {
+  width: var(--orb-zone);
+  height: var(--orb-zone);
+  border-radius: 50%;
+  border: 2px solid var(--orb-main);
+  opacity: 0;
+  animation: orb-forgotten 2.4s ease-out 1 both;
+}
+.orb-badge {
+  position: absolute;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--orb-glass);
+  border: 1px solid var(--orb-glass-edge);
+  color: var(--orb-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* ---- the pill: what JARVIS is doing ---- */
+
+.orb-pill {
+  position: absolute;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  padding: 6px 12px;
+  border: 1px solid var(--orb-glass-edge);
+  border-radius: 14px;
+  background: var(--orb-glass);
+  color: var(--orb-text);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* ---- the minimal bar ---- */
+
+.bar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--orb-glass-edge);
+  border-radius: 999px;
+  background: var(--orb-glass);
+  color: var(--orb-text);
+  cursor: default;
+}
+.bar-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--orb-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--orb-accent) 70%, transparent);
+}
+.bar[data-state='listening'] .bar-dot,
+.bar[data-state='speaking'] .bar-dot,
+.bar[data-state='thinking'] .bar-dot,
+.bar[data-state='working'] .bar-dot,
+.bar[data-state='needs-you'] .bar-dot {
+  animation: orb-dot-fast 1.2s ease-in-out infinite;
+}
+.bar[data-state='error'] .bar-dot {
+  animation: none;
+}
+.bar-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.bar-mic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border: 1px solid var(--orb-glass-edge);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--orb-accent) 28%, transparent);
+  color: var(--orb-text);
+  cursor: pointer;
+}
+.bar-mic:hover {
+  background: color-mix(in srgb, var(--orb-accent) 45%, transparent);
+}
+.bar[data-state='listening'] .bar-mic {
+  background: color-mix(in srgb, var(--orb-accent) 60%, transparent);
+  box-shadow: 0 0 0 calc((var(--orb-scale) - 1) * 18px) color-mix(in srgb, var(--orb-accent) 40%, transparent);
+}
+.bar-mic svg {
+  width: 16px;
+  height: 16px;
+}
+.bar-size-S { width: 300px; height: 36px; }
+.bar-size-M { width: 380px; height: 44px; }
+.bar-size-L { width: 480px; height: 56px; }
+.bar-size-L .bar-text { font-size: 15px; }
+.bar-size-L .bar-mic { width: 40px; height: 40px; }
+
+/* ---- the menu ---- */
+
+.orb-menu {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--orb-glass-edge);
+  border-radius: 14px;
+  background: var(--orb-glass);
+  color: var(--orb-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.orb-menu-head {
+  padding: 4px 10px 2px;
+  color: var(--orb-dim);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.orb-menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--orb-glass-edge);
+}
+.orb-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.orb-menu-item:hover {
+  background: var(--orb-hover);
+}
+.orb-menu-item[aria-checked='true']::before,
+.orb-menu-item[aria-pressed='true']::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--orb-main);
+}
+.orb-menu-item:not([aria-checked='true']):not([aria-pressed='true'])[role='menuitemradio']::before,
+.orb-menu-item:not([aria-checked='true'])[role='menuitemcheckbox']::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--orb-dim);
+}
+.orb-menu-key {
+  margin-left: auto;
+  color: var(--orb-dim);
+  font-size: 11px;
+}
+.orb-menu-sizes {
+  display: flex;
+  gap: 4px;
+  padding: 2px 4px;
+}
+.orb-menu-sizes .orb-menu-item {
+  justify-content: center;
+  padding: 4px 0;
+}
+.orb-menu-sizes .orb-menu-item::before {
+  display: none !important;
+}
+.orb-menu-sizes .orb-menu-item[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--orb-main) 35%, transparent);
+  font-weight: 600;
+}
+
+/* ---- the panels beside the orb (ask, timeline, preview) ---- */
+
+html[data-jarvis-zone] .ask,
+html[data-jarvis-zone] .tl,
+html[data-jarvis-zone] .pv {
+  top: var(--orb-card-y, 12px);
+  left: var(--orb-card-x, 12px);
+  right: auto;
+  bottom: auto;
+  width: var(--orb-card-w, 460px);
+  height: var(--orb-card-h, 560px);
+  max-height: none;
+}
+/* until the main process has made room for them, they stay invisible (the window is only the orb) */
+html[data-jarvis-zone]:not([data-jarvis-card-ready]) .ask,
+html[data-jarvis-zone]:not([data-jarvis-card-ready]) .tl,
+html[data-jarvis-zone]:not([data-jarvis-card-ready]) .pv {
+  visibility: hidden;
+}
+/* the orb's window has its own size: no resize handles at its edges, no preview launcher, no toasts (errors show as the orb's red state) */
+html[data-jarvis-zone] .pv-launch,
+html[data-jarvis-zone] .resize-handles,
+html[data-jarvis-zone] [data-sonner-toaster] {
+  display: none !important;
+}
+html[data-jarvis-zone],
+html[data-jarvis-zone] body {
+  background: transparent !important;
+  overflow: hidden;
+}
+
+/* ---- motion ---- */
+
+@keyframes orb-pulse {
+  0% { transform: scale(1); opacity: 0.85; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+@keyframes orb-attention {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+@keyframes orb-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes orb-arc-spin {
+  from { transform: rotate(-90deg); }
+  to { transform: rotate(270deg); }
+}
+@keyframes orb-forgotten {
+  0% { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes orb-dot-fast {
+  0%, 100% { opacity: 0.55; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+/*
+ * Reduced motion: nothing moves. The states stay apart by shape and colour:
+ * listening a solid ring, speaking a thick ring, thinking a quarter-bright swirl, working a progress arc, needs-you a thick amber ring,
+ * error a dashed red ring.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .orb-root *,
+  .orb-root *::before,
+  .orb-root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .orb-zone[data-state='listening'] .orb-ring { opacity: 0.9; transform: scale(1.12); }
+  .orb-zone[data-state='speaking'] .orb-ring { opacity: 0.9; transform: scale(1.12); }
+  .orb-zone[data-state='thinking'] .orb-swirl { transform: rotate(40deg); }
+  .orb-forgotten { opacity: 0.6; transform: scale(1.1); }
+}
+
+/*
+ * Windows high contrast (forced colors): the system draws the colours, so the orb is told to use them. The states stay apart by shape:
+ * a ring for listening and speaking, a dashed ring for an error, an arc for work, a thick ring for the owner's turn.
+ */
+@media (forced-colors: active) {
+  .orb-disc {
+    border: 2px solid CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+  .orb-glow,
+  .orb-shine,
+  .orb-swirl {
+    display: none;
+  }
+  .orb-ring,
+  .orb-level,
+  .orb-attention,
+  .orb-forgotten {
+    border-color: Highlight;
+  }
+  .orb-arc-bar,
+  .orb-arc-track {
+    stroke: Highlight;
+  }
+  .orb-pill,
+  .orb-menu,
+  .bar,
+  .orb-badge,
+  .bar-mic {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .bar-dot {
+    background: Highlight;
+    box-shadow: none;
+  }
+  .orb-menu-item:hover,
+  .orb-menu-sizes .orb-menu-item[aria-pressed='true'] {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .orb-disc:focus-visible,
+  .bar-mic:focus-visible,
+  .orb-menu-item:focus-visible,
+  .bar:focus-visible {
+    outline: 3px solid Highlight;
+    box-shadow: none;
+  }
+}

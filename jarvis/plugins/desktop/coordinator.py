@@ -41,17 +41,19 @@ AGENT = {"open_website": "browser", "play_media": "browser", "browser": "browser
          "type_text": "desktop", "press_key": "desktop", "open_file": "desktop", "check_pc": "desktop",
          "troubleshoot": "troubleshooter", "research": "research", "open_output": "desktop", "stop": "coordinator",
          "open_in_vscode": "desktop", "type_in_editor": "desktop", "save_as": "desktop", "drive": "desktop", "simple_task": "desktop",      # D54
-         "web_task": "desktop"}                                                                                           # D64: a deck on a free web generator
+         "web_task": "desktop", "task_step": "desktop", "vm2_task": "desktop",                  # D64: a deck on a free web generator; D76: a milestone of an open-ended task; D79: a VM2 task
+         "problemset": "desktop", "webjudge": "browser"}                                        # D77: the owner's problem statements, solved and run on their sample cases
 TRANSIENT = re.compile(r"(?i)timeout|timed out|connection failed|not answering|temporarily|busy")
 # Steps that change nothing when run twice (open, focus, read, check). Typing, keys, clicks, playing, repairs and
 # research are not: a failure reported as a timeout may come after they already acted, so they are never re-run blindly.
-REPEAT_SAFE = {"open_website", "open_app", "window", "check_pc", "open_file"}
+# D77: "problemset" is repeat-safe: its job record skips every problem already done, and it only creates files (never overwrites), so a second run continues, never repeats.
+REPEAT_SAFE = {"open_website", "open_app", "window", "check_pc", "open_file", "problemset", "webjudge"}
 REPEAT_SAFE_BROWSER = {"read", "find", "tabs", "whoami"}
 
 
 def repeat_safe(step: dict) -> bool:
     t = step.get("tool")
-    return t in REPEAT_SAFE or (t == "browser" and step.get("action") in REPEAT_SAFE_BROWSER)
+    return t in REPEAT_SAFE or (t == "browser" and step.get("action") in REPEAT_SAFE_BROWSER) or (t == "task_step" and bool(step.get("repeat_safe")))     # D76: a milestone that only reads, searches, opens or downloads into quarantine
 
 
 class Busy(Exception):
@@ -1432,6 +1434,9 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
     t = step["tool"]
     if r.get("state") in ("waiting_for_permission", "denied"):
         return False, f"held for the owner ({r.get('state')})", ""
+    if t == "task_step":                                   # D76: a milestone of an open-ended task; it passes only on what its executor VERIFIED by effect
+        from . import taskrun
+        return taskrun.verify_step(step, r)
     if r.get("ok") is not True:                         # only boolean True: {"ok": "false"} is not success
         return False, "the action did not succeed", str(r.get("error") or r.get("state") or "")[:200]
     if t == "open_website":
@@ -1478,6 +1483,15 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
         if not facts:
             return True, "the steps were sent", unobserved(loose or "nothing about their effect could be checked on the PC")
         return True, facts, unobserved(loose) if loose else ""
+    if t in ("problemset", "webjudge"):                    # D77: passes on files that were really written; solved = ran on the sample cases; the rest is said
+        if r.get("stopped"):
+            return False, "stopped by the owner", str(r.get("summary") or "")[:200]
+        files, st, typed = r.get("files") or [], r.get("status"), int(r.get("typed") or 0)        # (the web judge's work is code typed into the page's editor, not files)
+        if not files and not typed and st != "held":
+            return False, "no solution file was written", str(r.get("summary") or r.get("error") or "")[:240]
+        said = "; ".join(str(x) for x in (r.get("facts") or []) + (r.get("unverified") or []))
+        note = [str(r.get("summary") or "")] if st in ("partial", "held") else []
+        return True, (said or str(r.get("summary") or "problems written"))[:400], "; ".join(note + [f"{len(r.get('skipped') or [])} file(s) or page(s) not read"] * bool(r.get("skipped")))[:300]
     if t == "web_task":                                    # D64: passes only on a deck file that arrived in quarantine AND was read (type, size, slide or page count)
         facts = "; ".join(str(x) for x in r.get("facts") or [])
         if r.get("stopped"):
@@ -1488,6 +1502,13 @@ def verify(step: dict, result: dict) -> tuple[bool, str, str]:
         if step.get("open_after") and not r.get("opened_verified"):
             return True, facts, "the deck was made, but no window showing it was seen" + (f" ({r.get('open_note')})" if r.get("open_note") else "")
         return True, facts, ""
+    if t == "vm2_task":                                    # D79: passes only when the lab agent finished and the quarantine was looked at; a wall left for the owner is a pause, not a pass
+        if r.get("stopped"):
+            return False, "stopped by the owner", str(r.get("error") or "")[:200]
+        if not r.get("ok") or not r.get("facts"):
+            who = r.get("needs_owner") or {}
+            return False, "the VM2 task did not finish", str(who.get("detail") or r.get("error") or r.get("summary") or "")[:240]
+        return True, "; ".join(str(x) for x in r.get("facts") or []), ""
     if t == "drive":                                       # D54: an observe - decide - act loop; it passes on what was VERIFIED, never on the model's "done"
         facts = "; ".join(str(x) for x in r.get("facts") or [])
         loose = "; ".join(str(x) for x in r.get("unverified") or [])

@@ -16,6 +16,8 @@ export function createOnboardingService(params: {
   context: ReturnType<typeof createContext>['context']
   onboardingWindowManager: OnboardingWindowManager
   mainWindow: BrowserWindow
+  /** D78: true while the orb or the bar is shown. Its window is placed by the look controller, so the onboarding must not move it beside itself. */
+  keepMainWindowInPlace?: () => boolean
 }) {
   const mainWindowAnimator = new Animator(params.mainWindow)
   let cleanupOnClosed: (() => void) | undefined
@@ -24,6 +26,8 @@ export function createOnboardingService(params: {
     const savedBounds = params.mainWindow.getBounds()
 
     const onboardingWindow = await params.onboardingWindowManager.getAndToggleWindow()
+    if (params.keepMainWindowInPlace?.())
+      return
     const onboardingBounds = onboardingWindow.getBounds()
     const display = screen.getDisplayMatching(onboardingBounds)
 

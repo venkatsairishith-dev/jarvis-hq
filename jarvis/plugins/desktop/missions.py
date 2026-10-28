@@ -23,6 +23,10 @@ still a JARVIS kernel job that the kernel alone permits.
   the owner gave is handed to exactly the job it was asked for.
 - A research step that made its file but whose window was not seen is not run again: the file is opened (open_output).
 - A step that can take long (research, troubleshoot) is not started when the time budget left cannot cover it.
+2026-10-27 (D76, the open-ended task path): a mission may be of kind "task" (start(goal, kind="task")): its planner is `E.task_plan_fn` (taskrun.mission_plan: the online
+  model plans milestones, the rules when it is down), its steps are `task_step` milestones, it is re-planned ONCE (not twice) after a failed milestone, a result that says
+  `stop_task` (the task's hard budget is used up) ends it as "stopped" with what it has instead of re-planning, and its explanation is the verified-facts answer
+  (taskrun.final_text). Everything else (the effects journal, the PC lock, Stop, resume, the loop check) is unchanged.
 """
 from __future__ import annotations
 
@@ -63,7 +67,10 @@ class _Engine:
     agents: dict[str, Callable[[dict], dict]] = {}
     # (goal, context) -> steps, or a decide.Plan (status ok|clarify|fallback, steps, question, problems); context empty = first plan
     plan_fn: Callable[[str, str], object] | None = None
+    task_plan_fn: Callable[[str, str], object] | None = None          # D76: the planner of a mission of kind "task" (taskrun.mission_plan)
     on_cancel: Callable[[], None] = staticmethod(lambda: None)        # stop the PC job that is running right now
+    # D79: a mission paused for a takeover is continued: hand the screen back first (VM2: "continue task"). Called with the takeover record.
+    on_takeover_resume: Callable[[dict], None] = staticmethod(lambda rec: None)
     db_path: Path = MISSIONS_DIR / "missions.sqlite"
     clock: Callable[[], float] = staticmethod(time.time)
     budget_s: float = BUDGET_S
@@ -120,10 +127,22 @@ def _sig(step: dict) -> str:
     return hashlib.sha256(json.dumps(args, sort_keys=True, default=str).encode()).hexdigest()[:20]
 
 
+def current_mission() -> str:
+    """The id of the mission whose step runs on this thread ('' outside a step): the task executor keeps its board under it."""
+    return str(getattr(_tls, "mid", None) or "")
+
+
 def cancel_requested() -> bool:
     """For an agent waiting on something long (a research call): has the owner stopped the mission running this step?"""
     mid = getattr(_tls, "mid", None)
     return bool(mid) and _cancelled(mid)
+
+
+def takeover_of(res: dict) -> dict | None:
+    """D79: the durable takeover pause a step reports ({id, target, kind, host, milestones ...}), or None. A web step that met a wall the owner did not clear in time
+    returns it as `takeover` (or inside `needs_owner`); it is a pause for the owner, not a failure and never a reason to re-plan."""
+    t = (res.get("takeover") or (res.get("needs_owner") or {}).get("takeover")) if isinstance(res, dict) else None
+    return t if isinstance(t, dict) and t.get("id") else None
 
 
 def _classify(res: dict) -> dict:
@@ -158,6 +177,9 @@ def _now() -> float:
 
 @DBOS.step()
 def _plan(goal: str, context: str) -> dict:
+    wf = getattr(_tls, "wf", None)
+    if wf and E.task_plan_fn is not None and (load(wf) or {}).get("kind") == "task":
+        return _as_plan(E.task_plan_fn(goal, context))
     return _as_plan(E.plan_fn(goal, context) if E.plan_fn else [])
 
 
@@ -202,6 +224,8 @@ def _act(mid: str, step: dict, occurrence: int) -> dict:
         return {"ok": False, "interrupted": True, "effect": key,
                 "error": f"the {step['tool']} step got no confirmed result ({str(res.get('error') or 'unknown')[:120]}) and may already "
                          "have acted; not repeated so nothing happens twice. Check it and tell me to continue."}
+    if res.get("interrupted") and not res.get("effect"):            # D76: a step that needs the owner (a wall, a card) is continued with 'done' or 'redo' on this effect
+        res = dict(res, effect=key)
     _q("update effects set state=?, result=?, at=? where key=?", ("done", json.dumps(res, default=str), E.clock(), key))
     return res
 
@@ -238,6 +262,7 @@ def _replan_context(rec: dict, step: dict, why: str) -> str:
 @DBOS.workflow()
 def run_mission(mid: str, goal: str, resume: bool = False) -> dict:
     started = _now()
+    _tls.wf = mid
     if resume:
         return _resumed(mid, goal, started)
     try:
@@ -249,6 +274,9 @@ def run_mission(mid: str, goal: str, resume: bool = False) -> dict:
         _save(mid, **rec)
         return rec
     rec = {"id": mid, "goal": goal, "status": "running", "started": started, "plans": [plan["steps"]], "steps": [], "replans": 0}
+    kind = (load(mid) or {}).get("kind")
+    if kind:
+        rec["kind"] = kind                                      # D76: the kind the mission was started with stays on its record
     _save(mid, **rec)
     stop = _plan_stop(rec, plan, steps_so_far=[], seen={}, history=[])
     if stop:
@@ -308,6 +336,12 @@ def _resumed(mid: str, goal: str, started: float) -> dict:
         steps = steps[:i] + plan["steps"]
     elif r.get("approval") and i < len(steps):     # hand the owner's approval to exactly the job it was asked for
         steps[i] = dict(steps[i], _approval=r["approval"])
+    elif r.get("kind") == "takeover" and i < len(steps):    # D79: the screen goes back first, then the step continues from its last verified milestone
+        try:
+            E.on_takeover_resume(r.get("takeover") or {})
+        except Exception:  # noqa: BLE001 - the step looks again and asks again if the wall is still there
+            pass
+        steps[i] = dict(steps[i], _takeover=r.get("takeover") or {})
     _save(mid, **rec)
     return _drive(mid, goal, rec, steps, i, seen, history, started)
 
@@ -379,9 +413,19 @@ def _drive(mid: str, goal: str, rec: dict, steps: list, i: int, seen: dict, hist
                     rec["resume"] = {"kind": "interrupted", "cursor": i, "steps": steps, "seen": seen_before,
                                      "history": history[:-1], "effect": res.get("effect")}
                 break
+            tk = takeover_of(res)
+            if tk and not passed:                       # D79: the owner is needed at a screen (CAPTCHA, login, code): paused durably, continued with the same id
+                entry["held"] = True
+                where = "the VM2 desktop" if tk.get("target") == "vm2" else "your screen"
+                rec.update(status="needs_owner", error=f"waiting for you at {where}: a {str(tk.get('kind') or 'step').replace('_', ' ')} on {tk.get('host') or 'the site'}",
+                           resume={"kind": "takeover", "cursor": i, "steps": steps, "seen": seen_before, "history": history[:-1], "takeover": tk})
+                break
             if res.get("refused"):                      # the kernel refused: final, never re-planned (audit PC-D9)
                 rec.update(status="refused", error=f"the JARVIS kernel refused the {step['tool']} step: {str(res.get('error'))[:200]}. "
                                                    "Not re-planned: a refusal is final, not a reason to try another way")
+                break
+            if res.get("stop_task"):                    # D76: the task's hard budget is used up: report what it has, never loop or re-plan
+                rec.update(status="stopped", error=f"the task's budget ran out: {str(res.get('detail') or res.get('reason') or '')[:160]}")
                 break
             if res.get("unavailable"):                  # it could not run at all: another plan cannot fix that
                 rec.update(status="failed", error=f"the {step['tool']} step could not run: {str(res['unavailable'])[:200]}. "
@@ -404,8 +448,9 @@ def _drive(mid: str, goal: str, rec: dict, steps: list, i: int, seen: dict, hist
                 rec["plans"].append(steps[i + 1:])
                 i += 1
                 continue
-            if rec["replans"] >= MAX_REPLANS:
-                rec.update(status="failed", error=f"step {step['tool']} failed after {MAX_REPLANS} re-plans: {unc or checked}"[:300])
+            max_replans = 1 if rec.get("kind") == "task" else MAX_REPLANS         # D76: a task is re-planned once, then reported honestly
+            if rec["replans"] >= max_replans:
+                rec.update(status="failed", error=f"step {step['tool']} failed after {max_replans} re-plan(s): {unc or checked}"[:300])
                 break
             rec["replans"] += 1
             ctx = _replan_context(rec, step, unc or checked)
@@ -439,6 +484,9 @@ def _drive(mid: str, goal: str, rec: dict, steps: list, i: int, seen: dict, hist
 
 def explain(rec: dict) -> str:
     """The owner's answer: what was done and checked, and what the research found (from its summary, not invented)."""
+    if rec.get("kind") == "task":                                  # D76: only the facts the milestones verified, and what was not done
+        from . import taskrun
+        return taskrun.final_text(rec)
     steps = [s for s in rec.get("steps", []) if not s.get("held")]     # a step held for the owner is not a failed step
     done = [s for s in steps if s.get("passed")]
     guess = [s for s in done if coord.UNOBSERVED in str(s.get("uncertainty") or "")]
@@ -448,6 +496,8 @@ def explain(rec: dict) -> str:
         r = s.get("result") or {}
         if s["tool"] == "research" and r.get("summary"):
             parts.append("Findings: " + str(r["summary"])[:600])
+        if s["tool"] == "problemset" and r.get("summary"):                 # D77: the table's one-line summary (sample cases only), the folder the files are in
+            parts.append(str(r["summary"])[:600] + (f" Solutions folder: {r['out']}" if r.get("out") else ""))
         if r.get("path") or r.get("file"):
             parts.append(f"File: {r.get('path') or r.get('file')}")
     unsure = [f"step {s.get('n')} ({s['tool']}): {s['uncertainty']}" for s in done if s.get("uncertainty")]
@@ -460,6 +510,8 @@ def explain(rec: dict) -> str:
                      "not repeated")
     elif rec.get("status") == "needs_clarification":
         parts.append(f"Not finished: I need to know: {rec.get('question')} Answer it and I continue the mission ({mid})")
+    elif rec.get("status") == "needs_owner" and (rec.get("resume") or {}).get("kind") == "takeover":
+        parts.append(f"Not finished: {rec.get('error')}. Do that step, then tell me to continue the mission ({mid}): the steps already verified are not repeated")
     elif rec.get("status") == "needs_owner":
         parts.append(f"Not finished: {rec.get('error')} Tell me 'done' if it already happened (I skip it) or 'redo' if it did "
                      f"not (I do it now), and I continue the mission ({mid})")
@@ -469,10 +521,10 @@ def explain(rec: dict) -> str:
 
 
 # ---------------------------------------------------------------- control
-def start(goal: str) -> str:
+def start(goal: str, kind: str = "") -> str:
     mid = time.strftime("m%Y%m%d-%H%M%S-") + secrets.token_hex(3)
     _q("insert into missions (id, goal, status, created, updated, record) values (?,?,?,?,?,?)",
-       (mid, goal, "queued", E.clock(), E.clock(), json.dumps({"id": mid, "goal": goal, "status": "queued"})))
+       (mid, goal, "queued", E.clock(), E.clock(), json.dumps({"id": mid, "goal": goal, "status": "queued", **({"kind": kind} if kind else {})})))
     with SetWorkflowID(mid):
         DBOS.start_workflow(run_mission, mid, goal)
     return mid
@@ -491,12 +543,13 @@ def resume(mid: str, answer: str = "") -> dict:
                 "error": f"the mission is {st}: only a mission waiting for your approval, an answer or a check can continue"}
     if st == "needs_clarification" and not answer:
         return {"ok": False, "mission": mid, "status": st, "error": f"answer the question first: {rec.get('question')}"}
-    if st == "needs_owner" and answer.lower() not in ("done", "redo"):
+    takeover = st == "needs_owner" and (rec.get("resume") or {}).get("kind") == "takeover"
+    if st == "needs_owner" and not takeover and answer.lower() not in ("done", "redo"):
         return {"ok": False, "mission": mid, "status": st, "error": "say whether the interrupted step already happened: 'done' "
                 "(it did: skip it) or 'redo' (it did not: do it now)"}
     if not _cas(mid, st, "queued"):
         return {"ok": False, "mission": mid, "error": "the mission changed meanwhile (already continuing or stopped)"}
-    if st == "needs_owner":
+    if st == "needs_owner" and not takeover:
         key = rec["resume"].get("effect") or ""
         if answer.lower() == "done":                 # the owner checked: it happened. Recorded so it is never done again
             _q("update effects set state='done', result=?, at=? where key=?",

@@ -2,6 +2,8 @@ import type { Session } from 'electron'
 
 import { env } from 'node:process'
 
+import { isViewerTarget, urlPort } from './vm2-viewer'
+
 /**
  * The face may reach this PC and the owner's tailnet, and nothing else.
  *
@@ -78,7 +80,8 @@ export function isAllowedUrl(url: string, allowHosts: string[] = parseAllowHosts
   }
   if (!NETWORK_SCHEMES.has(parsed.protocol))
     return true
-  return isAllowedHost(parsed.hostname, allowHosts)
+  // D79: VM2's takeover viewer, the one exact host:port in config/vm2.json (only when that file is there, enabled and valid)
+  return isAllowedHost(parsed.hostname, allowHosts) || isViewerTarget(parsed.hostname, urlPort(parsed))
 }
 
 function urlOf(input: unknown): string {

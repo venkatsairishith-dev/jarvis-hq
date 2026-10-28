@@ -300,3 +300,17 @@ def test_a_title_has_no_direction_override_zero_width_or_control_characters(root
     (only / ("evil" + RLO + "gpj.exe.pdf")).write_bytes(_pdf())
     titles = [i["title"] for i in P.OutputPreview(root).list()["items"]]
     assert len(titles) >= 2 and not any(P.INVISIBLE.search(t) for t in titles), titles
+
+
+# D76: a task that made a file queues it for the panel by its path
+def test_show_path_queues_one_plain_file_of_the_folder_and_nothing_else(root, tmp_path):
+    op = P.OutputPreview(root)
+    (root / "20261027-120000-comparison.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    assert op.show_path(str(root / "20261027-120000-comparison.csv")) is True
+    assert op.take_wanted() == [P.encode_id("20261027-120000-comparison.csv")]
+    outside = tmp_path / "elsewhere.csv"
+    outside.write_text("a\n", encoding="utf-8")
+    assert op.show_path(str(outside)) is False and op.show_path(str(root / "no-such.csv")) is False and op.show_path(str(root / ".." / "x.csv")) is False
+    (root / "api-token.csv").write_text("a\n", encoding="utf-8")
+    assert op.show_path(str(root / "api-token.csv")) is False                       # a secret-looking name is never shown
+    assert op.take_wanted() == []

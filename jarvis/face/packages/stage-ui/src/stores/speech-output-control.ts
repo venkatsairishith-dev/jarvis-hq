@@ -4,7 +4,7 @@ import { defineInvoke } from '@moeru/eventa'
 import { useLocalStorage } from '@vueuse/core'
 import { clamp } from 'es-toolkit'
 import { defineStore } from 'pinia'
-import { computed, onScopeDispose, shallowRef } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef } from 'vue'
 
 import { getSpeechBusContext, voiceGetTurns, voiceInterrupt, voiceRequestTurns, voiceSnapshotChanged, voiceTurnsChanged } from '../services/speech/bus'
 
@@ -14,6 +14,13 @@ export type SpeechOutputStopRequest = { reason: 'manual-chat', sessionId: string
 /** Settings control future speech. External interruption targets identities supplied by the audio host. */
 export const useSpeechOutputControlStore = defineStore('speech-output-control', () => {
   const speechMuted = useLocalStorage('settings/speech/output-muted', false)
+  /**
+   * D78: the host (the face's hidden mode) keeps JARVIS silent. Not stored: it is never the owner's mute setting, so a crash while hidden
+   * cannot leave speech muted, and an unhide gives the voice back exactly as it was.
+   */
+  const hostSilenced = ref(false)
+  /** Speech is not produced: the owner muted it, or the host (hidden mode) silenced it. Stage and the voice output read this one. */
+  const speechSilent = computed(() => speechMuted.value || hostSilenced.value)
   const storedSpeechVolume = useLocalStorage('settings/speech/output-volume', 1)
   const storedLastAudibleVolume = useLocalStorage('settings/speech/output-volume-last-audible', 1)
   /**
@@ -81,5 +88,5 @@ export const useSpeechOutputControlStore = defineStore('speech-output-control', 
     }
   }
 
-  return { speechMuted, speechVolume, activeTurns, requestStopSpeaking, setSpeechMuted, toggleSpeechMuted, setSpeechVolume }
+  return { speechMuted, hostSilenced, speechSilent, speechVolume, activeTurns, requestStopSpeaking, setSpeechMuted, toggleSpeechMuted, setSpeechVolume }
 })

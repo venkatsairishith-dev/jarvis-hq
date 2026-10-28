@@ -7,6 +7,8 @@
 //     --format png|webp   webp needs python3 + Pillow (compressed, for the committed pairs)
 //     --report FILE    write the findings as JSON                      --audit   also run the slow audit (focus rings, contrast list)
 //     --no-shots       only the checks
+//     --perf           the idle-cost check of the orb (D78): animation-frame calls a second, JS heap, canvases, and whether any avatar code was fetched;
+//                      with --avatar-baseline DIR it also measures the real Live2D renderer (needs the build's downloads) for the before / after numbers
 //
 // It FAILS (exit 1) when, in any screen at any size and theme:
 //   - the page scrolls sideways, or a visible element sticks out of the window on the left or right
@@ -39,6 +41,8 @@ const format = String(opt('format', 'png'))
 const reportFile = opt('report', '')
 const audit = args.includes('--audit')
 const noShots = args.includes('--no-shots')
+const perf = args.includes('--perf')
+const avatarBaseline = opt('avatar-baseline', '')
 mkdirSync(outDir, { recursive: true })
 
 // The harness resolves its packages through two links to the face's node_modules (gitignored).
@@ -60,6 +64,7 @@ const dist = join(work, 'dist')
 const failures = []
 const warnings = []
 const report = { screens: [], failures, warnings }
+const perfReport = {}
 const log = (ok, name, detail = '') => {
   if (!ok || process.env.VERBOSE)
     console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? `  (${detail})` : ''}`)
@@ -72,9 +77,15 @@ execFileSync(process.env.PYTHON ?? 'python3', [join(here, 'make_fixtures.py'), j
 process.env.UI_HARNESS_OUT = dist
 await build({ configFile: join(here, 'harness', 'vite.config.mjs') })
 writeFileSync(join(dist, 'fixtures.json'), readFileSync(join(work, 'fixtures.json')))
+if (avatarBaseline) {
+  // what the face's build downloaded: the Cubism core and the Hiyori sample (see apps/stage-tamagotchi/downloads.lock.json); served for the baseline only
+  mkdirSync(join(dist, 'avatar-baseline'), { recursive: true })
+  for (const file of ['live2dcubismcore.min.js', 'hiyori_free_zh.zip'])
+    writeFileSync(join(dist, 'avatar-baseline', file), readFileSync(join(String(avatarBaseline), file)))
+}
 const fixtures = JSON.parse(readFileSync(join(work, 'fixtures.json'), 'utf8'))
 
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.png': 'image/png' }
+const types = { '.html': 'text/html', '.zip': 'application/zip', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.png': 'image/png' }
 const stray = []
 const server = http.createServer((request, response) => {
   const path = decodeURIComponent(new URL(request.url, 'http://x').pathname)
@@ -100,6 +111,9 @@ const screens = [
   'preview:closed',
   'preview:list',
   ...fixtures.preview.outputs.items.map(i => `preview:${i.title}`),
+  // D78: the orb in every state and size, the menu, a form with Telugu and Hindi beside it, the count after an unhide; the minimal bar at three sizes
+  ...['idle', 'listening', 'thinking', 'speaking', 'working', 'needs-you', 'error', 'size-S', 'size-L', 'working-L', 'menu', 'card', 'card-indic', 'badge'].map(n => `orb:${n}`),
+  ...['S', 'M', 'L', 'M-listening', 'M-working', 'L-needs-you'].map(n => `bar:${n}`),
 ].filter(s => !only || only.test(s))
 
 /** Runs in the page. Returns what is wrong with the layout, plus audit lists. */
@@ -344,6 +358,21 @@ try {
   await Promise.all(Array.from({ length: jobs }, async () => {
     while (next < tasks.length) await one(tasks[next++])
   }))
+
+  // D78: the idle-cost check, in the same browser
+  if (perf) {
+    perfReport.orbIdle = await idleCost('orb:idle')
+    perfReport.orbIdleOk = perfReport.orbIdle.rafPerSecond <= 15 && perfReport.orbIdle.webgl === 0 && perfReport.orbIdle.avatarScriptsFetched.length === 0
+    log(perfReport.orbIdleOk, 'orb idle cost', JSON.stringify(perfReport.orbIdle))
+    perfReport.barIdle = await idleCost('bar:M')
+    log(perfReport.barIdle.rafPerSecond <= 15 && perfReport.barIdle.webgl === 0, 'bar idle cost', JSON.stringify(perfReport.barIdle))
+    if (avatarBaseline) {
+      perfReport.avatar = await idleCost('avatar:idle', `&base=${encodeURIComponent(String(avatarBaseline))}`)
+      console.log('avatar (real Live2D renderer, software GL):', JSON.stringify(perfReport.avatar))
+    }
+    console.log('\nidle cost:', JSON.stringify(perfReport, null, 1))
+  }
+
 }
 finally {
   await browser.close()
@@ -353,6 +382,69 @@ finally {
 if (stray.length) {
   log(false, 'requests the harness did not serve', [...new Set(stray)].slice(0, 5).join(', '))
 }
+// CPU seconds used so far by the renderer and the GPU process of this Chromium (CDP SystemInfo), and the memory of its process tree (ps)
+function processCpu(info) {
+  const sum = { renderer: 0, gpu: 0 }
+  for (const p of info.processInfo ?? []) {
+    if (p.type === 'renderer') sum.renderer += p.cpuTime
+    else if (p.type === 'GPU' || p.type === 'gpu') sum.gpu += p.cpuTime
+  }
+  return sum
+}
+function residentMemoryMB() {
+  try {
+    const rows = execFileSync('ps', ['-eo', 'pid=,ppid=,rss=,args='], { encoding: 'utf8' }).split('\n').map(l => l.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean).map(m => ({ pid: +m[1], ppid: +m[2], rss: +m[3], args: m[4] }))
+    const root = rows.find(r => /--remote-debugging-pipe/.test(r.args) && !/--type=/.test(r.args) && /chrom|headless/i.test(r.args))
+    if (!root) return null
+    const tree = new Set([root.pid])
+    for (let grew = true; grew;) {
+      grew = false
+      for (const r of rows) {
+        if (!tree.has(r.pid) && tree.has(r.ppid)) { tree.add(r.pid); grew = true }
+      }
+    }
+    return Math.round(rows.filter(r => tree.has(r.pid)).reduce((n, r) => n + r.rss, 0) / 1024)
+  }
+  catch { return null }
+}
+// ---- D78: the idle cost of the orb, measured in the same Chromium (no reduced motion, so the CSS animations really run)
+async function idleCost(name, extraQuery = '') {
+  const context = await browser.newContext({ viewport: { width: 450, height: 600 }, colorScheme: 'dark', reducedMotion: process.env.JARVIS_UI_PERF_REDUCED ? 'reduce' : 'no-preference' })
+  const page = await context.newPage()
+  const requests = []
+  page.on('request', r => requests.push(r.url()))
+  await page.addInitScript(() => {
+    window.__raf = 0
+    const original = window.requestAnimationFrame.bind(window)
+    window.requestAnimationFrame = (cb) => { window.__raf++; return original(cb) }
+    window.__contexts = 0
+    const get = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function (...a) { if (/webgl/.test(String(a[0]))) window.__contexts++; return get.apply(this, a) }
+  })
+  await page.goto(`${origin}/index.html?${new URLSearchParams({ screen: name, theme: 'dark' })}${extraQuery}`, { waitUntil: 'load' })
+  await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 })
+  await page.waitForTimeout(1500) // start-up work settles
+  const client = await context.newCDPSession(page)
+  await client.send('HeapProfiler.enable')
+  await client.send('HeapProfiler.collectGarbage')
+  const heap = (await client.send('Runtime.getHeapUsage')).usedSize
+  const raf0 = await page.evaluate(() => window.__raf)
+  const browserCdp = await browser.newBrowserCDPSession()
+  const cpu0 = processCpu(await browserCdp.send('SystemInfo.getProcessInfo'))
+  const t0 = Date.now()
+  await page.waitForTimeout(5000)
+  const cpu1 = processCpu(await browserCdp.send('SystemInfo.getProcessInfo'))
+  const raf1 = await page.evaluate(() => window.__raf)
+  const seconds = (Date.now() - t0) / 1000
+  const rss = residentMemoryMB()
+  const animations = await page.evaluate(() => document.getAnimations().filter(a => a.playState === 'running').map(a => `${a.constructor.name}:${a.animationName || a.transitionProperty}@${a.effect?.target?.className || a.effect?.target?.tagName}`))
+  const canvases = await page.evaluate(() => ({ canvas: document.querySelectorAll('canvas').length, webgl: window.__contexts }))
+  const js = requests.filter(u => /\.js(\?|$)/.test(u)).map(u => u.split('/').pop())
+  const avatarCode = js.filter(f => /live2d|pixi|three|vrm|mmd|spine|tachie|^Stage-|AvatarStage/i.test(f))
+  await context.close()
+  const pct = key => Math.round((cpu1[key] - cpu0[key]) / seconds * 1000) / 10
+  return { name, rafPerSecond: Math.round((raf1 - raf0) / seconds * 10) / 10, cpuRendererPercentOfOneCore: pct('renderer'), cpuGpuPercentOfOneCore: pct('gpu'), residentMB: rss, jsHeapMB: Math.round(heap / 1048576 * 10) / 10, runningCssAnimations: animations.length, runningAnimations: animations, ...canvases, scriptsFetched: js.length, avatarScriptsFetched: avatarCode }
+}
 const warnKinds = {}
 for (const w of warnings) {
   const kind = w.split(' ').find(p => p.endsWith(':'))
@@ -361,6 +453,6 @@ for (const w of warnings) {
 console.log(`\n${screens.length} screens x ${sizes.length} sizes x ${themes.length} themes; ${failures.length} failure(s); warnings: ${JSON.stringify(warnKinds)}`)
 if (reportFile) {
   mkdirSync(dirname(resolve(String(reportFile))), { recursive: true })
-  writeFileSync(resolve(String(reportFile)), JSON.stringify(report, null, 1))
+  writeFileSync(resolve(String(reportFile)), JSON.stringify({ ...report, perf: perfReport }, null, 1))
 }
 process.exit(failures.length ? 1 : 0)

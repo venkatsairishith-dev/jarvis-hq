@@ -54,6 +54,10 @@ REPAIR_OPS = {"restart_app", "edit_file", "restore", "install"}
 UNDO_OPS = {"recycle", "restore_bin", "move", "close_window", "setting"}
 URL = re.compile(r"^https?://[^\s\"'<>\\]{1,2000}$")
 SAFE_TEXT = re.compile(r"^[^\r\n\0]*$")
+# D77: the text typed into a field of a page (a browser `type` job) may be a few lines of code for a practice problem's editor: up to CODE_TEXT_MAX characters and line breaks.
+# Every other browser text stays one line of at most 500 characters. What is typed is content, never words the policy judges (policy._browser_words).
+CODE_TEXT_MAX = 4000
+CODE_TEXT = re.compile(r"^[^\0]*$")
 KINDS = {
     # kind: (policy tool, policy op or None when the op comes from the job's params)
     "project_check": ("tests", "run"),
@@ -191,7 +195,9 @@ def _check_params(kind: str, params: dict):
               and re.match(r"^[a-z0-9][a-z0-9_-]{0,31}$", str(params["profile"])) is not None
               and isinstance(params["url"], str) and (params["url"] == "" or URL.match(params["url"]) is not None)
               and isinstance(params["target"], str) and len(params["target"]) <= 300 and SAFE_TEXT.match(params["target"]) is not None
-              and isinstance(params["text"], str) and len(params["text"]) <= 500 and SAFE_TEXT.match(params["text"]) is not None
+              and isinstance(params["text"], str)
+              and ((op == "type" and len(params["text"]) <= CODE_TEXT_MAX and CODE_TEXT.match(params["text"]) is not None)
+                   or (len(params["text"]) <= 500 and SAFE_TEXT.match(params["text"]) is not None))
               and (op not in ("open", "goto") or params["url"] != "")
               and (op not in BROWSER_NEEDS_TARGET or params["target"] != "")
               and _browser_ok(op, params))

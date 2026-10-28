@@ -25,13 +25,16 @@ CONTROL_FILE = DATA / "plugins" / "pc_task_control.json"
 LIVE_FRESH_S = 90.0              # a "running" file older than this belongs to a task that is gone
 RECENT_S = 1800.0                # a finished task can still be asked about for half an hour
 
-STATES = ("running", "paused_owner", "asking", "waiting_approval", "stopped", "failed", "done", "idle")
+STATES = ("running", "paused_owner", "asking", "waiting_approval", "needs_owner", "stopped", "failed", "done", "idle")
 PHASES = ("perceive", "decide", "act", "verify", "recover", "wait", "ask", "")
 CONTROLS = ("stop", "try_another", "skip")
 SAY = {    # fixed phrases for what the loop is doing (an app's process name is added after "in"/"on"); no typed text, ever
     "open_app": "opening", "click": "clicking in", "click_at": "clicking in", "type": "typing into", "paste": "typing into", "key": "pressing a key in",
     "scroll": "scrolling", "save_as": "saving the file from", "check_file": "checking the folder for the file", "focus": "bringing to the front",
     "restore": "bringing back", "drag": "dragging in", "wait": "waiting for", "read": "reading", "look": "looking at", "done": "finishing",
+    # D76 (open-ended tasks): the words of the web, document and output milestones; the "app" is a site's host name (letters, digits, dots)
+    "plan": "planning the task for", "browse": "browsing", "search": "searching", "download": "downloading from", "read_doc": "reading the files in",
+    "write_output": "writing the result for", "ask_owner": "asking you about", "fill": "filling in a form on",
 }
 APP = re.compile(r"^[A-Za-z0-9_.\- ]{1,40}$")
 _LOCK = threading.Lock()
@@ -117,7 +120,7 @@ class TaskState:
         self.update(state=state, phase="", why=why)
 
     def _flush(self) -> None:
-        self.d["line"] = (_doing(self.d) + ".") if self.d.get("state") in ("running", "paused_owner", "asking", "waiting_approval") else ""      # the HUD strip's sentence: fixed phrases and a process name
+        self.d["line"] = (_doing(self.d) + ".") if self.d.get("state") in ("running", "paused_owner", "asking", "waiting_approval", "needs_owner") else ""      # the HUD strip's sentence: fixed phrases and a process name
         with _LOCK:
             _write(self.state_file, self.d)
 
@@ -139,6 +142,7 @@ WHY = {   # why a task stopped: fixed words the loop picks, and the sentence the
     "no_window": "I could not find or open the window", "not_responding": "the app stopped responding", "approval": "a step needed your approval",
     "resource": "the PC is missing something it needs (disk space, network or the app itself)", "skipped": "you told me to skip the step",
     "done": "the task is finished", "asked": "I need your answer to go on", "error": "a step failed",
+    "takeover": "a step needs you at the screen (a CAPTCHA, a login or a code) and I do not do those",
 }
 PROBLEM_SAY = {
     "wrong_window": "the wrong window was in front", "no_window": "the app had no window", "minimized": "the window was minimised",
@@ -157,7 +161,7 @@ def read(path: Path | None = None) -> dict | None:
 def live(d: dict | None, now: float | None = None) -> bool:
     """Is there a task under way right now? (running, paused, asking or waiting for an approval, and written recently)"""
     now = time.time() if now is None else now
-    return bool(d) and d.get("state") in ("running", "paused_owner", "asking", "waiting_approval") and now - float(d.get("updated") or 0) <= LIVE_FRESH_S
+    return bool(d) and d.get("state") in ("running", "paused_owner", "asking", "waiting_approval", "needs_owner") and now - float(d.get("updated") or 0) <= LIVE_FRESH_S
 
 
 def recent(d: dict | None, now: float | None = None) -> bool:
@@ -172,6 +176,8 @@ def _doing(d: dict) -> str:
         return "I am waiting because you are using the PC. I will carry on when you are done"
     if d.get("state") == "waiting_approval":
         return "I am waiting for your approval in the JARVIS console"
+    if d.get("state") == "needs_owner":
+        return "I stopped because a step needs you at the screen. I will look again when you press Done"
     if d.get("state") == "asking":
         return "I am waiting for your answer"
     if d.get("phase") == "recover" and d.get("problem"):

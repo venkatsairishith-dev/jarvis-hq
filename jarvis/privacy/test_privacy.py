@@ -440,6 +440,40 @@ class RealDetectorsOnEveryField(unittest.TestCase):
         self.assertIn("John Smith", preview()["text"])                    # and the names=True answer was not cached for the default
 
 
+class CachedRedactionWidening(unittest.TestCase):
+    """D80: the gateway's per-message cache (D60) widened to hit on leading/trailing whitespace, against the REAL Presidio + spaCy
+    engine (patterns + names), not the fake one test_latency_d60.py uses. Proves the widening is correct, and that the one widening
+    considered and REJECTED (case-insensitive keys) would have been wrong, with the real engine's own behaviour."""
+
+    def setUp(self):
+        self.red = Redactor(names=True, model=None)        # patterns + spaCy names; no GLiNER files needed for this
+
+    def test_leading_and_trailing_whitespace_still_get_the_same_correct_redaction(self):
+        cached = gateway.CachedRedaction(self.red)
+        core = "My password is Zq9xW7vLpad and my friend Turing came by."
+        variants = [core, " " + core, core + "\n", "  \n\t" + core + "   ", "\n\n" + core]
+        outs = [cached.redact(v, Mapping()) for v in variants]
+        for v, out in zip(variants, outs):
+            lead = v[:len(v) - len(v.lstrip())]
+            trail = v[len(v.rstrip()):]
+            self.assertEqual(out, lead + outs[0].strip() + trail, repr(v))
+            self.assertNotIn("Zq9xW7vLpad", out)
+            self.assertNotIn("Turing", out)
+        snap = cached.snapshot()
+        self.assertEqual(snap["misses"], 1, "one real scan for the core text")
+        self.assertEqual(snap["hits"], len(variants) - 1, "every padded repeat of the same core text is a cache hit")
+
+    def test_a_different_case_is_never_served_from_another_cases_cache_entry(self):
+        """The widening does NOT fold case: 'Turing' is a name to the real engine, 'turing' and 'TURING' are not (spaCy is case-sensitive).
+        Each must be redacted on its own, whether or not another case of the same text already primed the cache."""
+        cached = gateway.CachedRedaction(self.red)
+        proper, lower, upper = "My friend Turing came by.", "my friend turing came by.", "My friend TURING came by."
+        self.assertIn("[PERSON_1]", cached.redact(proper, Mapping()))
+        self.assertEqual(cached.redact(lower, Mapping()), lower, "no false positive, and no false NEGATIVE borrowed from the proper-case entry")
+        self.assertEqual(cached.redact(upper, Mapping()), upper)
+        self.assertEqual(cached.snapshot()["misses"], 3, "three different texts, three real scans: none shared a cache entry by case")
+
+
 class _Scripted(BaseHTTPRequestHandler):
     """A fake provider: answers with the next status code from its script and records what it got."""
     def log_message(self, *a):

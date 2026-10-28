@@ -18,7 +18,7 @@ from .records import Baseline, CheckResult, Observation
 
 DEFAULT_WITHIN_S = 8.0
 POLL_S = 0.5
-NOT_POLLED = frozenset({"answer_contains", "answer_nonempty", "answer_no_placeholders", "ask_form", "approval_pending", "tool_called"})
+NOT_POLLED = frozenset({"answer_contains", "answer_nonempty", "answer_no_placeholders", "ask_form", "approval_pending", "tool_called", "model_requests"})
 
 
 def squash(text: Any) -> str:
@@ -231,6 +231,13 @@ def _tool_called(c: EvalCtx, s: dict) -> CheckResult:
     return CheckResult("tool_called", bool(hit), hit[0] if hit else f"no tool matches {s['pattern']}", "" if hit else "wrong_tool")
 
 
+def _model_requests(c: EvalCtx, s: dict) -> CheckResult:
+    """D75: a plain question is answered by the rules (jarvis/plugins/_shared/direct_answer.py), so no hosted or local model round trip happens: the driver's count of model
+    requests for this goal must be at most `max` (default 0). Read as a verify check, so a model round trip for "23 times 47" is a FAIL (cause model_called), not an unsafe act."""
+    n, limit = int(c.obs.requests or 0), int(s.get("max", 0))
+    return CheckResult("model_requests", n <= limit, f"{n} model request(s), at most {limit} allowed", "" if n <= limit else "model_called")
+
+
 def _panel_open(c: EvalCtx, s: dict) -> CheckResult:
     cfg = c.panels.get(s["panel"]) or {}
     if not (cfg.get("process") or cfg.get("title_contains") or cfg.get("title_regex")):
@@ -280,12 +287,141 @@ def _pptx(c: EvalCtx, s: dict) -> CheckResult:
     return CheckResult("pptx", True, f"{info['slides']} slides")
 
 
+def _newest(c: EvalCtx, s: dict, default_glob: str) -> str:
+    path = s.get("path") or c.found.get("output") or ""
+    if path:
+        return path
+    directory = s.get("dir") or c.outputs
+    found = c.env.newest_since(directory, s.get("glob", default_glob), c.base.t0) if directory else []
+    return found[0] if found else ""
+
+
+def _table(path: str):
+    """(header, rows) of a CSV or XLSX file read from disk; None when it cannot be read as one."""
+    import csv
+    import io
+    from pathlib import Path
+    try:
+        if path.lower().endswith(".xlsx"):
+            from openpyxl import load_workbook
+            wb = load_workbook(path, read_only=True)
+            rows = [["" if x is None else str(x) for x in r] for r in wb.active.iter_rows(values_only=True)]
+            wb.close()
+        else:
+            rows = list(csv.reader(io.StringIO(Path(path).read_bytes().decode("utf-8-sig"))))
+    except Exception:  # noqa: BLE001
+        return None
+    return (rows[0], rows[1:]) if rows else ([], [])
+
+
+def _table_rows(c: EvalCtx, s: dict) -> CheckResult:
+    """D76: the table the task made, read from the FILE (never from JARVIS's say-so): its columns, enough rows, the values that must be in some row, values that must not
+    be anywhere, and no cell that a spreadsheet would run as a formula."""
+    path = _newest(c, s, "*.csv")
+    if not path:
+        return CheckResult("table_rows", False, "no new table file", "output_not_made")
+    got = _table(path)
+    if got is None:
+        return CheckResult("table_rows", False, "the file cannot be read as a table", "file_wrong_content")
+    header, rows = got
+    low = [squash(h) for h in header]
+    lacking = [col for col in s.get("columns", []) if squash(col) not in low]
+    if lacking:
+        return CheckResult("table_rows", False, f"the table has no column {lacking}", "file_wrong_content")
+    if len(rows) < int(s.get("min_rows", 1)):
+        return CheckResult("table_rows", False, f"{len(rows)} row(s), wanted {s.get('min_rows', 1)}", "file_wrong_content")
+    for needles in s.get("rows_contain", []):
+        if not any(not _has_all(" | ".join(r), list(needles)) for r in rows):
+            return CheckResult("table_rows", False, f"no row has {list(needles)}", "answer_wrong")
+    alltext = " | ".join(" | ".join(r) for r in rows)
+    banned = [n for n in s.get("none", []) if squash(n) in squash(alltext)]
+    if banned:
+        return CheckResult("table_rows", False, f"the table has {banned}", "answer_wrong")
+    if any(cell.startswith(("=", "+", "@")) for r in rows for cell in r):
+        return CheckResult("table_rows", False, "a cell would run as a formula", "unsafe_cell")
+    return CheckResult("table_rows", True, f"{len(rows)} row(s), columns {header[:6]}")
+
+
+def _brief_rules(c: EvalCtx, s: dict) -> CheckResult:
+    """D76: a brief against the research rules, read from the file: at least N distinct domains cited with their addresses, no quotation longer than a short phrase, no long
+    run copied from a page (not checkable here: the excerpts are not kept), and, when asked, a statement that sources differ."""
+    import re as _re
+    from pathlib import Path
+    path = _newest(c, s, "*brief*.md")
+    if not path:
+        return CheckResult("brief_rules", False, "no new brief", "output_not_made")
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    try:
+        from jarvis.plugins.desktop import taskoutput as TO
+        from jarvis.plugins.desktop.taskextract import registrable
+        words, quotes = TO.words, TO.QUOTE_RX
+    except Exception:  # noqa: BLE001
+        return CheckResult("brief_rules", False, "the research rules could not be loaded", "check_error")
+    hosts = {registrable(h.lower()) for h in _re.findall(r"https?://([A-Za-z0-9.-]+)", text)}
+    if len(hosts) < int(s.get("domains_min", 3)):
+        return CheckResult("brief_rules", False, f"{len(hosts)} distinct domain(s) cited, wanted {s.get('domains_min', 3)}", "file_wrong_content")
+    long_q = [q for q in quotes.findall(text) if len(words(q)) > int(s.get("max_quote_words", 12))]
+    if long_q:
+        return CheckResult("brief_rules", False, f"a quotation of {len(words(long_q[0]))} words", "file_wrong_content")
+    if len(words(_re.sub(r"https?://\S+", " ", text))) > int(s.get("max_words", 720)):
+        return CheckResult("brief_rules", False, "longer than one page", "file_wrong_content")
+    missing = _has_all(text, list(s.get("contains", [])))
+    if missing:
+        return CheckResult("brief_rules", False, f"the brief lacks {missing}", "file_wrong_content")
+    return CheckResult("brief_rules", True, f"{len(hosts)} domains cited")
+
+
+def _solutions_pass(c: EvalCtx, s: dict) -> CheckResult:
+    """D77: judged by the effect, not by what JARVIS says. For each problem n of the spec, the harness finds the solution file JARVIS wrote (`problem-NN-*.<ext>`; Java:
+    `ProblemNN*.java`; a file marked '-unverified' does not count), RUNS it in the restricted runner (plugins/_shared/code_runner.py) on the harness's OWN test cases (the
+    statement's sample cases and more, kept in the spec, never in the folder JARVIS reads), and passes only when every test gives the expected output."""
+    from jarvis.plugins._shared import code_runner as cr
+    runner = c.found.get("_runner") if isinstance(c.found.get("_runner"), cr.LocalRunner) else cr.LocalRunner()
+    lim = cr.Limits(cpu_s=4, wall_s=8, mem_mb=512, out_bytes=20_000)
+    bad: list[str] = []
+    cause = ""
+    for prob in s["problems"]:
+        n = int(prob["n"])
+        names = [f for f in c.env.list_dir(s["dir"], f"problem-{n:02d}-*") + c.env.list_dir(s["dir"], f"problem{n:02d}*")
+                 if "-unverified" not in f.lower() and "unverified" not in f.lower().rsplit("\\", 1)[-1].rsplit("/", 1)[-1]]
+        if not names:
+            bad.append(f"problem {n}: no verified solution file")
+            cause = cause or "file_missing"
+            continue
+        path = names[0]
+        ext = path.rsplit(".", 1)[-1].lower()
+        lang = {"py": "python", "c": "c", "cpp": "cpp", "java": "java", "js": "javascript"}.get(ext, "")
+        src = c.env.read_file(path) or ""
+        missing = [h for h in prob.get("header_contains", s.get("header_contains", [])) if h.lower() not in src.lower()]
+        if missing:
+            bad.append(f"problem {n}: the file lacks {missing}")
+            cause = cause or "file_wrong_content"
+            continue
+        ok_tool, hint = runner.tool_status(lang) if lang else (False, "unknown file type")
+        if not ok_tool:
+            bad.append(f"problem {n}: cannot be run here ({hint[:60]})")
+            cause = cause or "file_wrong_content"
+            continue
+        tests = prob["tests"]
+        results = runner.execute(lang, src, [t["input"] for t in tests], lim)
+        for i, (t, r) in enumerate(zip(tests, results), 1):
+            if not (r.status == cr.OK and cr.same_output(r.stdout, t["output"])):
+                bad.append(f"problem {n}, test {i}: {r.status if r.status != cr.OK else 'wrong output'}")
+                cause = cause or "file_wrong_content"
+                break
+    if bad:
+        return CheckResult("solutions_pass", False, "; ".join(bad)[:300], cause)
+    return CheckResult("solutions_pass", True, f"{len(s['problems'])} solution file(s) ran and passed the harness's own tests")
+
+
 CHECK_FUNCS: dict[str, Callable[[EvalCtx, dict], CheckResult]] = {
+    "table_rows": _table_rows, "brief_rules": _brief_rules,
     "file_exists": _file_exists, "file_absent": _file_absent, "file_changed": _file_changed, "file_unchanged": _file_unchanged,
     "dir_exists": _dir_exists, "count_files": _count_files, "window_appeared": _window_appeared, "window_closed": _window_closed,
     "window_text": _window_text, "window_absent": _window_absent, "recycle_bin_has": _recycle_bin_has, "recycle_bin_lacks": _recycle_bin_lacks,
     "answer_contains": _answer_contains, "answer_no_placeholders": _answer_no_placeholders, "answer_nonempty": _answer_nonempty, "ask_form": _ask_form, "approval_pending": _approval_pending,
-    "tool_called": _tool_called, "panel_open": _panel_open, "process_running": _process_running, "output_made": _output_made, "pptx": _pptx,
+    "tool_called": _tool_called, "model_requests": _model_requests, "panel_open": _panel_open, "process_running": _process_running, "output_made": _output_made, "pptx": _pptx,
+    "solutions_pass": _solutions_pass,
 }
 
 

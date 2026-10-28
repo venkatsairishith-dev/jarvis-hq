@@ -29,6 +29,12 @@ trimmed schemas (about 8 KB instead of 53 KB), and registers nothing else except
 Every string in a result is cleaned for a model (jarvis/plugins/_shared/screen_text.clean_result) before it leaves, because the
 face hands results to its chat model.
 
+tools/list is cached in THIS process (D80): the face re-asks for it on every reconnect (D57's backoff schedule, a cold start, a dropped
+loopback connection), and the compacting work (compact_schema's recursion plus one model_copy per tool) is the same every time the tool set has
+not changed. The cache key is a revision counter bumped only by add_tool, so it can never go stale while this server runs; it does not help a
+genuinely cold run of this process itself (a fresh python face_tools.py pays the real first compacting pass once, which is cheap: see the timing
+test below) and it is not the gateway's redaction cache (D60) or a fix for a model's own prompt-processing time, which this cache cannot touch.
+
 Network: it listens on 127.0.0.1 only. Requests must name 127.0.0.1:48970 or localhost:48970 as Host and carry no Origin, so a web
 page in a browser cannot call it (DNS rebinding and cross-site requests are refused with 403/421).
 
@@ -141,19 +147,31 @@ def _face_server_class():
         allowed: frozenset | None = None         # set: only these tools are registered (the others cannot be called either)
         unlisted: frozenset = frozenset()        # registered and callable, left out of tools/list
         short: dict[str, str] | None = None      # set: the compact listing (descriptions from here, trimmed schemas, no annotations)
+        _tool_rev: int = 0                       # D80: bumped by every add_tool; the only way this class's tool registry can change
+        _list_cache: tuple | None = None         # (the key below at build time, the finished list) - skips the compacting work on a repeat call
 
         def add_tool(self, fn, name=None, *args, **kwargs):
             if self.allowed is not None and (name or getattr(fn, "__name__", "")) not in self.allowed:
                 return
             super().add_tool(fn, name, *args, **kwargs)
+            self._tool_rev += 1
+
+        def _list_key(self):
+            # content-hash in spirit, cheap in practice: the registry can only change through add_tool (which bumps _tool_rev), so this
+            # tuple fully determines the compacted list below; recomputing it is a few small comparisons, not a schema walk.
+            return (self._tool_rev, self.unlisted, None if self.short is None else tuple(sorted(self.short.items())))
 
         async def list_tools(self):
+            key = self._list_key()
+            if self._list_cache is not None and self._list_cache[0] == key:
+                return self._list_cache[1]
             tools = [t for t in await super().list_tools() if t.name not in self.unlisted]
-            if self.short is None:
-                return tools
-            return [t.model_copy(update={"description": self.short.get(t.name) or (t.description or "")[:240],
-                                         "input_schema": compact_schema(t.input_schema), "annotations": None, "output_schema": None,
-                                         "meta": None, "title": None, "icons": None}) for t in tools]
+            out = tools if self.short is None else [
+                t.model_copy(update={"description": self.short.get(t.name) or (t.description or "")[:240],
+                                     "input_schema": compact_schema(t.input_schema), "annotations": None, "output_schema": None,
+                                     "meta": None, "title": None, "icons": None}) for t in tools]
+            self._list_cache = (key, out)
+            return out
 
     return FaceMCPServer
 
@@ -270,15 +288,26 @@ def read_pc_line(path=None, now=None) -> dict:
         line, state, at = snap["line"], snap["state"], float(snap["updated"])
     except (OSError, ValueError, KeyError, TypeError):
         return {}
-    if state not in ("running", "paused_owner", "asking", "waiting_approval") or now - at > PC_LINE_STALE_S or not isinstance(line, str) or not PC_LINE_OK.match(line):
+    if state not in ("running", "paused_owner", "asking", "waiting_approval", "needs_owner") or now - at > PC_LINE_STALE_S or not isinstance(line, str) or not PC_LINE_OK.match(line):
         return {}
     return {"pc_line": line}
+
+
+def read_vm2_hud(path=None, config=None) -> dict:
+    """D79: VM2's state as one fixed word and a short fixed sentence ("VM2 ready" / "busy" / "needs you" / "offline"). {} when VM2 is not set up. The state file is re-probed (3 s
+    at most) when it is older than a minute, so the HUD's frequent polling does not touch the network."""
+    try:
+        from jarvis.plugins._shared import vm2
+        return vm2.hud_fields(path, config=config)
+    except Exception:  # noqa: BLE001 - a broken VM2 line must never hide the rest of the status
+        return {}
 
 
 class FaceTools:
     """The tools as plain async functions; `build_server` only registers them. `client_factory` returns a JarvisClient."""
 
-    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None, goal_progress_path=None, pc_line_path=None):
+    def __init__(self, client_factory=None, console=None, clean=None, pc_ops_path=None, unread=None, goal_progress_path=None, pc_line_path=None, vm2_state_path=None, vm2_config=None):
+        self.vm2_state_path, self.vm2_config = vm2_state_path, vm2_config
         self.goal_progress_path = goal_progress_path
         self.pc_line_path = pc_line_path
         self.console = console or _load_console_client()
@@ -333,7 +362,13 @@ class FaceTools:
         out.update(await asyncio.to_thread(read_pc_operations, self.pc_ops_path))
         out.update(await asyncio.to_thread(read_goal_progress, self.goal_progress_path))
         out.update(await asyncio.to_thread(read_pc_line, self.pc_line_path))
+        vm2 = await asyncio.to_thread(read_vm2_hud, self.vm2_state_path, self.vm2_config)
         res = self._out(out)
+        if vm2:                                                          # D79: one fixed word, and the words in the HUD line next to the PC task's (fixed words too, added after the cleaner)
+            res["vm2"] = vm2["vm2"]
+            line = res.get("pc_line")
+            joined = f"{line} - {vm2['vm2_line']}" if isinstance(line, str) and PC_LINE_OK.match(line) else vm2["vm2_line"]
+            res["pc_line"] = joined[:140] if PC_LINE_OK.match(joined[:140]) else vm2["vm2_line"]
         if safe_mode.active():                                           # D71: the plain words "Safe mode" on the HUD's line (fixed words, so added after the cleaner), and one boolean
             res["safe_mode"] = True
             line = res.get("pc_line")
@@ -369,7 +404,25 @@ class FaceTools:
         except Exception:  # noqa: BLE001 - the gate must never break a task
             return None
 
+    @staticmethod
+    def direct_answer(task: str) -> str:
+        """D75: a plain question ("23 times 47", "15% of 2400", "convert 5 km to miles", "what is the date after 45 days") is ANSWERED here, on this PC, with no console task, no
+        kernel job and no model (plugins/_shared/direct_answer.py, exact, no network). '' when it is not such a question, when the owner named the Calculator or the screen, or when
+        the quick path is off (JARVIS_QUICK_PATH=0, JARVIS_DIRECT_ANSWERS=0, safe mode)."""
+        try:
+            from jarvis import safe_mode
+            from jarvis.plugins._shared import direct_answer
+            if safe_mode.active() or not direct_answer.enabled() or os.environ.get("JARVIS_QUICK_PATH", "").strip().lower() in ("0", "false", "no", "off"):
+                return ""
+            got = direct_answer.answer(str(task or ""))
+            return got.text if got else ""
+        except Exception:  # noqa: BLE001 - an answer is optional; the task goes on to the console as before
+            return ""
+
     async def do(self, task: str) -> dict:
+        said = self.direct_answer(task)
+        if said:
+            return self._out({"ok": True, "answered": True, "message": "Already answered on this PC; nothing was started. Tell the owner: " + said})
         v = self._ambiguity(task)
         if v is not None and not v.auto_text:
             from jarvis.plugins._shared import ambiguity
@@ -643,6 +696,8 @@ async def _serve(args, views) -> None:
             asker = AskBroker()
             from jarvis.plugins._shared import owner_ask                   # D64: the browser agent asks the owner through this panel when a page needs him
             owner_ask.install(asker, asyncio.get_running_loop())
+            if outputs is not None:
+                owner_ask.install_preview(outputs.show_path)                 # D76: a task that made a file (a table, a brief) puts it in the Preview panel by itself
             try:
                 from jarvis.bridge.cleaner import Cleaner
                 from jarvis.bridge.cleaner_ui import CleanerService
