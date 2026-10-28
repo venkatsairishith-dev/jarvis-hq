@@ -646,6 +646,34 @@ class OrderAndRoomNumbersSurviveTheFreeGuess(unittest.TestCase):
     def test_a_real_cue_worded_otp_stays_protected_even_though_its_own_label_is_one_time_code(self):
         self.assertIsNone(self._kind("Your otp is 482913 for login.", "one-time code", "482913"))
 
+    def test_a_cue_word_with_no_is_still_protects_the_value(self):
+        """Owner's laptop, live GLiNER check, 2026-10-28: the first version of this fix used `_SECRET_AFTER_CUE`
+        (which needs a connector like "is"/"="/":" right after the cue word) to decide there was no cue -- so "pin
+        4821" with no "is" became restorable, a real regression. The cue word itself, with nothing between it and
+        the value, must still protect it."""
+        self.assertIsNone(self._kind("pin 4821 and order 77413 for room 204", "password", "4821"))
+
+    def test_a_cue_word_several_words_back_still_protects_the_value(self):
+        """Same live check: "code" alone is not in `_SECRET_AFTER_CUE`'s own cue list (only "security code" is),
+        so "Your verification code is 123456" also became restorable under the first version of this fix."""
+        self.assertIsNone(self._kind("Your verification code is 123456", "one-time code", "123456"))
+        self.assertIsNone(self._kind("Your code is 482913", "one-time code", "482913"))
+
+    def test_a_cue_word_elsewhere_in_the_sentence_does_not_protect_an_unrelated_number(self):
+        """The other half of the same live check: a sentence-wide "is there a cue word anywhere" check fixed the
+        two cases above but broke this one back -- "order 77413" is NOT the value "pin" is attached to, so it
+        must still come through as an ordinary, restorable number even though "pin" appears earlier in the same
+        sentence. The cue check has to be local to each candidate span, not sentence-wide."""
+        self.assertEqual(self._kind("pin 4821 and order 77413 for room 204", "password", "77413"), "NUMBER")
+
+    def test_three_numbers_in_one_sentence_are_all_restorable_even_when_one_is_mislabeled_api_key(self):
+        """Owner's laptop, live GLiNER check, 2026-10-28: with three numbers close together, GLiNER mislabeled the
+        third one "api key" rather than "password"/"one-time code" -- a remaining gap the laptop found after the
+        first two were fixed."""
+        self.assertEqual(self._kind("room 83521, call 555-0142 about order 77413", "one-time code", "83521"), "NUMBER")
+        self.assertEqual(self._kind("room 83521, call 555-0142 about order 77413", "one-time code", "555-0142"), "NUMBER")
+        self.assertEqual(self._kind("room 83521, call 555-0142 about order 77413", "api key", "77413"), "NUMBER")
+
 
 class ScreenTextReversible(unittest.TestCase):
     """D73, with the REAL pattern detector (Presidio + spaCy; no PII model): what the screen-text path keeps, hides and never keeps."""
