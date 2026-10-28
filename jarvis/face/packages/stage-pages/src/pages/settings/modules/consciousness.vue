@@ -155,7 +155,7 @@ async function updateTopPEnabled(value: boolean) {
               transition="colors duration-200 ease-in-out"
               to="/settings/providers"
             >
-              <div i-solar:warning-circle-line-duotone class="text-2xl text-amber-500 dark:text-amber-400" />
+              <div i-solar:danger-circle-line-duotone class="text-2xl text-amber-500 dark:text-amber-400" />
               <div class="flex flex-col">
                 <span class="font-medium">{{ t('settings.pages.modules.consciousness.sections.section.provider-model-selection.no_providers_configured_title') }}</span>
                 <span class="text-sm text-neutral-400 dark:text-neutral-500">{{ t('settings.pages.modules.consciousness.sections.section.provider-model-selection.no_providers_configured_description') }}</span>
@@ -183,7 +183,7 @@ async function updateTopPEnabled(value: boolean) {
         <!-- Loading state -->
         <div v-if="isLoadingActiveProviderModels" class="flex items-center justify-center py-4">
           <div class="mr-2 animate-spin">
-            <div i-solar:spinner-line-duotone text-xl />
+            <div i-svg-spinners:ring-resize text-xl />
           </div>
           <span>{{ t('settings.pages.modules.consciousness.sections.section.provider-model-selection.loading') }}</span>
         </div>

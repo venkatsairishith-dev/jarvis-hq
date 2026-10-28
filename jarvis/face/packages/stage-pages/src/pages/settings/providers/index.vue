@@ -82,7 +82,7 @@ const allArtistryProvidersMetadata = computed<ProviderSourceCard[]>((): Provider
             id: 'replicate',
             category: 'artistry',
             icon: 'i-lobe-icons:replicate',
-            iconColor: 'i-lobe-icons:replicate-color',
+            iconColor: 'i-lobe-icons:replicate-brand',
             name: 'Replicate',
             localizedName: 'Replicate',
             description: t('settings.pages.providers.categories.artistry.items.replicate.description'),

@@ -413,7 +413,7 @@ onUnmounted(() => {
                   'transition-colors duration-200 ease-in-out',
                 ]"
               >
-                <div :class="['i-solar:warning-circle-line-duotone text-2xl text-amber-500 dark:text-amber-400']" />
+                <div :class="['i-solar:danger-circle-line-duotone text-2xl text-amber-500 dark:text-amber-400']" />
                 <div :class="['flex flex-col']">
                   <span :class="['font-medium']">No Providers Configured</span>
                   <span :class="['text-sm text-neutral-400 dark:text-neutral-500']">Click here to set up your Transcription providers</span>
@@ -450,7 +450,7 @@ onUnmounted(() => {
             <!-- Loading state -->
             <div v-if="isLoadingActiveProviderModels && supportsModelListing" :class="['flex items-center justify-center py-4']">
               <div :class="['mr-2 animate-spin']">
-                <div :class="['i-solar:spinner-line-duotone text-xl']" />
+                <div :class="['i-svg-spinners:ring-resize text-xl']" />
               </div>
               <span>{{ t('settings.pages.modules.consciousness.sections.section.provider-model-selection.loading') }}</span>
             </div>
@@ -529,7 +529,7 @@ onUnmounted(() => {
             {{ t('settings.pages.modules.hearing.sections.section.confidence-threshold.verbose-json-note') }}
           </div>
           <div v-if="verboseJsonNotSupported" :class="['mt-2 flex items-center gap-1.5 text-xs text-amber-500 dark:text-amber-400']">
-            <div :class="['i-solar:warning-circle-line-duotone shrink-0']" />
+            <div :class="['i-solar:danger-circle-line-duotone shrink-0']" />
             {{ t('settings.pages.modules.hearing.sections.section.confidence-threshold.verbose-json-unsupported') }}
           </div>
         </div>
@@ -652,7 +652,7 @@ onUnmounted(() => {
                 <!-- VAD Model Status -->
                 <div v-if="useVADModel" :class="['mt-3 space-y-2']">
                   <div v-if="loadingVAD" :class="['flex items-center gap-2 text-primary-600 dark:text-primary-400']">
-                    <div :class="['i-solar:spinner-line-duotone animate-spin text-sm']" />
+                    <div :class="['i-svg-spinners:ring-resize animate-spin text-sm']" />
                     <span :class="['text-sm']">Loading...</span>
                   </div>
 

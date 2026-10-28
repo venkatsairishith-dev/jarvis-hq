@@ -114,7 +114,7 @@ export function defineVoicevoxFamilyProvider<const TId extends string>(
         return speakers.flatMap(speaker => (speaker.styles ?? []).map(style => toVoiceInfo(options.id, speaker.name, style)))
       },
     },
-    icon: 'i-lobe-icons:speaker',
+    icon: 'i-lobe-icons:agentvoice',
     id: options.id,
     name: options.name,
 

@@ -659,7 +659,7 @@ async function handleDeleteProvider(providerId: string) {
               class="flex items-center gap-3 rounded-lg p-4" border="2 dashed neutral-200 dark:neutral-800"
               bg="neutral-50 dark:neutral-800" transition="colors duration-200 ease-in-out" to="/settings/providers"
             >
-              <div i-solar:warning-circle-line-duotone class="text-2xl text-amber-500 dark:text-amber-400" />
+              <div i-solar:danger-circle-line-duotone class="text-2xl text-amber-500 dark:text-amber-400" />
               <div class="flex flex-col">
                 <span class="font-medium">No Speech Providers Configured</span>
                 <span class="text-sm text-neutral-400 dark:text-neutral-500">Click here to set up your speech
@@ -700,7 +700,7 @@ async function handleDeleteProvider(providerId: string) {
             <!-- Loading state -->
             <div v-if="displayedModelsLoading" class="flex items-center justify-center py-4">
               <div class="mr-2 animate-spin">
-                <div i-solar:spinner-line-duotone text-xl />
+                <div i-svg-spinners:ring-resize text-xl />
               </div>
               <span>{{ t('settings.pages.modules.consciousness.sections.section.provider-model-selection.loading') }}</span>
             </div>
