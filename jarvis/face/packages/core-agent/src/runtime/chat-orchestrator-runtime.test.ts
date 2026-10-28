@@ -311,7 +311,6 @@ describe('createChatOrchestratorRuntime', () => {
     await harness.runtime.ingest('reply', { model: 'test', chatProvider: provider, stickers: [{ id: 'heart', description: 'A heart' }] })
     const saved = harness.sessionMessages['session-1'].findLast(message => message.role === 'assistant')
     expect(saved?.role).toBe('assistant')
-    expect(literals).toEqual([])
     if (kind === 'tool') {
       // Live finding, 2026-10-28: a turn that ends with a tool call and no words of its own used to store and show
       // nothing but the tool chip. `toolOnlyFallbackText` now writes one honest, non-claiming line for it -- the
@@ -321,12 +320,17 @@ describe('createChatOrchestratorRuntime', () => {
       const textSlices = saved?.role === 'assistant' ? saved.slices.filter(slice => slice.type === 'text') : []
       expect(textSlices).toEqual([{ type: 'text', text: 'I used weather, but didn\'t write anything back. Ask me again if you still need an answer.' }])
       expect(saved?.role === 'assistant' && saved.content).toContain('didn\'t write anything back')
+      // Live finding, 2026-10-28 (laptop): the fallback reached the chat bubble but never reached voice, because it
+      // was written after the stream ended and never passed through the live token-literal hook that speech reads.
+      expect(literals).toEqual(['I used weather, but didn\'t write anything back. Ask me again if you still need an answer.'])
     }
     else if (kind === 'sticker') {
+      expect(literals).toEqual([])
       expect(saved?.content).toBe('')
       expect(saved?.role === 'assistant' && saved.slices).toEqual([{ type: 'sticker', stickerId: 'heart' }])
     }
     else {
+      expect(literals).toEqual([])
       expect(saved?.content).toBe('')
       expect(saved?.role === 'assistant' && saved.slices.filter(slice => slice.type === 'text')).toEqual([])
       expect(saved?.role === 'assistant' && saved.generationTranscript).toEqual(generatedTurn)

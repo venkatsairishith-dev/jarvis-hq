@@ -1263,6 +1263,12 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
           buildingMessage.slices.push({ type: 'text', text: fallback })
           buildingMessage.content += fallback
           fullText += fallback
+          // The live speech feed (OrbSpeechHost's onTokenLiteral, the Stage's lip-sync writer) only ever sees text
+          // passed through this hook as it streams -- this line is written after the stream already ended, so
+          // without this it reaches the chat bubble but never reaches voice. Same hook, same context, as a live token.
+          await hooks.emitTokenLiteralHooks(fallback, streamingMessageContext)
+          if (shouldAbort())
+            return
         }
       }
 
