@@ -362,3 +362,6 @@ Investigation only, from the real logs; nothing changed. Plain result first: I c
 3. Add `C:\mingw64\bin` to the Windows allow-list for gcc/g++ in `plugins/_shared/code_runner.py` if C/C++ solutions should be verified; Java needs an install by the owner.
 4. Run the `problem_sets` capability once (about 45 minutes).
 5. Everything owner-only is unchanged: kernel deploy, provider capacity, VM2, OmniRoute key, token rotation, Telugu/Hindi sign-off, the reliability gate.
+
+## Handoff item 3 (C/C++ allow-list), 2026-10-28 evening: DONE
+- `C:\mingw64\bin\gcc.exe` and `g++.exe` added to the Windows allow-list in `plugins/_shared/code_runner.py`. Real check through the runner on this laptop: a C program (reads two numbers, prints the sum) -> status ok, stdout 7; a C++ program (product) -> ok, 42. Java is still absent (`tool_status("java")` -> "No Java JDK ... Installing is your step"): the owner installs one if he wants Java verified. New test in `test_code_runner.py`; the file passes.

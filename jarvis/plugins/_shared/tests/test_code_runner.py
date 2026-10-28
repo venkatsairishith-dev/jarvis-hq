@@ -332,3 +332,8 @@ def test_windows_allowlist_covers_the_python_install_manager_layout(tmp_path, mo
     exe.chmod(0o755)
     found = C.find_tool("python", {"python": table["python"]})
     assert found and found.lower().endswith(os.path.join("pythoncore-3.14-64", "python.exe").lower())
+
+
+def test_the_windows_table_lists_the_laptops_own_mingw_folder():
+    t = C.DEFAULT_TOOL_PATHS["windows"]
+    assert "C:\mingw64\bin\gcc.exe" in t["gcc"] and "C:\mingw64\bin\g++.exe" in t["g++"]       # this laptop's gcc/g++ were not found before (2026-10-28), so C and C++ solutions were saved "-unverified"

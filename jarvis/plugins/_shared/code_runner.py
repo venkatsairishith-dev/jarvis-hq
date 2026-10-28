@@ -154,9 +154,9 @@ DEFAULT_TOOL_PATHS: dict[str, dict[str, list[str]]] = {
         "python": ["%ProgramFiles%\\Python3*\\python.exe", "%LOCALAPPDATA%\\Programs\\Python\\Python3*\\python.exe", "D:\\jarvis\\tools\\python*\\python.exe",
                    "%LOCALAPPDATA%\\Python\\pythoncore-3*\\python.exe"],        # the Python install manager's layout (this laptop: pythoncore-3.14-64), laptop 2026-10-28
         "gcc": ["C:\\msys64\\ucrt64\\bin\\gcc.exe", "C:\\msys64\\mingw64\\bin\\gcc.exe", "C:\\w64devkit\\bin\\gcc.exe", "D:\\jarvis\\tools\\w64devkit\\bin\\gcc.exe",
-                "%ProgramFiles%\\mingw-w64\\*\\mingw64\\bin\\gcc.exe"],
+                "%ProgramFiles%\\mingw-w64\\*\\mingw64\\bin\\gcc.exe", "C:\\mingw64\\bin\\gcc.exe"],            # C:\mingw64\bin: this laptop's own gcc (2026-10-28)
         "g++": ["C:\\msys64\\ucrt64\\bin\\g++.exe", "C:\\msys64\\mingw64\\bin\\g++.exe", "C:\\w64devkit\\bin\\g++.exe", "D:\\jarvis\\tools\\w64devkit\\bin\\g++.exe",
-                "%ProgramFiles%\\mingw-w64\\*\\mingw64\\bin\\g++.exe"],
+                "%ProgramFiles%\\mingw-w64\\*\\mingw64\\bin\\g++.exe", "C:\\mingw64\\bin\\g++.exe"],
         "javac": ["%ProgramFiles%\\Eclipse Adoptium\\jdk-*\\bin\\javac.exe", "%ProgramFiles%\\Java\\jdk*\\bin\\javac.exe", "%ProgramFiles%\\Microsoft\\jdk-*\\bin\\javac.exe",
                   "D:\\jarvis\\tools\\jdk*\\bin\\javac.exe"],
         "java": ["%ProgramFiles%\\Eclipse Adoptium\\jdk-*\\bin\\java.exe", "%ProgramFiles%\\Java\\jdk*\\bin\\java.exe", "%ProgramFiles%\\Microsoft\\jdk-*\\bin\\java.exe",
