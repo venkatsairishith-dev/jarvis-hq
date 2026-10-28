@@ -53,6 +53,18 @@ DEFAULT_WORK = os.path.join(os.path.expanduser("~"), "Documents")
 HARNESS_STREAK = 5            # this many harness failures in a row stop the run: the face or the tool server is down, not JARVIS wrong
 
 
+def _sensitive_window(w) -> bool:
+    """True for a password manager / wallet / bank / broker window (the node's own floor, D18-era): cleanup never auto-closes one, even if a goal
+    somehow opened it, on the same rule the rest of JARVIS already refuses to read or act on such a window by. Missing on a non-Windows import
+    path (this module runs on Linux too, e.g. in CI): then nothing is treated as sensitive, same as before this fix - it is a safety ADDITION, never
+    a reason cleanup does less than it already did."""
+    try:
+        from jarvis.node.jarvis_node import sensitive
+    except Exception:  # noqa: BLE001
+        return False
+    return bool(sensitive.why(w.process, w.title))
+
+
 class PinSwitch:
     """The gateway's pin file (PROTOCOL of the on-screen bench): one line `local` / `groq` / ... Empty or missing = the normal chain. Restored at the end."""
 
@@ -196,14 +208,23 @@ class Runner:
         base.bin = set(self.env.recycle_names())
 
     def _cleanup(self, ctx: model.Context, pre_hwnds: set[int], extras: list[str] | tuple = ()) -> int:
+        """Close every window THIS RUN opened (owner, 2026-10-28: 'it is opening all apps and windows for tests but not
+        closing them after'). Before this, only a window matching the hand-maintained `cleanup.closable` list in
+        goals.json (just Notepad and Calculator) was closed, so VS Code, Chrome, Paint, Explorer, a judge page - anything
+        D64/D76/D77 opens that wasn't on that short list - was left open after every run. Now: new since this goal
+        started (not in `pre_hwnds`), not an ignored background process, and not a password manager/wallet/bank window
+        (never auto-closed, even one this run somehow opened) all get closed; `closable` still widens the match (kept
+        for any spec that is NOT a plain process/title window, e.g. a future non-window target) but is no longer the
+        only way in."""
         closed = 0
         try:
             for w in self.env.windows():
                 if w.hwnd in pre_hwnds or w.process.lower() in {p.lower() for p in self.ignore}:
                     continue
-                if any(checks._match(w, spec) for spec in self.closable):
-                    self.env.close_window(w)
-                    closed += 1
+                if _sensitive_window(w):
+                    continue
+                self.env.close_window(w)
+                closed += 1
             self.sleep(0.5)
             if os.path.normcase(ctx.work.rstrip(ctx.sep)) == os.path.normcase(ctx.docs.rstrip(ctx.sep)):
                 for entry in self.env.list_dir(ctx.docs, "*" + ctx.tok + "*"):         # only what carries this run's token

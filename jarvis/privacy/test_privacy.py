@@ -608,6 +608,45 @@ class BenignAppNames(unittest.TestCase):
         self.assertTrue(self._spans("Open Notepad hunter2xyz", "Notepad hunter2xyz"))
 
 
+class OrderAndRoomNumbersSurviveTheFreeGuess(unittest.TestCase):
+    """D83, owner's laptop live GLiNER check, 2026-10-28: next to other digits, GLiNER's own free guess (no cue
+    word anywhere) sometimes labels a plain order, room or callback number "password" or "one-time code", which
+    `screen_class` never let through -- so a 5-digit order number was lost forever as `[REDACTED:password]`. A
+    REAL cue-worded secret ("pin is 4821", "otp: 482913") must stay exactly as protected as before."""
+
+    class _Model:
+        def __init__(self, hits):
+            self.hits = hits          # [(gliner_label, substring), ...]
+
+        def predict_entities(self, sentence, labels, threshold=0.5):
+            out = []
+            for label, word in self.hits:
+                i = sentence.index(word)
+                out.append({"label": label, "start": i, "end": i + len(word), "score": 0.6})
+            return out
+
+    def _kind(self, sentence, label, word):
+        from redactor import model_candidates, screen_class
+        (kind, s, e, _), = model_candidates(self._Model([(label, word)]), sentence)
+        self.assertEqual(sentence[s:e], word)
+        return screen_class(kind, sentence[s:e])
+
+    def test_a_cue_free_order_number_mislabeled_password_is_restorable(self):
+        self.assertEqual(self._kind("Please file order 77413 today.", "password", "77413"), "NUMBER")
+
+    def test_a_cue_free_room_number_mislabeled_one_time_code_is_restorable(self):
+        self.assertEqual(self._kind("The deadline is Friday, room 83521 at noon.", "one-time code", "83521"), "NUMBER")
+
+    def test_a_cue_free_hyphenated_callback_number_mislabeled_one_time_code_is_restorable(self):
+        self.assertEqual(self._kind("Call me back, 555-0142, when free.", "one-time code", "555-0142"), "NUMBER")
+
+    def test_a_real_cue_worded_pin_stays_protected(self):
+        self.assertIsNone(self._kind("My pin is 4821 today.", "password", "4821"))
+
+    def test_a_real_cue_worded_otp_stays_protected_even_though_its_own_label_is_one_time_code(self):
+        self.assertIsNone(self._kind("Your otp is 482913 for login.", "one-time code", "482913"))
+
+
 class ScreenTextReversible(unittest.TestCase):
     """D73, with the REAL pattern detector (Presidio + spaCy; no PII model): what the screen-text path keeps, hides and never keeps."""
 
@@ -633,6 +672,16 @@ class ScreenTextReversible(unittest.TestCase):
         self.assertTrue(set(shown.values()) <= {"+91 98765 43210", "Hyderabad", "Ravi", "a.b@example.com"})
         for tag in shown:
             self.assertIn(tag, out)
+
+    def test_a_two_word_name_is_not_split_leaving_the_surname_in_the_clear(self):
+        """D83, owner's laptop live GLiNER check, 2026-10-28: the small spaCy model tagged only "Zorblat" (as
+        LOCATION, not even PERSON), leaving "Quimby" as plain text that would reach the online model. The widened
+        span must cover the whole name, and it must still be the kind of thing the owner may hear back."""
+        out, _, hidden = self.run_screen("The deadline is Friday, room 204, call Zorblat Quimby")
+        self.assertNotIn("Zorblat", out)
+        self.assertNotIn("Quimby", out)
+        self.assertEqual(hidden, 0)
+        self.assertIn("Zorblat Quimby", self.vault.display().values())
 
     def test_a_tag_on_the_screen_is_not_ours_and_a_marker_is_not_a_new_secret(self):
         out, _, _ = self.run_screen("The chat window says [PERSON_1] and password: hunter2xyz9")

@@ -144,6 +144,7 @@ def _widen(sentence: str, s: int, e: int) -> tuple[int, int]:
 def model_candidates(model, sentence: str):
     """GLiNER-PII candidates in one sentence, as (kind, start, end, score) relative to the sentence."""
     out = []
+    has_cue = bool(re.search(_SECRET_AFTER_CUE, sentence))
     for ent in model.predict_entities(sentence, list(PII_LABELS), threshold=PII_MODEL_THRESHOLD):
         kind = PII_LABELS.get(ent["label"])
         if not kind:
@@ -152,6 +153,17 @@ def model_candidates(model, sentence: str):
         if len(sentence[s:e].strip()) < 4:       # "AI" became [API_KEY_1] in a research query (seen live); real
             continue                             # secrets this short are caught by the cue patterns ("pin 123")
         piece = sentence[s:e]
+        # No cue word anywhere in the sentence, and the span LOOKS like nothing but a short number ("order 77413",
+        # "room 83521", "555-0142" next to other digits): GLiNER's own free guess, not a confirmed secret. Folded
+        # into BANK_ACCOUNT -- not OTP, and not left as PASSWORD -- because screen_class's existing digit-length
+        # floor for BANK_ACCOUNT/PASSPORT/DRIVING_LICENCE already demotes a too-short-to-be-real instance of THOSE
+        # labels to an ordinary, restorable [NUMBER_n]; OTP and PASSWORD stay unconditionally protected even when
+        # short (a real one-time code or PIN often IS 4-8 digits), so routing through them would leak one. A real
+        # cue-worded secret ("pin is 4821", "otp: 482913") is matched by `_CueRecognizer` before this ever runs,
+        # keeps its own PASSWORD label with the cue word attached, and is untouched by this branch (owner's laptop,
+        # live GLiNER check, 2026-10-28; D83: "order 77413"/"room 83521" were being lost as REDACTED forever).
+        if kind in ("PASSWORD", "OTP") and not has_cue and _SHORT_NUMBER.match(piece):
+            kind = "BANK_ACCOUNT"
         if _PATHY.search(piece):
             m = _PROFILE.search(piece)
             if not m:
@@ -194,6 +206,31 @@ def load_pii_model(path: str = PII_MODEL_DIR):
         return GLiNER.from_pretrained(path, load_onnx_model=True, load_tokenizer=True, onnx_model_file="onnx/model_quint8.onnx")
     except Exception:                                   # noqa: BLE001 - a broken optional model must not stop redaction
         return None
+
+
+# A single bare Title-Case word immediately after a name span (one space, nothing else between): "Zorblat Quimby" ->
+# spaCy's small en_core_web_sm model often tags only "Zorblat" as PERSON/LOCATION, leaving "Quimby" as plain text that
+# reaches the provider (owner's laptop, live check, 2026-10-28; D83). Growing the span to swallow it costs nothing: the
+# combined span is still a restorable name under the same tag.
+_NAME_TAIL = re.compile(r" (?P<w>[A-Z][a-zA-Z'\-]{1,30})(?=[\s.,;:!?)]|\Z)")
+
+
+def _widen_name_tail(spans, text):
+    out = []
+    for i, r in enumerate(spans):
+        end = r.end
+        if r.entity_type in ("PERSON", "LOCATION"):
+            next_start = spans[i + 1].start if i + 1 < len(spans) else len(text)
+            while True:
+                m = _NAME_TAIL.match(text, end)
+                if not m or m.end() > next_start:
+                    break
+                word = m.group("w").lower()
+                if word in CUE_WORDS or word in BENIGN_WORDS:
+                    break
+                end = m.end()
+        out.append(r if end == r.end else RecognizerResult(r.entity_type, r.start, end, r.score))
+    return out
 
 
 def _merge_adjacent(spans, text):
@@ -297,6 +334,7 @@ class Redactor:
             if all(r.end <= c.start or r.start >= c.end for c in chosen):
                 chosen.append(r)
         chosen = _merge_adjacent(sorted(chosen, key=lambda r: r.start), text)
+        chosen = _widen_name_tail(chosen, text)
         if self.stats["jev_unreachable"] == unreachable_before:     # not remembered while the checker is down
             if len(self._cache) > 512:
                 self._cache.clear()
@@ -363,7 +401,9 @@ class StreamRestorer:
 SCREEN_RESTORABLE = frozenset({"PERSON", "LOCATION", "EMAIL_ADDRESS", "PHONE_NUMBER", "IP_ADDRESS", "ADDRESS", "USERNAME", "NUMBER"})
 # Labels the PII model gives to ID-like text. A SHORT digit run or a "XX-12345" reference cannot be a bank account (9 to 18 digits), a card (13 to 19), a
 # passport (letters and digits, no separator) or a licence, so it is an ordinary number: [NUMBER_n] instead of [BANK_ACCOUNT_n], restorable. This is what
-# makes "order number 73912" a hidden "private" value that the model then refuses or guesses (reliability run 2026-10-27).
+# makes "order number 73912" a hidden "private" value that the model then refuses or guesses (reliability run 2026-10-27). OTP and PASSWORD are
+# deliberately NOT here (D83): a real one-time code or PIN is often this short too, so demoting them on shape alone would un-protect a real secret;
+# `model_candidates` instead folds its own cue-free, short-number-shaped PASSWORD/OTP guesses into BANK_ACCOUNT before they ever reach this set.
 SCREEN_ID_LABELS = frozenset({"BANK_ACCOUNT", "PASSPORT", "DRIVING_LICENCE"})
 _SHORT_NUMBER = re.compile(r"(?:\d[\d ,.\-]{0,12}|[A-Za-z]{1,4}[-_/]\d{1,10})\Z")
 
