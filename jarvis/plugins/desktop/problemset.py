@@ -471,6 +471,8 @@ def resolve_out(phrase: str, folder: Path) -> tuple[Path | None, str]:
     phrase = re.sub(r"(?i)\s+(?:folder|directory|dir)$", "", phrase).strip()
     if not phrase:
         out = folder / "solutions"
+    elif re.fullmatch(r"(?i)(?:that|this|same|the same|same one|that same|it|there|here)(?:\s+(?:one|place))?", phrase):
+        out = folder                                       # "save them in that folder" / "in the same folder" is the problem folder itself, not a folder named "that" (laptop 2026-10-28)
     elif re.match(r"(?i)^[a-z]:[\\/]|^~[\\/]|^/", phrase):
         out = Path(phrase).expanduser()
     elif re.search(r"[\\/]", phrase) or ".." in phrase:
@@ -533,12 +535,13 @@ def _read_bytes(path: Path) -> bytes:
 
 
 def _decode(b: bytes) -> str:
+    """Text with \\n line ends only: a statement saved on Windows has \\r\\n, and a sample input split from it would end in a stray \\r."""
     for enc in ("utf-8-sig", "utf-16"):
         try:
-            return b.decode(enc)
+            return b.decode(enc).replace("\r\n", "\n").replace("\r", "\n")
         except UnicodeDecodeError:
             continue
-    return b.decode("utf-8", "replace")
+    return b.decode("utf-8", "replace").replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _read_doc_reader(path: Path, max_pages: int) -> FileRead:

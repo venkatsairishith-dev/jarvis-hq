@@ -17,6 +17,17 @@ from jarvis.evals.reliability.fakes import FakeEnv
 from jarvis.evals.reliability.records import Observation
 
 
+@pytest.fixture(autouse=True)
+def _fake_env_only(monkeypatch):
+    """The default window lister reads the REAL desktop when `jarvis_node.windows` is importable on Windows, so on the laptop these fake-environment tests saw the
+    owner's real windows (chrome/jarvis/Code) instead of the fake ones. Fakes only: turn that path off."""
+    try:
+        from jarvis.node.jarvis_node import windows as node_windows
+        monkeypatch.setattr(node_windows, "ON_WINDOWS", False)
+    except Exception:  # noqa: BLE001 - not importable: the lister already falls back to the environment
+        pass
+
+
 # ------------------------------------------------------------------------------------------------------------------------------- fake drivers
 class QuickDriver:
     """Returns right away: the ordinary, no-hang case."""
@@ -520,3 +531,27 @@ def test_the_watchdog_hook_does_not_fire_for_an_ordinary_quick_goal(tmp_path):
                       sleep=clk.sleep, clock=clk.now, log=lambda s: None)
     row = r.run(repeats=1)["runs"][0]
     assert row["outcome"] == K.PASS and not row.get("harness")
+
+
+def test_bounded_gives_up_on_a_call_that_never_returns_and_reports_one_that_does():
+    import threading
+    gate = threading.Event()
+    assert W.bounded(lambda: gate.wait(30), 0.3) is False        # still running: abandoned, the caller moves on
+    gate.set()
+    assert W.bounded(lambda: None, 1.0) is True
+    assert W.bounded(lambda: 1 / 0, 1.0) is False                 # a failed call is never raised to the caller, and is not a success
+
+
+def test_a_cancel_that_hangs_does_not_hang_the_recovery():
+    class HungCancel(QuickDriver):
+        def cancel_all(self):
+            threading.Event().wait(30)
+    import threading
+    t0 = time.time()
+    orig = W.CANCEL_DEADLINE_S
+    try:
+        W.bounded.__defaults__ = (0.3,)
+        out = W.recover(FakeEnv(), HungCancel(), W.StuckCause(W.NO_WINDOW_MODEL_SILENT, "x"), closable=[])
+    finally:
+        W.bounded.__defaults__ = (orig,)
+    assert time.time() - t0 < 5 and out["cancelled"] is False

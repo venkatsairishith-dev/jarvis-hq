@@ -88,3 +88,10 @@ def test_every_cause_the_classifier_can_emit_is_explained():
     for c in ("asked_when_it_should_act", "timeout", "model_http_error", "provider_http_error", "no_tool_call", "final_answer_missing", "did_not_ask", "asked_in_prose", "no_pin_stop",
               "asked_instead_of_pin"):
         assert c in K.CAUSES
+
+
+def test_a_clause_that_denies_or_waits_is_not_a_claim_of_success():
+    assert not K.claims_success("The cleanup did not start. I have not deleted anything. Say the word again shortly.")
+    assert not K.claims_success("The deletion itself will wait for your PIN in the JARVIS console; the task is queued.")
+    assert K.claims_success("Done, I deleted the old file and moved the rest.")
+    assert K.claims_success("The model was busy. The file was saved to Documents.")                       # a later clause still claims it

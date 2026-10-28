@@ -277,6 +277,29 @@ def write_stuck_report(results_dir: Path | str | None, goal_id: str, rep: int, c
 
 
 # ------------------------------------------------------------------------------------------------------------------------ recovery
+CANCEL_DEADLINE_S = 15.0
+
+
+def bounded(fn: Callable[[], Any], seconds: float = CANCEL_DEADLINE_S) -> bool:
+    """Runs `fn()` on a daemon thread and waits at most `seconds`: True when it finished without raising, False when it raised or was still running (and is abandoned).
+    For the calls the runner makes AFTER a hang, to the same peer that hung (`driver.cancel_all()` asks the tool server what is still running): a server that
+    keeps sending a byte every few seconds defeats a per-read socket timeout, so that one call hung the whole suite right after the watchdog had recovered the
+    goal (laptop 2026-10-28, a local server that trickled keep-alive bytes: stuck report written at +185 s, runner still blocked 5 minutes later)."""
+    ok: list[bool] = []
+
+    def _run() -> None:
+        try:
+            fn()
+            ok.append(True)
+        except Exception:  # noqa: BLE001 - the caller treats a failed call like a skipped one
+            pass
+
+    th = threading.Thread(target=_run, name="reliability-bounded-call", daemon=True)
+    th.start()
+    th.join(seconds)
+    return bool(ok)
+
+
 def recover(env: Any, driver: Any, cause: StuckCause, *, closable: list[dict], ignore: tuple[str, ...] = (), pre_hwnds: set[int] = frozenset(),
             process_grace_s: float = 5.0, sleep: Callable[[float], None] = time.sleep) -> dict:
     """Narrow, reversible recovery: closes at most ONE window (new, and matching the SAME closable rule `runner.py`'s own cleanup uses), or cancels
@@ -294,11 +317,7 @@ def recover(env: Any, driver: Any, cause: StuckCause, *, closable: list[dict], i
                     pass
     cancelled = terminated = False
     if cause.kind in (NO_WINDOW_MODEL_SILENT, PROCESS_ZOMBIE):
-        try:
-            driver.cancel_all()
-            cancelled = True
-        except Exception:  # noqa: BLE001 - cancel_all() is already called defensively everywhere else in the runner
-            pass
+        cancelled = bounded(driver.cancel_all)       # a peer that hung once can hang the cancel too: never wait for it past a short deadline
         proc = getattr(driver, "current_proc", None)
         if proc is not None:
             sleep(process_grace_s)

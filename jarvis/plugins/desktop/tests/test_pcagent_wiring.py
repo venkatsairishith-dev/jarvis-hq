@@ -101,7 +101,8 @@ def test_the_owner_using_the_mouse_pauses_the_task_and_it_goes_on_afterwards(pc,
     def input_state():
         state["reads"] += 1
         if state["owner"]:
-            if time.time() - state["since"] > 1.0:                       # he stops after a second
+            state["owner_reads"] = state.get("owner_reads", 0) + 1
+            if state["owner_reads"] > 2:                                  # he stops after two readings (counted, not timed: on a PC where every job takes a second a timed owner stops between the two looks, laptop 2026-10-28)
                 state["owner"] = False
                 state["last"] = time.time() - 3.5
         idle = 0 if state["owner"] else int((time.time() - state.get("last", t0 - 100)) * 1000)

@@ -23,6 +23,7 @@ process), and the run moves on to the next goal with that one marked invalid - a
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import platform
@@ -45,7 +46,10 @@ SCHEMA = 1
 # project folder. The first default, D:\jarvis\data\reliability\work, is outside all of them, so every file goal answered "the PC executor only makes folders
 # inside ..." and the gate counted that as JARVIS failing (laptop 2026-10-27: sm-folder, sm-copy, sm-rename, sm-empty-file, the Save As goals). The run folder
 # now sits in Documents (removed after each run; the Recycle Bin is purged by the run's token only).
-DEFAULT_WORK = os.path.join(os.path.expanduser("~"), "Documents", "jarvis-reliability-work")
+# The kernel's create operations make a file or folder only DIRECTLY inside Documents (a run folder inside Documents was refused too: fa-file-created,
+# pr-popup-mid-task, sm-empty-file, 2026-10-28), so on Windows {work} IS Documents: every name a goal makes carries the run's token and the cleanup removes
+# exactly the entries whose name holds that token (never a folder as a whole).
+DEFAULT_WORK = os.path.join(os.path.expanduser("~"), "Documents")
 HARNESS_STREAK = 5            # this many harness failures in a row stop the run: the face or the tool server is down, not JARVIS wrong
 
 
@@ -222,7 +226,11 @@ class Runner:
                 self.env.close_window(w)
                 closed += 1
             self.sleep(0.5)
-            self.env.remove_tree(ctx.work)
+            if os.path.normcase(ctx.work.rstrip(ctx.sep)) == os.path.normcase(ctx.docs.rstrip(ctx.sep)):
+                for entry in self.env.list_dir(ctx.docs, "*" + ctx.tok + "*"):         # only what carries this run's token
+                    self.env.remove_tree(entry)
+            else:
+                self.env.remove_tree(ctx.work)
             for extra in extras:
                 # only what this run made: inside Documents and named with the run's token (the kernel makes folders only DIRECTLY in Documents, Desktop ...)
                 if ctx.tok in extra and extra.lower().startswith(ctx.docs.lower() + ctx.sep):
@@ -240,6 +248,8 @@ class Runner:
         if g0.kind == "probe":
             return self._run_probe(g0, rep, row)
         ctx = model.make_context(self.work_root, self.env.sep, self.outputs, f"{g0.id}:{rep}:{self.wall()}", self.wall())
+        if self.env.sep == "\\" and os.path.normcase(self.work_root.rstrip("\\")) == os.path.normcase(ctx.docs.rstrip("\\")):
+            ctx = dataclasses.replace(ctx, work=ctx.docs)           # flat: see DEFAULT_WORK
         g = model.render(g0, ctx)
         base = Baseline()
         pre = self.env.windows()
@@ -278,10 +288,7 @@ class Runner:
                         hits.append((CheckResult(spec.get("label") or r.name, True, spec.get("label") or r.detail, r.cause), int(spec["severity"])))
             out = classify.classify(g.kind, obs, verify, hits)
         finally:
-            try:
-                self.driver.cancel_all()
-            except Exception:  # noqa: BLE001
-                pass
+            watchdog.bounded(self.driver.cancel_all)         # not a bare call: after a hang the same server can hang this one too (D81 follow-up, laptop 2026-10-28)
             self._cleanup(ctx, pre_hwnds, g.cleanup)
         if obs.status == "harness_error":
             row["harness"] = True

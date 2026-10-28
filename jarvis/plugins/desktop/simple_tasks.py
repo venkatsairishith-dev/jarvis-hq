@@ -280,6 +280,7 @@ def plan_for(request: str, path: Path | None = None) -> dict | None:
        {"status": "ok", "steps": [...], "task": id, "class": c}      steps for validate()/the coordinator
        {"status": "clarify", "question": ...}                          a missing or vague part, or a task that is explained and not done
        {"status": "fallback", "problems": [...]}                       a task the catalogue lists honestly as not built"""
+    request = composite.localize_paths(str(request or ""))      # "C:\Users\me\Documents\a.txt" is "a.txt in Documents", not a place outside the known folders
     hit = match(request, path)
     if hit is None:
         if OUTSIDE.search(str(request or "")):               # a place that is not a known folder is asked about, never guessed or handed to the model

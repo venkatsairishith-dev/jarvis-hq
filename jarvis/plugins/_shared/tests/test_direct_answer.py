@@ -758,3 +758,29 @@ def test_explicit_app_words():
         assert D.explicit_app(t), t
     for t in ("23 times 47", "what is 15% of 2400", "what time is it", "convert 5 km to miles"):
         assert not D.explicit_app(t), t
+
+
+ANCHORED = [                                         # a date N units AFTER / BEFORE a date the owner NAMED (laptop 2026-10-28: "what is the date 45 days after 1 January 2027" went to the model)
+    ("what is the date 45 days after 1 January 2027", dt.date(2027, 1, 1) + dt.timedelta(days=45)),
+    ("30 days after 1 March 2027", dt.date(2027, 3, 31)),
+    ("what date is 45 days after 1 january 2027", dt.date(2027, 2, 15)),
+    ("60 days before 15 march 2027", dt.date(2027, 1, 14)),
+    ("what is 100 days before 1 jan 2027", dt.date(2027, 1, 1) - dt.timedelta(days=100)),
+    ("what date is 3 weeks after 5 november 2026", dt.date(2026, 11, 26)),
+    ("date 90 days after 3 march 2026", dt.date(2026, 6, 1)),
+    ("what is the date 2 months after 31 january 2027", dt.date(2027, 3, 31)),
+    ("1 year after 29 february 2028", dt.date(2029, 2, 28)),
+    ("10 days after tomorrow", dt.date(2026, 11, 7)),
+]
+
+
+@pytest.mark.parametrize("text,want", ANCHORED, ids=[t for t, _ in ANCHORED])
+def test_a_date_n_units_after_or_before_a_named_date(text, want):
+    got = val(text)
+    assert got.value == want.isoformat()
+    assert f"{want.strftime('%A')}, {want.day} {want.strftime('%B %Y')}" in got.text
+
+
+@pytest.mark.parametrize("text", ["45 days after 1 march", "2 weeks after 12/05/2026", "open calculator and 45 days after 1 january 2027", "45 days after the meeting"])
+def test_an_anchor_with_no_year_an_ambiguous_date_or_an_app_is_left_alone(text):
+    assert D.answer(text, now=NOW) is None

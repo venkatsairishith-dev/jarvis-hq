@@ -101,6 +101,29 @@ def folder_question(raw: str = "") -> str:
     return f"I can only save into {ROOTS_TEXT}. Which of them should it be?"
 
 
+_HOME_ITEM = None
+
+
+def localize_paths(text: str) -> str:
+    """A full path to something DIRECTLY inside one of the owner's own known folders is the same request as "<name> in <Folder>": "Delete C:\\Users\\me\\Documents\\a.txt" is
+    "Delete a.txt in Documents". Without this every such request was treated as a place outside the known folders and answered "I can only save into Documents, Desktop, ..."
+    (laptop 2026-10-28: 9 of 40 tasks in one sweep, 37 of the 66 questions the tasks asked in two days). A path deeper than that, in another profile, or on another drive is left
+    exactly as it was (it is still refused or asked about, and the node checks again)."""
+    global _HOME_ITEM
+    home = os.path.expanduser("~")
+    if not text or not home or home == "~":
+        return text
+    if _HOME_ITEM is None or _HOME_ITEM[0] != home:
+        h = r"[\\/]+".join(re.escape(part) for part in re.split(r"[\\/]+", home) if part)
+        folders = "Documents|Desktop|Downloads|Pictures|Videos|Music"
+        name = r"[^\\/\s\"'<>|*?:]*[^\\/\s\"'<>|*?:.,;!]"
+        _HOME_ITEM = (home, re.compile(rf"(?i)(?<![A-Za-z0-9])[\\/]*{h}[\\/]+({folders})[\\/]+({name})(?![\\/\w])"),
+                      re.compile(rf"(?i)(?<![A-Za-z0-9])[\\/]*{h}[\\/]+({folders})(?![\\/\w])"))
+    item, root = _HOME_ITEM[1], _HOME_ITEM[2]
+    out = item.sub(lambda m: f"{m.group(2)} in {m.group(1).capitalize()}", text)
+    return root.sub(lambda m: f"{m.group(1).capitalize()} folder", out)
+
+
 # ---------------------------------------------------------------------------------------------------------------- file names
 def default_name(app: str = "") -> str:
     import time
@@ -161,6 +184,9 @@ def parse_save(request: str) -> dict | None:
 VSCODE_NAME = r"(?:vs\s?code|visual\s+studio\s+code)"
 VSCODE_OPEN = re.compile(rf"(?i)\b(?:open|launch|start)\s+(?:up\s+)?{VSCODE_NAME}\b")
 VSCODE_IN = re.compile(rf"(?i)\b(?:open|launch|start)\s+(?:up\s+)?{VSCODE_NAME}\s+(?:app\s+)?(?:in|on|at|with|inside|from|to)\s+"
+                       # "on a new folder C:\x\y", "in the folder D:\work\app", "on folder ~/code/app": the words before the path are skipped, but "the folder" is skipped only when a real
+                       # path follows ("in the project folder" keeps meaning that phrase). Before this, the path was never taken and VS Code asked "which folder?" (laptop 2026-10-28)
+                       r"(?:(?:(?:a|an|the|my)\s+)?(?:folder|directory)\s+(?=[\w.:~\\/-])|(?:(?:a|an|the)\s+)?new\s+(?:folder|directory|project)\s+)?"
                        rf"(?:{Q}([^\"'”’]{{1,120}}){QE}|((?:my\s+|the\s+)?[\w:./\\~-]+(?:\s+(?:folder|directory|project))?(?:\s+folder)?))"
                        r"(?=\s*(?:,|;|\.\s|\.$|!|\?|$|\band\b|\bthen\b))")
 VSCODE_FILE = re.compile(rf"(?i)\b(?:create|make|add|new)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?(?:file\s+)?(?:called\s+|named\s+)?(?:{Q}([^\"'”’]{{1,80}}){QE}|([\w()-][\w .()-]{{0,60}}?\.[A-Za-z0-9]{{1,6}})\b)")

@@ -20,3 +20,9 @@ $env:ELECTRON_BUILDER_CACHE = 'D:\jarvis\cache\electron-builder'
 $env:OLLAMA_MODELS = 'D:\jarvis\models\ollama'
 $env:LLAMA_CACHE = 'D:\jarvis\cache\llama'
 $env:APP_USER_DATA_PATH = 'D:\jarvis\data\face\user-data'
+
+# Owner switches (NOT storage: supervisor/test_budget.py leaves these out of the mirror check). Dot-sourced by jarvis-start.ps1 (tool server, gateways) and start-node.ps1 (node).
+# JARVIS_SCREEN_TEXT_TO_MODEL=1: the owner said "Yes, turn it on" (twice, relayed 2026-10-28). Window and page text may go to the model, and ONLY through the privacy gateway: names, numbers and
+# dates become reversible tags ([PERSON_1]), secrets (passwords, card numbers, keys, codes) become [REDACTED:kind] and are never sent or kept (D73, plugins/_shared/screen_text.py).
+# To turn it off again: delete the next line (or set it to 0) and restart the stack and the node.
+$env:JARVIS_SCREEN_TEXT_TO_MODEL = '1'

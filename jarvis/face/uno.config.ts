@@ -187,6 +187,19 @@ export function sharedUnoConfig() {
         collections: {
           ...createExternalPackageIconLoader('@proj-airi/lobe-icons'),
           ...createExternalPackageIconLoader('@proj-airi/iconify-meteocons'),
+          // JARVIS (laptop 2026-10-28, "I can't see icons"): the standard collections below were found by UnoCSS's own lookup only on a machine where it happened to work; on this Windows
+          // build NONE of them was, so 566 icon classes (359 solar, 54 mingcute, 19 lucide, ...) had no CSS rule and every button/menu icon was blank, while lobe-icons (loaded the explicit
+          // way above) was fine. Loading them the same explicit way does not depend on the lookup.
+          ...createExternalPackageIconLoader('@iconify-json/solar'),
+          ...createExternalPackageIconLoader('@iconify-json/mingcute'),
+          ...createExternalPackageIconLoader('@iconify-json/lucide'),
+          ...createExternalPackageIconLoader('@iconify-json/ph'),
+          ...createExternalPackageIconLoader('@iconify-json/tabler'),
+          ...createExternalPackageIconLoader('@iconify-json/carbon'),
+          ...createExternalPackageIconLoader('@iconify-json/eos-icons'),
+          ...createExternalPackageIconLoader('@iconify-json/svg-spinners'),
+          ...createExternalPackageIconLoader('@iconify-json/simple-icons'),
+          ...createExternalPackageIconLoader('@iconify-json/vscode-icons'),
         },
       }),
       presetScrollbar(),

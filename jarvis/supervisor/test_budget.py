@@ -92,9 +92,15 @@ def ps1_env(path: Path) -> dict[str, str]:
     return dict(re.findall(r"^\$env:(\w+) = '([^']+)'$", path.read_text(encoding="utf-8-sig"), re.M))
 
 
+OWNER_SWITCHES = {"JARVIS_SCREEN_TEXT_TO_MODEL": {"0", "1"}}          # not storage: set in their own block at the end of d-env.ps1
+
+
 def test_d_env_ps1_mirrors_storage_env():
-    """d-env.ps1 (dot-sourced by jarvis-start.ps1, the installer and every start script) must set exactly what budget.storage_env() returns."""
-    assert ps1_env(JARVIS / "scripts" / "d-env.ps1") == budget.storage_env()
+    """d-env.ps1 (dot-sourced by jarvis-start.ps1, the installer and every start script) must set exactly what budget.storage_env() returns, plus only the named owner switches."""
+    got = ps1_env(JARVIS / "scripts" / "d-env.ps1")
+    switches = {k: v for k, v in got.items() if k in OWNER_SWITCHES}
+    assert all(v in OWNER_SWITCHES[k] for k, v in switches.items())
+    assert {k: v for k, v in got.items() if k not in OWNER_SWITCHES} == budget.storage_env()
 
 
 def test_start_scripts_use_d_env_and_check_d():
