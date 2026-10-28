@@ -141,10 +141,30 @@ def _widen(sentence: str, s: int, e: int) -> tuple[int, int]:
     return s, e
 
 
+_WORD_RX = re.compile(r"\S+")
+_CUE_LOOKBACK_WORDS = 3
+
+
+def _cue_word_just_before(sentence: str, start: int) -> bool:
+    """A cue word (pin/password/code/otp/...) among the few WORDS immediately before `start` -- word count, not a
+    character window, and checked PER CANDIDATE, not once for the whole sentence. A character window is the wrong
+    unit here: wide enough to reach back across "verification code is " (22 chars) to catch "code", it is ALSO wide
+    enough, in a compact sentence, to reach all the way from "order 77413" back across "and order " to "pin" at the
+    very start of "pin 4821 and order 77413" -- wrongly protecting the unrelated order number too. A fixed number
+    of words avoids both failure modes: the last 3 words before "77413" there are ["4821", "and", "order"], none a
+    cue word, while the last 3 before "4821" are just ["pin"]. This also catches "pin 4821"/"...code is 123456",
+    which `_SECRET_AFTER_CUE`'s own strict grammar (a cue word directly followed by is/was/=/:/-) does not match
+    ("pin 4821" has no connector; "code" alone is not in its cue list, only "security code" is). Laptop live check,
+    2026-10-28: the first version of this used `_SECRET_AFTER_CUE` on the WHOLE sentence, which both missed those
+    two (a real PIN/OTP became restorable: a regression) and over-protected a number sharing a sentence with an
+    unrelated cue word; a from-scratch character window had the second problem on its own, as above."""
+    words = [m.group(0) for m in _WORD_RX.finditer(sentence, 0, start)]
+    return any(w.strip(_TRAILING).lower() in CUE_WORDS for w in words[-_CUE_LOOKBACK_WORDS:])
+
+
 def model_candidates(model, sentence: str):
     """GLiNER-PII candidates in one sentence, as (kind, start, end, score) relative to the sentence."""
     out = []
-    has_cue = bool(re.search(_SECRET_AFTER_CUE, sentence))
     for ent in model.predict_entities(sentence, list(PII_LABELS), threshold=PII_MODEL_THRESHOLD):
         kind = PII_LABELS.get(ent["label"])
         if not kind:
@@ -153,16 +173,17 @@ def model_candidates(model, sentence: str):
         if len(sentence[s:e].strip()) < 4:       # "AI" became [API_KEY_1] in a research query (seen live); real
             continue                             # secrets this short are caught by the cue patterns ("pin 123")
         piece = sentence[s:e]
-        # No cue word anywhere in the sentence, and the span LOOKS like nothing but a short number ("order 77413",
-        # "room 83521", "555-0142" next to other digits): GLiNER's own free guess, not a confirmed secret. Folded
-        # into BANK_ACCOUNT -- not OTP, and not left as PASSWORD -- because screen_class's existing digit-length
-        # floor for BANK_ACCOUNT/PASSPORT/DRIVING_LICENCE already demotes a too-short-to-be-real instance of THOSE
-        # labels to an ordinary, restorable [NUMBER_n]; OTP and PASSWORD stay unconditionally protected even when
-        # short (a real one-time code or PIN often IS 4-8 digits), so routing through them would leak one. A real
-        # cue-worded secret ("pin is 4821", "otp: 482913") is matched by `_CueRecognizer` before this ever runs,
-        # keeps its own PASSWORD label with the cue word attached, and is untouched by this branch (owner's laptop,
-        # live GLiNER check, 2026-10-28; D83: "order 77413"/"room 83521" were being lost as REDACTED forever).
-        if kind in ("PASSWORD", "OTP") and not has_cue and _SHORT_NUMBER.match(piece):
+        # No cue word just before THIS span (not "anywhere in the sentence" -- see `_cue_word_just_before`), and the
+        # span LOOKS like nothing but a short number ("order 77413", "room 83521", "555-0142" next to other digits,
+        # or mislabeled API_KEY when several numbers sit close together): GLiNER's own free guess, not a confirmed
+        # secret. Folded into BANK_ACCOUNT -- not OTP, and not left as PASSWORD/API_KEY -- because screen_class's
+        # existing digit-length floor for BANK_ACCOUNT/PASSPORT/DRIVING_LICENCE already demotes a too-short-to-be-
+        # real instance of THOSE labels to an ordinary, restorable [NUMBER_n]; OTP and PASSWORD stay unconditionally
+        # protected even when short (a real one-time code or PIN often IS 4-8 digits), so routing through them would
+        # leak one. A real cue-worded secret ("pin 4821", "otp: 482913", "your verification code is 123456") keeps
+        # its own PASSWORD/OTP label because the cue word sits right before it (owner's laptop, live GLiNER check,
+        # 2026-10-28; D83/D86: "order 77413"/"room 83521"/"555-0142" were being lost as REDACTED forever).
+        if kind in ("PASSWORD", "OTP", "API_KEY") and not _cue_word_just_before(sentence, s) and _SHORT_NUMBER.match(piece):
             kind = "BANK_ACCOUNT"
         if _PATHY.search(piece):
             m = _PROFILE.search(piece)
