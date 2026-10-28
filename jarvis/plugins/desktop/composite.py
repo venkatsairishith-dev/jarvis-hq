@@ -101,6 +101,29 @@ def folder_question(raw: str = "") -> str:
     return f"I can only save into {ROOTS_TEXT}. Which of them should it be?"
 
 
+_HOME_ITEM = None
+
+
+def localize_paths(text: str) -> str:
+    """A full path to something DIRECTLY inside one of the owner's own known folders is the same request as "<name> in <Folder>": "Delete C:\\Users\\me\\Documents\\a.txt" is
+    "Delete a.txt in Documents". Without this every such request was treated as a place outside the known folders and answered "I can only save into Documents, Desktop, ..."
+    (laptop 2026-10-28: 9 of 40 tasks in one sweep, 37 of the 66 questions the tasks asked in two days). A path deeper than that, in another profile, or on another drive is left
+    exactly as it was (it is still refused or asked about, and the node checks again)."""
+    global _HOME_ITEM
+    home = os.path.expanduser("~")
+    if not text or not home or home == "~":
+        return text
+    if _HOME_ITEM is None or _HOME_ITEM[0] != home:
+        h = r"[\\/]+".join(re.escape(part) for part in re.split(r"[\\/]+", home) if part)
+        folders = "Documents|Desktop|Downloads|Pictures|Videos|Music"
+        name = r"[^\\/\s\"'<>|*?:]*[^\\/\s\"'<>|*?:.,;!]"
+        _HOME_ITEM = (home, re.compile(rf"(?i)(?<![A-Za-z0-9])[\\/]*{h}[\\/]+({folders})[\\/]+({name})(?![\\/\w])"),
+                      re.compile(rf"(?i)(?<![A-Za-z0-9])[\\/]*{h}[\\/]+({folders})(?![\\/\w])"))
+    item, root = _HOME_ITEM[1], _HOME_ITEM[2]
+    out = item.sub(lambda m: f"{m.group(2)} in {m.group(1).capitalize()}", text)
+    return root.sub(lambda m: f"{m.group(1).capitalize()} folder", out)
+
+
 # ---------------------------------------------------------------------------------------------------------------- file names
 def default_name(app: str = "") -> str:
     import time
