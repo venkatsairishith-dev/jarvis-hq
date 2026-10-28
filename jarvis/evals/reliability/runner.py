@@ -267,10 +267,7 @@ class Runner:
                         hits.append((CheckResult(spec.get("label") or r.name, True, spec.get("label") or r.detail, r.cause), int(spec["severity"])))
             out = classify.classify(g.kind, obs, verify, hits)
         finally:
-            try:
-                self.driver.cancel_all()
-            except Exception:  # noqa: BLE001
-                pass
+            watchdog.bounded(self.driver.cancel_all)         # not a bare call: after a hang the same server can hang this one too (D81 follow-up, laptop 2026-10-28)
             self._cleanup(ctx, pre_hwnds, g.cleanup)
         if obs.status == "harness_error":
             row["harness"] = True
