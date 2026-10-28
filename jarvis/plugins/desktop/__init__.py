@@ -181,8 +181,21 @@ class _PcLock:
             op.entry_exit()
         return False
 
+    SINGLE_WAIT_S = 20.0
+
     async def __aenter__(self):
-        return self.__enter__()
+        """Like __enter__, but a refusal because ANOTHER SINGLE ACTION holds the lock is waited out (up to SINGLE_WAIT_S, without blocking the event loop). The chat model
+        fires several run_pc_action calls in one breath (laptop 2026-10-28, Calculator: three ui_click_element in the same second, two refused with "another PC task is
+        running (single-run_pc_action-..., running 0 s)"); each is a few seconds long, so waiting is right and failing is not. A task or a mission holding the lock still
+        refuses at once, as before."""
+        deadline = time.monotonic() + self.SINGLE_WAIT_S
+        while True:
+            try:
+                return self.__enter__()
+            except coord.Busy as e:
+                if "(single-" not in str(e) or time.monotonic() >= deadline:
+                    raise
+            await asyncio.sleep(0.25)
 
     async def __aexit__(self, *exc):
         return self.__exit__(*exc)
@@ -595,7 +608,7 @@ class DesktopPlugin(PluginBase):
         if approval_id:
             body["approval_id"] = approval_id
         try:
-            with _PcLock("run_browser_action", 360):
+            async with _PcLock("run_browser_action", 360):
                 res = await self._run(self._pc(), body, 120, f"{action} {target}"[:120])
         except coord.Busy as e:
             return _err(e)
@@ -636,7 +649,7 @@ class DesktopPlugin(PluginBase):
         if approval_id:
             body["approval_id"] = approval_id
         try:
-            with _PcLock("run_pc_action", 360):
+            async with _PcLock("run_pc_action", 360):
                 return await DesktopPlugin._action_closed_loop(self, action, target, text, body)      # (not self._...: tests and hosts lend a stand-in `self`)
         except coord.Busy as e:
             return _err(e)
