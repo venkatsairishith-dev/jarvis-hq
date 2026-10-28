@@ -151,7 +151,8 @@ DEFAULT_TOOL_PATHS: dict[str, dict[str, list[str]]] = {
         "node": ["/usr/bin/node", "/usr/local/bin/node", "/opt/node*/bin/node", "/opt/homebrew/bin/node"],
     },
     "windows": {
-        "python": ["%ProgramFiles%\\Python3*\\python.exe", "%LOCALAPPDATA%\\Programs\\Python\\Python3*\\python.exe", "D:\\jarvis\\tools\\python*\\python.exe"],
+        "python": ["%ProgramFiles%\\Python3*\\python.exe", "%LOCALAPPDATA%\\Programs\\Python\\Python3*\\python.exe", "D:\\jarvis\\tools\\python*\\python.exe",
+                   "%LOCALAPPDATA%\\Python\\pythoncore-3*\\python.exe"],        # the Python install manager's layout (this laptop: pythoncore-3.14-64), laptop 2026-10-28
         "gcc": ["C:\\msys64\\ucrt64\\bin\\gcc.exe", "C:\\msys64\\mingw64\\bin\\gcc.exe", "C:\\w64devkit\\bin\\gcc.exe", "D:\\jarvis\\tools\\w64devkit\\bin\\gcc.exe",
                 "%ProgramFiles%\\mingw-w64\\*\\mingw64\\bin\\gcc.exe"],
         "g++": ["C:\\msys64\\ucrt64\\bin\\g++.exe", "C:\\msys64\\mingw64\\bin\\g++.exe", "C:\\w64devkit\\bin\\g++.exe", "D:\\jarvis\\tools\\w64devkit\\bin\\g++.exe",
@@ -542,7 +543,7 @@ class LocalRunner:
         if not status:
             if code == 0:
                 status = OK
-            elif sig == getattr(signal, "SIGXCPU", -1):
+            elif sig == getattr(signal, "SIGXCPU", -1) or (IS_WINDOWS and code == 0xC0000044):      # the Windows job object's CPU limit ends the process with STATUS_QUOTA_EXCEEDED
                 status, note = TIMEOUT, f"stopped after {cpu:g} s of CPU time"
             elif sig == getattr(signal, "SIGKILL", -1) and wall_s < wall:
                 status, note = (MEMORY, "the run was killed by the memory limit") if MEM_WORDS.search(se) else (RUNTIME_ERROR, "killed by the system (the CPU or memory limit)")

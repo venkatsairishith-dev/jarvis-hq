@@ -318,3 +318,17 @@ def test_runs_are_made_under_the_configured_work_dir(tmp_path):
     runner = C.LocalRunner(cfg={"work_dir": str(tmp_path / "runs")})
     r = runner.execute("python", "import os\nprint(os.getcwd())", [""], FAST)[0]
     assert r.status == "ok" and r.stdout.strip().startswith(str((tmp_path / "runs").resolve())) and list((tmp_path / "runs").iterdir()) == []
+
+
+def test_windows_allowlist_covers_the_python_install_manager_layout(tmp_path, monkeypatch):
+    """The laptop's Python is %LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe; the Windows table did not list that layout, so 'solve all the problems in <folder>'
+    saved every solution as -unverified with 'Python 3 is not installed' (laptop 2026-10-28)."""
+    table = C.DEFAULT_TOOL_PATHS["windows"]
+    home = tmp_path / "Local"
+    exe = home / "Python" / "pythoncore-3.14-64" / "python.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_text("x")
+    monkeypatch.setenv("LOCALAPPDATA", str(home))
+    exe.chmod(0o755)
+    found = C.find_tool("python", {"python": table["python"]})
+    assert found and found.lower().endswith(os.path.join("pythoncore-3.14-64", "python.exe").lower())

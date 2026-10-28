@@ -789,3 +789,17 @@ def test_the_ambiguity_gate_does_not_ask_about_a_clear_problem_set_request():
     rules = A.load()
     for text in POSITIVE:
         assert A.check(text, A.Context(apps=[], sites=[]), rules) is None, text
+
+
+def test_a_pronoun_for_the_output_folder_means_the_problem_folder(tmp_path):
+    """The face's chat model rewrites "solve all the problems in <folder> in Python" as "... and save them in that folder"; that made a folder NAMED "that" (laptop 2026-10-28)."""
+    d = tmp_path / "set"
+    d.mkdir()
+    for words in ("that folder", "that", "the same folder", "this folder", "it", "there"):
+        assert P.resolve_out(words, d)[0] == d, words
+    assert P.resolve_out("thatcher", d)[0] == d / "thatcher"
+
+
+def test_statement_text_has_unix_line_ends_whatever_the_file_had(tmp_path):
+    (tmp_path / "w.txt").write_bytes(b"Sample Input:\r\n3 4\r\nSample Output:\r\n7\r\n")
+    assert "\r" not in P.default_read(tmp_path / "w.txt").text

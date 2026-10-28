@@ -247,7 +247,8 @@ class TaskRunner:
             if missing:
                 bad.append(f"{fd['name']}: {', '.join(missing)} not found")
         out = Outcome(rows > 0, "none" if rows else "no_values", data={"private": True, "rows": rows} if private else {"rows": rows}, unverified=bad[:4])
-        out.facts = [f"read {rows} of {len(files)} file(s) in {'the folder' if ms.folder.startswith(('/', '\\')) or ':' in ms.folder else ms.folder}; each value was found in the file's own text"] if rows else []
+        where = "the folder" if ms.folder.startswith(("/", chr(92))) or ":" in ms.folder else ms.folder    # chr(92): a backslash in an f-string expression is a SyntaxError before Python 3.12
+        out.facts = [f"read {rows} of {len(files)} file(s) in {where}; each value was found in the file's own text"] if rows else []
         if rows and told:
             out.facts += told[:6]
         if not rows:

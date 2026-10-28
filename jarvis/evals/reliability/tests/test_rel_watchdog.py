@@ -17,6 +17,17 @@ from jarvis.evals.reliability.fakes import FakeEnv
 from jarvis.evals.reliability.records import Observation
 
 
+@pytest.fixture(autouse=True)
+def _fake_env_only(monkeypatch):
+    """The default window lister reads the REAL desktop when `jarvis_node.windows` is importable on Windows, so on the laptop these fake-environment tests saw the
+    owner's real windows (chrome/jarvis/Code) instead of the fake ones. Fakes only: turn that path off."""
+    try:
+        from jarvis.node.jarvis_node import windows as node_windows
+        monkeypatch.setattr(node_windows, "ON_WINDOWS", False)
+    except Exception:  # noqa: BLE001 - not importable: the lister already falls back to the environment
+        pass
+
+
 # ------------------------------------------------------------------------------------------------------------------------------- fake drivers
 class QuickDriver:
     """Returns right away: the ordinary, no-hang case."""

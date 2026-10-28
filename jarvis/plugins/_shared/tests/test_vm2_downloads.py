@@ -78,7 +78,9 @@ def test_a_program_gets_a_warning_a_cautious_default_and_a_name_that_cannot_run(
     assert any(f["type"] == "callout" and "never open, run or unpack" in f["text"] for f in form["fields"])
     saved = next((rig.out / "downloads" / "files.example.test").iterdir())
     assert saved.name.endswith("setup.exe.quarantined") and got["copied"][0]["risky"] is True
-    assert not os.access(saved, os.X_OK), "no execute bit, and the name does not end in .exe"
+    assert not saved.name.lower().endswith((".exe", ".msi", ".bat", ".cmd", ".ps1")), "the name cannot run"
+    if os.name != "nt":                                 # on Windows os.access(X_OK) is True for every file: the extension is the whole guard there
+        assert not os.access(saved, os.X_OK), "no execute bit"
 
 
 def test_an_archive_is_copied_as_it_is_and_never_extracted(rig):
